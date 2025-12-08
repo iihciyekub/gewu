@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PDF文献分析管理工具</title>
+    <link rel="stylesheet" href="./css/styles.css">
+</head>
+<body>
+    <div class="container">
+        <!-- 左侧栏：JSON文件列表 -->
+        <div class="panel panel-left" id="panelLeft">
+            <div class="panel-header">
+                <h3>📂 文献列表</h3>
+                <div class="file-controls">
+                    <button id="themeToggle" class="btn-icon" title="切换主题">🌙</button>
+                    <button id="refreshFiles" class="btn-icon" title="刷新文件列表">↻</button>
+                </div>
+            </div>
+            <div class="panel-content">
+                <div id="fileList" class="file-list">
+                    <!-- 文件列表将动态加载 -->
+                </div>
+            </div>
+        </div>
+
+        <!-- 分隔条1 -->
+        <div class="resizer" id="resizer1"></div>
+
+        <!-- 中间栏：数据表格展示 -->
+        <div class="panel panel-middle" id="panelMiddle">
+            <div class="panel-header">
+                <h3>📊 文献数据分析</h3>
+                <div class="data-controls">
+                    <select id="viewMode" class="select-control">
+                        <option value="hierarchical">分层视图</option>
+                        <option value="flat">扁平视图</option>
+                    </select>
+                </div>
+            </div>
+            <div class="panel-content">
+                <div id="dataDisplay" class="data-display">
+                    <div class="placeholder">
+                        <div class="placeholder-icon">📄</div>
+                        <p>请从左侧选择一个JSON文件查看数据</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 分隔条2 -->
+        <div class="resizer" id="resizer2"></div>
+
+        <!-- 右侧栏：PDF查看器 -->
+        <div class="panel panel-right" id="panelRight">
+            <div class="panel-header">
+                <h3>📖 PDF查看器</h3>
+                <div class="pdf-controls">
+                    <input type="file" id="pdfFileInput" accept=".pdf" style="display:none;" />
+                    <button id="loadPdfBtn" class="btn-primary" title="加载PDF文件">📁</button>
+                    <span id="pdfFileName" class="pdf-file-info" style="display:none;"></span>
+                    <button id="fitWidth" class="btn-icon" title="适应宽度" style="background:#4caf50;color:white;">⇔</button>
+                    <button id="prevPage" class="btn-icon" title="上一页">←</button>
+                    <span id="pageInfo" class="page-info">- / -</span>
+                    <button id="nextPage" class="btn-icon" title="下一页">→</button>
+                    <button id="zoomOut" class="btn-icon" title="缩小">-</button>
+                    <span id="zoomLevel" class="zoom-info">150%</span>
+                    <button id="zoomIn" class="btn-icon" title="放大">+</button>
+                </div>
+            </div>
+            <div class="panel-content">
+                <div id="pdfViewer" class="pdf-viewer">
+                    <div class="placeholder">
+                        <div class="placeholder-icon">📑</div>
+                        <p>PDF将在此显示</p>
+                        <small>点击表格中的页码或证据链接查看PDF</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- PDF.js库 -->
+    <script type="module" src="./js/app.js"></script>
+</body>
+</html>
