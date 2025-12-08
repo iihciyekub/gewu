@@ -21,7 +21,8 @@ const AppState = {
     scale: 1.5,  // 提高默认缩放比例
     jsonFiles: [],
     renderTask: null,
-    autoFitWidth: true  // 自动适应宽度
+    autoFitWidth: true,  // 自动适应宽度
+    isEditMode: false    // 编辑模式
 };
 
 // ========================================
@@ -46,6 +47,9 @@ function initializeApp() {
     
     // 绑定事件监听器
     bindEventListeners();
+    
+    // 初始化编辑对话框
+    initializeEditDialog();
 }
 
 // ========================================
@@ -71,7 +75,7 @@ function setTheme(theme) {
     // 更新按钮图标
     const themeToggle = document.getElementById('themeToggle');
     if (themeToggle) {
-        themeToggle.textContent = theme === 'dark' ? '☀️' : '🌙';
+        themeToggle.innerHTML = theme === 'dark' ? '<i class="fas fa-sun"></i>' : '<i class="fas fa-moon"></i>';
         themeToggle.title = theme === 'dark' ? '切换到白天模式' : '切换到黑暗模式';
     }
 }
@@ -155,6 +159,21 @@ function bindEventListeners() {
         if (AppState.currentJsonData) {
             renderJsonData(AppState.currentJsonData, e.target.value);
         }
+    });
+    
+    // 编辑模式切换
+    document.getElementById('toggleEditMode').addEventListener('click', () => {
+        toggleEditMode();
+    });
+    
+    // 保存JSON
+    document.getElementById('saveJson').addEventListener('click', () => {
+        saveJsonData();
+    });
+    
+    // 添加类别
+    document.getElementById('addCategory').addEventListener('click', () => {
+        addNewCategory();
     });
 }
 
@@ -322,21 +341,8 @@ async function loadJsonFile(filename) {
         const viewMode = document.getElementById('viewMode').value;
         renderJsonData(data, viewMode);
         
-        // 如果有PDF路径，加载PDF - 支持多种JSON结构
-        const pdfPath = data.pdf_path || data.meta_info?.pdf_path || data.metadata?.pdf_path;
-        if (pdfPath) {
-            loadPdf(pdfPath);
-        } else {
-            // 没有PDF路径，显示提示
-            const pdfViewer = document.getElementById('pdfViewer');
-            pdfViewer.innerHTML = `
-                <div class="placeholder">
-                    <div class="placeholder-icon">📄</div>
-                    <p>未找到PDF路径</p>
-                    <button class="btn-primary" style="margin-top:12px;" onclick="document.getElementById('loadPdfBtn').click()">手动加载PDF</button>
-                </div>
-            `;
-        }
+        // 自动构建并加载PDF
+        await autoLoadPdfFromDoi(data);
         
     } catch (error) {
         console.error('加载JSON文件失败:', error);
@@ -349,11 +355,111 @@ async function loadJsonFile(filename) {
     }
 }
 
+/**
+ * 根据DOI自动查找并加载PDF
+ */
+async function autoLoadPdfFromDoi(data) {
+    const pdfViewer = document.getElementById('pdfViewer');
+    
+    // 1. 首先尝试从JSON中读取显式指定的pdf_path
+    let pdfPath = data.pdf_path || data.meta_info?.pdf_path || data.metadata?.pdf_path;
+    
+    // 2. 如果没有显式路径，尝试从DOI构建路径
+    if (!pdfPath) {
+        const doi = data.doi || data.meta_info?.doi || data.metadata?.doi;
+        
+        if (doi) {
+            console.log('从DOI构建PDF路径:', doi);
+            
+            // 清理DOI - 将所有非字母数字和点号的字符替换为下划线
+            const cleanDoi = sanitizeDoiForFilename(doi);
+            
+            // 构建可能的PDF文件名（按优先级排序）
+            const possibleFilenames = [
+                `${cleanDoi}.pdf`,                     // 完整清理后的DOI
+                `${doi.split('/').pop()}.pdf`,         // DOI的最后部分（原样）
+                sanitizeDoiForFilename(doi.split('/').pop()) + '.pdf', // DOI最后部分清理后
+                `${doi.replace(/\//g, '_')}.pdf`,      // 简单替换斜杠（向后兼容）
+                `${doi.replace(/\//g, '-')}.pdf`,      // 替换斜杠为连字符（向后兼容）
+            ];
+            
+            // 去重
+            const uniqueFilenames = [...new Set(possibleFilenames)];
+            
+            console.log('尝试的文件名:', uniqueFilenames);
+            
+            // 尝试查找存在的PDF文件
+            for (const filename of uniqueFilenames) {
+                const testPath = `./src/papers/${filename}`;
+                const exists = await checkPdfExists(testPath);
+                if (exists) {
+                    pdfPath = testPath;
+                    console.log('找到PDF文件:', testPath);
+                    break;
+                }
+            }
+            
+            if (!pdfPath) {
+                console.warn('未找到PDF文件，尝试的文件名:', uniqueFilenames);
+            }
+        }
+    }
+    
+    // 3. 加载PDF或显示提示
+    if (pdfPath) {
+        await loadPdf(pdfPath);
+    } else {
+        pdfViewer.innerHTML = `
+            <div class="placeholder">
+                <div class="placeholder-icon"><i class="fas fa-file-pdf" style="font-size:48px;color:#adb5bd;"></i></div>
+                <p>未找到PDF文件</p>
+                <small>在 ./src/papers/ 目录中未找到对应的PDF</small>
+                <button class="btn-primary" style="margin-top:12px;" onclick="document.getElementById('loadPdfBtn').click()">手动加载PDF</button>
+            </div>
+        `;
+    }
+}
+
+/**
+ * 检查PDF文件是否存在
+ */
+async function checkPdfExists(path) {
+    try {
+        const response = await fetch(path, { method: 'HEAD' });
+        return response.ok;
+    } catch (error) {
+        return false;
+    }
+}
+
+/**
+ * 清理DOI字符串，使其成为有效的文件名
+ * 将所有非字母数字、点号、连字符的字符替换为下划线
+ */
+function sanitizeDoiForFilename(doi) {
+    if (!doi) return '';
+    
+    // 将所有非字母数字、点号、连字符的字符替换为下划线
+    // 保留: a-z, A-Z, 0-9, ., -
+    // 替换: / : ? # [ ] @ ! $ & ' ( ) * + , ; = % 空格等
+    let sanitized = doi.replace(/[^a-zA-Z0-9.\-]/g, '_');
+    
+    // 移除连续的下划线
+    sanitized = sanitized.replace(/_+/g, '_');
+    
+    // 移除开头和结尾的下划线
+    sanitized = sanitized.replace(/^_+|_+$/g, '');
+    
+    return sanitized;
+}
+
 function renderJsonData(data, viewMode = 'hierarchical') {
     const dataDisplay = document.getElementById('dataDisplay');
     dataDisplay.innerHTML = '';
     
-    if (viewMode === 'hierarchical') {
+    if (viewMode === 'edit') {
+        renderEditView(data, dataDisplay);
+    } else if (viewMode === 'hierarchical') {
         renderHierarchicalView(data, dataDisplay);
     } else {
         renderFlatView(data, dataDisplay);
@@ -368,7 +474,7 @@ function renderHierarchicalView(data, container) {
     // 动态识别所有顶层字段，自动生成分区
     const sectionMapping = {
         'doi': '🔖 文献标识',
-        'pdf_path': '📄 PDF路径',
+        'pdf_path': '<i class="fas fa-file-pdf"></i> PDF路径',
         'literature_meta': '📚 文献元数据',
         'basic_info': '📖 基本信息',
         'research_context': '🎯 研究背景',
@@ -379,7 +485,7 @@ function renderHierarchicalView(data, container) {
         'results': '📊 研究结果',
         'methodology': '🔧 研究方法',
         'conclusion': '✅ 结论',
-        'limitations': '⚠️ 局限性',
+        'limitations': '<i class="fas fa-exclamation-circle"></i> 局限性',
         'references': '📚 参考文献'
     };
     
@@ -407,18 +513,19 @@ function renderHierarchicalView(data, container) {
                     <table class="data-table">
                         <tr>
                             <td class="field-label">${formatKey(key)}</td>
-                            <td class="field-value">${formatValue(value)}</td>
+                            <td class="field-value">${formatValue(value, key)}</td>
                         </tr>
                     </table>
                 </div>
             `;
             container.appendChild(simpleSection);
+            renderMath(simpleSection);
         }
     }
     
     // 如果没有找到任何内容，显示原始数据
     if (container.children.length === 0) {
-        const section = createSection('📄 数据内容', data);
+        const section = createSection('<i class="fas fa-database"></i> 数据内容', data);
         container.appendChild(section);
     }
 }
@@ -454,6 +561,7 @@ function renderObject(obj, container, level = 0) {
         const span = document.createElement('span');
         span.innerHTML = formatValue(obj);
         container.appendChild(span);
+        renderMath(span);
         return;
     }
     
@@ -483,6 +591,7 @@ function renderObject(obj, container, level = 0) {
         
         const valueCell = document.createElement('td');
         valueCell.className = 'field-value';
+        valueCell.dataset.fieldKey = key;
         
         // 检查是否有配对的_loc字段
         const locKey = key + '_loc';
@@ -496,7 +605,18 @@ function renderObject(obj, container, level = 0) {
         else if (value && typeof value === 'object' && !Array.isArray(value) && ('value' in value || 'evidence' in value)) {
             // 显示value字段
             if ('value' in value) {
-                valueCell.innerHTML = formatValue(value.value);
+                const valueSpan = document.createElement('span');
+                valueSpan.innerHTML = formatValue(value.value, key);
+                valueCell.appendChild(valueSpan);
+                renderMath(valueSpan);
+                
+                // 如果有配对的_loc字段，添加内联链接
+                if (hasLocField) {
+                    const locLink = createEvidenceLinks(obj[locKey]);
+                    if (locLink) {
+                        valueSpan.innerHTML += ' ' + locLink;
+                    }
+                }
             }
             
             // 显示evidence字段
@@ -505,14 +625,7 @@ function renderObject(obj, container, level = 0) {
                 evidenceSpan.style.marginTop = '2px';
                 evidenceSpan.innerHTML = createEvidenceLinks(value.evidence);
                 valueCell.appendChild(evidenceSpan);
-            }
-            
-            // 检查是否有配对的_loc字段
-            if (hasLocField) {
-                const locSpan = document.createElement('div');
-                locSpan.style.marginTop = '2px';
-                locSpan.innerHTML = createEvidenceLinks(obj[locKey]);
-                valueCell.appendChild(locSpan);
+                renderMath(evidenceSpan);
             }
             
             // 显示其他字段（如reasoning, description等）
@@ -533,7 +646,8 @@ function renderObject(obj, container, level = 0) {
                 valueCell.innerHTML = '<span style="color: #adb5bd;">[]</span>';
             } else if (value.every(v => typeof v === 'string' || typeof v === 'number' || v === null)) {
                 // 简单值数组
-                valueCell.innerHTML = formatValue(value);
+                valueCell.innerHTML = formatValue(value, key);
+                renderMath(valueCell);
             } else {
                 // 复杂对象数组
                 const nestedDiv = document.createElement('div');
@@ -564,23 +678,769 @@ function renderObject(obj, container, level = 0) {
         }
         // 处理原始值
         else {
-            valueCell.innerHTML = formatValue(value);
+            const valueSpan = document.createElement('span');
+            valueSpan.innerHTML = formatValue(value, key);
+            valueCell.appendChild(valueSpan);
             
-            // 如果有_loc字段，添加跳转链接
+            // 如果有_loc字段，添加内联跳转链接
             if (hasLocField) {
-                const locSpan = document.createElement('div');
-                locSpan.style.marginTop = '2px';
-                locSpan.innerHTML = createEvidenceLinks(obj[locKey]);
-                valueCell.appendChild(locSpan);
+                const locLink = createEvidenceLinks(obj[locKey]);
+                if (locLink) {
+                    valueSpan.innerHTML += ' ' + locLink;
+                }
             }
+            renderMath(valueSpan);
         }
         
         row.appendChild(keyCell);
         row.appendChild(valueCell);
+        
+        // 添加双击编辑功能
+        valueCell.style.cursor = 'pointer';
+        valueCell.title = '双击编辑';
+        valueCell.addEventListener('dblclick', () => {
+            openEditDialog(key, value, obj, locKey);
+        });
+        
         table.appendChild(row);
     }
     
     container.appendChild(table);
+}
+
+// ========================================
+// 编辑视图渲染
+// ========================================
+
+/**
+ * 统一数据结构：
+ * {
+ *   "meta_info": { ... },
+ *   "categories": [
+ *     {
+ *       "id": "did_design_setup",
+ *       "title": "DID设计",
+ *       "icon": "fas fa-flask",
+ *       "items": [
+ *         {
+ *           "key": "model_type",
+ *           "label": "模型类型",
+ *           "value": "Staggered DID",
+ *           "pdf_location": {
+ *             "page_label": "2044",
+ *             "pdf_page_index": 7,
+ *             "pdf_open_params": "#page=7",
+ *             "quote": "observe the implementation year..."
+ *           }
+ *         }
+ *       ]
+ *     }
+ *   ]
+ * }
+ */
+
+function renderEditView(data, container) {
+    container.innerHTML = '';
+    
+    // 标准化数据结构
+    const normalizedData = normalizeDataStructure(data);
+    
+    // 创建编辑容器
+    const editContainer = document.createElement('div');
+    editContainer.className = 'edit-container';
+    editContainer.id = 'editContainer';
+    
+    // 渲染元信息
+    if (normalizedData.meta_info) {
+        const metaSection = createEditableSection('meta_info', '元信息', normalizedData.meta_info, true);
+        editContainer.appendChild(metaSection);
+    }
+    
+    // 渲染类别
+    if (normalizedData.categories && normalizedData.categories.length > 0) {
+        normalizedData.categories.forEach((category, index) => {
+            const categorySection = createEditableCategory(category, index);
+            editContainer.appendChild(categorySection);
+        });
+    }
+    
+    container.appendChild(editContainer);
+    
+    // 保存标准化数据到AppState
+    AppState.normalizedData = normalizedData;
+}
+
+/**
+ * 标准化数据结构 - 将旧格式转换为新格式
+ */
+function normalizeDataStructure(data) {
+    // 如果已经是标准化格式
+    if (data.categories && Array.isArray(data.categories)) {
+        return data;
+    }
+    
+    const normalized = {
+        meta_info: data.meta_info || {},
+        categories: []
+    };
+    
+    // 类别映射
+    const categoryMapping = {
+        'did_design_setup': { title: 'DID设计', icon: 'fas fa-flask' },
+        'data_metrics': { title: '数据指标', icon: 'fas fa-database' },
+        'robustness_checks': { title: '稳健性检验', icon: 'fas fa-check-circle' },
+        'key_findings': { title: '关键发现', icon: 'fas fa-star' },
+        'identification_strategy': { title: '识别策略', icon: 'fas fa-bullseye' },
+        'methodology': { title: '研究方法', icon: 'fas fa-cogs' },
+        'results': { title: '研究结果', icon: 'fas fa-chart-line' }
+    };
+    
+    // 遍历数据，提取类别
+    for (const [key, value] of Object.entries(data)) {
+        if (key === 'meta_info' || key === 'categories') continue;
+        
+        if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
+            const categoryInfo = categoryMapping[key] || { 
+                title: formatKey(key), 
+                icon: 'fas fa-folder' 
+            };
+            
+            const items = [];
+            
+            // 提取items
+            for (const [itemKey, itemValue] of Object.entries(value)) {
+                if (itemKey.endsWith('_loc')) continue;
+                
+                const locKey = itemKey + '_loc';
+                const pdfLocation = value[locKey] || null;
+                
+                items.push({
+                    key: itemKey,
+                    label: formatKey(itemKey),
+                    value: typeof itemValue === 'object' ? JSON.stringify(itemValue) : itemValue,
+                    pdf_location: pdfLocation
+                });
+            }
+            
+            normalized.categories.push({
+                id: key,
+                title: categoryInfo.title,
+                icon: categoryInfo.icon,
+                items: items
+            });
+        }
+    }
+    
+    return normalized;
+}
+
+/**
+ * 创建可编辑的类别区块
+ */
+function createEditableCategory(category, categoryIndex) {
+    const section = document.createElement('div');
+    section.className = 'edit-section';
+    section.dataset.categoryId = category.id;
+    section.dataset.categoryIndex = categoryIndex;
+    
+    // 类别标题栏
+    const header = document.createElement('div');
+    header.className = 'edit-section-header';
+    header.innerHTML = `
+        <div class="edit-section-title">
+            <i class="${category.icon}"></i>
+            <input type="text" class="category-title-input" value="${category.title}" data-field="title" />
+        </div>
+        <div class="edit-section-actions">
+            <button class="btn-icon btn-add-item" title="添加项目"><i class="fas fa-plus"></i></button>
+            <button class="btn-icon btn-delete-category" title="删除类别"><i class="fas fa-trash"></i></button>
+        </div>
+    `;
+    
+    // 类别内容
+    const content = document.createElement('div');
+    content.className = 'edit-section-content';
+    
+    // 渲染所有items
+    category.items.forEach((item, itemIndex) => {
+        const itemElement = createEditableItem(item, categoryIndex, itemIndex);
+        content.appendChild(itemElement);
+    });
+    
+    // 绑定事件
+    header.querySelector('.btn-add-item').addEventListener('click', () => {
+        addItemToCategory(categoryIndex);
+    });
+    
+    header.querySelector('.btn-delete-category').addEventListener('click', () => {
+        deleteCategory(categoryIndex);
+    });
+    
+    header.querySelector('.category-title-input').addEventListener('change', (e) => {
+        updateCategoryTitle(categoryIndex, e.target.value);
+    });
+    
+    section.appendChild(header);
+    section.appendChild(content);
+    
+    return section;
+}
+
+/**
+ * 创建可编辑的项目
+ */
+function createEditableItem(item, categoryIndex, itemIndex) {
+    const itemDiv = document.createElement('div');
+    itemDiv.className = 'edit-item';
+    itemDiv.dataset.itemIndex = itemIndex;
+    
+    const pdfLoc = item.pdf_location || {};
+    
+    itemDiv.innerHTML = `
+        <div class="edit-item-header">
+            <div class="edit-item-label">
+                <input type="text" class="item-label-input" value="${escapeHtml(item.label)}" placeholder="标签" />
+                <span class="item-key-display">(${item.key})</span>
+            </div>
+            <button class="btn-icon btn-delete-item" title="删除项目"><i class="fas fa-times"></i></button>
+        </div>
+        <div class="edit-item-body">
+            <div class="edit-field">
+                <label>Key:</label>
+                <input type="text" class="item-key-input" value="${escapeHtml(item.key)}" placeholder="字段key" />
+            </div>
+            <div class="edit-field">
+                <label>Value:</label>
+                <textarea class="item-value-input" rows="2" placeholder="值">${escapeHtml(item.value || '')}</textarea>
+            </div>
+            <div class="edit-field-group">
+                <div class="edit-field edit-field-small">
+                    <label>页码标签:</label>
+                    <input type="text" class="item-page-label-input" value="${escapeHtml(pdfLoc.page_label || '')}" placeholder="2044" />
+                </div>
+                <div class="edit-field edit-field-small">
+                    <label>页面索引:</label>
+                    <input type="number" class="item-page-index-input" value="${pdfLoc.pdf_page_index || ''}" placeholder="7" />
+                </div>
+            </div>
+            <div class="edit-field">
+                <label>引用文本:</label>
+                <textarea class="item-quote-input" rows="2" placeholder="PDF中的引用文本">${escapeHtml(pdfLoc.quote || '')}</textarea>
+            </div>
+            ${pdfLoc.pdf_page_index ? `<a href="#" class="evidence-link pdf-icon-link" data-page-index="${pdfLoc.pdf_page_index}" data-quote="${escapeHtml(pdfLoc.quote || '')}" title="跳转到PDF"><i class="fas fa-file-pdf"></i> 预览</a>` : ''}
+        </div>
+    `;
+    
+    // 绑定删除按钮
+    itemDiv.querySelector('.btn-delete-item').addEventListener('click', () => {
+        deleteItem(categoryIndex, itemIndex);
+    });
+    
+    // 绑定所有输入框的change事件
+    itemDiv.querySelectorAll('input, textarea').forEach(input => {
+        input.addEventListener('change', (e) => {
+            updateItemData(categoryIndex, itemIndex, e.target);
+        });
+    });
+    
+    return itemDiv;
+}
+
+/**
+ * 创建可编辑的区块（用于meta_info）
+ */
+function createEditableSection(id, title, data, isMetaInfo = false) {
+    const section = document.createElement('div');
+    section.className = 'edit-section';
+    section.dataset.sectionId = id;
+    
+    const header = document.createElement('div');
+    header.className = 'edit-section-header';
+    header.innerHTML = `
+        <div class="edit-section-title">
+            <i class="fas fa-info-circle"></i>
+            <span>${title}</span>
+        </div>
+    `;
+    
+    const content = document.createElement('div');
+    content.className = 'edit-section-content';
+    
+    const table = document.createElement('table');
+    table.className = 'edit-meta-table';
+    
+    for (const [key, value] of Object.entries(data)) {
+        if (key.endsWith('_loc')) continue;
+        
+        const row = document.createElement('tr');
+        
+        const locKey = key + '_loc';
+        const hasLoc = data[locKey];
+        
+        let displayValue = value;
+        if (typeof value === 'object' && value !== null) {
+            displayValue = JSON.stringify(value, null, 2);
+        }
+        
+        row.innerHTML = `
+            <td class="meta-key">${formatKey(key)}</td>
+            <td class="meta-value">
+                <input type="text" class="meta-value-input" value="${escapeHtml(displayValue)}" data-key="${key}" />
+                ${hasLoc ? `<a href="#" class="evidence-link pdf-icon-link" data-page-index="${hasLoc.pdf_page_index}" data-quote="${escapeHtml(hasLoc.quote || '')}" title="跳转到PDF"><i class="fas fa-file-pdf"></i></a>` : ''}
+            </td>
+        `;
+        
+        table.appendChild(row);
+    }
+    
+    content.appendChild(table);
+    section.appendChild(header);
+    section.appendChild(content);
+    
+    // 绑定输入框事件
+    section.querySelectorAll('.meta-value-input').forEach(input => {
+        input.addEventListener('change', (e) => {
+            updateMetaInfo(e.target.dataset.key, e.target.value);
+        });
+    });
+    
+    return section;
+}
+
+// ========================================
+// 编辑操作函数
+// ========================================
+
+function toggleEditMode() {
+    AppState.isEditMode = !AppState.isEditMode;
+    
+    const toggleBtn = document.getElementById('toggleEditMode');
+    const saveBtn = document.getElementById('saveJson');
+    const addCategoryBtn = document.getElementById('addCategory');
+    const viewMode = document.getElementById('viewMode');
+    
+    if (AppState.isEditMode) {
+        toggleBtn.style.background = '#4caf50';
+        toggleBtn.style.color = 'white';
+        toggleBtn.title = '退出编辑模式';
+        saveBtn.style.display = 'inline-block';
+        addCategoryBtn.style.display = 'inline-block';
+        viewMode.value = 'edit';
+        
+        if (AppState.currentJsonData) {
+            renderJsonData(AppState.currentJsonData, 'edit');
+        }
+    } else {
+        toggleBtn.style.background = '';
+        toggleBtn.style.color = '';
+        toggleBtn.title = '切换编辑模式';
+        saveBtn.style.display = 'none';
+        addCategoryBtn.style.display = 'none';
+        viewMode.value = 'hierarchical';
+        
+        if (AppState.currentJsonData) {
+            renderJsonData(AppState.currentJsonData, 'hierarchical');
+        }
+    }
+}
+
+function updateMetaInfo(key, value) {
+    if (!AppState.normalizedData) return;
+    
+    try {
+        // 尝试解析JSON
+        AppState.normalizedData.meta_info[key] = JSON.parse(value);
+    } catch {
+        // 如果不是JSON，直接存储字符串
+        AppState.normalizedData.meta_info[key] = value;
+    }
+    
+    console.log('更新meta_info:', key, value);
+}
+
+function updateCategoryTitle(categoryIndex, newTitle) {
+    if (!AppState.normalizedData || !AppState.normalizedData.categories[categoryIndex]) return;
+    
+    AppState.normalizedData.categories[categoryIndex].title = newTitle;
+    console.log('更新类别标题:', categoryIndex, newTitle);
+}
+
+function updateItemData(categoryIndex, itemIndex, inputElement) {
+    if (!AppState.normalizedData || !AppState.normalizedData.categories[categoryIndex]) return;
+    
+    const category = AppState.normalizedData.categories[categoryIndex];
+    if (!category.items[itemIndex]) return;
+    
+    const item = category.items[itemIndex];
+    const className = inputElement.className;
+    
+    if (className.includes('item-label-input')) {
+        item.label = inputElement.value;
+    } else if (className.includes('item-key-input')) {
+        item.key = inputElement.value;
+        // 更新key显示
+        const itemDiv = inputElement.closest('.edit-item');
+        const keyDisplay = itemDiv.querySelector('.item-key-display');
+        if (keyDisplay) keyDisplay.textContent = `(${inputElement.value})`;
+    } else if (className.includes('item-value-input')) {
+        item.value = inputElement.value;
+    } else if (className.includes('item-page-label-input')) {
+        if (!item.pdf_location) item.pdf_location = {};
+        item.pdf_location.page_label = inputElement.value;
+    } else if (className.includes('item-page-index-input')) {
+        if (!item.pdf_location) item.pdf_location = {};
+        item.pdf_location.pdf_page_index = parseInt(inputElement.value) || null;
+        item.pdf_location.pdf_open_params = `#page=${inputElement.value}`;
+    } else if (className.includes('item-quote-input')) {
+        if (!item.pdf_location) item.pdf_location = {};
+        item.pdf_location.quote = inputElement.value;
+    }
+    
+    console.log('更新项目数据:', categoryIndex, itemIndex, item);
+}
+
+function addNewCategory() {
+    if (!AppState.normalizedData) {
+        AppState.normalizedData = { meta_info: {}, categories: [] };
+    }
+    
+    if (!AppState.normalizedData.categories) {
+        AppState.normalizedData.categories = [];
+    }
+    
+    const newCategory = {
+        id: `category_${Date.now()}`,
+        title: '新类别',
+        icon: 'fas fa-folder',
+        items: []
+    };
+    
+    AppState.normalizedData.categories.push(newCategory);
+    
+    // 重新渲染
+    renderJsonData(AppState.normalizedData, 'edit');
+}
+
+function addItemToCategory(categoryIndex) {
+    if (!AppState.normalizedData || !AppState.normalizedData.categories[categoryIndex]) return;
+    
+    const newItem = {
+        key: `new_field_${Date.now()}`,
+        label: '新字段',
+        value: '',
+        pdf_location: null
+    };
+    
+    AppState.normalizedData.categories[categoryIndex].items.push(newItem);
+    
+    // 重新渲染
+    renderJsonData(AppState.normalizedData, 'edit');
+}
+
+function deleteCategory(categoryIndex) {
+    if (!AppState.normalizedData || !AppState.normalizedData.categories[categoryIndex]) return;
+    
+    if (confirm('确定要删除这个类别吗？')) {
+        AppState.normalizedData.categories.splice(categoryIndex, 1);
+        renderJsonData(AppState.normalizedData, 'edit');
+    }
+}
+
+function deleteItem(categoryIndex, itemIndex) {
+    if (!AppState.normalizedData || !AppState.normalizedData.categories[categoryIndex]) return;
+    
+    const category = AppState.normalizedData.categories[categoryIndex];
+    if (!category.items[itemIndex]) return;
+    
+    if (confirm('确定要删除这个项目吗？')) {
+        category.items.splice(itemIndex, 1);
+        renderJsonData(AppState.normalizedData, 'edit');
+    }
+}
+
+async function saveJsonData() {
+    if (!AppState.normalizedData || !AppState.currentJsonFile) {
+        alert('没有数据可保存');
+        return;
+    }
+    
+    // 转换回原始格式
+    const originalFormat = convertToOriginalFormat(AppState.normalizedData);
+    
+    try {
+        const response = await fetch('/api/save-json', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                filename: AppState.currentJsonFile,
+                data: originalFormat
+            })
+        });
+        
+        if (!response.ok) {
+            throw new Error(`保存失败: ${response.statusText}`);
+        }
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            alert('保存成功！');
+            // 更新当前数据
+            AppState.currentJsonData = originalFormat;
+        } else {
+            alert('保存失败: ' + (result.error || '未知错误'));
+        }
+    } catch (error) {
+        console.error('保存JSON失败:', error);
+        alert('保存失败: ' + error.message);
+    }
+}
+
+/**
+ * 将标准化格式转换回原始格式
+ */
+function convertToOriginalFormat(normalizedData) {
+    const original = {
+        meta_info: normalizedData.meta_info || {}
+    };
+    
+    // 转换categories回原始结构
+    if (normalizedData.categories) {
+        normalizedData.categories.forEach(category => {
+            const categoryData = {};
+            
+            category.items.forEach(item => {
+                categoryData[item.key] = item.value;
+                
+                if (item.pdf_location && item.pdf_location.pdf_page_index) {
+                    categoryData[item.key + '_loc'] = item.pdf_location;
+                }
+            });
+            
+            original[category.id] = categoryData;
+        });
+    }
+    
+    return original;
+}
+
+// ========================================
+// 双击编辑对话框功能
+// ========================================
+
+let currentEditContext = null;
+
+/**
+ * 打开编辑对话框
+ */
+function openEditDialog(key, value, parentObj, locKey) {
+    const dialog = document.getElementById('editDialog');
+    const fieldNameDisplay = dialog.querySelector('.field-name-display');
+    const valueInput = document.getElementById('dialogValueInput');
+    const pageLabelInput = document.getElementById('dialogPageLabel');
+    const pageIndexInput = document.getElementById('dialogPageIndex');
+    const quoteInput = document.getElementById('dialogQuote');
+    
+    // 保存编辑上下文
+    currentEditContext = {
+        key: key,
+        parentObj: parentObj,
+        locKey: locKey
+    };
+    
+    // 填充当前值
+    fieldNameDisplay.textContent = formatKey(key);
+    
+    // 处理value
+    let displayValue = value;
+    if (typeof value === 'object' && value !== null) {
+        if (value.value !== undefined) {
+            displayValue = value.value;
+        } else {
+            displayValue = JSON.stringify(value, null, 2);
+        }
+    }
+    valueInput.value = displayValue || '';
+    
+    // 填充PDF位置信息
+    const locData = parentObj[locKey];
+    if (locData && typeof locData === 'object') {
+        pageLabelInput.value = locData.page_label || '';
+        pageIndexInput.value = locData.pdf_page_index || '';
+        quoteInput.value = locData.quote || '';
+    } else {
+        pageLabelInput.value = '';
+        pageIndexInput.value = '';
+        quoteInput.value = '';
+    }
+    
+    // 显示对话框
+    dialog.style.display = 'flex';
+    valueInput.focus();
+    valueInput.select();
+}
+
+/**
+ * 关闭编辑对话框
+ */
+function closeEditDialog() {
+    const dialog = document.getElementById('editDialog');
+    dialog.style.display = 'none';
+    currentEditContext = null;
+}
+
+/**
+ * 保存对话框中的编辑
+ */
+async function saveDialogEdit() {
+    if (!currentEditContext) return;
+    
+    const valueInput = document.getElementById('dialogValueInput');
+    const pageLabelInput = document.getElementById('dialogPageLabel');
+    const pageIndexInput = document.getElementById('dialogPageIndex');
+    const quoteInput = document.getElementById('dialogQuote');
+    
+    const { key, parentObj, locKey } = currentEditContext;
+    
+    // 更新值
+    const newValue = valueInput.value.trim();
+    try {
+        // 尝试解析JSON
+        parentObj[key] = JSON.parse(newValue);
+    } catch {
+        // 如果不是JSON，直接存储字符串
+        parentObj[key] = newValue;
+    }
+    
+    // 更新或创建_loc字段
+    const pageIndex = parseInt(pageIndexInput.value);
+    const pageLabel = pageLabelInput.value.trim();
+    const quote = quoteInput.value.trim();
+    
+    if (pageIndex && pageLabel) {
+        parentObj[locKey] = {
+            page_label: pageLabel,
+            pdf_page_index: pageIndex,
+            pdf_open_params: `#page=${pageIndex}`,
+            quote: quote
+        };
+    } else if (parentObj[locKey]) {
+        // 如果清空了必需字段，删除_loc
+        if (!pageIndex && !pageLabel) {
+            delete parentObj[locKey];
+        }
+    }
+    
+    // 关闭对话框
+    closeEditDialog();
+    
+    // 自动保存
+    await autoSaveJsonData();
+    
+    // 重新渲染当前视图
+    const viewMode = document.getElementById('viewMode').value;
+    if (AppState.currentJsonData) {
+        renderJsonData(AppState.currentJsonData, viewMode);
+    }
+}
+
+/**
+ * 自动保存JSON数据
+ */
+async function autoSaveJsonData() {
+    if (!AppState.currentJsonData || !AppState.currentJsonFile) {
+        console.warn('没有数据可保存');
+        return;
+    }
+    
+    try {
+        const response = await fetch('/api/save-json', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                filename: AppState.currentJsonFile,
+                data: AppState.currentJsonData
+            })
+        });
+        
+        if (!response.ok) {
+            throw new Error(`保存失败: ${response.statusText}`);
+        }
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            // 显示保存成功提示
+            showToast('保存成功', 'success');
+            console.log('自动保存成功:', AppState.currentJsonFile);
+        } else {
+            showToast('保存失败: ' + (result.error || '未知错误'), 'error');
+        }
+    } catch (error) {
+        console.error('自动保存失败:', error);
+        showToast('保存失败: ' + error.message, 'error');
+    }
+}
+
+/**
+ * 显示Toast提示
+ */
+function showToast(message, type = 'info') {
+    // 移除旧的toast
+    const oldToast = document.querySelector('.toast-message');
+    if (oldToast) oldToast.remove();
+    
+    const toast = document.createElement('div');
+    toast.className = `toast-message toast-${type}`;
+    toast.innerHTML = `
+        <i class="fas fa-${type === 'success' ? 'check-circle' : type === 'error' ? 'exclamation-circle' : 'info-circle'}"></i>
+        <span>${message}</span>
+    `;
+    
+    document.body.appendChild(toast);
+    
+    // 触发动画
+    setTimeout(() => toast.classList.add('show'), 10);
+    
+    // 3秒后移除
+    setTimeout(() => {
+        toast.classList.remove('show');
+        setTimeout(() => toast.remove(), 300);
+    }, 3000);
+}
+
+// 绑定对话框事件
+function initializeEditDialog() {
+    const dialog = document.getElementById('editDialog');
+    if (!dialog) return;
+    
+    // 关闭按钮
+    dialog.querySelector('.btn-close-dialog').addEventListener('click', closeEditDialog);
+    dialog.querySelector('.btn-cancel-dialog').addEventListener('click', closeEditDialog);
+    
+    // 保存按钮
+    dialog.querySelector('.btn-save-dialog').addEventListener('click', saveDialogEdit);
+    
+    // 点击遮罩关闭
+    dialog.querySelector('.edit-dialog-overlay').addEventListener('click', closeEditDialog);
+    
+    // ESC键关闭
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && dialog.style.display === 'flex') {
+            closeEditDialog();
+        }
+    });
+    
+    // Ctrl+Enter保存
+    dialog.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && e.ctrlKey && dialog.style.display === 'flex') {
+            saveDialogEdit();
+        }
+    });
 }
 
 // ========================================
@@ -711,11 +1571,13 @@ function renderFlatView(data, container) {
         
         const valueCell = document.createElement('td');
         valueCell.className = 'field-value';
-        valueCell.innerHTML = formatValue(item.value);
+        valueCell.innerHTML = formatValue(item.value, item.key);
+        renderMath(valueCell);
         
         const evidenceCell = document.createElement('td');
         evidenceCell.style.fontSize = '11px';
         evidenceCell.innerHTML = item.evidence ? createEvidenceLinks(item.evidence) : '-';
+        renderMath(evidenceCell);
         
         row.appendChild(keyCell);
         row.appendChild(valueCell);
@@ -731,15 +1593,49 @@ function renderFlatView(data, container) {
 // 工具函数
 // ========================================
 
+/**
+ * 生成 Web of Science 查询链接
+ * @param {string} doi - DOI 标识符
+ * @returns {string} Web of Science 查询 URL
+ */
+function generateWosUrl(doi) {
+    if (!doi) return '';
+    
+    const query = [{
+        rowText: `DO=${doi}`
+    }];
+    const jsonStr = encodeURIComponent(JSON.stringify(query));
+    return `https://www.webofscience.com/wos/woscc/general-summary?queryJson=${jsonStr}`;
+}
+
+/**
+ * 将 DOI 渲染为可点击的链接
+ * @param {string} doi - DOI 标识符
+ * @returns {string} HTML 链接字符串
+ */
+function renderDoiLink(doi) {
+    if (!doi) return '<span style="color: #adb5bd;">-</span>';
+    
+    const wosUrl = generateWosUrl(doi);
+    return `<a href="${wosUrl}" target="_blank" class="doi-link" title="在 Web of Science 中查看">
+        <i class="fas fa-external-link-alt"></i> ${escapeHtml(doi)}
+    </a>`;
+}
+
 function formatKey(key) {
     return key
         .replace(/_/g, ' ')
         .replace(/\b\w/g, c => c.toUpperCase());
 }
 
-function formatValue(value) {
+function formatValue(value, key = null) {
     if (value === null || value === undefined) {
         return '<span style="color: #adb5bd;">-</span>';
+    }
+    
+    // 特殊处理: 如果 key 是 doi，渲染为 WoS 链接
+    if (key === 'doi' && typeof value === 'string') {
+        return renderDoiLink(value);
     }
     
     if (Array.isArray(value)) {
@@ -773,8 +1669,8 @@ function createEvidenceLinks(evidence, pdfPageIndex = null) {
         const quote = evidence.quote || '';
         
         if (pageIndex !== undefined) {
-            const displayText = pageLabel ? `📄 p.${pageLabel}` : `📄 Page ${pageIndex}`;
-            return `<a href="#" class="evidence-link" data-page-index="${pageIndex}" data-quote="${escapeHtml(quote)}" title="${escapeHtml(quote)}">${displayText}</a>`;
+            const title = `跳转到第${pageLabel || pageIndex}页${quote ? '\n' + quote : ''}`;
+            return `<a href="#" class="evidence-link pdf-icon-link" data-page-index="${pageIndex}" data-quote="${escapeHtml(quote)}" title="${escapeHtml(title)}"><i class="fas fa-file-pdf"></i></a>`;
         }
         
         // 如果是包含其他信息的对象，转为字符串处理
@@ -819,6 +1715,29 @@ function escapeHtml(text) {
     return div.innerHTML;
 }
 
+/**
+ * 渲染元素中的 LaTeX 数学公式
+ * @param {HTMLElement} element - 需要渲染数学公式的元素
+ */
+function renderMath(element) {
+    if (window.MathJax && window.MathJax.typesetPromise) {
+        window.MathJax.typesetPromise([element]).catch((err) => {
+            console.warn('MathJax 渲染失败:', err);
+        });
+    }
+}
+
+/**
+ * 渲染整个页面的数学公式
+ */
+function renderAllMath() {
+    if (window.MathJax && window.MathJax.typesetPromise) {
+        window.MathJax.typesetPromise().catch((err) => {
+            console.warn('MathJax 渲染失败:', err);
+        });
+    }
+}
+
 // ========================================
 // PDF加载与渲染
 // ========================================
@@ -856,20 +1775,27 @@ async function loadPdf(pdfPath) {
         updatePageInfo();
         updatePdfFileName(pdfPath);
         
-        // 创建canvas
-        const canvas = document.createElement('canvas');
-        canvas.id = 'pdfCanvas';
+        // 清空pdfViewer内容
         pdfViewer.innerHTML = '';
-        pdfViewer.appendChild(canvas);
         
-        // 渲染第一页
-        await renderPdfPage(1);
+        // 创建连续页面容器
+        const pagesContainer = document.createElement('div');
+        pagesContainer.id = 'pdfPagesContainer';
+        pagesContainer.style.display = 'flex';
+        pagesContainer.style.flexDirection = 'column';
+        pagesContainer.style.alignItems = 'center';
+        pagesContainer.style.gap = '20px';
+        pagesContainer.style.padding = '20px 0';
+        pdfViewer.appendChild(pagesContainer);
+        
+        // 渲染所有页面
+        await renderAllPages();
         
     } catch (error) {
         console.error('加载PDF失败:', error);
         pdfViewer.innerHTML = `
             <div class="placeholder">
-                <div class="placeholder-icon">⚠️</div>
+                <div class="placeholder-icon"><i class="fas fa-exclamation-triangle" style="font-size:48px;color:#e74c3c;"></i></div>
                 <p>PDF加载失败</p>
                 <small>${escapeHtml(error.message || '未知错误')}</small>
                 <small style="display:block; margin-top:8px; color:#adb5bd;">路径: ${escapeHtml(pdfPath || 'N/A')}</small>
@@ -905,14 +1831,21 @@ async function loadPdfFromFile(file) {
             updatePageInfo();
             updatePdfFileName(file.name);
             
-            // 创建canvas
-            const canvas = document.createElement('canvas');
-            canvas.id = 'pdfCanvas';
+            // 清空pdfViewer内容
             pdfViewer.innerHTML = '';
-            pdfViewer.appendChild(canvas);
             
-            // 渲染第一页
-            await renderPdfPage(1);
+            // 创建连续页面容器
+            const pagesContainer = document.createElement('div');
+            pagesContainer.id = 'pdfPagesContainer';
+            pagesContainer.style.display = 'flex';
+            pagesContainer.style.flexDirection = 'column';
+            pagesContainer.style.alignItems = 'center';
+            pagesContainer.style.gap = '20px';
+            pagesContainer.style.padding = '20px 0';
+            pdfViewer.appendChild(pagesContainer);
+            
+            // 渲染所有页面
+            await renderAllPages();
         };
         
         fileReader.onerror = function() {
@@ -925,7 +1858,7 @@ async function loadPdfFromFile(file) {
         console.error('加载PDF文件失败:', error);
         pdfViewer.innerHTML = `
             <div class="placeholder">
-                <div class="placeholder-icon">⚠️</div>
+                <div class="placeholder-icon"><i class="fas fa-exclamation-triangle" style="font-size:48px;color:#e74c3c;"></i></div>
                 <p>PDF文件加载失败</p>
                 <small>${escapeHtml(error.message || '未知错误')}</small>
             </div>
@@ -942,6 +1875,86 @@ function updatePdfFileName(path) {
         fileNameSpan.title = path;
     } else {
         fileNameSpan.style.display = 'none';
+    }
+}
+
+/**
+ * 渲染所有PDF页面（连续滚动模式）
+ */
+async function renderAllPages() {
+    if (!AppState.pdfDocument) return;
+    
+    const pagesContainer = document.getElementById('pdfPagesContainer');
+    if (!pagesContainer) return;
+    
+    const pdfViewer = document.getElementById('pdfViewer');
+    const viewerWidth = pdfViewer.clientWidth - 40;
+    
+    try {
+        for (let pageNum = 1; pageNum <= AppState.totalPages; pageNum++) {
+            const page = await AppState.pdfDocument.getPage(pageNum);
+            
+            // 计算缩放比例
+            let scale = AppState.scale;
+            if (AppState.autoFitWidth) {
+                const viewport = page.getViewport({ scale: 1.0 });
+                const scaleToFit = viewerWidth / viewport.width;
+                scale = Math.min(scaleToFit, AppState.scale);
+            }
+            
+            const viewport = page.getViewport({ scale: scale });
+            
+            // 创建页面容器
+            const pageContainer = document.createElement('div');
+            pageContainer.className = 'pdf-page-container';
+            pageContainer.dataset.pageNumber = pageNum;
+            pageContainer.style.position = 'relative';
+            pageContainer.style.boxShadow = '0 2px 8px rgba(0,0,0,0.1)';
+            pageContainer.style.background = 'white';
+            
+            // 创建canvas
+            const canvas = document.createElement('canvas');
+            canvas.className = 'pdf-page-canvas';
+            canvas.dataset.pageNumber = pageNum;
+            
+            const context = canvas.getContext('2d');
+            const outputScale = window.devicePixelRatio || 1;
+            
+            canvas.width = Math.floor(viewport.width * outputScale);
+            canvas.height = Math.floor(viewport.height * outputScale);
+            canvas.style.width = Math.floor(viewport.width) + 'px';
+            canvas.style.height = Math.floor(viewport.height) + 'px';
+            
+            const transform = outputScale !== 1 ? [outputScale, 0, 0, outputScale, 0, 0] : null;
+            
+            const renderContext = {
+                canvasContext: context,
+                viewport: viewport,
+                transform: transform
+            };
+            
+            await page.render(renderContext).promise;
+            
+            // 添加页码标签
+            const pageLabel = document.createElement('div');
+            pageLabel.className = 'pdf-page-label';
+            pageLabel.textContent = `第 ${pageNum} / ${AppState.totalPages} 页`;
+            pageLabel.style.position = 'absolute';
+            pageLabel.style.top = '5px';
+            pageLabel.style.right = '5px';
+            pageLabel.style.background = 'rgba(0,0,0,0.6)';
+            pageLabel.style.color = 'white';
+            pageLabel.style.padding = '2px 8px';
+            pageLabel.style.borderRadius = '3px';
+            pageLabel.style.fontSize = '11px';
+            pageLabel.style.pointerEvents = 'none';
+            
+            pageContainer.appendChild(canvas);
+            pageContainer.appendChild(pageLabel);
+            pagesContainer.appendChild(pageContainer);
+        }
+    } catch (error) {
+        console.error('渲染PDF页面失败:', error);
     }
 }
 
@@ -1039,10 +2052,17 @@ async function jumpToPdfPage(pageIdentifier, isIndex = true, quote = null) {
     pageNum = Math.min(Math.max(1, pageNum), AppState.totalPages);
     
     AppState.currentPage = pageNum;
-    await renderPdfPage(pageNum);
     
-    // 显示跳转高亮指示器，如果有quote则尝试定位文本
-    await showJumpIndicator(quote, pageNum);
+    // 在连续滚动模式下，滚动到对应页面
+    const pageContainer = document.querySelector(`[data-page-number="${pageNum}"]`);
+    if (pageContainer) {
+        pageContainer.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        
+        // 显示跳转高亮指示器
+        await showJumpIndicator(quote, pageNum, pageContainer);
+    }
+    
+    updatePageInfo();
     
     return true;
 }
@@ -1052,49 +2072,43 @@ async function jumpToPdfPage(pageIdentifier, isIndex = true, quote = null) {
 // ========================================
 
 document.addEventListener('click', (e) => {
-    if (e.target.classList.contains('evidence-link')) {
+    // 查找最近的 evidence-link 元素（处理点击图标的情况）
+    const link = e.target.closest('.evidence-link');
+    
+    if (link) {
         e.preventDefault();
         
         // 优先使用pdf_page_index（从1开始）
-        let pageNum = parseInt(e.target.dataset.pageIndex);
+        let pageNum = parseInt(link.dataset.pageIndex);
         
         // 如果没有pageIndex，使用page（页码标签）
         if (!pageNum || isNaN(pageNum)) {
-            pageNum = parseInt(e.target.dataset.page);
+            pageNum = parseInt(link.dataset.page);
         }
         
         if (pageNum && !isNaN(pageNum)) {
-            const quote = e.target.dataset.quote || null;
+            const quote = link.dataset.quote || null;
             
             if (!AppState.pdfDocument) {
-                console.warn('PDF未加载，尝试从当前JSON数据加载PDF');
-                // 尝试从当前数据加载PDF - 支持多种结构
-                const pdfPath = AppState.currentJsonData?.pdf_path || 
-                               AppState.currentJsonData?.meta_info?.pdf_path || 
-                               AppState.currentJsonData?.metadata?.pdf_path;
-                if (pdfPath) {
-                    loadPdf(pdfPath).then(() => {
-                        if (AppState.pdfDocument) {
-                            jumpToPdfPage(pageNum, true, quote);
-                        }
-                    });
-                } else {
-                    alert('未找到关联的PDF文件，请点击右上角📁按钮手动加载');
-                }
+                console.warn('PDF未加载，尝试自动加载PDF');
+                // 尝试自动查找并加载PDF
+                autoLoadPdfFromDoi(AppState.currentJsonData).then(() => {
+                    if (AppState.pdfDocument) {
+                        jumpToPdfPage(pageNum, true, quote);
+                    } else {
+                        alert('未找到关联的PDF文件，请点击右上角📁按钮手动加载');
+                    }
+                });
                 return;
             }
             
             jumpToPdfPage(pageNum, true, quote);
             
             // 高亮链接并滚动到视图
-            e.target.style.backgroundColor = '#ffeb3b';
+            link.style.backgroundColor = '#ffeb3b';
             setTimeout(() => {
-                e.target.style.backgroundColor = '';
+                link.style.backgroundColor = '';
             }, 1000);
-            
-            // 将PDF面板滚动到顶部
-            const pdfViewer = document.getElementById('pdfViewer');
-            pdfViewer.scrollTop = 0;
         }
     }
 });
@@ -1162,7 +2176,7 @@ document.addEventListener('keydown', (e) => {
  * @param {string} quote - 要搜索和高亮的文本（可选）
  * @param {number} pageNum - 当前页码
  */
-async function showJumpIndicator(quote = null, pageNum = null) {
+async function showJumpIndicator(quote = null, pageNum = null, pageContainer = null) {
     const pdfViewer = document.getElementById('pdfViewer');
     if (!pdfViewer) {
         console.warn('PDF查看器容器未找到');
@@ -1173,16 +2187,23 @@ async function showJumpIndicator(quote = null, pageNum = null) {
     const oldIndicators = pdfViewer.querySelectorAll('.pdf-jump-indicator');
     oldIndicators.forEach(ind => ind.remove());
     
+    // 如果没有传入pageContainer，尝试找到它
+    if (!pageContainer && pageNum) {
+        pageContainer = document.querySelector(`.pdf-page-container[data-page-number="${pageNum}"]`);
+    }
+    
+    if (!pageContainer) {
+        console.warn('未找到页面容器');
+        return;
+    }
+    
     // 如果有quote，尝试在PDF页面中搜索文本位置
     if (quote && pageNum && AppState.pdfDocument) {
         try {
             const page = await AppState.pdfDocument.getPage(pageNum);
             const textContent = await page.getTextContent();
-            const canvas = document.getElementById('pdfCanvas');
-            if (!canvas) {
-                console.warn('Canvas未找到');
-                return;
-            }
+            const canvas = pageContainer.querySelector('canvas');
+            if (!canvas) return;
             
             // 获取当前视图的scale
             const viewport = page.getViewport({ scale: AppState.scale });
@@ -1255,20 +2276,20 @@ async function showJumpIndicator(quote = null, pageNum = null) {
                     console.log('显示坐标:', { x: displayX, y: displayY });
                     console.log('Canvas显示尺寸:', { width: canvasDisplayWidth, height: canvasDisplayHeight });
                     
-                    // 创建高亮指示器（相对于canvas定位）
+                    // 创建高亮指示器（相对于pageContainer定位）
                     const indicator = document.createElement('div');
                     indicator.className = 'pdf-jump-indicator';
                     indicator.style.position = 'absolute';
-                    // 相对于pdfViewer定位，需要加上canvas的偏移
+                    // 相对于pageContainer定位，需要加上canvas的偏移
                     const canvasOffsetLeft = canvas.offsetLeft;
                     const canvasOffsetTop = canvas.offsetTop;
                     indicator.style.left = `${canvasOffsetLeft + displayX}px`;
                     indicator.style.top = `${canvasOffsetTop + displayY - 50}px`; // 在文本上方50px
                     indicator.style.transform = 'translate(-50%, 0)';
-                    indicator.innerHTML = '📍 这里';
+                    indicator.innerHTML = '<i class="fas fa-location-dot"></i> 这里';
                     
-                    pdfViewer.style.position = 'relative';
-                    pdfViewer.appendChild(indicator);
+                    pageContainer.style.position = 'relative';
+                    pageContainer.appendChild(indicator);
                     
                     // 2.5秒后移除
                     setTimeout(() => {
@@ -1290,10 +2311,10 @@ async function showJumpIndicator(quote = null, pageNum = null) {
     // 如果没有quote或文本搜索失败，显示在中央
     const indicator = document.createElement('div');
     indicator.className = 'pdf-jump-indicator';
-    indicator.innerHTML = '📍 已跳转到此页';
+    indicator.innerHTML = '<i class="fas fa-location-dot"></i> 已跳转到此页';
     
-    pdfViewer.style.position = 'relative';
-    pdfViewer.appendChild(indicator);
+    pageContainer.style.position = 'relative';
+    pageContainer.appendChild(indicator);
     
     // 2秒后自动移除指示器
     setTimeout(() => {
