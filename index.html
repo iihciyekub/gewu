@@ -1,148 +1,115 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>PDF文献分析管理工具</title>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <title>Paper Reviewer - Overleaf Style</title>
+    
+    <!-- External Libraries -->
+    <link rel="stylesheet" href="js/core/fontawesome-free-6.7.2-web/css/all.min.css">
+    <link rel="stylesheet" href="js/core/jquery.json-viewer.css">
     <link rel="stylesheet" href="css/styles.css">
+    
+    <!-- MathJax for LaTeX rendering -->
     <script>
-    // MathJax 配置
-    window.MathJax = {
-        tex: {
-            inlineMath: [['$', '$'], ['\\(', '\\)']],
-            displayMath: [['$$', '$$'], ['\\[', '\\]']],
-            processEscapes: true,
-            processEnvironments: true
-        },
-        options: {
-            skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre']
-        }
-    };
+        MathJax = {
+            tex: {
+                inlineMath: [['$', '$'], ['\\(', '\\)']],
+                displayMath: [['$$', '$$'], ['\\[', '\\]']],
+                processEscapes: true,
+                processEnvironments: true
+            },
+            options: {
+                skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre']
+            }
+        };
     </script>
-    <script src="js/core/MathJax-3.2.2/es5/tex-chtml.js" id="MathJax-script"></script>
+    <script src="js/core/MathJax-3.2.2/es5/tex-mml-chtml.js" id="MathJax-script"></script>
 </head>
 <body>
+    <!-- Main Container -->
     <div class="container">
-        <!-- 左侧栏：JSON文件列表 -->
-        <div class="panel panel-left" id="panelLeft">
+        <!-- Left Panel - File List -->
+        <div class="left-panel">
             <div class="panel-header">
-                <h3><i class="fas fa-folder-open"></i> 文献列表</h3>
-                <div class="file-controls">
-                    <button id="themeToggle" class="btn-icon" title="切换主题"><i class="fas fa-moon"></i></button>
-                    <button id="refreshFiles" class="btn-icon" title="刷新文件列表"><i class="fas fa-rotate"></i></button>
-                </div>
+                <i class="fas fa-folder-open"></i> JSON Files
             </div>
-            <div class="panel-content">
-                <div id="fileList" class="file-list">
-                    <!-- 文件列表将动态加载 -->
+            <div class="file-list" id="fileList">
+                <div class="loading">
+                    <div class="spinner"></div>
+                    Loading files...
                 </div>
             </div>
         </div>
 
-        <!-- 分隔条1 -->
-        <div class="resizer" id="resizer1"></div>
+        <!-- Resizer -->
+        <div class="resizer" id="leftResizer"></div>
 
-        <!-- 中间栏：数据表格展示 -->
-        <div class="panel panel-middle" id="panelMiddle">
-            <div class="panel-header">
-                <h3><i class="fas fa-chart-bar"></i> 文献数据分析</h3>
-                <div class="data-controls">
-                    <button id="toggleEditMode" class="btn-icon" title="切换编辑模式"><i class="fas fa-edit"></i></button>
-                    <button id="saveJson" class="btn-primary" title="保存到JSON" style="display:none;"><i class="fas fa-save"></i> 保存</button>
-                    <button id="addCategory" class="btn-icon" title="添加类别" style="display:none;"><i class="fas fa-plus-circle"></i></button>
-                    <select id="viewMode" class="select-control">
-                        <option value="hierarchical">分层视图</option>
-                        <option value="flat">扁平视图</option>
-                        <option value="edit">编辑模式</option>
-                    </select>
+        <!-- Middle Panel - JSON Editor -->
+        <div class="middle-panel">
+            <div class="middle-header">
+                <div class="file-info">
+                    <i class="fas fa-file-code"></i>
+                    <span id="currentFileName">未选择文件</span>
+                </div>
+                <div class="header-actions">
+                    <button id="saveBtn" class="btn-save" style="display: none;" onclick="window.paperReviewerApp.saveToFile()">
+                        <i class="fas fa-save"></i> 保存修改
+                    </button>
+                    <div class="view-tabs">
+                        <button class="tab-btn active" data-view="structured">
+                            <i class="fas fa-table"></i>
+                        </button>
+                        <button class="tab-btn" data-view="flat">
+                            <i class="fas fa-code"></i>
+                        </button>
+                    </div>
                 </div>
             </div>
-            <div class="panel-content">
-                <div id="dataDisplay" class="data-display">
-                    <div class="placeholder">
-                        <div class="placeholder-icon"><i class="fas fa-file-alt" style="font-size:48px;"></i></div>
-                        <p>请从左侧选择一个JSON文件查看数据</p>
+            <div class="editor-container">
+                <div class="structured-view active" id="structuredView">
+                    <div class="empty-state">
+                        <i class="fas fa-file-alt"></i>
+                        <h3>No File Selected</h3>
+                        <p>Select a JSON file from the left panel to start editing</p>
+                    </div>
+                </div>
+                <div class="flat-view" id="flatView">
+                    <div class="empty-state">
+                        <i class="fas fa-file-code"></i>
+                        <h3>No File Selected</h3>
+                        <p>Select a JSON file from the left panel to view JSON data</p>
                     </div>
                 </div>
             </div>
         </div>
 
-        <!-- 分隔条2 -->
-        <div class="resizer" id="resizer2"></div>
+        <!-- Resizer -->
+        <div class="resizer" id="middleResizer"></div>
 
-        <!-- 右侧栏：PDF查看器 -->
-        <div class="panel panel-right" id="panelRight">
-            <div class="panel-header">
-                <h3><i class="fas fa-book-open"></i> PDF查看器</h3>
-                <div class="pdf-controls">
-                    <input type="file" id="pdfFileInput" accept=".pdf" style="display:none;" />
-                    <button id="loadPdfBtn" class="btn-primary" title="加载PDF文件"><i class="fas fa-folder-open"></i></button>
-                    <span id="pdfFileName" class="pdf-file-info" style="display:none;"></span>
-                    <button id="fitWidth" class="btn-icon" title="适应宽度" style="background:#4caf50;color:white;"><i class="fas fa-arrows-left-right"></i></button>
-                    <button id="prevPage" class="btn-icon" title="上一页"><i class="fas fa-chevron-left"></i></button>
-                    <span id="pageInfo" class="page-info">- / -</span>
-                    <button id="nextPage" class="btn-icon" title="下一页"><i class="fas fa-chevron-right"></i></button>
-                    <button id="zoomOut" class="btn-icon" title="缩小"><i class="fas fa-minus"></i></button>
-                    <span id="zoomLevel" class="zoom-info">150%</span>
-                    <button id="zoomIn" class="btn-icon" title="放大"><i class="fas fa-plus"></i></button>
-                </div>
+        <!-- Right Panel - PDF Viewer -->
+        <div class="right-panel">
+            <iframe id="pdfViewer" style="width: 100%; height: 100%; border: none;"></iframe>
+        </div>
+    </div>
+
+    <!-- Edit Modal -->
+    <div class="modal" id="editModal">
+        <div class="modal-content">
+            <div class="modal-header" id="modalTitle">Edit Value</div>
+            <div class="modal-body">
+                <textarea id="editTextarea"></textarea>
             </div>
-            <div class="panel-content">
-                <div id="pdfViewer" class="pdf-viewer">
-                    <div class="placeholder">
-                        <div class="placeholder-icon"><i class="fas fa-file-pdf" style="font-size: 48px;"></i></div>
-                        <p>PDF将在此显示</p>
-                        <small>点击表格中的页码或证据链接查看PDF</small>
-                    </div>
-                </div>
+            <div class="modal-footer">
+                <button class="btn btn-cancel" id="cancelEdit">Cancel</button>
+                <button class="btn btn-primary" id="saveEdit">Save</button>
             </div>
         </div>
     </div>
 
-    <!-- 编辑对话框 -->
-    <div id="editDialog" class="edit-dialog" style="display:none;">
-        <div class="edit-dialog-overlay"></div>
-        <div class="edit-dialog-content">
-            <div class="edit-dialog-header">
-                <h3><i class="fas fa-edit"></i> 编辑字段</h3>
-                <button class="btn-icon btn-close-dialog"><i class="fas fa-times"></i></button>
-            </div>
-            <div class="edit-dialog-body">
-                <div class="dialog-field">
-                    <label>字段名称:</label>
-                    <div class="field-name-display"></div>
-                </div>
-                <div class="dialog-field">
-                    <label>值:</label>
-                    <textarea id="dialogValueInput" rows="4" placeholder="输入字段值"></textarea>
-                </div>
-                <div class="dialog-section">
-                    <h4><i class="fas fa-file-pdf"></i> PDF位置信息（可选）</h4>
-                    <div class="dialog-field-group">
-                        <div class="dialog-field">
-                            <label>页码标签:</label>
-                            <input type="text" id="dialogPageLabel" placeholder="例如: 2044" />
-                        </div>
-                        <div class="dialog-field">
-                            <label>页面索引:</label>
-                            <input type="number" id="dialogPageIndex" placeholder="例如: 7" min="1" />
-                        </div>
-                    </div>
-                    <div class="dialog-field">
-                        <label>引用文本:</label>
-                        <textarea id="dialogQuote" rows="3" placeholder="PDF中的引用文本"></textarea>
-                    </div>
-                </div>
-            </div>
-            <div class="edit-dialog-footer">
-                <button class="btn-secondary btn-cancel-dialog">取消</button>
-                <button class="btn-primary btn-save-dialog"><i class="fas fa-save"></i> 保存</button>
-            </div>
-        </div>
-    </div>
-
-    <!-- PDF.js库 -->
-    <script type="module" src="./js/app.js"></script>
+    <!-- Scripts -->
+    <script src="js/core/jquery-3.7.0.js"></script>
+    <script src="js/core/jquery.json-viewer.js"></script>
+    <script src="js/app.js"></script>
 </body>
 </html>

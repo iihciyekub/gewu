@@ -1,30 +1,53 @@
+#!/usr/bin/env node
+/**
+ * Simple HTTP Server with JSON save support
+ * 支持直接保存JSON文件到 user/data/ 目录
+ */
+
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
+const url = require('url');
 
 const PORT = 8000;
 
+// MIME类型映射
 const mimeTypes = {
     '.html': 'text/html',
     '.js': 'text/javascript',
     '.mjs': 'text/javascript',
     '.css': 'text/css',
     '.json': 'application/json',
-    '.pdf': 'application/pdf',
     '.png': 'image/png',
     '.jpg': 'image/jpg',
     '.gif': 'image/gif',
     '.svg': 'image/svg+xml',
     '.ico': 'image/x-icon',
-    '.bcmap': 'application/octet-stream',
+    '.pdf': 'application/pdf',
+    '.woff': 'font/woff',
+    '.woff2': 'font/woff2',
+    '.ttf': 'font/ttf',
     '.wasm': 'application/wasm'
 };
 
 const server = http.createServer((req, res) => {
-    console.log(`${req.method} ${req.url}`);
-    
-    // 处理保存JSON的API
-    if (req.method === 'POST' && req.url === '/api/save-json') {
+    const parsedUrl = url.parse(req.url, true);
+    const pathname = parsedUrl.pathname;
+
+    // 设置CORS头
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+
+    // 处理OPTIONS预检请求
+    if (req.method === 'OPTIONS') {
+        res.writeHead(200);
+        res.end();
+        return;
+    }
+
+    // 处理JSON保存请求
+    if (req.method === 'POST' && pathname === '/save-json') {
         let body = '';
         
         req.on('data', chunk => {
@@ -33,47 +56,51 @@ const server = http.createServer((req, res) => {
         
         req.on('end', () => {
             try {
-                const { filename, data } = JSON.parse(body);
+                const data = JSON.parse(body);
+                const { filename, content } = data;
                 
-                if (!filename) {
+                if (!filename || !content) {
                     res.writeHead(400, { 'Content-Type': 'application/json' });
-                    res.end(JSON.stringify({ success: false, error: '缺少文件名' }));
+                    res.end(JSON.stringify({ success: false, error: 'Missing filename or content' }));
                     return;
                 }
                 
-                // 确保文件在src目录
-                const filePath = path.join(__dirname, 'src', filename);
+                // 保存到 user/data/ 目录
+                const filePath = path.join(__dirname, 'user', 'data', filename);
                 
-                // 检查路径安全性
-                if (!filePath.startsWith(path.join(__dirname, 'src'))) {
-                    res.writeHead(403, { 'Content-Type': 'application/json' });
-                    res.end(JSON.stringify({ success: false, error: '非法路径' }));
-                    return;
+                // 确保目录存在
+                const dir = path.dirname(filePath);
+                if (!fs.existsSync(dir)) {
+                    fs.mkdirSync(dir, { recursive: true });
                 }
                 
                 // 写入文件
-                fs.writeFile(filePath, JSON.stringify(data, null, 2), 'utf8', (err) => {
-                    if (err) {
-                        console.error('保存文件失败:', err);
-                        res.writeHead(500, { 'Content-Type': 'application/json' });
-                        res.end(JSON.stringify({ success: false, error: err.message }));
-                    } else {
-                        console.log('文件保存成功:', filePath);
-                        res.writeHead(200, { 'Content-Type': 'application/json' });
-                        res.end(JSON.stringify({ success: true, filename }));
-                    }
-                });
+                fs.writeFileSync(filePath, content, 'utf8');
+                
+                console.log(`✓ Saved: ${filePath}`);
+                
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({
+                    success: true,
+                    message: `File ${filename} saved successfully`,
+                    path: filePath
+                }));
+                
             } catch (error) {
-                console.error('处理保存请求失败:', error);
-                res.writeHead(400, { 'Content-Type': 'application/json' });
-                res.end(JSON.stringify({ success: false, error: error.message }));
+                console.error('✗ Error saving file:', error);
+                res.writeHead(500, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ 
+                    success: false, 
+                    error: error.message 
+                }));
             }
         });
         
         return;
     }
 
-    let filePath = '.' + req.url;
+    // 处理静态文件请求
+    let filePath = '.' + pathname;
     if (filePath === './') {
         filePath = './index.html';
     }
@@ -84,13 +111,16 @@ const server = http.createServer((req, res) => {
     fs.readFile(filePath, (error, content) => {
         if (error) {
             if (error.code === 'ENOENT') {
+                // 文件不存在
                 res.writeHead(404, { 'Content-Type': 'text/html' });
                 res.end('<h1>404 - File Not Found</h1>', 'utf-8');
             } else {
+                // 服务器错误
                 res.writeHead(500);
                 res.end(`Server Error: ${error.code}`, 'utf-8');
             }
         } else {
+            // 成功返回文件
             res.writeHead(200, { 'Content-Type': contentType });
             res.end(content, 'utf-8');
         }
@@ -98,8 +128,8 @@ const server = http.createServer((req, res) => {
 });
 
 server.listen(PORT, () => {
-    console.log(`\n🚀 服务器已启动！`);
-    console.log(`📂 目录: ${__dirname}`);
-    console.log(`🌐 访问地址: http://localhost:${PORT}`);
-    console.log(`\n按 Ctrl+C 停止服务器\n`);
+    console.log('🚀 Server running at http://localhost:' + PORT + '/');
+    console.log('📁 Serving files from: ' + __dirname);
+    console.log('💾 JSON files will be saved to: user/data/');
+    console.log('Press Ctrl+C to stop\n');
 });

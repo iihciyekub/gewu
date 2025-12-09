@@ -6,7 +6,6 @@
 {
   "meta_info": {
     "doi": "10.1287/poms.2017.1713",
-    "pdf_path": "./src/papers/example.pdf",
     "paper_id": "Author_Year",
     "title": "论文标题",
     "title_loc": {
@@ -71,20 +70,6 @@
 }
 ```
 
-## 兼容性
-
-系统会自动将旧格式转换为新格式：
-
-**旧格式:**
-```json
-{
-  "meta_info": { ... },
-  "did_design_setup": {
-    "model_type": "Staggered DID",
-    "model_type_loc": { ... }
-  }
-}
-```
 
 **自动转换为新格式:**
 ```json

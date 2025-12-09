@@ -1,0 +1,54 @@
+{
+  "meta_info": {
+    "doi": "10.1111/poms.12748",
+    "pdf_path": "user/papers/10.1111_poms.12748.pdf",
+    "paper_id": "Example_Paper_2",
+    "title": "Example Paper for Testing Multi-File Support",
+    "title_loc": {
+      "page_label": "1",
+      "pdf_page_index": 1,
+      "pdf_open_params": "#page=1",
+      "quote": "Example Paper for Testing..."
+    },
+    "authors": "Test Author; Another Author",
+    "journal_year": "POMS, 2023",
+    "authors_loc": {
+      "page_label": "2",
+      "pdf_page_index": 2,
+      "pdf_open_params": "#page=2",
+      "quote": "Authors list"
+    }
+  },
+  "research_design": {
+    "methodology": "Experimental Design",
+    "methodology_loc": {
+      "page_label": "5",
+      "pdf_page_index": 5,
+      "pdf_open_params": "#page=5",
+      "quote": "We employ an experimental approach..."
+    },
+    "sample_size": "1000 participants",
+    "sample_size_loc": {
+      "page_label": "6",
+      "pdf_page_index": 6,
+      "pdf_open_params": "#page=6",
+      "quote": "Our sample consists of 1000 participants"
+    }
+  },
+  "key_findings": {
+    "finding_1": "Significant positive effect on productivity",
+    "finding_1_loc": {
+      "page_label": "10",
+      "pdf_page_index": 10,
+      "pdf_open_params": "#page=10",
+      "quote": "Results show significant improvement..."
+    },
+    "finding_2": "No significant effect on employee satisfaction",
+    "finding_2_loc": {
+      "page_label": "12",
+      "pdf_page_index": 12,
+      "pdf_open_params": "#page=12",
+      "quote": "However, satisfaction levels remained unchanged"
+    }
+  }
+}
