@@ -919,18 +919,31 @@ class PaperReviewerApp {
 
     renderObject(obj, table, basePath) {
         for (const [key, value] of Object.entries(obj)) {
-            // 显示所有字段，不跳过_loc字段
             const row = document.createElement('tr');
             const keyCell = document.createElement('td');
             const valueCell = document.createElement('td');
 
+            // 判断是否是_loc字段
+            const isLocField = key.endsWith('_loc');
+            
+            // _loc字段默认隐藏，添加特殊样式
+            if (isLocField) {
+                row.classList.add('loc-field-row', 'collapsed');
+            }
+
             // Key可编辑，添加editable-key类和双击功能
-            keyCell.innerHTML = `<span class="editable-key" data-path="${basePath.join('.')}" data-key="${key}">${this.formatKey(key)}</span>`;
+            const keyDisplay = isLocField 
+                ? `<span class="editable-key loc-key" data-path="${basePath.join('.')}" data-key="${key}">
+                     <i class="fas fa-info-circle"></i> ${this.formatKey(key)}
+                   </span>`
+                : `<span class="editable-key" data-path="${basePath.join('.')}" data-key="${key}">${this.formatKey(key)}</span>`;
+            
+            keyCell.innerHTML = keyDisplay;
             const currentPath = [...basePath, key];
 
             // 检查是否有对应的 location 信息（_loc字段本身不显示PDF链接）
             const locKey = key + '_loc';
-            const locationInfo = (!key.endsWith('_loc') && obj[locKey]) ? obj[locKey] : null;
+            const locationInfo = (!isLocField && obj[locKey]) ? obj[locKey] : null;
 
             // 处理值的显示
             if (typeof value === 'object' && value !== null) {
@@ -945,10 +958,52 @@ class PaperReviewerApp {
                 // 简单值（字符串、数字等）
                 valueCell.innerHTML = this.createEditableValue(value, currentPath, locationInfo, key);
             }
+            
+            // 为非_loc字段添加展开/折叠按钮（如果有对应的_loc字段）
+            if (!isLocField && obj[locKey]) {
+                const toggleBtn = document.createElement('button');
+                toggleBtn.className = 'loc-toggle-btn';
+                toggleBtn.innerHTML = '<i class="fas fa-chevron-down"></i>';
+                toggleBtn.title = '显示/隐藏位置信息';
+                toggleBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    this.toggleLocField(table, key);
+                });
+                keyCell.appendChild(toggleBtn);
+            }
 
             row.appendChild(keyCell);
             row.appendChild(valueCell);
             table.appendChild(row);
+        }
+    }
+    
+    // 切换_loc字段的显示/隐藏
+    toggleLocField(table, baseKey) {
+        const locKey = baseKey + '_loc';
+        const locRows = Array.from(table.querySelectorAll('tr.loc-field-row')).filter(row => {
+            const keySpan = row.querySelector('.editable-key');
+            return keySpan && keySpan.dataset.key === locKey;
+        });
+        
+        locRows.forEach(row => {
+            row.classList.toggle('collapsed');
+        });
+        
+        // 更新按钮图标
+        const toggleBtn = Array.from(table.querySelectorAll('.loc-toggle-btn')).find(btn => {
+            const keyCell = btn.parentElement;
+            const keySpan = keyCell.querySelector('.editable-key');
+            return keySpan && keySpan.dataset.key === baseKey;
+        });
+        
+        if (toggleBtn) {
+            const icon = toggleBtn.querySelector('i');
+            if (locRows[0]?.classList.contains('collapsed')) {
+                icon.className = 'fas fa-chevron-down';
+            } else {
+                icon.className = 'fas fa-chevron-up';
+            }
         }
     }
 
@@ -1055,6 +1110,26 @@ class PaperReviewerApp {
             const viewerUrl = `js/pdfjs/web/viewer.html?file=${encodeURIComponent('../../../' + url)}`;
             pdfViewer.src = viewerUrl;
             
+            // 监听iframe加载完成，设置平滑滚动
+            pdfViewer.onload = () => {
+                try {
+                    console.log('📄 PDF iframe已加载，设置平滑滚动...');
+                    const pdfWindow = pdfViewer.contentWindow;
+                    const pdfDoc = pdfWindow.document;
+                    const viewerContainer = pdfDoc.querySelector('#viewerContainer');
+                    
+                    if (viewerContainer) {
+                        // 为viewerContainer添加CSS平滑滚动
+                        viewerContainer.style.scrollBehavior = 'smooth';
+                        console.log('✅ 已设置viewerContainer的平滑滚动属性');
+                    } else {
+                        console.warn('⚠️ 无法找到viewerContainer，将在后续尝试');
+                    }
+                } catch (error) {
+                    console.warn('⚠️ 设置平滑滚动失败（跨域限制）:', error);
+                }
+            };
+            
             this.showNotification('PDF 加载完成', 'success');
         } catch (error) {
             console.error('Error loading PDF:', error);
@@ -1106,14 +1181,97 @@ class PaperReviewerApp {
             if (cleanText) {
                 this.executeSearchAndScroll(pdfApp, cleanText);
             } else if (page) {
-                // 如果没有搜索文本，只跳转页码
-                pdfApp.page = parseInt(page);
-                this.showNotification(`📄 第 ${page} 页`, 'info');
+                // 如果没有搜索文本，丝滑跳转到页码
+                this.smoothScrollToPage(pdfApp, parseInt(page));
             }
             
         } catch (error) {
             console.error('Error in search:', error);
             this.showNotification('❌ 操作失败', 'error');
+        }
+    }
+    
+    // 丝滑滚动到指定页码
+    smoothScrollToPage(pdfApp, targetPage) {
+        try {
+            console.log(`🎯 开始丝滑滚动到第 ${targetPage} 页`);
+            
+            // 获取PDF iframe
+            const pdfIframe = document.querySelector('#pdfViewer');
+            if (!pdfIframe || !pdfIframe.contentWindow) {
+                console.warn('⚠️ 找不到PDF iframe');
+                return;
+            }
+            
+            const pdfWindow = pdfIframe.contentWindow;
+            const pdfDoc = pdfWindow.document;
+            
+            // 查找viewerContainer（PDF.js的滚动容器）
+            const viewerContainer = pdfDoc.querySelector('#viewerContainer');
+            
+            if (!viewerContainer) {
+                console.warn('⚠️ 找不到viewerContainer，尝试使用PDF.js API跳转');
+                pdfApp.page = targetPage;
+                this.showNotification(`📄 第 ${targetPage} 页`, 'info');
+                return;
+            }
+            
+            console.log('✅ 找到viewerContainer');
+            
+            // 确保设置了平滑滚动（以防未设置）
+            if (viewerContainer.style.scrollBehavior !== 'smooth') {
+                viewerContainer.style.scrollBehavior = 'smooth';
+                console.log('🔧 已设置viewerContainer平滑滚动');
+            }
+            
+            // 获取目标页面元素
+            const pageElement = pdfDoc.querySelector(`[data-page-number="${targetPage}"]`);
+            
+            if (pageElement) {
+                console.log(`📍 找到目标页面元素，准备滚动...`);
+                
+                // 获取页面位置
+                const pageRect = pageElement.getBoundingClientRect();
+                const containerRect = viewerContainer.getBoundingClientRect();
+                
+                // 计算目标滚动位置（页面顶部对齐到视口顶部，留点边距）
+                const targetScrollTop = viewerContainer.scrollTop + pageRect.top - containerRect.top - 20;
+                
+                console.log(`📊 滚动信息:`, {
+                    当前滚动位置: viewerContainer.scrollTop,
+                    页面相对位置: pageRect.top - containerRect.top,
+                    目标滚动位置: targetScrollTop,
+                    页面高度: pageRect.height
+                });
+                
+                // 丝滑滚动
+                viewerContainer.scrollTo({
+                    top: Math.max(0, targetScrollTop),
+                    behavior: 'smooth'
+                });
+                
+                // 同时更新PDF.js的当前页码（延迟避免冲突）
+                setTimeout(() => {
+                    pdfApp.page = targetPage;
+                    console.log(`✅ PDF.js页码已更新为 ${targetPage}`);
+                }, 500);
+                
+                this.showNotification(`📄 第 ${targetPage} 页`, 'info');
+                console.log('✅ 已触发丝滑页面跳转动画');
+            } else {
+                console.warn(`⚠️ 找不到页面${targetPage}的DOM元素，可能还未渲染`);
+                console.log('📋 尝试查找所有页面元素...');
+                const allPages = pdfDoc.querySelectorAll('[data-page-number]');
+                console.log(`📋 共找到 ${allPages.length} 个页面元素`);
+                
+                // 使用PDF.js API跳转
+                pdfApp.page = targetPage;
+                this.showNotification(`📄 第 ${targetPage} 页`, 'info');
+            }
+        } catch (error) {
+            console.error('❌ 丝滑滚动失败，使用默认跳转:', error);
+            pdfApp.page = targetPage;
+            this.showNotification(`📄 第 ${targetPage} 页`, 'info');
         }
     }
 
@@ -1141,10 +1299,10 @@ class PaperReviewerApp {
                 console.log('✅ 找到匹配');
                 searchResult.found = true;
                 
-                // 搜索成功后，延迟滚动到第一个高亮文本中央
+                // 搜索成功后，延迟滚动到第一个高亮文本中央（增加延迟确保渲染完成）
                 setTimeout(() => {
                     this.scrollToFirstMatch(pdfApp);
-                }, 400);
+                }, 600);
             } else if (evt.state === 3) { // NOT_FOUND
                 console.log('⚠️ 未找到匹配');
                 searchResult.found = false;
@@ -1204,20 +1362,36 @@ class PaperReviewerApp {
     // 滚动到第一个匹配结果的中央（丝滑动画）
     scrollToFirstMatch(pdfApp) {
         try {
+            console.log('🎯 开始查找并滚动到第一个匹配结果...');
+            
             const pdfViewer = pdfApp.pdfViewer;
             if (!pdfViewer) {
                 console.warn('⚠️ pdfViewer不可用');
                 return;
             }
             
-            // 获取viewer容器（在iframe内部）
-            const pdfWindow = pdfApp.eventBus._listeners ? 
-                              document.querySelector('#pdfViewer').contentWindow : window;
-            const viewerContainer = pdfWindow.document.querySelector('#viewerContainer');
+            // 获取PDF iframe和其内部的文档
+            const pdfIframe = document.querySelector('#pdfViewer');
+            if (!pdfIframe || !pdfIframe.contentWindow) {
+                console.warn('⚠️ 找不到PDF iframe');
+                return;
+            }
+            
+            const pdfWindow = pdfIframe.contentWindow;
+            const pdfDoc = pdfWindow.document;
+            const viewerContainer = pdfDoc.querySelector('#viewerContainer');
             
             if (!viewerContainer) {
                 console.warn('⚠️ 找不到viewerContainer');
                 return;
+            }
+            
+            console.log('✅ 找到viewerContainer，查找高亮元素...');
+            
+            // 确保设置了平滑滚动（以防未设置）
+            if (viewerContainer.style.scrollBehavior !== 'smooth') {
+                viewerContainer.style.scrollBehavior = 'smooth';
+                console.log('🔧 已设置viewerContainer平滑滚动');
             }
             
             // 查找第一个高亮元素（PDF.js的高亮class）
@@ -1226,7 +1400,7 @@ class PaperReviewerApp {
                                viewerContainer.querySelector('.highlight');
             
             if (highlighted) {
-                console.log('📍 找到第一个匹配，丝滑滚动到中央...');
+                console.log('📍 找到第一个匹配，准备丝滑滚动到中央...');
                 
                 // 获取元素在容器中的位置
                 const elementRect = highlighted.getBoundingClientRect();
@@ -1241,19 +1415,26 @@ class PaperReviewerApp {
                 // 目标滚动位置：让元素中心对齐视口中心
                 const targetScrollTop = elementCenterY - viewportCenterY;
                 
-                console.log(`📐 滚动参数: 当前=${viewerContainer.scrollTop}, 目标=${targetScrollTop}`);
+                console.log(`📊 滚动信息:`, {
+                    当前滚动位置: viewerContainer.scrollTop,
+                    元素位置: elementRect.top - containerRect.top,
+                    元素高度: elementRect.height,
+                    视口高度: containerRect.height,
+                    目标滚动位置: targetScrollTop
+                });
                 
-                // 丝滑滚动动画
+                // 丝滑滚动动画 - 滚动到元素中央
                 viewerContainer.scrollTo({
                     top: Math.max(0, targetScrollTop),
                     behavior: 'smooth'
                 });
                 
-                console.log('✅ 已触发丝滑滚动动画');
+                console.log('✅ 已触发丝滑滚动动画（元素居中）');
             } else {
                 console.warn('⚠️ 未找到高亮元素，可能还在渲染中');
                 // 如果第一次没找到，再重试一次
                 setTimeout(() => {
+                    console.log('🔄 重试查找高亮元素...');
                     this.scrollToFirstMatch(pdfApp);
                 }, 300);
             }

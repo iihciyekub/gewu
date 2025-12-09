@@ -380,6 +380,57 @@ body {
     z-index: 10;
 }
 
+/* _loc字段专用样式 */
+.loc-key {
+    color: #757575;
+    font-weight: 400;
+    font-size: 9px;
+}
+
+.loc-key i {
+    color: #9e9e9e;
+    margin-right: 3px;
+}
+
+.loc-field-row {
+    background: #f9f9f9;
+    transition: all 0.3s ease;
+}
+
+.loc-field-row.collapsed {
+    display: none;
+}
+
+.loc-field-row td {
+    padding: 3px 8px;
+    font-size: 9px;
+    color: #666;
+}
+
+/* _loc字段切换按钮 */
+.loc-toggle-btn {
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    padding: 2px 4px;
+    margin-left: 6px;
+    border-radius: 2px;
+    transition: all 0.2s;
+    color: #757575;
+    font-size: 10px;
+    display: inline-flex;
+    align-items: center;
+}
+
+.loc-toggle-btn:hover {
+    background: #e0e0e0;
+    color: #424242;
+}
+
+.loc-toggle-btn i {
+    font-size: 9px;
+}
+
 /* 可编辑的值（Value）*/
 .editable-value {
     cursor: pointer;
@@ -520,6 +571,8 @@ body {
 
 .right-panel iframe {
     flex: 1;
+    /* 优化PDF内部滚动的平滑度 */
+    scroll-behavior: smooth;
 }
 
 /* Loading State - 紧凑版 */
