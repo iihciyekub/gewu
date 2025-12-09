@@ -1,4 +1,30 @@
-/* Paper Reviewer System - Compact Style */
+/* Paper Reviewer System - Overleaf Style */
+
+:root {
+    /* Overleaf 绿色主题 */
+    --overleaf-green: #138A07;
+    --overleaf-green-light: #19A309;
+    --overleaf-green-dark: #0F6A05;
+    --overleaf-bg: #F4F4F4;
+    --overleaf-sidebar: #FAFAFA;
+    --overleaf-border: #E0E0E0;
+    --overleaf-text: #2F3A3E;
+    --overleaf-text-light: #6C7A89;
+    --overleaf-hover: #E8F5E9;
+    --overleaf-active: #C8E6C9;
+    
+    /* 高级灰色系 */
+    --gray-50: #FAFAFA;
+    --gray-100: #F5F5F5;
+    --gray-200: #EEEEEE;
+    --gray-300: #E0E0E0;
+    --gray-400: #BDBDBD;
+    --gray-500: #9E9E9E;
+    --gray-600: #757575;
+    --gray-700: #616161;
+    --gray-800: #424242;
+    --gray-900: #212121;
+}
 
 * {
     margin: 0;
@@ -7,118 +33,15 @@
 }
 
 body {
-    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    font-family: 'Lato', 'Helvetica Neue', Arial, sans-serif;
     height: 100vh;
     overflow: hidden;
-    background: #f5f5f5;
+    background: var(--gray-100);
     font-size: 11px;
-    line-height: 1.3;
+    line-height: 1.4;
     display: flex;
     flex-direction: column;
-}
-
-/* Project Header */
-.project-header {
-    background: #1565c0;
-    color: white;
-    padding: 4px 12px;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.15);
-    z-index: 1001;
-    height: 28px;
-    flex-shrink: 0;
-    font-size: 10px;
-}
-
-.project-info {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    font-size: 10px;
-}
-
-.project-info i {
-    font-size: 11px;
-}
-
-#currentProjectName {
-    font-weight: 600;
-}
-
-.project-path {
-    color: rgba(255, 255, 255, 0.7);
-    font-size: 9px;
-    margin-left: 6px;
-    max-width: 300px;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-
-.project-actions {
-    display: flex;
-    gap: 6px;
-}
-
-.project-actions .btn {
-    padding: 3px 8px;
-    font-size: 9px;
-}
-
-/* Top Header - 紧凑版 */
-.header {
-    background: #2e7d32;
-    color: white;
-    padding: 8px 15px;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-    z-index: 1000;
-    height: 38px;
-}
-
-.header h1 {
-    font-size: 16px;
-    font-weight: 500;
-}
-
-.header-actions {
-    display: flex;
-    gap: 8px;
-}
-
-.btn {
-    padding: 4px 10px;
-    border: none;
-    border-radius: 3px;
-    cursor: pointer;
-    font-size: 11px;
-    transition: all 0.2s;
-}
-
-.btn i {
-    font-size: 10px;
-}
-
-.btn-primary {
-    background: #1976d2;
-    color: white;
-}
-
-.btn-primary:hover {
-    background: #1565c0;
-}
-
-.btn-success {
-    background: #388e3c;
-    color: white;
-}
-
-.btn-success:hover {
-    background: #2e7d32;
+    color: var(--gray-800);
 }
 
 /* Main Container */
@@ -129,12 +52,47 @@ body {
     overflow: hidden;
 }
 
-/* Left Panel - File List - 紧凑版 */
+/* 通用按钮样式 */
+.btn {
+    padding: 4px 10px;
+    border: none;
+    border-radius: 2px;
+    cursor: pointer;
+    font-size: 11px;
+    transition: all 0.15s ease;
+    font-weight: 400;
+}
+
+.btn i {
+    font-size: 10px;
+}
+
+.btn-primary {
+    background: var(--overleaf-green);
+    color: white;
+}
+
+.btn-primary:hover {
+    background: var(--overleaf-green-dark);
+    box-shadow: 0 1px 3px rgba(0,0,0,0.12);
+}
+
+.btn-success {
+    background: var(--overleaf-green-light);
+    color: white;
+}
+
+.btn-success:hover {
+    background: var(--overleaf-green);
+    box-shadow: 0 1px 3px rgba(0,0,0,0.12);
+}
+
+/* Left Panel - File List - Overleaf Style */
 .left-panel {
     width: 200px;
     min-width: 0;
     background: white;
-    border-right: 1px solid #ddd;
+    border-right: 1px solid var(--gray-300);
     display: flex;
     flex-direction: column;
     overflow: hidden;
@@ -142,16 +100,60 @@ body {
 }
 
 .panel-header {
-    padding: 6px 10px;
-    background: #f8f8f8;
-    border-bottom: 1px solid #ddd;
-    font-weight: 600;
-    font-size: 11px;
-    color: #333;
+    padding: 6px 8px;
+    background: var(--overleaf-green);
+    border-bottom: 1px solid var(--overleaf-green-dark);
+    font-weight: 500;
+    font-size: 10px;
+    color: white;
     height: 32px;
     display: flex;
     align-items: center;
+    justify-content: space-between;
     flex-shrink: 0;
+}
+
+.panel-header-left {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    flex: 1;
+    min-width: 0;
+}
+
+.panel-header-left i {
+    font-size: 11px;
+    flex-shrink: 0;
+}
+
+#currentProjectName {
+    font-weight: 500;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.btn-switch-project {
+    background: transparent;
+    border: none;
+    color: white;
+    cursor: pointer;
+    padding: 4px 6px;
+    border-radius: 2px;
+    transition: all 0.15s ease;
+    font-size: 11px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.btn-switch-project:hover {
+    background: var(--overleaf-green-dark);
+}
+
+.btn-switch-project i {
+    font-size: 10px;
 }
 
 .file-list {
@@ -161,13 +163,13 @@ body {
 }
 
 .file-item {
-    padding: 8px 10px;
-    margin-bottom: 3px;
+    padding: 2px 4px;
+    margin-bottom: 2px;
     cursor: pointer;
-    border-radius: 3px;
-    transition: all 0.15s;
+    border-radius: 2px;
+    transition: all 0.12s ease;
     font-size: 11px;
-    color: #333;
+    color: var(--gray-800);
     display: flex;
     align-items: center;
     gap: 6px;
@@ -175,17 +177,23 @@ body {
 }
 
 .file-item:hover {
-    background: #e8f5e9;
+    background: var(--gray-100);
 }
 
 .file-item.active {
-    background: #2e7d32;
+    background: var(--overleaf-green);
     color: white;
+    font-weight: 500;
 }
 
 .file-item i {
     font-size: 12px;
     min-width: 12px;
+    color: var(--gray-600);
+}
+
+.file-item.active i {
+    color: white;
 }
 
 /* Middle Panel - JSON Editor - 紧凑版 */
@@ -201,8 +209,8 @@ body {
 
 .middle-header {
     padding: 6px 10px;
-    background: #f8f8f8;
-    border-bottom: 1px solid #ddd;
+    background: var(--gray-100);
+    border-bottom: 1px solid var(--gray-300);
     display: flex;
     justify-content: space-between;
     align-items: center;
@@ -215,12 +223,12 @@ body {
     align-items: center;
     gap: 5px;
     font-size: 11px;
-    color: #555;
+    color: var(--gray-700);
     font-weight: 500;
 }
 
 .file-info i {
-    color: #2e7d32;
+    color: var(--overleaf-green);
     font-size: 12px;
 }
 
@@ -232,23 +240,22 @@ body {
 
 .btn-save {
     padding: 4px 10px;
-    background: #2e7d32;
+    background: var(--overleaf-green);
     color: white;
     border: none;
-    border-radius: 3px;
+    border-radius: 2px;
     cursor: pointer;
     font-size: 10px;
     font-weight: 500;
     display: flex;
     align-items: center;
     gap: 4px;
-    transition: all 0.2s;
+    transition: all 0.15s ease;
 }
 
 .btn-save:hover {
-    background: #1b5e20;
-    transform: translateY(-1px);
-    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+    background: var(--overleaf-green-dark);
+    box-shadow: 0 1px 3px rgba(19, 138, 7, 0.3);
 }
 
 .btn-save i {
@@ -263,11 +270,11 @@ body {
 .tab-btn {
     padding: 4px 8px;
     background: white;
-    border: 1px solid #ddd;
+    border: 1px solid var(--overleaf-border);
     border-radius: 2px;
     cursor: pointer;
     font-size: 11px;
-    transition: all 0.2s;
+    transition: all 0.12s ease;
     line-height: 1.2;
     min-width: 28px;
     text-align: center;
@@ -278,13 +285,14 @@ body {
 }
 
 .tab-btn.active {
-    background: #2e7d32;
+    background: var(--overleaf-green);
     color: white;
-    border-color: #2e7d32;
+    border-color: var(--overleaf-green);
 }
 
 .tab-btn:hover:not(.active) {
-    background: #f0f0f0;
+    background: var(--overleaf-hover);
+    border-color: var(--overleaf-green-light);
 }
 
 .editor-container {
@@ -325,29 +333,51 @@ body {
 }
 
 .json-table tr {
-    border-bottom: 1px solid #f0f0f0;
+    transition: background-color 0.12s ease;
 }
 
-.json-table tr:last-child {
+.json-table tr:hover {
+    background-color: var(--gray-50);
+}
+
+.json-table tr:last-child td {
     border-bottom: none;
 }
 
 .json-table td {
-    padding: 4px 8px;
+    padding: 3px 10px;
     font-size: 10px;
     line-height: 1.3;
     vertical-align: top;
+    border-bottom: 1px solid var(--gray-200);
 }
 
-.json-table td:first-child {
+/* 第一列：折叠按钮列 */
+.json-table td.toggle-cell {
+    width: 30px;
+    min-width: 30px;
+    padding: 3px 4px;
+    text-align: center;
+    background: var(--gray-50);
+    border-right: 1px solid var(--gray-300);
+}
+
+/* 第二列：Key字段列 */
+.json-table td:nth-child(2) {
     font-weight: 500;
-    color: #555;
-    width: 140px;
-    background: #fafafa;
+    color: var(--gray-700);
+    width: 160px;
+    min-width: 160px;
+    background: var(--gray-100);
+    text-align: right;
+    padding-right: 12px;
+    border-right: 2px solid var(--gray-300);
 }
 
-.json-table td:last-child {
-    color: #333;
+/* 第三列：Value值列 */
+.json-table td:nth-child(3) {
+    color: var(--gray-800);
+    padding-left: 12px;
 }
 
 /* 可编辑的字段名（Key）*/
@@ -355,15 +385,15 @@ body {
     cursor: pointer;
     padding: 2px 5px;
     border-radius: 2px;
-    transition: all 0.2s;
+    transition: all 0.15s ease;
     display: inline-block;
     font-weight: 600;
-    color: #1976d2;
+    color: var(--overleaf-green);
 }
 
 .editable-key:hover {
-    background: #e3f2fd;
-    box-shadow: 0 0 0 1px #1976d2;
+    background: var(--overleaf-hover);
+    box-shadow: 0 0 0 1px var(--overleaf-green);
 }
 
 .editable-key:hover::after {
@@ -371,7 +401,7 @@ body {
     position: absolute;
     bottom: -20px;
     left: 0;
-    background: #1976d2;
+    background: var(--overleaf-green);
     color: white;
     padding: 2px 6px;
     border-radius: 2px;
@@ -393,7 +423,7 @@ body {
 }
 
 .loc-field-row {
-    background: #f9f9f9;
+    background: var(--gray-50);
     transition: all 0.3s ease;
 }
 
@@ -404,7 +434,7 @@ body {
 .loc-field-row td {
     padding: 3px 8px;
     font-size: 9px;
-    color: #666;
+    color: var(--gray-600);
 }
 
 /* _loc字段切换按钮 */
@@ -412,23 +442,26 @@ body {
     background: transparent;
     border: none;
     cursor: pointer;
-    padding: 2px 4px;
-    margin-left: 6px;
+    padding: 2px;
+    margin: 0;
     border-radius: 2px;
-    transition: all 0.2s;
-    color: #757575;
-    font-size: 10px;
+    transition: all 0.15s ease;
+    color: var(--gray-500);
+    font-size: 11px;
     display: inline-flex;
     align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
 }
 
 .loc-toggle-btn:hover {
-    background: #e0e0e0;
-    color: #424242;
+    background: var(--gray-300);
+    color: var(--overleaf-green);
 }
 
 .loc-toggle-btn i {
-    font-size: 9px;
+    font-size: 10px;
 }
 
 /* 可编辑的值（Value）*/
@@ -455,8 +488,8 @@ body {
 }
 
 .editable-value:hover {
-    background: #fff3cd;
-    box-shadow: 0 0 0 1px #ffc107;
+    background: #FFF9E6;
+    box-shadow: 0 0 0 1px #F0C419;
 }
 
 .editable-value:hover::after {
@@ -464,7 +497,7 @@ body {
     position: absolute;
     bottom: -20px;
     left: 0;
-    background: #333;
+    background: var(--overleaf-text);
     color: white;
     padding: 2px 6px;
     border-radius: 2px;
@@ -477,23 +510,22 @@ body {
     display: inline-flex;
     align-items: center;
     gap: 2px;
-    color: #1976d2;
+    color: var(--overleaf-green);
     text-decoration: none;
     font-size: 9px;
     margin-left: 6px;
     padding: 1px 4px;
     border-radius: 2px;
-    background: #e3f2fd;
-    transition: all 0.2s ease;
+    background: var(--overleaf-hover);
+    transition: all 0.12s ease;
     white-space: nowrap;
     vertical-align: middle;
 }
 
 .location-link:hover {
-    background: #1976d2;
+    background: var(--overleaf-green);
     color: white;
-    transform: translateY(-1px);
-    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+    box-shadow: 0 1px 3px rgba(19, 138, 7, 0.3);
 }
 
 .location-link i {
@@ -636,10 +668,11 @@ body {
     left: 0;
     width: 100%;
     height: 100%;
-    background: rgba(0,0,0,0.5);
+    background: rgba(33, 33, 33, 0.6);
     z-index: 2000;
     justify-content: center;
     align-items: center;
+    backdrop-filter: blur(2px);
 }
 
 .modal.active {
@@ -660,11 +693,11 @@ body {
 
 .modal-header {
     font-size: 11px;
-    font-weight: 600;
+    font-weight: 500;
     padding: 8px 12px;
-    color: #333;
-    background: #f5f5f5;
-    border-bottom: 1px solid #e0e0e0;
+    color: var(--gray-800);
+    background: var(--gray-100);
+    border-bottom: 1px solid var(--gray-300);
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -680,12 +713,13 @@ body {
     width: 100%;
     min-height: 120px;
     padding: 6px 8px;
-    border: 1px solid #ddd;
+    border: 1px solid var(--gray-300);
     border-radius: 2px;
     font-family: 'Courier New', monospace;
     font-size: 10px;
     resize: vertical;
     line-height: 1.4;
+    background: var(--gray-50);
 }
 
 .modal-body input[type="number"],
@@ -693,9 +727,10 @@ body {
 .modal-body select {
     width: 100%;
     padding: 4px 8px;
-    border: 1px solid #ddd;
+    border: 1px solid var(--gray-300);
     border-radius: 2px;
     font-size: 10px;
+    background: var(--gray-50);
 }
 
 .modal-footer {
@@ -703,8 +738,8 @@ body {
     display: flex;
     justify-content: flex-end;
     gap: 6px;
-    background: #f9f9f9;
-    border-top: 1px solid #e0e0e0;
+    background: var(--gray-50);
+    border-top: 1px solid var(--gray-300);
 }
 
 .modal-footer .btn {
@@ -713,12 +748,13 @@ body {
 }
 
 .btn-cancel {
-    background: #999;
+    background: var(--gray-500);
     color: white;
 }
 
 .btn-cancel:hover {
-    background: #777;
+    background: var(--gray-600);
+    box-shadow: 0 1px 3px rgba(0,0,0,0.12);
 }
 
 /* Resizable Panels - Overleaf Style */
@@ -852,18 +888,21 @@ ul.json-dict, ol.json-array {
 }
 
 .notification-toast.success {
-    background: linear-gradient(135deg, #2e7d32 0%, #388e3c 100%);
+    background: var(--overleaf-green);
     color: white;
+    box-shadow: 0 4px 12px rgba(19, 138, 7, 0.3);
 }
 
 .notification-toast.error {
-    background: linear-gradient(135deg, #c62828 0%, #d32f2f 100%);
+    background: #D32F2F;
     color: white;
+    box-shadow: 0 4px 12px rgba(211, 47, 47, 0.3);
 }
 
 .notification-toast.info {
-    background: linear-gradient(135deg, #1565c0 0%, #1976d2 100%);
+    background: #1976D2;
     color: white;
+    box-shadow: 0 4px 12px rgba(25, 118, 210, 0.3);
 }
 
 .notification-toast i {
@@ -876,7 +915,7 @@ ul.json-dict, ol.json-array {
         background-color: transparent;
     }
     50% {
-        background-color: #e8f5e9;
+        background-color: var(--overleaf-hover);
     }
     100% {
         background-color: transparent;
@@ -890,34 +929,35 @@ ul.json-dict, ol.json-array {
 /* 折叠功能样式 */
 .collapsible-section {
     margin-bottom: 6px;
-    border: 1px solid #e0e0e0;
-    border-radius: 3px;
+    border: 1px solid var(--gray-300);
+    border-radius: 2px;
     overflow: hidden;
+    background: white;
 }
 
 .collapsible-header {
-    background: #f5f5f5;
+    background: var(--gray-100);
     padding: 6px 10px;
     cursor: pointer;
     display: flex;
     justify-content: space-between;
     align-items: center;
     user-select: none;
-    transition: background 0.2s;
+    transition: background 0.12s ease;
 }
 
 .collapsible-header:hover {
-    background: #eeeeee;
+    background: var(--gray-200);
 }
 
 .collapsible-header.active {
-    background: #e8f5e9;
-    border-bottom: 1px solid #e0e0e0;
+    background: var(--overleaf-active);
+    border-bottom: 1px solid var(--gray-300);
 }
 
 .collapsible-title {
-    font-weight: 600;
-    color: #333;
+    font-weight: 500;
+    color: var(--gray-800);
     font-size: 11px;
 }
 
@@ -932,7 +972,7 @@ ul.json-dict, ol.json-array {
 
 .collapsible-content {
     display: none;
-    padding: 10px;
+    padding: 0px;
 }
 
 .collapsible-content.active {
@@ -946,9 +986,9 @@ ul.json-dict, ol.json-array {
 
 .form-group label {
     display: block;
-    font-weight: 600;
+    font-weight: 500;
     margin-bottom: 3px;
-    color: #555;
+    color: var(--gray-700);
     font-size: 10px;
 }
 
@@ -958,19 +998,20 @@ ul.json-dict, ol.json-array {
 .form-group textarea {
     width: 100%;
     padding: 4px 6px;
-    border: 1px solid #ddd;
+    border: 1px solid var(--gray-300);
     border-radius: 2px;
     font-size: 10px;
     font-family: inherit;
-    transition: border-color 0.15s;
+    transition: border-color 0.12s ease;
+    background: var(--gray-50);
 }
 
 .form-group input:focus,
 .form-group select:focus,
 .form-group textarea:focus {
     outline: none;
-    border-color: #4caf50;
-    box-shadow: 0 0 0 1px rgba(76, 175, 80, 0.2);
+    border-color: var(--overleaf-green);
+    box-shadow: 0 0 0 2px rgba(19, 138, 7, 0.1);
 }
 
 .form-row {
@@ -984,13 +1025,14 @@ ul.json-dict, ol.json-array {
 
 .section-divider {
     height: 1px;
-    background: #e0e0e0;
+    background: var(--gray-300);
     margin: 10px 0;
 }
 
 .location-edit-section h4 {
     font-size: 10px;
-    color: #2e7d32;
+    color: var(--overleaf-green);
+    font-weight: 500;
     margin-bottom: 8px;
     display: flex;
     align-items: center;
@@ -1079,10 +1121,11 @@ ul.json-dict, ol.json-array {
 
 .project-selector-content .modal-header {
     padding: 8px 12px;
-    background: #f5f5f5;
-    border-bottom: 1px solid #e0e0e0;
+    background: var(--overleaf-green);
+    border-bottom: none;
     font-size: 12px;
-    font-weight: 600;
+    font-weight: 500;
+    color: white;
 }
 
 .project-selector-content .modal-body {
@@ -1098,8 +1141,8 @@ ul.json-dict, ol.json-array {
 }
 
 .project-selector-info {
-    background: #e3f2fd;
-    border-left: 2px solid #1976d2;
+    background: var(--overleaf-hover);
+    border-left: 2px solid var(--overleaf-green);
     padding: 6px 8px;
     margin-bottom: 10px;
     border-radius: 2px;
@@ -1110,7 +1153,7 @@ ul.json-dict, ol.json-array {
 }
 
 .project-selector-info i {
-    color: #1976d2;
+    color: var(--overleaf-green);
     margin-top: 1px;
     font-size: 10px;
 }
@@ -1122,7 +1165,7 @@ ul.json-dict, ol.json-array {
 }
 
 .project-selector-info code {
-    background: rgba(25, 118, 210, 0.1);
+    background: rgba(19, 138, 7, 0.1);
     padding: 1px 3px;
     border-radius: 2px;
     font-family: monospace;
@@ -1159,17 +1202,17 @@ ul.json-dict, ol.json-array {
 .recent-projects {
     margin-top: 12px;
     padding-top: 10px;
-    border-top: 1px solid #e0e0e0;
+    border-top: 1px solid var(--gray-300);
 }
 
 .recent-projects h4 {
     font-size: 10px;
-    color: #666;
+    color: var(--gray-700);
     margin-bottom: 6px;
     display: flex;
     align-items: center;
     gap: 4px;
-    font-weight: 600;
+    font-weight: 500;
 }
 
 .recent-projects h4 i {
@@ -1186,24 +1229,25 @@ ul.json-dict, ol.json-array {
 
 .recent-project-item {
     padding: 5px 8px;
-    background: #f5f5f5;
-    border: 1px solid #e0e0e0;
+    background: white;
+    border: 1px solid var(--gray-300);
     border-radius: 2px;
     cursor: pointer;
-    transition: all 0.15s;
+    transition: all 0.12s ease;
     display: flex;
     align-items: center;
     gap: 6px;
 }
 
 .recent-project-item:hover {
-    background: #e3f2fd;
-    border-color: #1976d2;
+    background: var(--gray-50);
+    border-color: var(--overleaf-green);
     transform: translateX(2px);
+    box-shadow: 0 1px 3px rgba(0,0,0,0.08);
 }
 
 .recent-project-item i {
-    color: #1976d2;
+    color: var(--overleaf-green);
     font-size: 10px;
     flex-shrink: 0;
 }
@@ -1214,15 +1258,15 @@ ul.json-dict, ol.json-array {
 }
 
 .recent-project-name {
-    font-weight: 600;
+    font-weight: 500;
     font-size: 10px;
-    color: #333;
+    color: var(--overleaf-text);
     margin-bottom: 1px;
 }
 
 .recent-project-path {
     font-size: 9px;
-    color: #757575;
+    color: var(--overleaf-text-light);
     font-family: 'Courier New', monospace;
     overflow: hidden;
     text-overflow: ellipsis;

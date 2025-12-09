@@ -70,14 +70,13 @@ class PaperReviewerApp {
     // 更新项目显示
     updateProjectDisplay() {
         const nameEl = document.getElementById('currentProjectName');
-        const pathEl = document.getElementById('currentProjectPath');
         
         if (this.currentProject) {
             nameEl.textContent = this.currentProject.name;
-            pathEl.textContent = this.currentProject.path;
+            nameEl.title = this.currentProject.path; // 显示完整路径作为tooltip
         } else {
             nameEl.textContent = '未加载项目';
-            pathEl.textContent = '';
+            nameEl.title = '';
         }
     }
 
@@ -920,6 +919,7 @@ class PaperReviewerApp {
     renderObject(obj, table, basePath) {
         for (const [key, value] of Object.entries(obj)) {
             const row = document.createElement('tr');
+            const toggleCell = document.createElement('td');
             const keyCell = document.createElement('td');
             const valueCell = document.createElement('td');
 
@@ -931,7 +931,25 @@ class PaperReviewerApp {
                 row.classList.add('loc-field-row', 'collapsed');
             }
 
-            // Key可编辑，添加editable-key类和双击功能
+            // 检查是否有对应的 location 信息
+            const locKey = key + '_loc';
+            const locationInfo = (!isLocField && obj[locKey]) ? obj[locKey] : null;
+
+            // 第一列：展开/折叠按钮（如果有对应的_loc字段）
+            toggleCell.className = 'toggle-cell';
+            if (!isLocField && obj[locKey]) {
+                const toggleBtn = document.createElement('button');
+                toggleBtn.className = 'loc-toggle-btn';
+                toggleBtn.innerHTML = '<i class="fas fa-chevron-down"></i>';
+                toggleBtn.title = '显示/隐藏位置信息';
+                toggleBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    this.toggleLocField(table, key);
+                });
+                toggleCell.appendChild(toggleBtn);
+            }
+
+            // 第二列：Key可编辑
             const keyDisplay = isLocField 
                 ? `<span class="editable-key loc-key" data-path="${basePath.join('.')}" data-key="${key}">
                      <i class="fas fa-info-circle"></i> ${this.formatKey(key)}
@@ -941,11 +959,7 @@ class PaperReviewerApp {
             keyCell.innerHTML = keyDisplay;
             const currentPath = [...basePath, key];
 
-            // 检查是否有对应的 location 信息（_loc字段本身不显示PDF链接）
-            const locKey = key + '_loc';
-            const locationInfo = (!isLocField && obj[locKey]) ? obj[locKey] : null;
-
-            // 处理值的显示
+            // 第三列：Value值的显示
             if (typeof value === 'object' && value !== null) {
                 if (Array.isArray(value)) {
                     // 数组：显示为 JSON 字符串
@@ -958,20 +972,8 @@ class PaperReviewerApp {
                 // 简单值（字符串、数字等）
                 valueCell.innerHTML = this.createEditableValue(value, currentPath, locationInfo, key);
             }
-            
-            // 为非_loc字段添加展开/折叠按钮（如果有对应的_loc字段）
-            if (!isLocField && obj[locKey]) {
-                const toggleBtn = document.createElement('button');
-                toggleBtn.className = 'loc-toggle-btn';
-                toggleBtn.innerHTML = '<i class="fas fa-chevron-down"></i>';
-                toggleBtn.title = '显示/隐藏位置信息';
-                toggleBtn.addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    this.toggleLocField(table, key);
-                });
-                keyCell.appendChild(toggleBtn);
-            }
 
+            row.appendChild(toggleCell);
             row.appendChild(keyCell);
             row.appendChild(valueCell);
             table.appendChild(row);
@@ -990,10 +992,12 @@ class PaperReviewerApp {
             row.classList.toggle('collapsed');
         });
         
-        // 更新按钮图标
+        // 更新按钮图标 - 现在按钮在独立的toggle-cell中
         const toggleBtn = Array.from(table.querySelectorAll('.loc-toggle-btn')).find(btn => {
-            const keyCell = btn.parentElement;
-            const keySpan = keyCell.querySelector('.editable-key');
+            const toggleCell = btn.parentElement;
+            const row = toggleCell.parentElement;
+            const keyCell = row.querySelector('td:nth-child(2)'); // 第二列是key列
+            const keySpan = keyCell?.querySelector('.editable-key');
             return keySpan && keySpan.dataset.key === baseKey;
         });
         
@@ -1860,30 +1864,50 @@ class PaperReviewerApp {
     }
 
     setupEditableListeners() {
-        // Add double-click listeners to editable keys（双击编辑字段名）
-        document.querySelectorAll('.editable-key').forEach(el => {
-            el.addEventListener('dblclick', () => {
+        // 使用事件委托，监听整个文档的双击事件，更稳健
+        // 移除之前可能存在的监听器，避免重复绑定
+        if (this._editableClickHandler) {
+            document.removeEventListener('dblclick', this._editableClickHandler);
+        }
+        
+        this._editableClickHandler = (e) => {
+            const target = e.target;
+            
+            // 处理双击 editable-key（编辑字段名）
+            if (target.classList.contains('editable-key') || target.closest('.editable-key')) {
+                const el = target.classList.contains('editable-key') ? target : target.closest('.editable-key');
                 const parentPath = el.dataset.path ? el.dataset.path.split('.').filter(p => p) : [];
                 const oldKey = el.dataset.key;
                 this.openEditKeyModal(parentPath, oldKey);
-            });
-        });
-
-        // Add double-click listeners to editable values
-        document.querySelectorAll('.editable-value').forEach(el => {
-            el.addEventListener('dblclick', () => {
+                return;
+            }
+            
+            // 处理双击 editable-value（编辑值）
+            if (target.classList.contains('editable-value') || target.closest('.editable-value')) {
+                const el = target.classList.contains('editable-value') ? target : target.closest('.editable-value');
                 const path = el.dataset.path.split('.');
                 const value = el.textContent;
                 this.openEditModal(path, value);
-            });
-        });
-
-        // Add click listeners to location links
-        document.querySelectorAll('.location-link').forEach(el => {
-            el.addEventListener('click', (e) => {
+                return;
+            }
+        };
+        
+        // 使用事件委托，绑定到document
+        document.addEventListener('dblclick', this._editableClickHandler);
+        
+        // 处理 location-link 点击事件（也使用事件委托）
+        if (this._locationLinkHandler) {
+            document.removeEventListener('click', this._locationLinkHandler);
+        }
+        
+        this._locationLinkHandler = (e) => {
+            const target = e.target;
+            const link = target.classList.contains('location-link') ? target : target.closest('.location-link');
+            
+            if (link) {
                 e.preventDefault();
-                const page = parseInt(el.dataset.page);
-                const valuePath = el.dataset.valuePath;
+                const page = parseInt(link.dataset.page);
+                const valuePath = link.dataset.valuePath;
                 
                 // 从 _loc 字段中获取 quote 作为搜索文本
                 let searchText = '';
@@ -1926,8 +1950,10 @@ class PaperReviewerApp {
                     // 只跳转，不搜索
                     this.jumpToPage(page, '');
                 }
-            });
-        });
+            }
+        };
+        
+        document.addEventListener('click', this._locationLinkHandler);
     }
 
     // 清理 quote 文本用于搜索
