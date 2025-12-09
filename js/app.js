@@ -8,14 +8,77 @@ class PaperReviewerApp {
         this.editingPath = null;
         this.hasUnsavedChanges = false;
         this.tempDataCache = {}; // 临时数据缓存 {filename: data}
+        
+        // 项目管理
+        this.currentProject = null; // { name, path }
+        this.recentProjects = [];
 
         this.init();
     }
 
     async init() {
+        // 先加载项目配置
+        this.loadProjectConfig();
+        
+        // 如果没有当前项目，显示项目选择器
+        if (!this.currentProject) {
+            this.showProjectSelector();
+        } else {
+            // 有项目则正常初始化
+            await this.initializeProject();
+        }
+        
         this.setupEventListeners();
         this.setupResizers();
+    }
+
+    async initializeProject() {
+        // 更新UI显示当前项目
+        this.updateProjectDisplay();
+        
+        // 加载文件列表
         await this.loadFileList();
+    }
+    
+    // 加载项目配置
+    loadProjectConfig() {
+        try {
+            const config = localStorage.getItem('reviewerProjectConfig');
+            if (config) {
+                const data = JSON.parse(config);
+                this.currentProject = data.currentProject;
+                this.recentProjects = data.recentProjects || [];
+            }
+        } catch (error) {
+            console.error('Failed to load project config:', error);
+        }
+    }
+    
+    // 保存项目配置
+    saveProjectConfig() {
+        try {
+            const config = {
+                currentProject: this.currentProject,
+                recentProjects: this.recentProjects
+            };
+            localStorage.setItem('reviewerProjectConfig', JSON.stringify(config));
+        } catch (error) {
+            console.error('Failed to save project config:', error);
+        }
+    }
+    
+    // 更新项目显示
+    updateProjectDisplay() {
+        const nameEl = document.getElementById('currentProjectName');
+        const pathEl = document.getElementById('currentProjectPath');
+        
+        if (this.currentProject) {
+            nameEl.textContent = this.currentProject.name;
+            pathEl.textContent = this.currentProject.path;
+        } else {
+            nameEl.textContent = '未加载项目';
+            pathEl.textContent = '';
+        }
     }
 
     setupEventListeners() {
@@ -52,8 +115,26 @@ class PaperReviewerApp {
             }
             if (e.key === 'Escape') {
                 this.closeEditModal();
+                this.closeProjectSelector();
             }
         });
+
+        // 项目选择器事件
+        document.getElementById('projectFolderInput').addEventListener('change', (e) => {
+            const files = e.target.files;
+            if (files.length > 0) {
+                const folderPath = files[0].webkitRelativePath.split('/')[0];
+                const fullPath = files[0].path ? files[0].path.replace(/\/[^/]+$/, '') : folderPath;
+                document.getElementById('projectPathInput').value = fullPath;
+            }
+        });
+
+        document.getElementById('loadProjectBtn').addEventListener('click', () => {
+            this.loadSelectedProject();
+        });
+
+        // 粘贴事件监听
+        document.addEventListener('paste', (e) => this.handlePaste(e));
     }
 
     setupResizers() {
@@ -231,65 +312,489 @@ class PaperReviewerApp {
         }
     }
 
-    async loadFileList() {
-        const fileListEl = document.getElementById('fileList');
-        fileListEl.innerHTML = '<div class="loading"><div class="spinner"></div>Loading files...</div>';
-
+    // ========== 项目管理方法 ==========
+    
+    showProjectSelector() {
+        this.renderRecentProjects();
+        document.getElementById('projectSelectorModal').classList.add('active');
+    }
+    
+    closeProjectSelector() {
+        document.getElementById('projectSelectorModal').classList.remove('active');
+    }
+    
+    renderRecentProjects() {
+        const container = document.getElementById('recentProjectsContent');
+        
+        if (this.recentProjects.length === 0) {
+            container.innerHTML = `
+                <div class="empty-recent-projects">
+                    <i class="fas fa-folder-open"></i>
+                    <p>暂无最近使用的项目</p>
+                </div>
+            `;
+            return;
+        }
+        
+        container.innerHTML = '';
+        this.recentProjects.forEach(project => {
+            const item = document.createElement('div');
+            item.className = 'recent-project-item';
+            item.innerHTML = `
+                <i class="fas fa-folder"></i>
+                <div class="recent-project-info">
+                    <div class="recent-project-name">${this.escapeHtml(project.name)}</div>
+                    <div class="recent-project-path">${this.escapeHtml(project.path)}</div>
+                </div>
+            `;
+            item.addEventListener('click', () => {
+                this.switchProject(project);
+            });
+            container.appendChild(item);
+        });
+    }
+    
+    async loadSelectedProject() {
+        const pathInput = document.getElementById('projectPathInput');
+        const projectPath = pathInput.value.trim();
+        
+        if (!projectPath) {
+            this.showNotification('✗ 请选择项目文件夹', 'error');
+            return;
+        }
+        
+        // 提取项目名称（最后一个文件夹名）
+        const pathParts = projectPath.replace(/\\/g, '/').split('/').filter(p => p);
+        const projectName = pathParts[pathParts.length - 1];
+        
+        const project = {
+            name: projectName,
+            path: projectPath
+        };
+        
+        await this.switchProject(project);
+    }
+    
+    async switchProject(project) {
         try {
-            // Fetch the list of JSON files from user/data directory
-            const response = await fetch('user/data/');
-            const text = await response.text();
+            // 验证项目结构
+            const response = await fetch('/validate-project', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ projectPath: project.path })
+            });
             
-            // Parse directory listing (this is a simple approach, may need adjustment based on server)
-            const parser = new DOMParser();
-            const doc = parser.parseFromString(text, 'text/html');
-            const links = Array.from(doc.querySelectorAll('a'))
-                .map(a => a.getAttribute('href'))
-                .filter(href => href && href.endsWith('.json'));
-
-            if (links.length === 0) {
-                // Fallback: try known file
-                const knownFiles = ['paper_1_data.json'];
-                this.renderFileList(knownFiles);
-            } else {
-                this.renderFileList(links);
+            if (!response.ok) {
+                throw new Error('项目验证失败');
             }
+            
+            const result = await response.json();
+            
+            if (!result.valid) {
+                this.showNotification(`✗ 无效的项目结构: ${result.message}`, 'error');
+                return;
+            }
+            
+            // 保存当前项目
+            this.currentProject = project;
+            
+            // 更新最近项目列表
+            this.updateRecentProjects(project);
+            
+            // 保存配置
+            this.saveProjectConfig();
+            
+            // 更新UI
+            this.updateProjectDisplay();
+            
+            // 关闭选择器
+            this.closeProjectSelector();
+            
+            // 清空当前状态
+            this.currentFile = null;
+            this.currentData = null;
+            this.currentPdfUrl = null;
+            this.hasUnsavedChanges = false;
+            this.tempDataCache = {};
+            
+            // 重新加载文件列表
+            await this.loadFileList();
+            
+            this.showNotification(`✓ 已加载项目: ${project.name}`, 'success');
         } catch (error) {
-            console.error('Error loading file list:', error);
-            // Fallback to known files
-            const knownFiles = ['paper_1_data.json'];
-            this.renderFileList(knownFiles);
+            console.error('Error switching project:', error);
+            this.showNotification(`✗ 加载项目失败: ${error.message}`, 'error');
+        }
+    }
+    
+    updateRecentProjects(project) {
+        // 移除已存在的相同项目
+        this.recentProjects = this.recentProjects.filter(p => p.path !== project.path);
+        
+        // 添加到开头
+        this.recentProjects.unshift(project);
+        
+        // 最多保留5个
+        if (this.recentProjects.length > 5) {
+            this.recentProjects = this.recentProjects.slice(0, 5);
         }
     }
 
-    renderFileList(files) {
+    async loadFileList(keepSelection = false) {
         const fileListEl = document.getElementById('fileList');
-        fileListEl.innerHTML = '';
+        const currentSelected = this.currentFile; // 保存当前选中的文件
+        
+        // 检查是否有当前项目
+        if (!this.currentProject) {
+            fileListEl.innerHTML = '<div class="empty-state"><p>请先加载项目</p></div>';
+            return;
+        }
+        
+        if (!keepSelection) {
+            fileListEl.innerHTML = '<div class="loading"><div class="spinner"></div>Loading files...</div>';
+        }
 
+        try {
+            // 获取文件列表 API，传递项目路径
+            const response = await fetch('/list-json-files', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ projectPath: this.currentProject.path })
+            });
+            
+            if (!response.ok) {
+                throw new Error('Failed to fetch file list');
+            }
+            
+            const data = await response.json();
+            const files = data.files || [];
+            
+            this.renderFileList(files, keepSelection ? currentSelected : null);
+        } catch (error) {
+            console.error('Error loading file list:', error);
+            this.showNotification('✗ 加载文件列表失败', 'error');
+            fileListEl.innerHTML = '<div class="empty-state"><p>加载失败，请检查服务器</p></div>';
+        }
+    }
+
+    renderFileList(files, keepSelected = null) {
+        const fileListEl = document.getElementById('fileList');
+        
         if (files.length === 0) {
-            fileListEl.innerHTML = '<div class="empty-state"><p>No JSON files found</p></div>';
+            fileListEl.innerHTML = '<div class="empty-state"><p>暂无JSON文件</p></div>';
             return;
         }
 
-        files.forEach((file, index) => {
-            const fileItem = document.createElement('div');
-            fileItem.className = 'file-item';
-            fileItem.innerHTML = `
-                <i class="fas fa-file-alt"></i>
-                <span>${file}</span>
-            `;
-            fileItem.addEventListener('click', function() {
-                window.paperReviewerApp.loadFile(file, this);
-            });
-            fileListEl.appendChild(fileItem);
-
-            // Auto-load first file
-            if (index === 0) {
+        // 获取当前已存在的文件项
+        const existingItems = new Map();
+        Array.from(fileListEl.querySelectorAll('.file-item')).forEach(item => {
+            const filename = item.querySelector('span').textContent;
+            existingItems.set(filename, item);
+        });
+        
+        // 按文件名排序
+        const sortedFiles = [...files].sort();
+        
+        // 创建新的文件列表结构
+        const newFileListEl = document.createElement('div');
+        
+        sortedFiles.forEach((file, index) => {
+            let fileItem;
+            
+            // 复用现有的DOM元素
+            if (existingItems.has(file)) {
+                fileItem = existingItems.get(file);
+                existingItems.delete(file); // 标记为已使用
+            } else {
+                // 创建新元素
+                fileItem = document.createElement('div');
+                fileItem.className = 'file-item';
+                fileItem.innerHTML = `
+                    <i class="fas fa-file-alt"></i>
+                    <span>${file}</span>
+                `;
+                
+                // 左键点击加载文件
+                fileItem.addEventListener('click', function() {
+                    window.paperReviewerApp.loadFile(file, this);
+                });
+                
+                // 右键菜单
+                fileItem.addEventListener('contextmenu', (e) => {
+                    e.preventDefault();
+                    window.paperReviewerApp.showFileContextMenu(e, file, fileItem);
+                });
+            }
+            
+            // 保持或恢复选中状态
+            if (keepSelected && file === keepSelected) {
+                fileItem.classList.add('active');
+            } else if (!keepSelected && index === 0 && !this.currentFile) {
+                // 首次加载，自动选择第一个文件
                 setTimeout(() => {
                     window.paperReviewerApp.loadFile(file, fileItem);
                 }, 100);
             }
+            
+            newFileListEl.appendChild(fileItem);
         });
+        
+        // 一次性替换整个列表（最小化重排）
+        fileListEl.innerHTML = '';
+        fileListEl.appendChild(newFileListEl);
+    }
+
+    // 显示文件右键菜单
+    showFileContextMenu(e, filename, fileItem) {
+        // 移除旧菜单
+        const oldMenu = document.querySelector('.context-menu');
+        if (oldMenu) oldMenu.remove();
+        
+        // 创建菜单
+        const menu = document.createElement('div');
+        menu.className = 'context-menu';
+        menu.style.left = `${e.pageX}px`;
+        menu.style.top = `${e.pageY}px`;
+        menu.innerHTML = `
+            <div class="context-menu-item" data-action="rename">
+                <i class="fas fa-edit"></i> 重命名
+            </div>
+            <div class="context-menu-item" data-action="delete">
+                <i class="fas fa-trash"></i> 删除
+            </div>
+        `;
+        
+        document.body.appendChild(menu);
+        
+        // 菜单项点击事件
+        menu.querySelectorAll('.context-menu-item').forEach(item => {
+            item.addEventListener('click', () => {
+                const action = item.dataset.action;
+                menu.remove();
+                
+                if (action === 'rename') {
+                    this.renameFile(filename, fileItem);
+                } else if (action === 'delete') {
+                    this.deleteFile(filename, fileItem);
+                }
+            });
+        });
+        
+        // 点击其他地方关闭菜单
+        setTimeout(() => {
+            document.addEventListener('click', function closeMenu() {
+                menu.remove();
+                document.removeEventListener('click', closeMenu);
+            });
+        }, 0);
+    }
+
+    // 重命名文件
+    async renameFile(oldFilename, fileItem) {
+        const newFilename = prompt('请输入新文件名:', oldFilename);
+        if (!newFilename || newFilename === oldFilename) return;
+        
+        // 确保文件名以.json结尾
+        const finalFilename = newFilename.endsWith('.json') ? newFilename : newFilename + '.json';
+        
+        try {
+            const response = await fetch('/rename-json', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    projectPath: this.currentProject ? this.currentProject.path : 'user',
+                    oldFilename: oldFilename,
+                    newFilename: finalFilename
+                })
+            });
+            
+            if (!response.ok) throw new Error('重命名失败');
+            
+            this.showNotification(`✓ 已重命名为 ${finalFilename}`, 'success');
+            
+            // 如果当前打开的是这个文件，更新当前文件名
+            if (this.currentFile === oldFilename) {
+                this.currentFile = finalFilename;
+            }
+            
+            // 优雅更新：只更新文件名显示，保持选中状态
+            const span = fileItem.querySelector('span');
+            if (span) {
+                span.textContent = finalFilename;
+            }
+            
+            // 更新点击事件处理中的文件名引用（重新绑定）
+            const newFileItem = fileItem.cloneNode(true);
+            newFileItem.addEventListener('click', function() {
+                window.paperReviewerApp.loadFile(finalFilename, this);
+            });
+            newFileItem.addEventListener('contextmenu', (e) => {
+                e.preventDefault();
+                window.paperReviewerApp.showFileContextMenu(e, finalFilename, newFileItem);
+            });
+            fileItem.replaceWith(newFileItem);
+            
+            // 重新加载文件列表以更新排序，但保持选中状态
+            await this.loadFileList(true);
+            
+        } catch (error) {
+            console.error('Error renaming file:', error);
+            this.showNotification('✗ 重命名失败', 'error');
+        }
+    }
+
+    // 删除文件
+    async deleteFile(filename, fileItem) {
+        if (!confirm(`确定要删除 "${filename}" 吗？此操作无法撤销！`)) return;
+        
+        try {
+            const response = await fetch('/delete-json', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ 
+                    projectPath: this.currentProject ? this.currentProject.path : 'user',
+                    filename: filename 
+                })
+            });
+            
+            if (!response.ok) throw new Error('删除失败');
+            
+            this.showNotification(`✓ 已删除 ${filename}`, 'success');
+            
+            // 优雅移除：淡出动画
+            fileItem.style.transition = 'opacity 0.3s ease';
+            fileItem.style.opacity = '0';
+            
+            setTimeout(() => {
+                fileItem.remove();
+                
+                // 如果删除的是当前文件，清空显示并加载第一个文件
+                if (this.currentFile === filename) {
+                    this.currentFile = null;
+                    this.currentData = null;
+                    this.hasUnsavedChanges = false;
+                    delete this.tempDataCache[filename];
+                    
+                    const firstFile = document.querySelector('.file-item');
+                    if (firstFile) {
+                        const firstFilename = firstFile.querySelector('span').textContent;
+                        this.loadFile(firstFilename, firstFile);
+                    } else {
+                        this.showLoading();
+                    }
+                }
+            }, 300);
+            
+        } catch (error) {
+            console.error('Error deleting file:', error);
+            this.showNotification('✗ 删除失败', 'error');
+        }
+    }
+
+    // 处理粘贴事件
+    async handlePaste(e) {
+        try {
+            // 如果在输入框中粘贴，不处理
+            if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') {
+                return;
+            }
+            
+            const clipboardData = e.clipboardData || window.clipboardData;
+            const pastedText = clipboardData.getData('text');
+            
+            if (!pastedText) return;
+            
+            console.log('📋 检测到粘贴内容，尝试解析JSON...');
+            
+            // 尝试提取并解析JSON
+            const jsonData = this.extractJSON(pastedText);
+            
+            if (jsonData) {
+                e.preventDefault();
+                
+                // 询问文件名
+                const filename = prompt('检测到有效的JSON数据！\n请输入文件名:', 'pasted_data.json');
+                if (!filename) return;
+                
+                const finalFilename = filename.endsWith('.json') ? filename : filename + '.json';
+                
+                // 保存JSON文件
+                await this.saveNewJSONFile(finalFilename, jsonData);
+            }
+        } catch (error) {
+            console.error('Error handling paste:', error);
+        }
+    }
+
+    // 提取JSON数据
+    extractJSON(text) {
+        try {
+            // 尝试直接解析
+            return JSON.parse(text);
+        } catch (e) {
+            // 尝试提取代码块中的JSON
+            const codeBlockMatch = text.match(/```(?:json)?\s*([\s\S]*?)```/);
+            if (codeBlockMatch) {
+                try {
+                    return JSON.parse(codeBlockMatch[1].trim());
+                } catch (e2) {
+                    console.warn('代码块中的JSON解析失败');
+                }
+            }
+            
+            // 尝试提取{}或[]包裹的内容
+            const jsonMatch = text.match(/(\{[\s\S]*\}|\[[\s\S]*\])/);
+            if (jsonMatch) {
+                try {
+                    return JSON.parse(jsonMatch[1]);
+                } catch (e3) {
+                    console.warn('提取的JSON解析失败');
+                }
+            }
+            
+            return null;
+        }
+    }
+
+    // 保存新的JSON文件
+    async saveNewJSONFile(filename, jsonData) {
+        try {
+            const jsonString = JSON.stringify(jsonData, null, 2);
+            
+            const response = await fetch('/save-json', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    projectPath: this.currentProject ? this.currentProject.path : 'user',
+                    filename: filename,
+                    content: jsonString
+                })
+            });
+            
+            if (!response.ok) throw new Error('保存失败');
+            
+            this.showNotification(`✓ 已创建文件 ${filename}`, 'success');
+            
+            // 保存当前文件名，加载列表后恢复选中
+            const tempCurrentFile = this.currentFile;
+            this.currentFile = filename; // 设置为新文件，以便加载后选中
+            
+            // 重新加载文件列表，保持选中状态
+            await this.loadFileList(true);
+            
+            // 自动加载新创建的文件
+            setTimeout(() => {
+                const newFileItem = Array.from(document.querySelectorAll('.file-item'))
+                    .find(item => item.querySelector('span').textContent === filename);
+                if (newFileItem) {
+                    this.loadFile(filename, newFileItem);
+                }
+            }, 200);
+            
+        } catch (error) {
+            console.error('Error saving new JSON file:', error);
+            this.showNotification(`✗ 保存失败: ${error.message}`, 'error');
+        }
     }
 
     async loadFile(filename, clickedElement = null) {
@@ -323,8 +828,9 @@ class PaperReviewerApp {
                 this.currentData = this.tempDataCache[filename];
                 this.hasUnsavedChanges = true;
             } else {
-                // Fetch JSON file
-                const response = await fetch(`user/data/${filename}`);
+                // Fetch JSON file，使用项目路径
+                const projectPath = this.currentProject ? this.currentProject.path : 'user';
+                const response = await fetch(`${projectPath}/data/${filename}`);
                 if (!response.ok) throw new Error('Failed to load file');
                 this.currentData = await response.json();
                 this.hasUnsavedChanges = false;
@@ -343,8 +849,9 @@ class PaperReviewerApp {
             if (this.currentData.meta_info && this.currentData.meta_info.pdf_path) {
                 const pdfPath = this.currentData.meta_info.pdf_path;
                 // Convert path like "src/papers/joom.1169.pdf" to "user/papers/joom.1169.pdf"
+                const projectPath = this.currentProject ? this.currentProject.path : 'user';
                 const pdfFile = pdfPath.split('/').pop();
-                await this.loadPDF(`user/papers/${pdfFile}`);
+                await this.loadPDF(`${projectPath}/papers/${pdfFile}`);
             }
         } catch (error) {
             console.error('Error loading file:', error);
@@ -412,21 +919,18 @@ class PaperReviewerApp {
 
     renderObject(obj, table, basePath) {
         for (const [key, value] of Object.entries(obj)) {
-            // 跳过 _loc 字段，它们会随主字段一起显示
-            if (key.endsWith('_loc')) {
-                continue;
-            }
-
+            // 显示所有字段，不跳过_loc字段
             const row = document.createElement('tr');
             const keyCell = document.createElement('td');
             const valueCell = document.createElement('td');
 
-            keyCell.textContent = this.formatKey(key);
+            // Key可编辑，添加editable-key类和双击功能
+            keyCell.innerHTML = `<span class="editable-key" data-path="${basePath.join('.')}" data-key="${key}">${this.formatKey(key)}</span>`;
             const currentPath = [...basePath, key];
 
-            // 检查是否有对应的 location 信息
+            // 检查是否有对应的 location 信息（_loc字段本身不显示PDF链接）
             const locKey = key + '_loc';
-            const locationInfo = obj[locKey] || null;
+            const locationInfo = (!key.endsWith('_loc') && obj[locKey]) ? obj[locKey] : null;
 
             // 处理值的显示
             if (typeof value === 'object' && value !== null) {
@@ -906,6 +1410,55 @@ class PaperReviewerApp {
     }
 
     // Edit Functions
+    // 编辑字段名（双击key时调用）
+    openEditKeyModal(parentPath, oldKey) {
+        const newKey = prompt(`编辑字段名称:`, oldKey);
+        if (!newKey || newKey === oldKey || !newKey.trim()) return;
+
+        // 导航到父对象
+        let parent = this.currentData;
+        for (const p of parentPath) {
+            if (p && parent.hasOwnProperty(p)) {
+                parent = parent[p];
+            }
+        }
+
+        if (!parent || typeof parent !== 'object') {
+            this.showNotification('✗ 无法找到父对象', 'error');
+            return;
+        }
+
+        // 检查新key是否已存在
+        if (parent.hasOwnProperty(newKey)) {
+            this.showNotification('✗ 字段名已存在', 'error');
+            return;
+        }
+
+        // 重命名key：复制值到新key，删除旧key
+        parent[newKey] = parent[oldKey];
+        delete parent[oldKey];
+
+        // 如果有对应的_loc字段，也需要重命名
+        const oldLocKey = oldKey + '_loc';
+        const newLocKey = newKey + '_loc';
+        if (parent.hasOwnProperty(oldLocKey)) {
+            parent[newLocKey] = parent[oldLocKey];
+            delete parent[oldLocKey];
+        }
+
+        // 标记为有未保存的修改
+        this.hasUnsavedChanges = true;
+        this.tempDataCache[this.currentFile] = this.currentData;
+        this.updateSaveButtonState();
+
+        // 重新渲染
+        this.renderStructuredView();
+        this.renderFlatView();
+        this.setupEditableListeners();
+
+        this.showNotification(`✓ 字段已重命名: ${oldKey} → ${newKey}`, 'success');
+    }
+
     openEditModal(path, currentValue) {
         this.editingPath = path;
         const lastKey = path[path.length - 1];
@@ -968,6 +1521,18 @@ class PaperReviewerApp {
             }
         } catch (e) {
             current[lastKey] = newValue;
+        }
+
+        // 特殊处理：如果编辑的是"类"字段（不区分大小写），同步到所有可能的变体
+        const keyLower = lastKey.toLowerCase();
+        if (keyLower === 'class' || keyLower === '类' || keyLower === 'type' || keyLower === 'category') {
+            // 查找所有可能的"类"字段变体并统一更新
+            for (const k in current) {
+                const kLower = k.toLowerCase();
+                if (kLower === 'class' || kLower === '类' || kLower === 'type' || kLower === 'category') {
+                    current[k] = current[lastKey];
+                }
+            }
         }
 
         // Update location数据（如果有输入）
@@ -1114,6 +1679,15 @@ class PaperReviewerApp {
     }
 
     setupEditableListeners() {
+        // Add double-click listeners to editable keys（双击编辑字段名）
+        document.querySelectorAll('.editable-key').forEach(el => {
+            el.addEventListener('dblclick', () => {
+                const parentPath = el.dataset.path ? el.dataset.path.split('.').filter(p => p) : [];
+                const oldKey = el.dataset.key;
+                this.openEditKeyModal(parentPath, oldKey);
+            });
+        });
+
         // Add double-click listeners to editable values
         document.querySelectorAll('.editable-value').forEach(el => {
             el.addEventListener('dblclick', () => {
@@ -1347,6 +1921,7 @@ class PaperReviewerApp {
                     'Content-Type': 'application/json',
                 },
                 body: JSON.stringify({
+                    projectPath: this.currentProject ? this.currentProject.path : 'user',
                     filename: this.currentFile,
                     content: jsonString
                 })

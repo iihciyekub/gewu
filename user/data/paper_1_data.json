@@ -103,5 +103,28 @@
       "pdf_open_params": "#page=10",
       "quote": "Foreign competition has a negative\nimpact on US firms' product quality."
     }
-  }
+  },
+  "contributions": [
+    "e",
+    "w"
+  ],
+  "contributions_loc": [
+    {
+      "pdf_page_index": 3,
+      "quote": "e"
+    },
+    {
+      "pdf_page_index": 2,
+      "quote": "2"
+    }
+  ],
+  "Key Findings": [
+    "2"
+  ],
+  "Key Findings_loc": [
+    {
+      "pdf_page_index": 2,
+      "quote": "3"
+    }
+  ]
 }

@@ -13,6 +13,58 @@ body {
     background: #f5f5f5;
     font-size: 11px;
     line-height: 1.3;
+    display: flex;
+    flex-direction: column;
+}
+
+/* Project Header */
+.project-header {
+    background: #1565c0;
+    color: white;
+    padding: 4px 12px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.15);
+    z-index: 1001;
+    height: 28px;
+    flex-shrink: 0;
+    font-size: 10px;
+}
+
+.project-info {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 10px;
+}
+
+.project-info i {
+    font-size: 11px;
+}
+
+#currentProjectName {
+    font-weight: 600;
+}
+
+.project-path {
+    color: rgba(255, 255, 255, 0.7);
+    font-size: 9px;
+    margin-left: 6px;
+    max-width: 300px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.project-actions {
+    display: flex;
+    gap: 6px;
+}
+
+.project-actions .btn {
+    padding: 3px 8px;
+    font-size: 9px;
 }
 
 /* Top Header - 紧凑版 */
@@ -72,8 +124,9 @@ body {
 /* Main Container */
 .container {
     display: flex;
-    height: 100vh;
+    flex: 1;
     position: relative;
+    overflow: hidden;
 }
 
 /* Left Panel - File List - 紧凑版 */
@@ -297,6 +350,37 @@ body {
     color: #333;
 }
 
+/* 可编辑的字段名（Key）*/
+.editable-key {
+    cursor: pointer;
+    padding: 2px 5px;
+    border-radius: 2px;
+    transition: all 0.2s;
+    display: inline-block;
+    font-weight: 600;
+    color: #1976d2;
+}
+
+.editable-key:hover {
+    background: #e3f2fd;
+    box-shadow: 0 0 0 1px #1976d2;
+}
+
+.editable-key:hover::after {
+    content: '双击编辑字段名';
+    position: absolute;
+    bottom: -20px;
+    left: 0;
+    background: #1976d2;
+    color: white;
+    padding: 2px 6px;
+    border-radius: 2px;
+    font-size: 10px;
+    white-space: nowrap;
+    z-index: 10;
+}
+
+/* 可编辑的值（Value）*/
 .editable-value {
     cursor: pointer;
     padding: 2px 5px;
@@ -511,38 +595,68 @@ body {
 
 .modal-content {
     background: white;
-    padding: 20px;
-    border-radius: 6px;
+    padding: 0;
+    border-radius: 4px;
     max-width: 600px;
     width: 90%;
     max-height: 80vh;
-    overflow-y: auto;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
 }
 
 .modal-header {
-    font-size: 13px;
+    font-size: 11px;
     font-weight: 600;
-    margin-bottom: 12px;
+    padding: 8px 12px;
     color: #333;
+    background: #f5f5f5;
+    border-bottom: 1px solid #e0e0e0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.modal-body {
+    padding: 12px;
+    overflow-y: auto;
+    flex: 1;
 }
 
 .modal-body textarea {
     width: 100%;
-    min-height: 200px;
-    padding: 10px;
+    min-height: 120px;
+    padding: 6px 8px;
     border: 1px solid #ddd;
-    border-radius: 3px;
+    border-radius: 2px;
     font-family: 'Courier New', monospace;
-    font-size: 11px;
+    font-size: 10px;
     resize: vertical;
-    line-height: 1.5;
+    line-height: 1.4;
+}
+
+.modal-body input[type="number"],
+.modal-body input[type="text"],
+.modal-body select {
+    width: 100%;
+    padding: 4px 8px;
+    border: 1px solid #ddd;
+    border-radius: 2px;
+    font-size: 10px;
 }
 
 .modal-footer {
-    margin-top: 15px;
+    padding: 8px 12px;
     display: flex;
     justify-content: flex-end;
-    gap: 8px;
+    gap: 6px;
+    background: #f9f9f9;
+    border-top: 1px solid #e0e0e0;
+}
+
+.modal-footer .btn {
+    padding: 4px 10px;
+    font-size: 10px;
 }
 
 .btn-cancel {
@@ -774,15 +888,15 @@ ul.json-dict, ol.json-array {
 
 /* 表单样式 */
 .form-group {
-    margin-bottom: 10px;
+    margin-bottom: 8px;
 }
 
 .form-group label {
     display: block;
     font-weight: 600;
-    margin-bottom: 4px;
+    margin-bottom: 3px;
     color: #555;
-    font-size: 11px;
+    font-size: 10px;
 }
 
 .form-group input[type="text"],
@@ -790,12 +904,12 @@ ul.json-dict, ol.json-array {
 .form-group select,
 .form-group textarea {
     width: 100%;
-    padding: 6px 8px;
+    padding: 4px 6px;
     border: 1px solid #ddd;
-    border-radius: 3px;
-    font-size: 11px;
+    border-radius: 2px;
+    font-size: 10px;
     font-family: inherit;
-    transition: border-color 0.2s;
+    transition: border-color 0.15s;
 }
 
 .form-group input:focus,
@@ -803,12 +917,12 @@ ul.json-dict, ol.json-array {
 .form-group textarea:focus {
     outline: none;
     border-color: #4caf50;
-    box-shadow: 0 0 0 2px rgba(76, 175, 80, 0.1);
+    box-shadow: 0 0 0 1px rgba(76, 175, 80, 0.2);
 }
 
 .form-row {
     display: flex;
-    gap: 15px;
+    gap: 10px;
 }
 
 .form-row .form-group {
@@ -818,16 +932,24 @@ ul.json-dict, ol.json-array {
 .section-divider {
     height: 1px;
     background: #e0e0e0;
-    margin: 15px 0;
+    margin: 10px 0;
 }
 
 .location-edit-section h4 {
-    font-size: 13px;
+    font-size: 10px;
     color: #2e7d32;
-    margin-bottom: 12px;
+    margin-bottom: 8px;
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: 4px;
+}
+
+.location-edit-section {
+    margin-top: 8px;
+}
+
+.location-edit-section textarea {
+    min-height: 60px !important;
 }
 
 /* 添加条目按钮 */
@@ -855,26 +977,245 @@ ul.json-dict, ol.json-array {
     font-size: 9px;
 }
 
-/* Modal 内容区域优化 */
-.modal-content {
+/* 右键菜单 */
+.context-menu {
+    position: fixed;
     background: white;
-    padding: 12px;
+    border: 1px solid #ddd;
     border-radius: 4px;
-    max-width: 650px;
-    width: 90%;
-    max-height: 85vh;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+    z-index: 10000;
+    min-width: 140px;
+    padding: 4px 0;
+}
+
+.context-menu-item {
+    padding: 6px 12px;
+    cursor: pointer;
+    font-size: 11px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    transition: all 0.15s;
+}
+
+.context-menu-item:hover {
+    background: #f5f5f5;
+}
+
+.context-menu-item i {
+    font-size: 10px;
+    width: 14px;
+    text-align: center;
+}
+
+.context-menu-item[data-action="delete"] {
+    color: #d32f2f;
+}
+
+.context-menu-item[data-action="delete"]:hover {
+    background: #ffebee;
+}
+
+/* 项目选择器模态框 */
+.project-selector-content {
+    max-width: 500px;
+    width: 85%;
+    padding: 0;
+}
+
+.project-selector-content .modal-header {
+    padding: 8px 12px;
+    background: #f5f5f5;
+    border-bottom: 1px solid #e0e0e0;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.project-selector-content .modal-body {
+    padding: 12px;
+    max-height: 60vh;
     overflow-y: auto;
 }
 
-.modal-body textarea {
-    width: 100%;
-    min-height: 100px;
+.project-selector-content .modal-footer {
+    padding: 8px 12px;
+    background: #f9f9f9;
+    border-top: 1px solid #e0e0e0;
+}
+
+.project-selector-info {
+    background: #e3f2fd;
+    border-left: 2px solid #1976d2;
     padding: 6px 8px;
-    border: 1px solid #ddd;
-    border-radius: 3px;
-    font-family: 'Courier New', monospace;
+    margin-bottom: 10px;
+    border-radius: 2px;
+    display: flex;
+    align-items: flex-start;
+    gap: 6px;
+    font-size: 9px;
+}
+
+.project-selector-info i {
+    color: #1976d2;
+    margin-top: 1px;
     font-size: 10px;
-    resize: vertical;
+}
+
+.project-selector-info p {
+    margin: 0;
+    font-size: 9px;
     line-height: 1.4;
+}
+
+.project-selector-info code {
+    background: rgba(25, 118, 210, 0.1);
+    padding: 1px 3px;
+    border-radius: 2px;
+    font-family: monospace;
+    font-size: 9px;
+}
+
+.path-input-group {
+    display: flex;
+    gap: 6px;
+    margin-bottom: 12px;
+}
+
+.path-input-group input {
+    flex: 1;
+    padding: 4px 8px;
+    border: 1px solid #ddd;
+    border-radius: 2px;
+    font-size: 10px;
+    background: #f9f9f9;
+}
+
+.btn-browse {
+    background: #757575;
+    color: white;
+    padding: 4px 10px;
+    white-space: nowrap;
+    font-size: 9px;
+}
+
+.btn-browse:hover {
+    background: #616161;
+}
+
+.recent-projects {
+    margin-top: 12px;
+    padding-top: 10px;
+    border-top: 1px solid #e0e0e0;
+}
+
+.recent-projects h4 {
+    font-size: 10px;
+    color: #666;
+    margin-bottom: 6px;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-weight: 600;
+}
+
+.recent-projects h4 i {
+    font-size: 9px;
+}
+
+.recent-projects-list {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    max-height: 150px;
+    overflow-y: auto;
+}
+
+.recent-project-item {
+    padding: 5px 8px;
+    background: #f5f5f5;
+    border: 1px solid #e0e0e0;
+    border-radius: 2px;
+    cursor: pointer;
+    transition: all 0.15s;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.recent-project-item:hover {
+    background: #e3f2fd;
+    border-color: #1976d2;
+    transform: translateX(2px);
+}
+
+.recent-project-item i {
+    color: #1976d2;
+    font-size: 10px;
+    flex-shrink: 0;
+}
+
+.recent-project-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.recent-project-name {
+    font-weight: 600;
+    font-size: 10px;
+    color: #333;
+    margin-bottom: 1px;
+}
+
+.recent-project-path {
+    font-size: 9px;
+    color: #757575;
+    font-family: 'Courier New', monospace;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.close-btn {
+    background: none;
+    border: none;
+    color: #757575;
+    cursor: pointer;
+    padding: 2px 6px;
+    font-size: 12px;
+    transition: color 0.2s;
+    line-height: 1;
+}
+
+.close-btn:hover {
+    color: #333;
+}
+
+.empty-recent-projects {
+    text-align: center;
+    padding: 15px;
+    color: #999;
+    font-size: 9px;
+}
+
+.empty-recent-projects i {
+    font-size: 20px;
+    margin-bottom: 6px;
+    opacity: 0.5;
+    display: block;
+}
+
+.project-selector-content .form-group {
+    margin-bottom: 10px;
+}
+
+.project-selector-content .form-group label {
+    font-size: 10px;
+    margin-bottom: 3px;
+}
+
+.project-selector-content .modal-footer .btn {
+    padding: 4px 10px;
+    font-size: 10px;
 }
 
