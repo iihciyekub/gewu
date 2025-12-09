@@ -53,6 +53,9 @@
                     <span id="currentFileName">未选择文件</span>
                 </div>
                 <div class="header-actions">
+                    <button id="addItemBtn" class="btn-add-item" style="display: none;" onclick="window.paperReviewerApp.openAddItemModal()">
+                        <i class="fas fa-plus"></i> 添加条目
+                    </button>
                     <button id="saveBtn" class="btn-save" style="display: none;" onclick="window.paperReviewerApp.saveToFile()">
                         <i class="fas fa-save"></i> 保存修改
                     </button>
@@ -98,11 +101,78 @@
         <div class="modal-content">
             <div class="modal-header" id="modalTitle">Edit Value</div>
             <div class="modal-body">
-                <textarea id="editTextarea"></textarea>
+                <div class="form-group">
+                    <label for="editTextarea">内容:</label>
+                    <textarea id="editTextarea"></textarea>
+                </div>
+                
+                <!-- 页码和引用编辑区 -->
+                <div class="location-edit-section" id="locationEditSection" style="display: none;">
+                    <div class="section-divider"></div>
+                    <h4><i class="fa-solid fa-location-dot"></i> PDF 位置信息</h4>
+                    
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="editPageNumber">页码:</label>
+                            <input type="number" id="editPageNumber" placeholder="PDF页码" min="1">
+                        </div>
+                        <div class="form-group">
+                            <label for="editQuote">引用文本:</label>
+                            <textarea id="editQuote" rows="3" placeholder="从PDF中复制的引用文本"></textarea>
+                        </div>
+                    </div>
+                </div>
             </div>
             <div class="modal-footer">
-                <button class="btn btn-cancel" id="cancelEdit">Cancel</button>
-                <button class="btn btn-primary" id="saveEdit">Save</button>
+                <button class="btn btn-cancel" id="cancelEdit">取消</button>
+                <button class="btn btn-primary" id="saveEdit">保存</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add Item Modal -->
+    <div class="modal" id="addItemModal">
+        <div class="modal-content">
+            <div class="modal-header">添加新条目</div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label for="itemCategory">选择分类:</label>
+                    <select id="itemCategory">
+                        <option value="">-- 选择分类 --</option>
+                        <option value="contributions">Contributions (贡献)</option>
+                        <option value="limitations">Limitations (局限)</option>
+                        <option value="methods">Methods (方法)</option>
+                        <option value="findings">Findings (发现)</option>
+                        <option value="future_work">Future Work (未来工作)</option>
+                        <option value="notes">Notes (笔记)</option>
+                        <option value="questions">Questions (问题)</option>
+                        <option value="custom">Custom (自定义)</option>
+                    </select>
+                </div>
+                
+                <div class="form-group" id="customKeyGroup" style="display: none;">
+                    <label for="customKey">自定义键名:</label>
+                    <input type="text" id="customKey" placeholder="例如: related_work">
+                </div>
+                
+                <div class="form-group">
+                    <label for="itemContent">内容:</label>
+                    <textarea id="itemContent" rows="4" placeholder="输入条目内容"></textarea>
+                </div>
+                
+                <div class="form-group">
+                    <label for="itemPageNumber">页码 (可选):</label>
+                    <input type="number" id="itemPageNumber" placeholder="PDF页码" min="1">
+                </div>
+                
+                <div class="form-group">
+                    <label for="itemQuote">引用文本 (可选):</label>
+                    <textarea id="itemQuote" rows="2" placeholder="从PDF中复制的引用文本"></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-cancel" id="cancelAddItem">取消</button>
+                <button class="btn btn-primary" id="saveAddItem">添加</button>
             </div>
         </div>
     </div>

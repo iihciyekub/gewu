@@ -3,12 +3,12 @@
     "doi": "10.1002/joom.1169",
     "pdf_path": "user/papers/joom.1169.pdf",
     "paper_id": "Oh_Zheng_Bardhan_2018",
-    "title": "the impact",
+    "title": "the impact33333333333333333333",
     "title_loc": {
       "page_label": "2038",
       "pdf_page_index": 1,
       "pdf_open_params": "#page=1",
-      "quote": "Sooner or Later? Health Information Technology..."
+      "quote": "erforming a difference-in-differences estimation of the difference in\nproduct quality changes between treatment and control firms, our research shows\nthat increased foreign competition has a negat"
     },
     "authors": "Jeong-ha (Cath) Oh; Zhiqiang (Eric) Zheng; Indranil R. Bardhan",
     "journal_year": "POMS, 2018",
@@ -53,23 +53,23 @@
       "page_label": "2044",
       "pdf_page_index": 7,
       "pdf_open_params": "#page=7",
-      "quote": "AfterHealthITApp_ijkt takes a value of one... during the post-treatment"
+      "quote": "s US firms. In other words, we aim to identify factors that make US firms less likely to “cut corners” at the\nexpen"
     }
   },
   "data_metrics": {
-    "sample_size": "65,210 patient admissions",
+    "sample_size": "the reliability of the KLD",
     "sample_size_loc": {
       "page_label": "2041",
       "pdf_page_index": 4,
       "pdf_open_params": "#page=4",
       "quote": "Our data consist of 65,210 patient admissions"
     },
-    "time_window": "2006-2009",
+    "time_window": "硅",
     "time_window_loc": {
       "page_label": "2041",
       "pdf_page_index": 4,
       "pdf_open_params": "#page=4",
-      "quote": "starting from January 2006 to December 2009"
+      "quote": "The impact of foreign competition on product quality"
     }
   },
   "robustness_checks": {
@@ -101,7 +101,7 @@
       "page_label": "2047",
       "pdf_page_index": 10,
       "pdf_open_params": "#page=10",
-      "quote": "odds of readmission increase by 7% for patients in the Below Geom. Mean group"
+      "quote": "Foreign competition has a negative\nimpact on US firms' product quality."
     }
   }
 }
