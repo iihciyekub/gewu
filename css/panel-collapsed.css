@@ -1,0 +1,28 @@
+/* Panel collapsed state for left/right panel: only show resizer, hide content, keep resizer clickable */
+.left-panel.panel-collapsed {
+    width: 0 !important;
+    min-width: 0 !important;
+    padding: 0 !important;
+    border-right: none !important;
+    overflow: visible !important;
+}
+.left-panel.panel-collapsed + #leftResizer {
+    z-index: 20;
+}
+
+.right-panel.panel-collapsed {
+    width: 0 !important;
+    min-width: 0 !important;
+    padding: 0 !important;
+    border-left: none !important;
+    overflow: visible !important;
+}
+#middleResizer {
+    z-index: 20;
+}
+
+/* 保证resizer始终可点，且panel收起时内容不可点 */
+.left-panel.panel-collapsed > *:not(.resizer),
+.right-panel.panel-collapsed > *:not(.resizer) {
+    display: none !important;
+}

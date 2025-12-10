@@ -287,9 +287,57 @@ class PaperReviewerApp {
             });
         };
 
-        // 绑定事件
-        leftResizer.addEventListener('mousedown', (e) => startResize(e, leftResizer));
-        middleResizer.addEventListener('mousedown', (e) => startResize(e, middleResizer));
+        // 绑定拖动事件，点击resizer-toggle时不触发拖动
+        leftResizer.addEventListener('mousedown', (e) => {
+            if (e.target.closest('.resizer-toggle')) return; // 点击toggle时不拖动
+            startResize(e, leftResizer);
+        });
+        middleResizer.addEventListener('mousedown', (e) => {
+            if (e.target.closest('.resizer-toggle')) return;
+            startResize(e, middleResizer);
+        });
+
+        // 只在点击图标时触发隐藏/显示，采用width收缩/展开方式
+        let lastLeftWidth = leftPanel.getBoundingClientRect().width || 200;
+        let lastRightWidth = rightPanel.getBoundingClientRect().width || 320;
+        const leftToggle = leftResizer.querySelector('.resizer-toggle');
+        if (leftToggle) {
+            leftToggle.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const icon = leftToggle.querySelector('i');
+                if (leftPanel.classList.contains('panel-collapsed')) {
+                    leftPanel.classList.remove('panel-collapsed');
+                    leftPanel.style.width = lastLeftWidth + 'px';
+                    leftToggle.title = '点击隐藏左侧面板';
+                    if (icon) icon.style.transform = 'rotate(0deg)';
+                } else {
+                    lastLeftWidth = leftPanel.getBoundingClientRect().width;
+                    leftPanel.classList.add('panel-collapsed');
+                    leftPanel.style.width = '';
+                    leftToggle.title = '点击显示左侧面板';
+                    if (icon) icon.style.transform = 'rotate(180deg)';
+                }
+            });
+        }
+        const middleToggle = middleResizer.querySelector('.resizer-toggle');
+        if (middleToggle) {
+            middleToggle.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const icon = middleToggle.querySelector('i');
+                if (rightPanel.classList.contains('panel-collapsed')) {
+                    rightPanel.classList.remove('panel-collapsed');
+                    rightPanel.style.width = lastRightWidth + 'px';
+                    middleToggle.title = '点击隐藏右侧面板';
+                    if (icon) icon.style.transform = 'rotate(0deg)';
+                } else {
+                    lastRightWidth = rightPanel.getBoundingClientRect().width;
+                    rightPanel.classList.add('panel-collapsed');
+                    rightPanel.style.width = '';
+                    middleToggle.title = '点击显示右侧面板';
+                    if (icon) icon.style.transform = 'rotate(180deg)';
+                }
+            });
+        }
         
         document.addEventListener('mousemove', resize);
         document.addEventListener('mouseup', stopResize);
@@ -1171,24 +1219,9 @@ class PaperReviewerApp {
             const viewerUrl = `js/pdfjs/web/viewer.html?file=${encodeURIComponent('../../../' + url)}`;
             pdfViewer.src = viewerUrl;
             
-            // 监听iframe加载完成，设置平滑滚动
+            // 监听iframe加载完成（如需自定义滚动行为，可在此扩展）
             pdfViewer.onload = () => {
-                try {
-                    console.log('📄 PDF iframe已加载，设置平滑滚动...');
-                    const pdfWindow = pdfViewer.contentWindow;
-                    const pdfDoc = pdfWindow.document;
-                    const viewerContainer = pdfDoc.querySelector('#viewerContainer');
-                    
-                    if (viewerContainer) {
-                        // 为viewerContainer添加CSS平滑滚动
-                        viewerContainer.style.scrollBehavior = 'smooth';
-                        console.log('✅ 已设置viewerContainer的平滑滚动属性');
-                    } else {
-                        console.warn('⚠️ 无法找到viewerContainer，将在后续尝试');
-                    }
-                } catch (error) {
-                    console.warn('⚠️ 设置平滑滚动失败（跨域限制）:', error);
-                }
+                // 保持空实现，避免自动设置滚动动画
             };
             
             this.showNotification('PDF 加载完成', 'success');
