@@ -134,6 +134,30 @@ class PaperReviewerApp {
 
         // 粘贴事件监听
         document.addEventListener('paste', (e) => this.handlePaste(e));
+        
+        // 全屏横向连续阅读模式
+        const btnFullscreen = document.getElementById('btnFullscreenRead');
+        console.log('🔘 全屏按钮元素:', btnFullscreen);
+        if (btnFullscreen) {
+            btnFullscreen.addEventListener('click', () => {
+                console.log('🖱️ 全屏按钮被点击');
+                this.openFullscreenReader();
+            });
+        }
+        
+        document.getElementById('btnReaderClose').addEventListener('click', () => this.closeFullscreenReader());
+        document.getElementById('btnReaderZoomIn').addEventListener('click', () => this.adjustReaderZoom(1.1));  // 更精细：10%步进
+        document.getElementById('btnReaderZoomOut').addEventListener('click', () => this.adjustReaderZoom(0.9)); // 更精细：10%步进
+        
+        // ESC键退出全屏
+        document.addEventListener('keydown', (e) => {
+            const fullscreenReader = document.getElementById('fullscreenReader');
+            const isFullscreen = fullscreenReader && fullscreenReader.classList.contains('active');
+            
+            if (isFullscreen && e.key === 'Escape') {
+                this.closeFullscreenReader();
+            }
+        });
     }
 
     setupResizers() {
@@ -2146,6 +2170,396 @@ class PaperReviewerApp {
         }, 3000);
     }
 
+    // ==================== 全屏横向连续阅读模式 ====================
+    
+    initFullscreenReader() {
+        this.fullscreenState = {
+            pdfDoc: null,
+            currentStartPage: 1,
+            totalPages: 0,
+            zoom: 1.0,
+            isLoading: false
+        };
+        
+        // 初始化页面导航监听器
+        this.setupPageNavigationListeners();
+    }
+
+    async openFullscreenReader() {
+        console.log('🚀 打开全屏阅读器');
+        console.log('当前PDF URL:', this.currentPdfUrl);
+        
+        if (!this.currentPdfUrl) {
+            this.showNotification('请先选择一个PDF文件', 'error');
+            return;
+        }
+
+        const fullscreenReader = document.getElementById('fullscreenReader');
+        fullscreenReader.classList.add('active');
+        console.log('✓ 全屏容器已激活');
+        
+        // 尝试从 iframe 获取当前页码
+        let startPage = 1;
+        try {
+            const iframe = document.getElementById('pdfViewer');
+            if (iframe && iframe.contentWindow && iframe.contentWindow.PDFViewerApplication) {
+                startPage = iframe.contentWindow.PDFViewerApplication.page || 1;
+                console.log('✓ 从iframe获取页码:', startPage);
+            }
+        } catch (e) {
+            console.log('无法获取当前页码，从第1页开始');
+        }
+
+        this.fullscreenState.currentStartPage = startPage;
+        
+        // 设置手势支持
+        this.setupFullscreenGestures();
+        
+        // 加载PDF
+        await this.loadFullscreenPDF();
+    }
+
+    async loadFullscreenPDF() {
+        if (this.fullscreenState.isLoading) {
+            console.log('⚠️ 已在加载中，跳过');
+            return;
+        }
+        
+        this.fullscreenState.isLoading = true;
+        const container = document.getElementById('continuousPages');
+        console.log('📦 容器元素:', container);
+        
+        // 显示加载状态
+        container.innerHTML = `
+            <div class="fullscreen-loading">
+                <div class="spinner"></div>
+                <div>正在加载PDF...</div>
+            </div>
+        `;
+        console.log('✓ 加载提示已显示');
+
+        try {
+            // 动态加载 PDF.js (使用ES6 import)
+            console.log('📚 开始加载PDF.js库...');
+            if (!this.pdfjsLib) {
+                this.pdfjsLib = await import('/js/pdfjs/build/pdf.mjs');
+                this.pdfjsLib.GlobalWorkerOptions.workerSrc = '/js/pdfjs/build/pdf.worker.mjs';
+                console.log('✓ PDF.js库加载成功');
+            }
+
+            // 加载 PDF 文档
+            console.log('📄 开始加载PDF文档:', this.currentPdfUrl);
+            const loadingTask = this.pdfjsLib.getDocument(this.currentPdfUrl);
+            this.fullscreenState.pdfDoc = await loadingTask.promise;
+            this.fullscreenState.totalPages = this.fullscreenState.pdfDoc.numPages;
+
+            console.log(`✓ PDF加载成功，共 ${this.fullscreenState.totalPages} 页`);
+
+            // 渲染页面
+            console.log('🎨 开始渲染页面...');
+            await this.renderContinuousPages();
+            console.log('✓ 渲染完成');
+            
+        } catch (error) {
+            console.error('❌ 加载PDF失败:', error);
+            console.error('错误详情:', error.stack);
+            container.innerHTML = `
+                <div class="fullscreen-loading">
+                    <i class="fas fa-exclamation-triangle" style="font-size: 40px; color: #ff6b6b;"></i>
+                    <div>加载失败: ${error.message}</div>
+                </div>
+            `;
+        } finally {
+            this.fullscreenState.isLoading = false;
+            console.log('🏁 加载流程结束');
+        }
+    }
+
+    async renderContinuousPages() {
+        const container = document.getElementById('continuousPages');
+        console.log('🎯 开始渲染连续页面');
+
+        const startPage = this.fullscreenState.currentStartPage;
+        const totalPages = this.fullscreenState.totalPages;
+        const pdfDoc = this.fullscreenState.pdfDoc;
+
+        // 渲染所有页面
+        const pagesToRender = [];
+        for (let i = 1; i <= totalPages; i++) {
+            pagesToRender.push(i);
+        }
+
+        console.log(`📑 渲染所有页面: 1-${totalPages} (起始页: ${startPage})`);
+
+        // 显示加载进度
+        container.innerHTML = `
+            <div class="fullscreen-loading">
+                <div class="spinner"></div>
+                <div>正在加载页面 <span id="loadProgress">0/${totalPages}</span></div>
+            </div>
+        `;
+
+        // 批量渲染所有页面
+        for (let i = 0; i < pagesToRender.length; i++) {
+            const pageNum = pagesToRender[i];
+            
+            // 更新进度
+            const progressEl = document.getElementById('loadProgress');
+            if (progressEl) {
+                progressEl.textContent = `${i + 1}/${totalPages}`;
+            }
+            
+            await this.renderPage(pageNum, container);
+        }
+        
+        // 移除加载提示
+        const loadingEl = container.querySelector('.fullscreen-loading');
+        if (loadingEl) {
+            loadingEl.remove();
+        }
+
+        console.log('✓ 所有页面渲染完成');
+
+        // 滚动到起始页
+        const targetCanvas = container.querySelector(`[data-page="${startPage}"]`);
+        if (targetCanvas) {
+            console.log(`📍 滚动到第 ${startPage} 页`);
+            targetCanvas.scrollIntoView({ block: 'center', inline: 'center' });
+        } else {
+            console.warn(`⚠️ 未找到第 ${startPage} 页的canvas元素`);
+        }
+    }
+
+    async renderPage(pageNum, container) {
+        try {
+            const page = await this.fullscreenState.pdfDoc.getPage(pageNum);
+            const canvas = document.createElement('canvas');
+            canvas.dataset.page = pageNum;
+            const ctx = canvas.getContext('2d');
+
+            // 计算适配高度的缩放比例 - 最大化利用屏幕高度
+            const contentHeight = window.innerHeight - 40; // 只减去padding，工具栏是悬浮的
+            const viewport = page.getViewport({ scale: 1.0 });
+            const scale = (contentHeight / viewport.height) * this.fullscreenState.zoom;
+            const scaledViewport = page.getViewport({ scale });
+
+            // 支持高清屏
+            const dpr = window.devicePixelRatio || 1;
+            canvas.width = scaledViewport.width * dpr;
+            canvas.height = scaledViewport.height * dpr;
+            canvas.style.width = scaledViewport.width + 'px';
+            canvas.style.height = scaledViewport.height + 'px';
+
+            ctx.scale(dpr, dpr);
+
+            const renderContext = {
+                canvasContext: ctx,
+                viewport: scaledViewport
+            };
+
+            // 将canvas添加到容器（在加载提示之后）
+            const loadingEl = container.querySelector('.fullscreen-loading');
+            if (loadingEl) {
+                container.insertBefore(canvas, loadingEl);
+            } else {
+                container.appendChild(canvas);
+            }
+            
+            await page.render(renderContext).promise;
+            // console.log(`    ✓ 第 ${pageNum} 页渲染完成`); // 减少日志输出
+
+        } catch (error) {
+            console.error(`❌ 渲染第 ${pageNum} 页失败:`, error);
+        }
+    }
+
+    closeFullscreenReader() {
+        const fullscreenReader = document.getElementById('fullscreenReader');
+        fullscreenReader.classList.remove('active');
+        
+        // 清理定时器
+        if (this.pageNavTimer) {
+            clearTimeout(this.pageNavTimer);
+            this.pageNavTimer = null;
+        }
+        if (this.pageNavInterval) {
+            clearInterval(this.pageNavInterval);
+            this.pageNavInterval = null;
+        }
+        
+        // 清理PDF
+        document.getElementById('continuousPages').innerHTML = '';
+        if (this.fullscreenState.pdfDoc) {
+            this.fullscreenState.pdfDoc.destroy();
+            this.fullscreenState.pdfDoc = null;
+        }
+    }
+
+    navigateFullscreenPage(direction) {
+        const container = document.getElementById('continuousPages');
+        const contentEl = document.getElementById('fullscreenContent');
+        if (!container || !contentEl) return;
+
+        const allCanvases = Array.from(container.querySelectorAll('canvas[data-page]'));
+        if (allCanvases.length === 0) return;
+
+        // 获取当前视口中心的页面
+        const scrollLeft = contentEl.scrollLeft;
+        const viewportCenter = scrollLeft + (contentEl.clientWidth / 2);
+
+        let currentPageIndex = 0;
+        let minDistance = Infinity;
+
+        allCanvases.forEach((canvas, index) => {
+            const canvasLeft = canvas.offsetLeft;
+            const canvasCenter = canvasLeft + (canvas.offsetWidth / 2);
+            const distance = Math.abs(canvasCenter - viewportCenter);
+
+            if (distance < minDistance) {
+                minDistance = distance;
+                currentPageIndex = index;
+            }
+        });
+
+        // 计算目标页面
+        let targetIndex = currentPageIndex + direction;
+        targetIndex = Math.max(0, Math.min(allCanvases.length - 1, targetIndex));
+
+        if (targetIndex === currentPageIndex && direction !== 0) return;
+
+        const targetCanvas = allCanvases[targetIndex];
+        const targetLeft = targetCanvas.offsetLeft - (contentEl.clientWidth - targetCanvas.offsetWidth) / 2;
+        contentEl.scrollLeft = targetLeft;
+    }
+
+    setupPageNavigationListeners() {
+        document.addEventListener('keydown', (e) => {
+            const fullscreenReader = document.getElementById('fullscreenReader');
+            const isFullscreen = fullscreenReader && fullscreenReader.classList.contains('active');
+            
+            if (!isFullscreen) return;
+            if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+            if (e.repeat) return;
+
+            e.preventDefault();
+            
+            const direction = e.key === 'ArrowLeft' ? -1 : 1;
+            this.navigateFullscreenPage(direction);
+            
+            // 设置长按连续翻页 - 更快的响应速度
+            this.pageNavTimer = setTimeout(() => {
+                this.pageNavInterval = setInterval(() => {
+                    this.navigateFullscreenPage(direction);
+                }, 80);  // 从100ms改为80ms，速度更快
+            }, 200);  // 从300ms改为200ms，更快触发连续翻页
+        });
+
+        document.addEventListener('keyup', (e) => {
+            if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+                if (this.pageNavTimer) {
+                    clearTimeout(this.pageNavTimer);
+                    this.pageNavTimer = null;
+                }
+                if (this.pageNavInterval) {
+                    clearInterval(this.pageNavInterval);
+                    this.pageNavInterval = null;
+                }
+            }
+        });
+    }
+
+    async adjustReaderZoom(factor) {
+        // 限制缩放范围 0.5x - 3.0x
+        const newZoom = this.fullscreenState.zoom * factor;
+        if (newZoom < 0.5 || newZoom > 3.0) {
+            console.log(`⚠️ 缩放超出范围: ${newZoom.toFixed(2)}`);
+            return;
+        }
+        
+        this.fullscreenState.zoom = newZoom;
+        
+        // 更新缩放显示
+        const zoomPercent = Math.round(this.fullscreenState.zoom * 100);
+        document.getElementById('zoomIndicator').textContent = `${zoomPercent}%`;
+        
+        // 重新渲染
+        if (this.fullscreenState.pdfDoc) {
+            await this.renderContinuousPages();
+        }
+    }
+    
+    setupFullscreenGestures() {
+        const content = document.getElementById('fullscreenContent');
+        if (!content) return;
+        
+        // 双指缩放手势支持
+        let initialDistance = 0;
+        let initialZoom = 1.0;
+        
+        content.addEventListener('wheel', (e) => {
+            // 检测触控板双指缩放 (Ctrl + wheel 或 metaKey + wheel)
+            if (e.ctrlKey || e.metaKey) {
+                e.preventDefault();
+                
+                // deltaY < 0 = 放大, deltaY > 0 = 缩小
+                const delta = -e.deltaY;
+                const zoomFactor = 1 + (delta * 0.002); // 精细调整
+                
+                this.adjustReaderZoom(zoomFactor);
+            }
+        }, { passive: false });
+        
+        // 触摸屏双指缩放
+        content.addEventListener('touchstart', (e) => {
+            if (e.touches.length === 2) {
+                e.preventDefault();
+                const touch1 = e.touches[0];
+                const touch2 = e.touches[1];
+                initialDistance = Math.hypot(
+                    touch2.clientX - touch1.clientX,
+                    touch2.clientY - touch1.clientY
+                );
+                initialZoom = this.fullscreenState.zoom;
+            }
+        }, { passive: false });
+        
+        content.addEventListener('touchmove', (e) => {
+            if (e.touches.length === 2) {
+                e.preventDefault();
+                const touch1 = e.touches[0];
+                const touch2 = e.touches[1];
+                const currentDistance = Math.hypot(
+                    touch2.clientX - touch1.clientX,
+                    touch2.clientY - touch1.clientY
+                );
+                
+                if (initialDistance > 0) {
+                    const scale = currentDistance / initialDistance;
+                    const newZoom = initialZoom * scale;
+                    
+                    // 限制范围
+                    if (newZoom >= 0.5 && newZoom <= 3.0) {
+                        this.fullscreenState.zoom = newZoom;
+                        const zoomPercent = Math.round(newZoom * 100);
+                        document.getElementById('zoomIndicator').textContent = `${zoomPercent}%`;
+                    }
+                }
+            }
+        }, { passive: false });
+        
+        content.addEventListener('touchend', async (e) => {
+            if (e.touches.length < 2 && initialDistance > 0) {
+                // 双指松开，重新渲染
+                initialDistance = 0;
+                if (this.fullscreenState.pdfDoc) {
+                    await this.renderContinuousPages();
+                }
+            }
+        });
+    }
+
+    // ==================== 结束全屏阅读模式 ====================
+
     async saveToFile() {
         if (!this.currentFile || !this.currentData) return;
 
@@ -2340,6 +2754,9 @@ document.addEventListener('DOMContentLoaded', () => {
     setTimeout(() => {
         app.setupEditableListeners();
     }, 500);
+    
+    // 初始化全屏阅读器
+    app.initFullscreenReader();
     
     // 页面关闭/刷新前提示保存
     window.addEventListener('beforeunload', (e) => {

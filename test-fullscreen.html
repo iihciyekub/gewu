@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Test Fullscreen</title>
+    <style>
+        .fullscreen-reader {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: #1a1a1a;
+            z-index: 10000;
+            display: none;
+        }
+        .fullscreen-reader.active {
+            display: block;
+        }
+        .test-content {
+            color: white;
+            font-size: 24px;
+            text-align: center;
+            padding-top: 50px;
+        }
+    </style>
+</head>
+<body>
+    <button onclick="document.getElementById('fs').classList.add('active')">测试全屏</button>
+    <div class="fullscreen-reader" id="fs">
+        <div class="test-content">
+            <h1>全屏测试成功！</h1>
+            <button onclick="document.getElementById('fs').classList.remove('active')">关闭</button>
+        </div>
+    </div>
+</body>
+</html>

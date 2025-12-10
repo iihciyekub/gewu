@@ -8,7 +8,7 @@
       "page_label": "2038",
       "pdf_page_index": 1,
       "pdf_open_params": "#page=1",
-      "quote": "erforming a difference-in-differences estimation of the difference in\nproduct quality changes between treatment and control firms, our research shows\nthat increased foreign competition has a negat"
+      "quote": ["erforming a difference-in-differences estimation of the difference in\nproduct quality changes between treatment and control firms, our research shows\nthat increased foreign competition has a negat"]
     },
     "authors": "Jeong-ha (Cath) Oh; Zhiqiang (Eric) Zheng; Indranil R. Bardhan",
     "journal_year": "POMS, 2018",
@@ -16,7 +16,7 @@
       "page_label": "2039",
       "pdf_page_index": 8,
       "pdf_open_params": "#page=8",
-      "quote": "GMLOS"
+      "quote": ["GMLOS","test"]
     }
   },
   "did_design_setup": {
@@ -25,35 +25,35 @@
       "page_label": "2044",
       "pdf_page_index": 7,
       "pdf_open_params": "#page=7",
-      "quote": "observe the implementation year for each HIT application... DID mimics a quasi-experiment"
+      "quote": ["observe the implementation year for each HIT application... DID mimics a quasi-experiment"]
     },
     "regression_equation": "$y_{ijkt} = α1 HealthITApp + α2 AfterHealthITApp + β (Interaction) + e$",
     "regression_equation_loc": {
       "page_label": "2044",
       "pdf_page_index": 7,
       "pdf_open_params": "#page=7",
-      "quote": "Equation (1)"
+      "quote": ["Equation (1)","ere"]
     },
     "variable_y": "LOS Deviation (Actual LOS - GMLOS)",
     "variable_y_loc": {
       "page_label": "2042",
       "pdf_page_index": 5,
       "pdf_open_params": "#page=5",
-      "quote": "measure the deviation in length of stay from GMLOS"
+      "quote": ["measure the deviation in length of stay from GMLOS"]
     },
     "variable_treat": "HealthITApp (Binary: Hospital has HIT)",
     "variable_treat_loc": {
       "page_label": "2044",
       "pdf_page_index": 7,
       "pdf_open_params": "#page=7",
-      "quote": "HealthITApp_ijk takes a value of one if... HIT application k has been implemented"
+      "quote": ["HealthITApp_ijk takes a value of one if... HIT application k has been implemented"]
     },
     "variable_post": "AfterHealthITApp (Binary: Post-Implementation)",
     "variable_post_loc": {
       "page_label": "2044",
       "pdf_page_index": 7,
       "pdf_open_params": "#page=7",
-      "quote": "s US firms. In other words, we aim to identify factors that make US firms less likely to “cut corners” at the\nexpen"
+      "quote": ["s US firms. In other words, we aim to identify factors that make US firms less likely to “cut corners” at the\nexpen"]
     }
   },
   "data_metrics": {
@@ -62,7 +62,7 @@
       "page_label": "2041",
       "pdf_page_index": 4,
       "pdf_open_params": "#page=4",
-      "quote": "Our data consist of 65,210 patient admissions"
+      "quote": ["Our data consist of 65,210 patient admissions"]
     },
     "time_window": "硅",
     "time_window_loc": {
@@ -78,14 +78,14 @@
       "page_label": "2045",
       "pdf_page_index": 8,
       "pdf_open_params": "#page=8",
-      "quote": "adopt a difference-in-difference (DID) estimation method and a propensity score matching approach"
+      "quote":  ["Table 4 presents the results from our PSM-DID analysis"]
     },
     "parallel_trend_check": "Implicit (Assumed via DID design)",
     "parallel_trend_check_loc": {
       "page_label": "2044",
       "pdf_page_index": 7,
       "pdf_open_params": "#page=7",
-      "quote": "assumed that the time effects are common across treated and untreated individuals"
+      "quote": ["assumed that the time effects are common across treated and untreated individuals"]
     }
   },
   "key_findings": {
@@ -94,14 +94,14 @@
       "page_label": "2046",
       "pdf_page_index": 9,
       "pdf_open_params": "#page=9",
-      "quote": "Table 3... RFID-Patient Tracking... -2.655"
+      "quote": ["Table 3... RFID-Patient Tracking... -2.655"]
     },
     "secondary_result": "Early discharge increases readmission risk (Odds Ratio: 1.07)",
     "secondary_result_loc": {
       "page_label": "2047",
       "pdf_page_index": 10,
       "pdf_open_params": "#page=10",
-      "quote": "Foreign competition has a negative\nimpact on US firms' product quality."
+      "quote": ["Foreign competition has a negative\nimpact on US firms' product quality."]
     }
   },
   "contributions": [
