@@ -8,6 +8,11 @@ class PaperReviewerApp {
         this.editingPath = null;
         this.hasUnsavedChanges = false;
         this.tempDataCache = {}; // 临时数据缓存 {filename: data}
+        this.currentQuoteIndex = {}; // 跟踪每个字段当前显示的quote索引 {valuePath: index}
+        this.lastSearchText = null; // 跟踪上次搜索的文本
+        this.lastSearchValuePath = null; // 跟踪上次搜索的字段路径
+        this.searchMatchCount = 0; // 当前搜索的匹配数量
+        this.currentMatchIndex = 0; // 当前显示的匹配索引
         
         // 项目管理
         this.currentProject = null; // { name, path }
@@ -146,8 +151,10 @@ class PaperReviewerApp {
         }
         
         document.getElementById('btnReaderClose').addEventListener('click', () => this.closeFullscreenReader());
-        document.getElementById('btnReaderZoomIn').addEventListener('click', () => this.adjustReaderZoom(1.1));  // 更精细：10%步进
-        document.getElementById('btnReaderZoomOut').addEventListener('click', () => this.adjustReaderZoom(0.9)); // 更精细：10%步进
+        document.getElementById('btnReaderZoomIn').addEventListener('click', () => this.adjustReaderZoom(1.02));  // 2%步进
+        document.getElementById('btnReaderZoomOut').addEventListener('click', () => this.adjustReaderZoom(0.98)); // 2%步进
+        document.getElementById('btnReaderFitHeight').addEventListener('click', () => this.fitToHeight());
+        document.getElementById('btnReaderFitWidth').addEventListener('click', () => this.fitToWidth());
         
         // ESC键退出全屏
         document.addEventListener('keydown', (e) => {
@@ -1050,14 +1057,40 @@ class PaperReviewerApp {
         
         if (location) {
             const page = location.pdf_page_index || 1;
+            const quotes = location.quote || [];
+            const valuePath = path.join('.');
             
-            // 保存路径，点击时动态获取最新值作为搜索文本
-            html += `<a href="#" class="location-link" 
-                data-page="${page}" 
-                data-value-path="${path.join('.')}"
-                title="跳转到 PDF 第 ${page} 页并高亮文本">
-                <i class="fa-regular fa-file-pdf"></i>
-            </a>`;
+            // 如果quote是数组，为每个quote创建一个引用图标
+            if (Array.isArray(quotes) && quotes.length > 0) {
+                const validQuotes = quotes.filter(q => q && q.trim());
+                validQuotes.forEach((quote, index) => {
+                    // 所有图标使用相同valuePath，通过点击处理器循环切换
+                    html += `<a href="#" class="location-link" 
+                        data-page="${page}" 
+                        data-value-path="${valuePath}"
+                        data-quote-index="${index}"
+                        title="跳转到 PDF 第 ${page} 页并高亮 (循环 ${index + 1}/${validQuotes.length})">
+                        <i class="fa-solid fa-quote-right"></i>
+                    </a>`;
+                });
+            } else if (typeof quotes === 'string' && quotes.trim()) {
+                // 兼容旧的字符串格式
+                html += `<a href="#" class="location-link" 
+                    data-page="${page}" 
+                    data-value-path="${valuePath}"
+                    data-quote-index="0"
+                    title="跳转到 PDF 第 ${page} 页并高亮文本">
+                    <i class="fa-solid fa-quote-right"></i>
+                </a>`;
+            } else {
+                // 没有quote，只显示页码图标
+                html += `<a href="#" class="location-link" 
+                    data-page="${page}" 
+                    data-value-path="${valuePath}"
+                    title="跳转到 PDF 第 ${page} 页">
+                    <i class="fa-solid fa-quote-right"></i>
+                </a>`;
+            }
         }
 
         return html;
@@ -1178,14 +1211,12 @@ class PaperReviewerApp {
     }
 
     // 跳转到指定页面并搜索（简化版：直接搜索全文，滚动到第一个结果）
-    jumpToPage(page, searchText = '') {
+    jumpToPage(page, searchText = '', valuePath = null) {
         const pdfViewer = document.getElementById('pdfViewer');
         if (!pdfViewer || !this.currentPdfUrl) return;
         
         try {
             const cleanText = searchText ? searchText.trim() : '';
-            
-            console.log(`🔍 搜索文本并滚动到结果:`, cleanText);
             
             // 高亮右侧面板
             const rightPanel = document.querySelector('.right-panel');
@@ -1207,7 +1238,7 @@ class PaperReviewerApp {
             
             // 如果有搜索文本，执行全文搜索并滚动
             if (cleanText) {
-                this.executeSearchAndScroll(pdfApp, cleanText);
+                this.executeSearchAndScroll(pdfApp, cleanText, valuePath);
             } else if (page) {
                 // 如果没有搜索文本，丝滑跳转到页码
                 this.smoothScrollToPage(pdfApp, parseInt(page));
@@ -1304,13 +1335,46 @@ class PaperReviewerApp {
     }
 
     // 执行搜索并滚动到第一个结果（独立方法）
-    executeSearchAndScroll(pdfApp, searchText) {
+    executeSearchAndScroll(pdfApp, searchText, valuePath = null) {
         if (!pdfApp || !pdfApp.eventBus) {
             console.error('❌ EventBus不可用');
             return;
         }
         
-        console.log('🔍 全文搜索:', searchText);
+        // 检查是否是相同的搜索文本和字段（不管quoteIndex）
+        const isSameSearch = this.lastSearchText === searchText && this.lastSearchValuePath === valuePath;
+        
+        if (isSameSearch && this.searchMatchCount > 1) {
+            // 相同的搜索，且PDF中有多个匹配，循环查找下一个
+            this.currentMatchIndex = (this.currentMatchIndex + 1) % this.searchMatchCount;
+            
+            pdfApp.eventBus.dispatch('find', {
+                source: window,
+                type: 'again',
+                query: searchText,
+                phraseSearch: true,
+                caseSensitive: false,
+                highlightAll: true,
+                findPrevious: false
+            });
+            
+            setTimeout(() => {
+                this.scrollToCurrentMatch(pdfApp);
+            }, 300);
+            return;
+        } else if (isSameSearch && this.searchMatchCount === 1) {
+            // 相同搜索但只有1个匹配，直接跳转到那个位置
+            setTimeout(() => {
+                this.scrollToCurrentMatch(pdfApp);
+            }, 100);
+            return;
+        }
+        
+        // 新的搜索文本或不同字段，重置状态
+        this.lastSearchText = searchText;
+        this.lastSearchValuePath = valuePath;
+        this.searchMatchCount = 0;
+        this.currentMatchIndex = 0;
         
         // 用于跟踪搜索结果
         let searchResult = {
@@ -1321,40 +1385,29 @@ class PaperReviewerApp {
         
         // 监听搜索状态
         const resultListener = (evt) => {
-            console.log('📊 搜索状态:', evt);
-            
             if (evt.state === 1) { // FOUND
-                console.log('✅ 找到匹配');
                 searchResult.found = true;
                 
-                // 搜索成功后，延迟滚动到第一个高亮文本中央（增加延迟确保渲染完成）
+                // 搜索成功后，延迟滚动到第一个高亮文本中央
                 setTimeout(() => {
-                    this.scrollToFirstMatch(pdfApp);
+                    this.scrollToCurrentMatch(pdfApp);
                 }, 600);
             } else if (evt.state === 3) { // NOT_FOUND
-                console.log('⚠️ 未找到匹配');
                 searchResult.found = false;
-                // 不显示通知，只在控制台记录
             }
         };
         
         // 监听匹配数量
         const matchListener = (evt) => {
-            console.log('📈 匹配数量:', evt.matchesCount);
-            
             if (evt.matchesCount && evt.matchesCount.total > 0) {
                 searchResult.total = evt.matchesCount.total;
                 searchResult.found = true;
-                
-                // 找到匹配且还没显示过通知时才提示
-                if (!searchResult.notified) {
-                    searchResult.notified = true;
-                    this.showNotification(`✅ 找到 ${evt.matchesCount.total} 处匹配`, 'success');
-                }
+                this.searchMatchCount = evt.matchesCount.total;
+                searchResult.notified = true;
             } else if (evt.matchesCount && evt.matchesCount.total === 0) {
                 searchResult.total = 0;
                 searchResult.found = false;
-                // 不显示通知
+                this.searchMatchCount = 0;
             }
         };
         
@@ -1366,7 +1419,6 @@ class PaperReviewerApp {
         
         // 执行新搜索（搜索整个文档）
         setTimeout(() => {
-            console.log('🔍 执行搜索命令...');
             pdfApp.eventBus.dispatch('find', {
                 source: window,
                 type: 'find',
@@ -1377,8 +1429,6 @@ class PaperReviewerApp {
                 findPrevious: false        // 从前往后搜索
             });
             
-            console.log('✅ 搜索命令已发送');
-            
             // 10秒后清理监听器
             setTimeout(() => {
                 pdfApp.eventBus.off('updatefindcontrolstate', resultListener);
@@ -1387,8 +1437,8 @@ class PaperReviewerApp {
         }, 200);
     }
 
-    // 滚动到第一个匹配结果的中央（丝滑动画）
-    scrollToFirstMatch(pdfApp) {
+    // 滚动到当前匹配结果的中央（丝滑动画）
+    scrollToCurrentMatch(pdfApp) {
         try {
             console.log('🎯 开始查找并滚动到第一个匹配结果...');
             
@@ -1677,7 +1727,6 @@ class PaperReviewerApp {
         // 检查是否有对应的_loc字段
         const locSection = document.getElementById('locationEditSection');
         const pageInput = document.getElementById('editPageNumber');
-        const quoteInput = document.getElementById('editQuote');
         
         // 获取当前字段所在的父对象
         let current = this.currentData;
@@ -1694,7 +1743,7 @@ class PaperReviewerApp {
                 "page_label": "",
                 "pdf_page_index": null,
                 "pdf_open_params": "",
-                "quote": ""
+                "quote": []
             };
             
             // 标记数据已修改
@@ -1709,15 +1758,160 @@ class PaperReviewerApp {
             // 有location数据，显示编辑区
             locSection.style.display = 'block';
             pageInput.value = current[locKey].pdf_page_index || '';
-            quoteInput.value = current[locKey].quote || '';
+            
+            // 初始化引用标签页
+            const quotes = current[locKey].quote;
+            this.initQuoteTabs(quotes);
         } else {
             // 无location数据，隐藏编辑区
             locSection.style.display = 'none';
             pageInput.value = '';
-            quoteInput.value = '';
+            this.initQuoteTabs([]);
         }
         
         document.getElementById('editModal').classList.add('active');
+    }
+
+    // 初始化引用标签页
+    initQuoteTabs(quotes) {
+        const quotesArray = Array.isArray(quotes) ? quotes : (quotes ? [quotes] : []);
+        const tabsContainer = document.getElementById('quoteTabs');
+        const panelsContainer = document.getElementById('quotePanels');
+        
+        tabsContainer.innerHTML = '';
+        panelsContainer.innerHTML = '';
+        
+        if (quotesArray.length === 0) {
+            // 显示空状态
+            panelsContainer.innerHTML = `
+                <div class="quote-empty-state">
+                    <i class="fas fa-quote-right"></i>
+                    <p>暂无引用文本</p>
+                    <p style="font-size: 10px; color: #bbb;">点击上方"添加引用"按钮添加</p>
+                </div>
+            `;
+        } else {
+            // 创建标签页
+            quotesArray.forEach((quote, index) => {
+                this.addQuoteTab(quote, index, index === 0);
+            });
+        }
+        
+        // 绑定添加按钮
+        const btnAdd = document.getElementById('btnAddQuote');
+        btnAdd.onclick = () => this.addQuoteTab('', tabsContainer.children.length, true);
+    }
+
+    // 添加引用标签页
+    addQuoteTab(content = '', index = 0, setActive = false) {
+        const tabsContainer = document.getElementById('quoteTabs');
+        const panelsContainer = document.getElementById('quotePanels');
+        
+        // 移除空状态
+        const emptyState = panelsContainer.querySelector('.quote-empty-state');
+        if (emptyState) {
+            emptyState.remove();
+        }
+        
+        // 创建标签
+        const tab = document.createElement('div');
+        tab.className = 'quote-tab' + (setActive ? ' active' : '');
+        tab.dataset.index = index;
+        tab.innerHTML = `
+            <span>引用 ${index + 1}</span>
+            <i class="fas fa-times tab-remove" title="删除"></i>
+        `;
+        
+        // 创建面板
+        const panel = document.createElement('div');
+        panel.className = 'quote-panel' + (setActive ? ' active' : '');
+        panel.dataset.index = index;
+        const placeholderText = '在此粘贴从PDF复制的引用文本...\n\n提示：可以包含关键词、段落或公式\n支持多行文本';
+        panel.innerHTML = `
+            <textarea placeholder="${placeholderText}">${this.escapeHtml(content)}</textarea>
+        `;
+        
+        // 点击标签切换
+        tab.addEventListener('click', (e) => {
+            if (e.target.classList.contains('tab-remove')) {
+                this.removeQuoteTab(index);
+            } else {
+                this.switchQuoteTab(index);
+            }
+        });
+        
+        tabsContainer.appendChild(tab);
+        panelsContainer.appendChild(panel);
+        
+        if (setActive) {
+            this.switchQuoteTab(index);
+        }
+    }
+
+    // 切换标签页
+    switchQuoteTab(index) {
+        const tabs = document.querySelectorAll('.quote-tab');
+        const panels = document.querySelectorAll('.quote-panel');
+        
+        tabs.forEach(tab => tab.classList.remove('active'));
+        panels.forEach(panel => panel.classList.remove('active'));
+        
+        const targetTab = document.querySelector(`.quote-tab[data-index="${index}"]`);
+        const targetPanel = document.querySelector(`.quote-panel[data-index="${index}"]`);
+        
+        if (targetTab) targetTab.classList.add('active');
+        if (targetPanel) {
+            targetPanel.classList.add('active');
+            
+            // 自动聚焦到文本输入框
+            const textarea = targetPanel.querySelector('textarea');
+            if (textarea) {
+                setTimeout(() => {
+                    textarea.focus();
+                    // 将光标移动到文本末尾
+                    textarea.setSelectionRange(textarea.value.length, textarea.value.length);
+                }, 100);
+            }
+        }
+    }
+
+    // 删除标签页
+    removeQuoteTab(index) {
+        const tabsContainer = document.getElementById('quoteTabs');
+        const panelsContainer = document.getElementById('quotePanels');
+        
+        const tab = document.querySelector(`.quote-tab[data-index="${index}"]`);
+        const panel = document.querySelector(`.quote-panel[data-index="${index}"]`);
+        
+        if (tab) tab.remove();
+        if (panel) panel.remove();
+        
+        // 重新索引
+        const remainingTabs = tabsContainer.querySelectorAll('.quote-tab');
+        const remainingPanels = panelsContainer.querySelectorAll('.quote-panel');
+        
+        if (remainingTabs.length === 0) {
+            // 显示空状态
+            panelsContainer.innerHTML = `
+                <div class="quote-empty-state">
+                    <i class="fas fa-quote-right"></i>
+                    <p>暂无引用文本</p>
+                    <p style="font-size: 10px; color: #bbb;">点击上方"添加引用"按钮添加</p>
+                </div>
+            `;
+        } else {
+            // 重新编号
+            remainingTabs.forEach((tab, newIndex) => {
+                tab.dataset.index = newIndex;
+                tab.querySelector('span').textContent = `引用 ${newIndex + 1}`;
+            });
+            remainingPanels.forEach((panel, newIndex) => {
+                panel.dataset.index = newIndex;
+            });
+            
+            // 激活第一个标签
+            this.switchQuoteTab(0);
+        }
     }
 
     closeEditModal() {
@@ -1730,7 +1924,12 @@ class PaperReviewerApp {
 
         const newValue = document.getElementById('editTextarea').value;
         const pageNumber = document.getElementById('editPageNumber').value;
-        const quote = document.getElementById('editQuote').value;
+        
+        // 从标签页收集所有引用文本
+        const quotePanels = document.querySelectorAll('.quote-panel textarea');
+        const quotes = Array.from(quotePanels)
+            .map(textarea => textarea.value.trim())
+            .filter(q => q.length > 0);
         
         // Update data
         let current = this.currentData;
@@ -1772,7 +1971,7 @@ class PaperReviewerApp {
                 "page_label": "",
                 "pdf_page_index": null,
                 "pdf_open_params": "",
-                "quote": ""
+                "quote": []
             };
         }
         
@@ -1785,9 +1984,8 @@ class PaperReviewerApp {
             current[locKey].pdf_open_params = `#page=${pageIndex}`;
         }
         
-        if (quote) {
-            current[locKey].quote = quote;
-        }
+        // 保存引用数组
+        current[locKey].quote = quotes;
 
         // 标记为有未保存的修改
         this.hasUnsavedChanges = true;
@@ -1841,10 +2039,154 @@ class PaperReviewerApp {
         document.getElementById('customKey').value = '';
         document.getElementById('itemContent').value = '';
         document.getElementById('itemPageNumber').value = '';
-        document.getElementById('itemQuote').value = '';
         document.getElementById('customKeyGroup').style.display = 'none';
         
+        // 初始化引用标签页（空状态）
+        this.initQuoteTabsForItem([]);
+        
         document.getElementById('addItemModal').classList.add('active');
+    }
+
+    // 初始化添加条目的引用标签页
+    initQuoteTabsForItem(quotes) {
+        const quotesArray = Array.isArray(quotes) ? quotes : (quotes ? [quotes] : []);
+        const tabsContainer = document.getElementById('quoteTabsItem');
+        const panelsContainer = document.getElementById('quotePanelsItem');
+        
+        tabsContainer.innerHTML = '';
+        panelsContainer.innerHTML = '';
+        
+        if (quotesArray.length === 0) {
+            // 显示空状态
+            panelsContainer.innerHTML = `
+                <div class="quote-empty-state">
+                    <i class="fas fa-quote-right"></i>
+                    <p>暂无引用文本</p>
+                    <p style="font-size: 10px; color: #bbb;">点击上方“添加引用”按钮添加</p>
+                </div>
+            `;
+        } else {
+            // 创建标签页
+            quotesArray.forEach((quote, index) => {
+                this.addQuoteTabForItem(quote, index, index === 0);
+            });
+        }
+        
+        // 绑定添加按钮
+        const btnAdd = document.getElementById('btnAddQuoteItem');
+        btnAdd.onclick = () => this.addQuoteTabForItem('', tabsContainer.children.length, true);
+    }
+
+    // 添加条目的引用标签页
+    addQuoteTabForItem(content = '', index = 0, setActive = false) {
+        const tabsContainer = document.getElementById('quoteTabsItem');
+        const panelsContainer = document.getElementById('quotePanelsItem');
+        
+        // 移除空状态
+        const emptyState = panelsContainer.querySelector('.quote-empty-state');
+        if (emptyState) {
+            emptyState.remove();
+        }
+        
+        // 创建标签
+        const tab = document.createElement('div');
+        tab.className = 'quote-tab' + (setActive ? ' active' : '');
+        tab.dataset.index = index;
+        tab.innerHTML = `
+            <span>引用 ${index + 1}</span>
+            <i class="fas fa-times tab-remove" title="删除"></i>
+        `;
+        
+        // 创建面板
+        const panel = document.createElement('div');
+        panel.className = 'quote-panel' + (setActive ? ' active' : '');
+        panel.dataset.index = index;
+        const placeholderText = '在此粘贴从PDF复制的引用文本...\n\n提示：可以包含关键词、段落或公式\n支持多行文本';
+        panel.innerHTML = `
+            <textarea placeholder="${placeholderText}">${this.escapeHtml(content)}</textarea>
+        `;
+        
+        // 点击标签切换
+        tab.addEventListener('click', (e) => {
+            if (e.target.classList.contains('tab-remove')) {
+                this.removeQuoteTabForItem(index);
+            } else {
+                this.switchQuoteTabForItem(index);
+            }
+        });
+        
+        tabsContainer.appendChild(tab);
+        panelsContainer.appendChild(panel);
+        
+        if (setActive) {
+            this.switchQuoteTabForItem(index);
+        }
+    }
+
+    // 切换添加条目的标签页
+    switchQuoteTabForItem(index) {
+        const tabs = document.querySelectorAll('#quoteTabsItem .quote-tab');
+        const panels = document.querySelectorAll('#quotePanelsItem .quote-panel');
+        
+        tabs.forEach(tab => tab.classList.remove('active'));
+        panels.forEach(panel => panel.classList.remove('active'));
+        
+        const targetTab = document.querySelector(`#quoteTabsItem .quote-tab[data-index="${index}"]`);
+        const targetPanel = document.querySelector(`#quotePanelsItem .quote-panel[data-index="${index}"]`);
+        
+        if (targetTab) targetTab.classList.add('active');
+        if (targetPanel) {
+            targetPanel.classList.add('active');
+            
+            // 自动聚焦到文本输入框
+            const textarea = targetPanel.querySelector('textarea');
+            if (textarea) {
+                setTimeout(() => {
+                    textarea.focus();
+                    // 将光标移动到文本末尾
+                    textarea.setSelectionRange(textarea.value.length, textarea.value.length);
+                }, 100);
+            }
+        }
+    }
+
+    // 删除添加条目的标签页
+    removeQuoteTabForItem(index) {
+        const tabsContainer = document.getElementById('quoteTabsItem');
+        const panelsContainer = document.getElementById('quotePanelsItem');
+        
+        const tab = document.querySelector(`#quoteTabsItem .quote-tab[data-index="${index}"]`);
+        const panel = document.querySelector(`#quotePanelsItem .quote-panel[data-index="${index}"]`);
+        
+        if (tab) tab.remove();
+        if (panel) panel.remove();
+        
+        // 重新索引
+        const remainingTabs = tabsContainer.querySelectorAll('.quote-tab');
+        const remainingPanels = panelsContainer.querySelectorAll('.quote-panel');
+        
+        if (remainingTabs.length === 0) {
+            // 显示空状态
+            panelsContainer.innerHTML = `
+                <div class="quote-empty-state">
+                    <i class="fas fa-quote-right"></i>
+                    <p>暂无引用文本</p>
+                    <p style="font-size: 10px; color: #bbb;">点击上方“添加引用”按钮添加</p>
+                </div>
+            `;
+        } else {
+            // 重新编号
+            remainingTabs.forEach((tab, newIndex) => {
+                tab.dataset.index = newIndex;
+                tab.querySelector('span').textContent = `引用 ${newIndex + 1}`;
+            });
+            remainingPanels.forEach((panel, newIndex) => {
+                panel.dataset.index = newIndex;
+            });
+            
+            // 激活第一个标签
+            this.switchQuoteTabForItem(0);
+        }
     }
 
     closeAddItemModal() {
@@ -1856,7 +2198,12 @@ class PaperReviewerApp {
         const customKey = document.getElementById('customKey').value;
         const content = document.getElementById('itemContent').value;
         const pageNumber = document.getElementById('itemPageNumber').value;
-        const quote = document.getElementById('itemQuote').value;
+        
+        // 从标签页收集所有引用文本
+        const quotePanels = document.querySelectorAll('#quotePanelsItem .quote-panel textarea');
+        const quotes = Array.from(quotePanels)
+            .map(textarea => textarea.value.trim())
+            .filter(q => q.length > 0);
 
         if (!category) {
             this.showNotification('请选择分类', 'error');
@@ -1889,14 +2236,16 @@ class PaperReviewerApp {
             this.currentData[key].push(newItem);
             
             // 如果有页码或引用，添加location
-            if (pageNumber || quote) {
+            if (pageNumber || quotes.length > 0) {
                 const locKey = key + '_loc';
                 if (!this.currentData[locKey]) {
                     this.currentData[locKey] = [];
                 }
                 this.currentData[locKey].push({
                     pdf_page_index: pageNumber ? parseInt(pageNumber) : null,
-                    quote: quote || ''
+                    page_label: pageNumber ? pageNumber.toString() : '',
+                    pdf_open_params: pageNumber ? `#page=${pageNumber}` : '',
+                    quote: quotes
                 });
             }
         } else {
@@ -1963,52 +2312,108 @@ class PaperReviewerApp {
                 e.preventDefault();
                 const page = parseInt(link.dataset.page);
                 const valuePath = link.dataset.valuePath;
+                const quoteIndex = link.dataset.quoteIndex !== undefined ? parseInt(link.dataset.quoteIndex) : 0;
                 
-                // 从 _loc 字段中获取 quote 作为搜索文本
-                let searchText = '';
-                if (valuePath) {
-                    const pathArray = valuePath.split('.');
-                    let current = this.currentData;
-                    
-                    // 导航到字段所在的父对象
-                    for (let i = 0; i < pathArray.length - 1; i++) {
-                        if (current && current.hasOwnProperty(pathArray[i])) {
-                            current = current[pathArray[i]];
-                        } else {
-                            current = null;
-                            break;
-                        }
-                    }
-                    
-                    if (current) {
-                        const lastKey = pathArray[pathArray.length - 1];
-                        const locKey = lastKey + '_loc';
-                        
-                        // 优先使用 _loc.quote 作为搜索文本
-                        if (current[locKey] && current[locKey].quote) {
-                            searchText = this.cleanQuoteForSearch(current[locKey].quote);
-                            console.log('🔍 从 quote 获取搜索文本:', searchText);
-                        } else {
-                            // 如果没有 quote，使用字段值本身
-                            const fieldValue = current[lastKey];
-                            if (fieldValue !== null && fieldValue !== undefined) {
-                                searchText = typeof fieldValue === 'string' ? fieldValue : JSON.stringify(fieldValue);
-                                console.log('🔍 从字段值获取搜索文本:', searchText);
-                            }
-                        }
-                    }
-                }
-                
-                if (page && searchText) {
-                    this.jumpToPage(page, searchText);
-                } else if (page) {
-                    // 只跳转，不搜索
-                    this.jumpToPage(page, '');
-                }
+                // 直接跳转，让executeSearchAndScroll处理循环逻辑
+                this.jumpToPageWithQuote(page, valuePath, quoteIndex);
             }
         };
         
         document.addEventListener('click', this._locationLinkHandler);
+    }
+
+    // 获取指定字段的quote数量
+    getQuoteCount(valuePath) {
+        if (!valuePath) return 0;
+        
+        const pathArray = valuePath.split('.');
+        let current = this.currentData;
+        
+        // 导航到字段所在的父对象
+        for (let i = 0; i < pathArray.length - 1; i++) {
+            if (current && current.hasOwnProperty(pathArray[i])) {
+                current = current[pathArray[i]];
+            } else {
+                return 0;
+            }
+        }
+        
+        if (current) {
+            const lastKey = pathArray[pathArray.length - 1];
+            const locKey = lastKey + '_loc';
+            
+            if (current[locKey] && current[locKey].quote) {
+                const quotes = current[locKey].quote;
+                if (Array.isArray(quotes)) {
+                    return quotes.filter(q => q && q.trim()).length;
+                } else if (typeof quotes === 'string' && quotes.trim()) {
+                    return 1;
+                }
+            }
+        }
+        
+        return 0;
+    }
+
+    // 跳转到页面并高亮指定的quote
+    jumpToPageWithQuote(page, valuePath, quoteIndex = null) {
+        let searchText = '';
+        
+        if (valuePath) {
+            const pathArray = valuePath.split('.');
+            let current = this.currentData;
+            
+            // 导航到字段所在的父对象
+            for (let i = 0; i < pathArray.length - 1; i++) {
+                if (current && current.hasOwnProperty(pathArray[i])) {
+                    current = current[pathArray[i]];
+                } else {
+                    current = null;
+                    break;
+                }
+            }
+            
+            if (current) {
+                const lastKey = pathArray[pathArray.length - 1];
+                const locKey = lastKey + '_loc';
+                
+                // 从 _loc.quote 获取搜索文本
+                if (current[locKey] && current[locKey].quote) {
+                    const quotes = current[locKey].quote;
+                    
+                    if (Array.isArray(quotes)) {
+                        // 如果是数组，获取指定索引的quote
+                        if (quoteIndex !== null && quoteIndex >= 0 && quoteIndex < quotes.length) {
+                            searchText = this.cleanQuoteForSearch(quotes[quoteIndex]);
+                            console.log(`🔍 从 quote[${quoteIndex}] 获取搜索文本:`, searchText);
+                        } else if (quotes.length > 0) {
+                            // 默认使用第一个
+                            searchText = this.cleanQuoteForSearch(quotes[0]);
+                            console.log('🔍 从 quote[0] 获取搜索文本:', searchText);
+                        }
+                    } else if (typeof quotes === 'string') {
+                        // 兼容旧的字符串格式
+                        searchText = this.cleanQuoteForSearch(quotes);
+                        console.log('🔍 从 quote 字符串获取搜索文本:', searchText);
+                    }
+                }
+                
+                // 如果没有 quote，使用字段值本身
+                if (!searchText) {
+                    const fieldValue = current[lastKey];
+                    if (fieldValue !== null && fieldValue !== undefined) {
+                        searchText = typeof fieldValue === 'string' ? fieldValue : JSON.stringify(fieldValue);
+                        console.log('🔍 从字段值获取搜索文本:', searchText);
+                    }
+                }
+            }
+        }
+        
+        if (page && searchText) {
+            this.jumpToPage(page, searchText, valuePath);
+        } else if (page) {
+            this.jumpToPage(page, '', valuePath);
+        }
     }
 
     // 清理 quote 文本用于搜索
@@ -2177,7 +2582,8 @@ class PaperReviewerApp {
             pdfDoc: null,
             currentStartPage: 1,
             totalPages: 0,
-            zoom: 1.0,
+            baseScale: 1.0,  // 基础渲染缩放（页面渲染时使用）
+            viewScale: 1.0,   // 视图缩放（CSS transform）
             isLoading: false
         };
         
@@ -2275,11 +2681,11 @@ class PaperReviewerApp {
         }
     }
 
-    async renderContinuousPages() {
+    async renderContinuousPages(keepPage = null) {
         const container = document.getElementById('continuousPages');
         console.log('🎯 开始渲染连续页面');
 
-        const startPage = this.fullscreenState.currentStartPage;
+        const startPage = keepPage || this.fullscreenState.currentStartPage;
         const totalPages = this.fullscreenState.totalPages;
         const pdfDoc = this.fullscreenState.pdfDoc;
 
@@ -2320,6 +2726,10 @@ class PaperReviewerApp {
 
         console.log('✓ 所有页面渲染完成');
 
+        // 应用CSS transform缩放
+        container.style.transform = `scale(${this.fullscreenState.viewScale})`;
+        container.style.transformOrigin = 'center center';
+
         // 滚动到起始页
         const targetCanvas = container.querySelector(`[data-page="${startPage}"]`);
         if (targetCanvas) {
@@ -2337,10 +2747,9 @@ class PaperReviewerApp {
             canvas.dataset.page = pageNum;
             const ctx = canvas.getContext('2d');
 
-            // 计算适配高度的缩放比例 - 最大化利用屏幕高度
-            const contentHeight = window.innerHeight - 40; // 只减去padding，工具栏是悬浮的
+            // 使用baseScale作为渲染缩放比例
             const viewport = page.getViewport({ scale: 1.0 });
-            const scale = (contentHeight / viewport.height) * this.fullscreenState.zoom;
+            const scale = this.fullscreenState.baseScale;
             const scaledViewport = page.getViewport({ scale });
 
             // 支持高清屏
@@ -2468,24 +2877,130 @@ class PaperReviewerApp {
         });
     }
 
+    getCurrentVisiblePage() {
+        // 获取当前视口中最可见的页码
+        const container = document.getElementById('continuousPages');
+        const contentEl = document.getElementById('fullscreenContent');
+        
+        if (!container || !contentEl) {
+            return this.fullscreenState.currentStartPage || 1;
+        }
+        
+        const allCanvases = Array.from(container.querySelectorAll('canvas[data-page]'));
+        if (allCanvases.length === 0) {
+            return this.fullscreenState.currentStartPage || 1;
+        }
+        
+        // 获取视口中心点
+        const viewportCenterX = contentEl.scrollLeft + contentEl.clientWidth / 2;
+        const viewportCenterY = contentEl.scrollTop + contentEl.clientHeight / 2;
+        
+        // 找到最接近视口中心的页面
+        let closestPage = 1;
+        let minDistance = Infinity;
+        
+        allCanvases.forEach(canvas => {
+            const rect = canvas.getBoundingClientRect();
+            const containerRect = contentEl.getBoundingClientRect();
+            
+            // 计算canvas相对于容器的中心点
+            const canvasCenterX = contentEl.scrollLeft + (rect.left - containerRect.left) + rect.width / 2;
+            const canvasCenterY = contentEl.scrollTop + (rect.top - containerRect.top) + rect.height / 2;
+            
+            // 计算到视口中心的距离
+            const distance = Math.sqrt(
+                Math.pow(canvasCenterX - viewportCenterX, 2) + 
+                Math.pow(canvasCenterY - viewportCenterY, 2)
+            );
+            
+            if (distance < minDistance) {
+                minDistance = distance;
+                closestPage = parseInt(canvas.dataset.page);
+            }
+        });
+        
+        return closestPage;
+    }
+
     async adjustReaderZoom(factor) {
         // 限制缩放范围 0.5x - 3.0x
-        const newZoom = this.fullscreenState.zoom * factor;
-        if (newZoom < 0.5 || newZoom > 3.0) {
-            console.log(`⚠️ 缩放超出范围: ${newZoom.toFixed(2)}`);
+        const newScale = this.fullscreenState.viewScale * factor;
+        if (newScale < 0.5 || newScale > 3.0) {
+            console.log(`⚠️ 缩放超出范围: ${newScale.toFixed(2)}`);
             return;
         }
         
-        this.fullscreenState.zoom = newZoom;
+        this.fullscreenState.viewScale = newScale;
         
         // 更新缩放显示
-        const zoomPercent = Math.round(this.fullscreenState.zoom * 100);
+        const totalZoom = this.fullscreenState.baseScale * this.fullscreenState.viewScale;
+        const zoomPercent = Math.round(totalZoom * 100);
+        document.getElementById('zoomIndicator').textContent = `${zoomPercent}%`;
+        
+        // 直接使用CSS transform缩放，不重新渲染
+        const container = document.getElementById('continuousPages');
+        if (container) {
+            container.style.transform = `scale(${this.fullscreenState.viewScale})`;
+            container.style.transformOrigin = 'center center';
+        }
+    }
+    
+    async fitToHeight() {
+        // 适配高度：使PDF页面高度适配屏幕高度
+        if (!this.fullscreenState.pdfDoc) return;
+        
+        // 保存当前可见页码
+        const currentPage = this.getCurrentVisiblePage();
+        
+        const page = await this.fullscreenState.pdfDoc.getPage(1);
+        const viewport = page.getViewport({ scale: 1.0 });
+        
+        // 获取内容区域高度（扣除工具栏）
+        const toolbar = document.querySelector('.fullscreen-floating-toolbar');
+        const toolbarHeight = toolbar ? toolbar.offsetHeight : 0;
+        const contentHeight = window.innerHeight - toolbarHeight - 40; // 40px为上下间距
+        
+        // 计算适配缩放比例
+        const fitZoom = contentHeight / viewport.height;
+        
+        // 限制在合理范围内
+        this.fullscreenState.baseScale = Math.max(0.5, Math.min(3.0, fitZoom));
+        this.fullscreenState.viewScale = 1.0; // 重置viewScale
+        
+        // 更新显示
+        const zoomPercent = Math.round(this.fullscreenState.baseScale * 100);
         document.getElementById('zoomIndicator').textContent = `${zoomPercent}%`;
         
         // 重新渲染
-        if (this.fullscreenState.pdfDoc) {
-            await this.renderContinuousPages();
-        }
+        await this.renderContinuousPages(currentPage);
+    }
+    
+    async fitToWidth() {
+        // 适配宽度：使PDF页面宽度适配屏幕宽度
+        if (!this.fullscreenState.pdfDoc) return;
+        
+        // 保存当前可见页码
+        const currentPage = this.getCurrentVisiblePage();
+        
+        const page = await this.fullscreenState.pdfDoc.getPage(1);
+        const viewport = page.getViewport({ scale: 1.0 });
+        
+        // 获取内容区域宽度（扣除左右间距）
+        const contentWidth = window.innerWidth - 40; // 40px为左右间距
+        
+        // 计算适配缩放比例
+        const fitZoom = contentWidth / viewport.width;
+        
+        // 限制在合理范围内
+        this.fullscreenState.baseScale = Math.max(0.5, Math.min(3.0, fitZoom));
+        this.fullscreenState.viewScale = 1.0; // 重置viewScale
+        
+        // 更新显示
+        const zoomPercent = Math.round(this.fullscreenState.baseScale * 100);
+        document.getElementById('zoomIndicator').textContent = `${zoomPercent}%`;
+        
+        // 重新渲染
+        await this.renderContinuousPages(currentPage);
     }
     
     setupFullscreenGestures() {

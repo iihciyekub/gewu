@@ -521,31 +521,64 @@ body {
     color: var(--wos-blue);
     text-decoration: none;
     font-size: 9px;
-    margin-left: 6px;
-    padding: 1px 4px;
-    border-radius: 2px;
+    margin-left: 3px;
+    padding: 1px 5px;
+    border-radius: 3px;
     background: var(--wos-hover);
     transition: all 0.12s ease;
     white-space: nowrap;
     vertical-align: middle;
+    position: relative;
 }
 
 .location-link:hover {
     background: var(--wos-blue);
     color: white;
     box-shadow: 0 2px 4px rgba(0,62,116,0.3);
+    transform: translateY(-1px);
 }
 
 .location-link i {
     font-size: 9px;
 }
 
-.location-link i.fa-file-pdf {
-    color: #d32f2f;
+.location-link i.fa-quote-right {
+    color: var(--wos-blue);
 }
 
-.location-link:hover i.fa-file-pdf {
+.location-link:hover i.fa-quote-right {
     color: white;
+}
+
+/* 多个quote的间距 */
+.location-link:not(:first-of-type) {
+    margin-left: 2px;
+}
+
+/* 悬停时显示提示 */
+.location-link::before {
+    content: attr(title);
+    position: absolute;
+    bottom: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(0, 0, 0, 0.9);
+    color: white;
+    padding: 4px 8px;
+    border-radius: 3px;
+    font-size: 10px;
+    white-space: nowrap;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s;
+    margin-bottom: 4px;
+    max-width: 300px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.location-link:hover::before {
+    opacity: 1;
 }
 
 .location-link i.fa-external-link-alt {
@@ -668,6 +701,131 @@ body {
     font-size: 12px;
 }
 
+/* Quote Tabs 引用标签页 */
+.quotes-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+}
+
+.btn-add-quote {
+    background: var(--wos-blue);
+    color: white;
+    border: none;
+    padding: 3px 8px;
+    border-radius: 2px;
+    font-size: 10px;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    transition: all 0.2s;
+}
+
+.btn-add-quote:hover {
+    background: var(--wos-light-blue);
+    transform: translateY(-1px);
+    box-shadow: 0 2px 4px rgba(0,62,116,0.2);
+}
+
+.quote-tabs {
+    display: flex;
+    gap: 0px;
+    border-bottom: 1px solid #e0e0e0;
+    margin-bottom: -1px;
+}
+
+.quote-tab {
+    background: #f5f5f5;
+    border: 1px solid #ddd;
+    border-bottom: none;
+    padding: 4px 8px;
+    border-radius: 3px 3px 0 0;
+    cursor: pointer;
+    font-size: 10px;
+    color: #666;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    white-space: nowrap;
+    position: relative;
+}
+
+.quote-tab:hover {
+    background: #e8e8e8;
+    color: var(--wos-blue);
+}
+
+.quote-tab.active {
+    background: white;
+    color: var(--wos-blue);
+    font-weight: 500;
+    border-color: var(--wos-blue);
+    border-bottom: 1px solid white;
+    margin-bottom: -1px;
+}
+
+.quote-tab .tab-remove {
+    color: #999;
+    margin-left: 2px;
+    cursor: pointer;
+    font-size: 9px;
+    padding: 1px;
+    border-radius: 2px;
+    transition: all 0.15s;
+}
+
+.quote-tab .tab-remove:hover {
+    color: #d32f2f;
+    background: rgba(211, 47, 47, 0.1);
+}
+
+.quote-panels {
+    min-height: 100px;
+}
+
+.quote-panel {
+    display: none;
+}
+
+.quote-panel.active {
+    display: block;
+}
+
+.quote-panel textarea {
+    width: 100%;
+    min-height: 80px;
+    height: 80px;
+    padding: 6px;
+    border: 1px solid #ddd;
+    border-radius: 3px;
+    font-family: 'Georgia', serif;
+    font-size: 11px;
+    line-height: 1.5;
+    resize: vertical;
+}
+
+.quote-panel textarea:focus {
+    outline: none;
+    border-color: var(--wos-blue);
+    box-shadow: 0 0 0 2px rgba(0, 62, 116, 0.1);
+}
+
+.quote-empty-state {
+    text-align: center;
+    padding: 20px;
+    color: #999;
+    font-size: 11px;
+}
+
+.quote-empty-state i {
+    font-size: 24px;
+    margin-bottom: 8px;
+    opacity: 0.3;
+}
+
 /* Modal for Editing - 紧凑版 */
 .modal {
     display: none;
@@ -719,7 +877,7 @@ body {
 
 .modal-body textarea {
     width: 100%;
-    min-height: 120px;
+    min-height: 60px;
     padding: 6px 8px;
     border: 1px solid var(--gray-300);
     border-radius: 2px;
@@ -1441,9 +1599,9 @@ ul.json-dict, ol.json-array {
     width: 100%;
     height: 100vh;
     overflow-x: auto;
-    overflow-y: hidden;
+    overflow-y: auto;
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     position: relative;
     scroll-behavior: auto;
 }
@@ -1459,8 +1617,6 @@ ul.json-dict, ol.json-array {
 }
 
 .continuous-pages canvas {
-    height: calc(100vh - 40px);
-    width: auto;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
     border-radius: 2px;
     background: white;
@@ -1469,6 +1625,7 @@ ul.json-dict, ol.json-array {
 /* 滚动条样式 */
 .fullscreen-content::-webkit-scrollbar {
     height: 12px;
+    width: 12px;
 }
 
 .fullscreen-content::-webkit-scrollbar-track {

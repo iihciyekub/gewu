@@ -160,6 +160,12 @@
             <button class="btn-fs-tool" id="btnReaderZoomIn" title="放大">
                 <i class="fas fa-search-plus"></i>
             </button>
+            <button class="btn-fs-tool" id="btnReaderFitHeight" title="适配高度">
+                <i class="fas fa-arrows-alt-v"></i>
+            </button>
+            <button class="btn-fs-tool" id="btnReaderFitWidth" title="适配宽度">
+                <i class="fas fa-arrows-alt-h"></i>
+            </button>
             <button class="btn-fs-tool btn-fs-close" id="btnReaderClose" title="退出全屏 (ESC)">
                 <i class="fas fa-times"></i>
             </button>
@@ -184,15 +190,24 @@
                     <div class="section-divider"></div>
                     <h4><i class="fa-solid fa-location-dot"></i> PDF 位置信息</h4>
                     
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label for="editPageNumber">页码:</label>
-                            <input type="number" id="editPageNumber" placeholder="PDF页码" min="1">
+                    <div class="form-group">
+                        <label for="editPageNumber">页码:</label>
+                        <input type="number" id="editPageNumber" placeholder="PDF页码" min="1">
+                    </div>
+                    
+                    <div class="form-group">
+                        <div class="quotes-header">
+                            <label>引用文本:</label>
+                            <button type="button" class="btn-add-quote" id="btnAddQuote" title="添加引用">
+                                <i class="fas fa-plus"></i> 添加引用
+                            </button>
                         </div>
-                        <div class="form-group">
-                            <label for="editQuote">引用文本:</label>
-                            <textarea id="editQuote" rows="3" placeholder="从PDF中复制的引用文本"></textarea>
-                        </div>
+                        
+                        <!-- 标签页头部 -->
+                        <div class="quote-tabs" id="quoteTabs"></div>
+                        
+                        <!-- 标签页内容 -->
+                        <div class="quote-panels" id="quotePanels"></div>
                     </div>
                 </div>
             </div>
@@ -233,14 +248,30 @@
                     <textarea id="itemContent" rows="4" placeholder="输入条目内容"></textarea>
                 </div>
                 
-                <div class="form-group">
-                    <label for="itemPageNumber">页码 (可选):</label>
-                    <input type="number" id="itemPageNumber" placeholder="PDF页码" min="1">
-                </div>
-                
-                <div class="form-group">
-                    <label for="itemQuote">引用文本 (可选):</label>
-                    <textarea id="itemQuote" rows="2" placeholder="从PDF中复制的引用文本"></textarea>
+                <!-- PDF 位置信息 -->
+                <div class="location-edit-section">
+                    <div class="section-divider"></div>
+                    <h4><i class="fa-solid fa-location-dot"></i> PDF 位置信息 (可选)</h4>
+                    
+                    <div class="form-group">
+                        <label for="itemPageNumber">页码:</label>
+                        <input type="number" id="itemPageNumber" placeholder="PDF页码" min="1">
+                    </div>
+                    
+                    <div class="form-group">
+                        <div class="quotes-header">
+                            <label>引用文本:</label>
+                            <button type="button" class="btn-add-quote" id="btnAddQuoteItem" title="添加引用">
+                                <i class="fas fa-plus"></i> 添加引用
+                            </button>
+                        </div>
+                        
+                        <!-- 标签页头部 -->
+                        <div class="quote-tabs" id="quoteTabsItem"></div>
+                        
+                        <!-- 标签页内容 -->
+                        <div class="quote-panels" id="quotePanelsItem"></div>
+                    </div>
                 </div>
             </div>
             <div class="modal-footer">
