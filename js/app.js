@@ -1655,13 +1655,32 @@ class PaperReviewerApp {
         const pageInput = document.getElementById('editPageNumber');
         const quoteInput = document.getElementById('editQuote');
         
-        // 获取location数据
+        // 获取当前字段所在的父对象
         let current = this.currentData;
         for (let i = 0; i < path.length - 1; i++) {
             current = current[path[i]];
         }
         
         const locKey = lastKey + '_loc';
+        
+        // 🔧 检查并自动创建 _loc 字段（如果不存在）
+        if (current && !current[locKey]) {
+            // 初始化标准的 _loc 结构，所有值允许为空
+            current[locKey] = {
+                "page_label": "",
+                "pdf_page_index": null,
+                "pdf_open_params": "",
+                "quote": ""
+            };
+            
+            // 标记数据已修改
+            this.hasUnsavedChanges = true;
+            this.tempDataCache[this.currentFile] = this.currentData;
+            this.updateSaveButtonState();
+            
+            console.log(`✓ 已自动创建 ${locKey} 字段`);
+        }
+        
         if (current && current[locKey]) {
             // 有location数据，显示编辑区
             locSection.style.display = 'block';
@@ -1720,18 +1739,30 @@ class PaperReviewerApp {
             }
         }
 
-        // Update location数据（如果有输入）
+        // Update location数据
         const locKey = lastKey + '_loc';
-        if (pageNumber || quote) {
-            if (!current[locKey]) {
-                current[locKey] = {};
-            }
-            if (pageNumber) {
-                current[locKey].pdf_page_index = parseInt(pageNumber);
-            }
-            if (quote) {
-                current[locKey].quote = quote;
-            }
+        
+        // 确保 _loc 字段存在（如果不存在则创建标准结构）
+        if (!current[locKey]) {
+            current[locKey] = {
+                "page_label": "",
+                "pdf_page_index": null,
+                "pdf_open_params": "",
+                "quote": ""
+            };
+        }
+        
+        // 更新 _loc 字段的值
+        if (pageNumber) {
+            const pageIndex = parseInt(pageNumber);
+            current[locKey].pdf_page_index = pageIndex;
+            // 同步更新 page_label 和 pdf_open_params
+            current[locKey].page_label = pageIndex.toString();
+            current[locKey].pdf_open_params = `#page=${pageIndex}`;
+        }
+        
+        if (quote) {
+            current[locKey].quote = quote;
         }
 
         // 标记为有未保存的修改

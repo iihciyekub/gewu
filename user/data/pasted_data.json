@@ -2,66 +2,65 @@
   "meta_info": {
     "doi": "10.1111/poms.12748",
     "pdf_path": "user/papers/10.1111_poms.12748.pdf",
-    "paper_id": "Oh_Zheng_Bardhan_2018",
-    "title": "Sooner or Later? Health Information Technology, Length of Stay, and Readmission Risk",
+    "paper_id": "Example_Paper_2",
+    "title": "Example Paper for Testing Multi-File Support",
     "title_loc": {
-      "page_label": "2038",
+      "page_label": "1",
       "pdf_page_index": 1,
       "pdf_open_params": "#page=1",
-      "quote": "Sooner or Later? Health Information Technology,\nLength of Stay, and Readmission Risk"
+      "quote": "Example Paper for Testing..."
     },
-    "authors": "Jeong-ha (Cath) Oh; Zhiqiang (Eric) Zheng; Indranil R. Bardhan",
-    "journal_year": "POMS, 2018",
+    "authors": "Test Author; Another Author",
+    "journal_year": "POMS, 2023",
     "authors_loc": {
-      "page_label": "2038",
-      "pdf_page_index": 1,
-      "pdf_open_params": "#page=1",
-      "quote": "Jeong-ha (Cath) Oh\n\nRobinson College of Business, Georgia State University, PO Box 4015, Atlanta, Georgia 30302-4015, USA, jhoh@gsu.edu\n\nZhiqiang (Eric) Zheng"
+      "page_label": "2",
+      "pdf_page_index": 2,
+      "pdf_open_params": "#page=2",
+      "quote": "Authors list"
+    },
+    "paper_id_loc": {
+      "page_label": "",
+      "pdf_page_index": null,
+      "pdf_open_params": "",
+      "quote": ""
+    },
+    "pdf_path_loc": {
+      "page_label": "",
+      "pdf_page_index": null,
+      "pdf_open_params": "",
+      "quote": ""
     }
   },
-  "did_design_setup": {
-    "model_type": "Staggered DID (多时点/交错DID)",
-    "model_type_explanation": "文章利用不同医院在不同年份实施HIT系统的时间差异（Implementation year varies），构建了准实验设计。",
-    "model_type_loc": {
-      "page_label": "2044",
-      "pdf_page_index": 7,
-      "pdf_open_params": "#page=7",
-      "quote": "observe the implementation year for each HIT application at each hospital. DID mimics a quasi-\nexperiment situation"
+  "research_design": {
+    "methodology": "Experimental Design",
+    "methodology_loc": {
+      "page_label": "5",
+      "pdf_page_index": 5,
+      "pdf_open_params": "#page=5",
+      "quote": "We employ an experimental approach..."
     },
-    "time_period": "2006-2009",
-    "time_period_loc": {
-      "page_label": "2041",
-      "pdf_page_index": 4,
-      "pdf_open_params": "#page=4",
-      "quote": "starting from January 2006 to December 2009"
+    "sample_size": "1000 participants",
+    "sample_size_loc": {
+      "page_label": "6",
+      "pdf_page_index": 6,
+      "pdf_open_params": "#page=6",
+      "quote": "Our sample consists of 1000 participants"
+    }
+  },
+  "key_findings": {
+    "finding_1": "Significant positive effect on productivity",
+    "finding_1_loc": {
+      "page_label": "10",
+      "pdf_page_index": 10,
+      "pdf_open_params": "#page=10",
+      "quote": "Results show significant improvement..."
     },
-    "treatment_definition": "HIT application implementation (Change from inactive to fully operational)",
-    "treatment_definition_loc": {
-      "page_label": "2044",
-      "pdf_page_index": 7,
-      "pdf_open_params": "#page=7",
-      "quote": "track the\nchange in an application's status turning from inac-\ntive to fully operational"
-    },
-    "control_group": "Hospitals without HIT / Before implementation period",
-    "control_group_loc": {
-      "page_label": "2044",
-      "pdf_page_index": 7,
-      "pdf_open_params": "#page=7",
-      "quote": "change in the deviation of LOS\namong patient visits to hospitals with HIT implemen-\ntation (treatment) relative to hospitals without HIT\n(control)"
-    },
-    "regression_equation_latex": "y_{ijkt} = \\alpha_1 + \\beta (HealthIT App * AfterHealthIT App) + e_{ijkt}",
-    "regression_equation_loc": {
-      "page_label": "2045",
-      "pdf_page_index": 8,
-      "pdf_open_params": "#page=8",
-      "quote": "y_{ijkt}=\\alpha_{1}"
-    },
-    "dependent_variable": "Deviation of LOS from GMLOS (Actual LOS - Geometric Mean LOS)",
-    "dependent_variable_loc": {
-      "page_label": "2045",
-      "pdf_page_index": 8,
-      "pdf_open_params": "#page=8",
-      "quote": "where y is the outcome, denoting the deviation of\nLOS from GMLOS"
+    "finding_2": "No significant effect on employee satisfaction",
+    "finding_2_loc": {
+      "page_label": "12",
+      "pdf_page_index": 12,
+      "pdf_open_params": "#page=12",
+      "quote": "However, satisfaction levels remained unchanged"
     }
   }
 }

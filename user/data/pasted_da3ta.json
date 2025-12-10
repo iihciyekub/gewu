@@ -1,0 +1,127 @@
+{
+  "meta_info": {
+    "doi": "10.1111/poms.12748",
+    "title": "Sooner or Later? Health Information Technology, Length of Stay, and Readmission Risk",
+    "authors": "Jeong-ha (Cath) Oh; Zhiqiang (Eric) Zheng; Indranil R. Bardhan",
+    "journal_year": "Production and Operations Management, 2018",
+    "pdf_path": "/mnt/data/10.1111_poms.12748.pdf",
+    "paper_id": "Oh_Zheng_Bardhan_2018",
+    "title_loc": {
+      "page_label": "2038",
+      "pdf_page_index": 1,
+      "pdf_open_params": "#page=1",
+      "quote": "Sooner or Later? Health Information Technology, Length of Stay, and Readmission Risk"
+    },
+    "authors_loc": {
+      "page_label": "2038",
+      "pdf_page_index": 1,
+      "pdf_open_params": "#page=1",
+      "quote": "Jeong-ha (Cath) Oh ... Zhiqiang (Eric) Zheng ... Indranil R. Bardhan"
+    }
+  },
+  "research_question": {
+    "question": "What is the relationship between Health IT implementation, hospitals’ deviation from CMS GMLOS guidelines, and 30-day readmission risk?",
+    "gap": "Prior studies examine LOS or readmissions separately, but do not study: (1) deviation from GMLOS as the correct benchmark; (2) joint effect of HIT on LOS deviation and readmission risk; (3) cost trade-offs between early discharge and readmission.",
+    "contribution": "Introduces LOS deviation from GMLOS as a new performance measure; uses DID to estimate HIT effects; jointly studies LOS deviation, readmission risk, and economic cost trade-offs.",
+    "loc": {
+      "page_label": "2038–2039",
+      "pdf_page_index": 1,
+      "pdf_open_params": "#page=1",
+      "quote": "Our objective is to establish the relationship between LOS and readmission risk... examine the role of health IT in reducing the deviation of LOS from GMLOS..."
+    }
+  },
+  "data": {
+    "data_source": "Patient admission records from 67 non-Federal hospitals in North Texas, combined with HIMSS Analytics HIT implementation data, 2006–2009.",
+    "sample_period": "January 2006 – December 2009",
+    "unit_of_observation": "Patient admission (visit-level panel)",
+    "variables": {
+      "outcome": "Deviation between LOS and GMLOS; 30-day readmission",
+      "treatment": "Implementation of specific HIT systems (binary: 1 = implemented & operational)",
+      "controls": "Patient demographics, mortality risk, procedures, payer type, hospital characteristics (beds, CMI, teaching, urban)"
+    },
+    "data_loc": {
+      "page_label": "2041",
+      "pdf_page_index": 4,
+      "pdf_open_params": "#page=4",
+      "quote": "Our data consist of patient admission records from 67 non-Federal hospitals... starting from January 2006 to December 2009."
+    }
+  },
+  "did_design": {
+    "model_type": "Standard DID with staggered adoption of HIT across hospitals (Staggered DID).",
+    "treatment_definition": "Hospital implements and fully operationalizes a specific HIT application (binary indicator switches from 0 → 1).",
+    "control_group": "Hospitals that have not implemented the HIT application during the same period.",
+    "parallel_trend_test": "Not explicitly presented in figures; justified through quasi-experimental staggered HIT adoption and DID identification literature.",
+    "event_study": "Not included.",
+    "did_design_loc": {
+      "page_label": "2044",
+      "pdf_page_index": 7,
+      "pdf_open_params": "#page=7",
+      "quote": "Our HIMSS data allow us to observe the implementation year... DID mimics a quasi-experiment situation..."
+    }
+  },
+  "regression": {
+    "equation_latex": "y_{ijkt} = α_1 HealthIT_{jk} + α_2 After_{jkt} + β (HealthIT_{jk} × After_{jkt}) + e_{ijkt}",
+    "fixed_effects": "Implicit hospital-time HIT adoption structure; no explicit FE notation in main text.",
+    "cluster": "Not explicitly stated; likely hospital-level clustering (common practice).",
+    "regression_loc": {
+      "page_label": "2044–2045",
+      "pdf_page_index": 7,
+      "pdf_open_params": "#page=7",
+      "quote": "yijkt = a1 HealthIT Appijk + a1 AfterHealthIT Appijkt + β HealthIT Appijk × AfterHealthIT Appijkt..."
+    }
+  },
+  "main_results": {
+    "estimate": "Implementation of HIT applications significantly reduces LOS deviation by 0.8–2.6 days depending on system; early discharge (LOS < GMLOS − 1) increases 30-day readmission risk by about 7%.",
+    "interpretation": "HIT improves hospital adherence to standardized LOS guidelines; premature discharge increases probability of readmission.",
+    "table_loc": {
+      "page_label": "2046",
+      "pdf_page_index": 9,
+      "pdf_open_params": "#page=9",
+      "quote": "Table 3 shows significant reductions... RFID reduces LOS deviation by 2.655 days."
+    }
+  },
+  "robustness": {
+    "tests": [
+      "Propensity score matching at hospital level to reduce selection bias.",
+      "PSM at patient level to estimate causal effect of early discharge on readmission.",
+      "Hospital-level comparison between high-HIT and low-HIT hospitals with low readmission rates."
+    ],
+    "loc": {
+      "page_label": "2048",
+      "pdf_page_index": 11,
+      "pdf_open_params": "#page=11",
+      "quote": "Propensity score matching allows us to reliably estimate... Table 5... Table 6..."
+    }
+  },
+  "heterogeneity": {
+    "dimension": "By type of HIT application; by patient characteristics (gender, race, payer type, mortality risk).",
+    "findings": "Different HIT modules (RFID, CDS, CPOE) have varied magnitude of impact. African-American & Medicaid patients have higher readmission risk.",
+    "loc": {
+      "page_label": "2046–2047",
+      "pdf_page_index": 9,
+      "pdf_open_params": "#page=9",
+      "quote": "Implementation of patient scheduling... EMAR... African-American patients 17% more likely..."
+    }
+  },
+  "mechanism": {
+    "mechanism_hypothesis": "HIT improves care coordination, scheduling efficiency, and information flow → reducing LOS deviation.",
+    "evidence": "Systems such as RFID tracking, CPOE, and Decision Support directly reduce operational delays, congestion, and uncertainty in scheduling.",
+    "loc": {
+      "page_label": "2044",
+      "pdf_page_index": 7,
+      "pdf_open_params": "#page=7",
+      "quote": "These HIT applications enable care inpatient providers to improve operations efficiency... reducing time spent..."
+    }
+  },
+  "conclusion": {
+    "policy_implications": "Shorter LOS may save costs immediately but leads to higher long-term readmission costs. Hospitals should emphasize adherence to GMLOS and invest in HIT.",
+    "limitations": "Data limited to North Texas region; observational setting; limited visibility into post-discharge care coordination; no explicit parallel trend plots.",
+    "future_research": "Explore heterogeneous treatment timing with modern staggered DID estimators; include more granular patient clinical data; assess dynamic HIT effects.",
+    "loc": {
+      "page_label": "2050",
+      "pdf_page_index": 13,
+      "pdf_open_params": "#page=13",
+      "quote": "Our analysis suggests that cost savings from early discharges may be outweighed... discharging patients quicker yet sicker is myopic..."
+    }
+  }
+}
