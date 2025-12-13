@@ -1,7 +1,7 @@
 {
   "meta_info": {
     "doi": "10.1002/joom.1169",
-    "pdf_path": "user/papers/joom.1169.pdf",
+    "pdf_path": "user/papers/joom.1169_1.pdf",
     "paper_id": "Oh_Zheng_Bardhan_2018",
     "title": "the impact33333333333333333333",
     "title_loc": {
@@ -22,6 +22,12 @@
         "the impact",
         "nsideration of both strength\nand concern is particularly important in ou"
       ]
+    },
+    "pdf_path_loc": {
+      "page_label": "",
+      "pdf_page_index": null,
+      "pdf_open_params": "",
+      "quote": []
     }
   },
   "did_design_setup": {

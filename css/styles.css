@@ -650,6 +650,66 @@ body {
     scroll-behavior: smooth;
 }
 
+/* PDF.js 全屏快捷按钮 */
+.btn-pdfjs-fullscreen {
+    position: absolute;
+    bottom: 16px;
+    right: 16px;
+    width: 42px;
+    height: 42px;
+    background: var(--wos-blue);
+    color: #fff;
+    border: none;
+    border-radius: 50%;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 6px 16px rgba(0, 62, 116, 0.35);
+    transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+    z-index: 10;
+}
+
+.btn-pdfjs-fullscreen:hover {
+    background: var(--wos-blue-dark);
+    transform: translateY(-2px) scale(1.03);
+    box-shadow: 0 8px 18px rgba(0, 62, 116, 0.45);
+}
+
+.btn-pdfjs-fullscreen i {
+    font-size: 16px;
+}
+
+/* PDF.js 下载快捷按钮 */
+.btn-pdfjs-download {
+    position: absolute;
+    bottom: 16px;
+    right: 70px;
+    width: 42px;
+    height: 42px;
+    background: var(--wos-blue-light);
+    color: #fff;
+    border: none;
+    border-radius: 50%;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 6px 16px rgba(0, 102, 204, 0.35);
+    transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+    z-index: 10;
+}
+
+.btn-pdfjs-download:hover {
+    background: var(--wos-blue);
+    transform: translateY(-2px) scale(1.03);
+    box-shadow: 0 8px 18px rgba(0, 62, 116, 0.45);
+}
+
+.btn-pdfjs-download i {
+    font-size: 16px;
+}
+
 /* Loading State - 紧凑版 */
 .loading {
     display: flex;
@@ -1515,187 +1575,3 @@ ul.json-dict, ol.json-array {
     padding: 4px 10px;
     font-size: 10px;
 }
-
-/* 右侧面板悬浮全屏按钮 */
-.right-panel {
-    position: relative;
-}
-
-.btn-floating-fullscreen {
-    position: absolute;
-    bottom: 20px;
-    right: 20px;
-    width: 44px;
-    height: 44px;
-    background: var(--wos-blue);
-    color: white;
-    border: none;
-    border-radius: 50%;
-    cursor: pointer;
-    font-size: 16px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: all 0.3s ease;
-    box-shadow: 0 4px 12px rgba(0,62,116,0.4);
-    z-index: 100;
-}
-
-.btn-floating-fullscreen:hover {
-    background: var(--wos-blue-dark);
-    box-shadow: 0 6px 20px rgba(0,62,116,0.6);
-    transform: scale(1.1);
-}
-
-.btn-floating-fullscreen i {
-    font-size: 18px;
-}
-
-/* Fullscreen Continuous Reading Mode */
-.fullscreen-reader {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100vw;
-    height: 100vh;
-    background: #1a1a1a;
-    z-index: 10000;
-    display: none;
-    overflow: hidden;
-}
-
-.fullscreen-reader.active {
-    display: block;
-}
-
-/* 悬浮工具栏 - 小巧紧凑 */
-.fullscreen-floating-toolbar {
-    position: fixed;
-    top: 12px;
-    right: 12px;
-    background: rgba(0, 0, 0, 0.75);
-    backdrop-filter: blur(10px);
-    border-radius: 24px;
-    padding: 4px 8px;
-    display: flex;
-    align-items: center;
-    gap: 4px;
-    z-index: 10002;
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    opacity: 0.3;
-    transition: opacity 0.3s ease;
-}
-
-.fullscreen-floating-toolbar:hover {
-    opacity: 1;
-}
-
-.btn-fs-tool {
-    background: transparent;
-    border: none;
-    color: white;
-    width: 32px;
-    height: 32px;
-    border-radius: 50%;
-    cursor: pointer;
-    transition: all 0.2s ease;
-    font-size: 14px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}
-
-.btn-fs-tool:hover {
-    background: rgba(255, 255, 255, 0.15);
-    transform: scale(1.1);
-}
-
-.btn-fs-tool.btn-fs-close {
-    color: #ff6b6b;
-}
-
-.btn-fs-tool.btn-fs-close:hover {
-    background: rgba(255, 107, 107, 0.2);
-}
-
-.fs-zoom-indicator {
-    color: white;
-    font-size: 11px;
-    font-family: 'Courier New', monospace;
-    min-width: 40px;
-    text-align: center;
-    font-weight: 500;
-    padding: 0 4px;
-}
-
-.fullscreen-content {
-    width: 100%;
-    height: 100vh;
-    overflow-x: auto;
-    overflow-y: auto;
-    display: flex;
-    align-items: flex-start;
-    position: relative;
-    scroll-behavior: auto;
-}
-
-.continuous-pages {
-    display: flex;
-    flex-direction: row;
-    height: 100%;
-    align-items: center;
-    padding: 20px;
-    gap: 30px;
-    min-width: min-content;
-}
-
-.continuous-pages canvas {
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
-    border-radius: 2px;
-    background: white;
-}
-
-/* 滚动条样式 */
-.fullscreen-content::-webkit-scrollbar {
-    height: 12px;
-    width: 12px;
-}
-
-.fullscreen-content::-webkit-scrollbar-track {
-    background: rgba(0, 0, 0, 0.3);
-}
-
-.fullscreen-content::-webkit-scrollbar-thumb {
-    background: rgba(255, 255, 255, 0.2);
-    border-radius: 6px;
-}
-
-.fullscreen-content::-webkit-scrollbar-thumb:hover {
-    background: rgba(255, 255, 255, 0.3);
-}
-
-/* 加载状态 */
-.fullscreen-loading {
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    color: white;
-    font-size: 16px;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 15px;
-}
-
-.fullscreen-loading .spinner {
-    border: 3px solid rgba(255, 255, 255, 0.1);
-    border-top: 3px solid var(--wos-blue-light);
-    border-radius: 50%;
-    width: 40px;
-    height: 40px;
-    animation: spin 1s linear infinite;
-}
-
-
