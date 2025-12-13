@@ -1101,7 +1101,8 @@ class PaperReviewerApp {
             </a>`;
         }
         
-        let html = `<span class="editable-value" data-path="${path.join('.')}">${this.escapeHtml(displayValue)}</span>`;
+        const rawValueAttr = this.escapeHtml(displayValue);
+        let html = `<span class="editable-value" data-path="${path.join('.')}" data-raw-value="${rawValueAttr}">${this.escapeHtml(displayValue)}</span>`;
         
         if (location) {
             const page = location.pdf_page_index || 1;
@@ -2323,7 +2324,7 @@ class PaperReviewerApp {
             if (target.classList.contains('editable-value') || target.closest('.editable-value')) {
                 const el = target.classList.contains('editable-value') ? target : target.closest('.editable-value');
                 const path = el.dataset.path.split('.');
-                const value = el.textContent;
+                const value = el.dataset.rawValue !== undefined ? el.dataset.rawValue : el.textContent;
                 this.openEditModal(path, value);
                 return;
             }

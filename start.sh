@@ -20,10 +20,12 @@ if ! command -v python3 &> /dev/null; then
     exit 1
 fi
 
-echo "✅ Starting HTTP server with JSON save support on port 8000..."
+PORT=${PORT:-8000}
+
+echo "✅ Starting HTTP server with JSON save support on port ${PORT}..."
 echo ""
 echo "📂 Project directory: $(pwd)"
-echo "🌐 Access the application at: http://localhost:8000"
+echo "🌐 Access the application at: http://localhost:${PORT}"
 echo "💾 JSON files will be saved to: user/data/"
 echo ""
 echo "Press Ctrl+C to stop the server"

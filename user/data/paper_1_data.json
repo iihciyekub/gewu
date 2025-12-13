@@ -34,9 +34,9 @@
         "observe the implementation year for each HIT application... DID mimics a quasi-experiment"
       ]
     },
-    "regression_equation": "$y_{ijkt} = α1 HealthITApp + α2 AfterHealthITApp + β (Interaction) + e$",
+    "regression_equation": "$\\sum_{y}^x=1$",
     "regression_equation_loc": {
-      "page_label": "2044",
+      "page_label": "7",
       "pdf_page_index": 7,
       "pdf_open_params": "#page=7",
       "quote": [

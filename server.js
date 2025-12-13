@@ -9,7 +9,27 @@ const fs = require('fs');
 const path = require('path');
 const url = require('url');
 
-const PORT = 8000;
+const PORT = process.env.PORT ? Number(process.env.PORT) : 8000;
+const ROOT_DIR = path.resolve(__dirname);
+
+// 路径规范化，返回安全的 projectKey 以及完整路径
+function normalizeProjectPath(projectPath = 'user') {
+    const raw = (projectPath || 'user').trim() || 'user';
+    const normalizedInput = raw.replace(/^[/\\]+/, '');
+    const candidate = path.isAbsolute(raw)
+        ? path.normalize(raw)
+        : path.resolve(ROOT_DIR, normalizedInput);
+
+    const relative = path.relative(ROOT_DIR, candidate);
+    if (relative.startsWith('..') || path.isAbsolute(relative)) {
+        throw new Error('Invalid project path');
+    }
+
+    // 如果选择了项目根，默认使用 user 目录
+    const projectKey = !relative || relative === '.' ? 'user' : relative;
+    const fullPath = projectKey === 'user' ? path.join(ROOT_DIR, 'user') : candidate;
+    return { projectKey, fullPath };
+}
 
 // MIME类型映射
 const mimeTypes = {
@@ -65,8 +85,8 @@ const server = http.createServer((req, res) => {
                     return;
                 }
                 
-                // 验证项目结构
-                const fullPath = path.join(__dirname, projectPath);
+                // 验证项目结构并规范路径
+                const { projectKey, fullPath } = normalizeProjectPath(projectPath);
                 const dataDir = path.join(fullPath, 'data');
                 const papersDir = path.join(fullPath, 'papers');
                 
@@ -92,7 +112,8 @@ const server = http.createServer((req, res) => {
                     valid: true,
                     message: '项目结构有效',
                     dataDir: dataDir,
-                    papersDir: papersDir
+                    papersDir: papersDir,
+                    projectKey
                 }));
                 
             } catch (error) {
@@ -127,8 +148,9 @@ const server = http.createServer((req, res) => {
                     return;
                 }
                 
+                const { projectKey, fullPath } = normalizeProjectPath(projectPath);
                 // 保存到指定项目的 data/ 目录
-                const filePath = path.join(__dirname, projectPath, 'data', filename);
+                const filePath = path.join(fullPath, 'data', filename);
                 
                 // 确保目录存在
                 const dir = path.dirname(filePath);
@@ -145,7 +167,8 @@ const server = http.createServer((req, res) => {
                 res.end(JSON.stringify({
                     success: true,
                     message: `File ${filename} saved successfully`,
-                    path: filePath
+                    path: filePath,
+                    projectKey
                 }));
                 
             } catch (error) {
@@ -180,9 +203,10 @@ const server = http.createServer((req, res) => {
                     return;
                 }
                 
+                const { projectKey, fullPath } = normalizeProjectPath(projectPath);
                 // 构建文件路径
-                const oldPath = path.join(__dirname, projectPath, 'data', oldFilename);
-                const newPath = path.join(__dirname, projectPath, 'data', newFilename);
+                const oldPath = path.join(fullPath, 'data', oldFilename);
+                const newPath = path.join(fullPath, 'data', newFilename);
                 
                 // 检查旧文件是否存在
                 if (!fs.existsSync(oldPath)) {
@@ -208,7 +232,8 @@ const server = http.createServer((req, res) => {
                     success: true,
                     message: `File renamed successfully`,
                     oldFilename,
-                    newFilename
+                    newFilename,
+                    projectKey
                 }));
                 
             } catch (error) {
@@ -243,8 +268,9 @@ const server = http.createServer((req, res) => {
                     return;
                 }
                 
+                const { projectKey, fullPath } = normalizeProjectPath(projectPath);
                 // 构建文件路径
-                const filePath = path.join(__dirname, projectPath, 'data', filename);
+                const filePath = path.join(fullPath, 'data', filename);
                 
                 // 检查文件是否存在
                 if (!fs.existsSync(filePath)) {
@@ -262,7 +288,8 @@ const server = http.createServer((req, res) => {
                 res.end(JSON.stringify({
                     success: true,
                     message: `File deleted successfully`,
-                    filename
+                    filename,
+                    projectKey
                 }));
                 
             } catch (error) {
@@ -291,7 +318,8 @@ const server = http.createServer((req, res) => {
                 const data = JSON.parse(body);
                 const { projectPath = 'user' } = data;
                 
-                const dataDir = path.join(__dirname, projectPath, 'data');
+                const { projectKey, fullPath } = normalizeProjectPath(projectPath);
+                const dataDir = path.join(fullPath, 'data');
                 
                 // 确保目录存在
                 if (!fs.existsSync(dataDir)) {
@@ -306,7 +334,8 @@ const server = http.createServer((req, res) => {
                 res.writeHead(200, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify({
                     success: true,
-                    files: files
+                    files: files,
+                    projectKey
                 }));
                 
             } catch (error) {
@@ -325,7 +354,7 @@ const server = http.createServer((req, res) => {
     // 获取JSON文件列表
     if (req.method === 'GET' && pathname === '/list-json-files') {
         try {
-            const dataDir = path.join(__dirname, 'user', 'data');
+            const dataDir = path.join(ROOT_DIR, 'user', 'data');
             
             // 确保目录存在
             if (!fs.existsSync(dataDir)) {
@@ -341,7 +370,8 @@ const server = http.createServer((req, res) => {
             res.end(JSON.stringify({
                 success: true,
                 files: files,
-                count: files.length
+                count: files.length,
+                projectKey: 'user'
             }));
             
         } catch (error) {
@@ -382,6 +412,15 @@ const server = http.createServer((req, res) => {
             res.end(content, 'utf-8');
         }
     });
+});
+
+server.on('error', (err) => {
+    if (err.code === 'EADDRINUSE') {
+        console.error(`✗ Port ${PORT} is already in use. Set PORT env or stop the other server.`);
+    } else {
+        console.error('✗ Server error:', err);
+    }
+    process.exit(1);
 });
 
 server.listen(PORT, () => {
