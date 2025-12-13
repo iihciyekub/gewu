@@ -136,6 +136,12 @@ class PaperReviewerApp {
             this.loadSelectedProject();
         });
 
+        // 复制 wosAide.js 源码
+        const copyWosAideBtn = document.getElementById('copyWosAideBtn');
+        if (copyWosAideBtn) {
+            copyWosAideBtn.addEventListener('click', () => this.copyWosAideSource());
+        }
+
         // 粘贴事件监听
         document.addEventListener('paste', (e) => this.handlePaste(e));
 
@@ -1177,6 +1183,31 @@ class PaperReviewerApp {
     normalizeProjectPathString(pathStr) {
         if (!pathStr) return '';
         return pathStr.replace(/\\/g, '/').replace(/\/+$/, '');
+    }
+
+    async copyWosAideSource() {
+        try {
+            const response = await fetch('/wosAide.js');
+            if (!response.ok) throw new Error(`读取失败: ${response.statusText}`);
+            const text = await response.text();
+
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                await navigator.clipboard.writeText(text);
+            } else {
+                // 兼容方案
+                const textarea = document.createElement('textarea');
+                textarea.value = text;
+                document.body.appendChild(textarea);
+                textarea.select();
+                document.execCommand('copy');
+                textarea.remove();
+            }
+
+            this.showNotification('已复制 wosAide.js 源码到剪贴板', 'success');
+        } catch (error) {
+            console.error('复制 wosAide.js 失败:', error);
+            this.showNotification(`复制失败: ${error.message}`, 'error');
+        }
     }
 
     renderFlatView() {
