@@ -11,6 +11,7 @@ class PaperReviewerApp {
         this.isReorderMode = false; // 表格拖拽重排模式
         this.isCollapseAll = false; // 折叠全部开关
         this.reorderSelected = null; // { path: [], key }
+        this.lastPasteBackup = null; // { file, data }
         this.hasUnsavedChanges = false;
         this.tempDataCache = {}; // 临时数据缓存 {filename: data}
         this.currentQuoteIndex = {}; // 跟踪每个字段当前显示的quote索引 {valuePath: index}
@@ -100,6 +101,7 @@ class PaperReviewerApp {
         // Modal controls
         document.getElementById('cancelEdit').addEventListener('click', () => this.closeEditModal());
         document.getElementById('saveEdit').addEventListener('click', () => this.saveEditedValue());
+        document.getElementById('deleteEdit').addEventListener('click', () => this.deleteCurrentField());
         // Add Item Modal controls
         document.getElementById('cancelAddItem').addEventListener('click', () => this.closeAddItemModal());
         document.getElementById('saveAddItem').addEventListener('click', () => this.saveNewItem());
@@ -164,6 +166,10 @@ class PaperReviewerApp {
         const copyWosAideBtn = document.getElementById('copyWosAideBtn');
         if (copyWosAideBtn) {
             copyWosAideBtn.addEventListener('click', () => this.copyWosAideSource());
+        }
+        const undoPasteBtn = document.getElementById('undoPasteBtn');
+        if (undoPasteBtn) {
+            undoPasteBtn.addEventListener('click', () => this.undoLastPaste());
         }
 
         // 粘贴事件监听
@@ -857,15 +863,59 @@ class PaperReviewerApp {
             const jsonData = this.extractJSON(pastedText);
             
             if (jsonData) {
+                const inLeftPanel = !!e.target.closest('.left-panel');
+                const inCenterPanel = !!e.target.closest('.middle-panel');
+
+                // 中间表格：合并/更新当前JSON
+                if (inCenterPanel && this.currentData) {
+                    e.preventDefault();
+                    if (typeof jsonData !== 'object' || Array.isArray(jsonData)) {
+                        this.showNotification('粘贴内容不是对象，无法合并', 'error');
+                        return;
+                    }
+                    const updated = this.mergeIntoCurrentData(jsonData, true);
+                    if (updated) {
+                        this.hasUnsavedChanges = true;
+                        this.tempDataCache[this.currentFile] = this.currentData;
+                        this.updateSaveButtonState();
+                        this.renderStructuredView();
+                        this.renderFlatView();
+                        this.setupEditableListeners();
+                        this.updateUndoButtonState();
+                        this.showNotification('已合并粘贴内容到当前文件', 'success');
+                    } else {
+                        this.showNotification('未检测到可合并的字段', 'info');
+                    }
+                    return;
+                }
+
+                // 左侧文件区域：校验结构并新建文件
+                if (inLeftPanel) {
+                    e.preventDefault();
+                    const required = ['schema_version', 'meta_info'];
+                    const missing = required.filter(k => !jsonData.hasOwnProperty(k));
+                    if (missing.length) {
+                        this.showNotification(`JSON 缺少关键字段: ${missing.join(', ')}`, 'error');
+                        return;
+                    }
+                    const defaultName = jsonData.meta_info?.paper_id
+                        ? `${jsonData.meta_info.paper_id}.json`
+                        : 'pasted_data.json';
+                    
+                    const filename = prompt('检测到有效的JSON数据！\n请输入文件名:', defaultName);
+                    if (!filename) return;
+                    const finalFilename = filename.endsWith('.json') ? filename : filename + '.json';
+                    await this.saveNewJSONFile(finalFilename, jsonData);
+                    this.lastPasteBackup = null;
+                    this.updateUndoButtonState();
+                    return;
+                }
+
+                // 其它区域保持默认创建逻辑
                 e.preventDefault();
-                
-                // 询问文件名
                 const filename = prompt('检测到有效的JSON数据！\n请输入文件名:', 'pasted_data.json');
                 if (!filename) return;
-                
                 const finalFilename = filename.endsWith('.json') ? filename : filename + '.json';
-                
-                // 保存JSON文件
                 await this.saveNewJSONFile(finalFilename, jsonData);
             }
         } catch (error) {
@@ -982,11 +1032,14 @@ class PaperReviewerApp {
                 this.currentData = await response.json();
                 this.hasUnsavedChanges = false;
             }
+            this.ensureSchemaVersion();
             
             this.currentFile = filename;
 
             // 更新UI状态
             this.updateSaveButtonState();
+            this.updateSchemaBadge();
+            this.updateUndoButtonState();
 
             // Render data
             this.renderStructuredView();
@@ -1020,8 +1073,8 @@ class PaperReviewerApp {
 
         // Iterate through top-level sections with collapsible support
         for (const [sectionKey, sectionValue] of Object.entries(this.currentData)) {
-            // 跳过_loc字段
-            if (sectionKey.endsWith('_loc')) continue;
+            // 跳过_loc字段和schema_version字段
+            if (sectionKey.endsWith('_loc') || sectionKey === 'schema_version') continue;
             
             const section = this.createCollapsibleSection(sectionKey, sectionValue, [sectionKey]);
             container.appendChild(section);
@@ -1081,6 +1134,14 @@ class PaperReviewerApp {
             header.addEventListener('click', () => {
                 const isActive = header.classList.toggle('active');
                 content.classList.toggle('active');
+            });
+            header.addEventListener('dblclick', (e) => {
+                e.preventDefault();
+                const firstConfirm = confirm(`确定删除整个字段 "${title}" 及其所有内容？`);
+                if (!firstConfirm) return;
+                const secondConfirm = confirm('再次确认：删除后不可恢复，是否继续？');
+                if (!secondConfirm) return;
+                this.deleteField([], title);
             });
         }
 
@@ -1315,6 +1376,93 @@ class PaperReviewerApp {
         return pathStr.replace(/\\/g, '/').replace(/\/+$/, '');
     }
 
+    mergeIntoCurrentData(sourceObj, backup = false) {
+        if (backup) {
+            this.lastPasteBackup = {
+                file: this.currentFile,
+                data: JSON.parse(JSON.stringify(this.currentData || {}))
+            };
+        }
+        let changed = false;
+        Object.entries(sourceObj).forEach(([key, value]) => {
+            if (key === 'schema_version') {
+                this.currentData.schema_version = value || this.currentData.schema_version || this.generateSchemaVersion();
+                changed = true;
+                return;
+            }
+            if (this.currentData.hasOwnProperty(key) && this.isPlainObject(this.currentData[key]) && this.isPlainObject(value)) {
+                this.deepMerge(this.currentData[key], value);
+            } else {
+                this.currentData[key] = value;
+            }
+            changed = true;
+        });
+        return changed;
+    }
+
+    isPlainObject(obj) {
+        return Object.prototype.toString.call(obj) === '[object Object]';
+    }
+
+    deepMerge(target, source) {
+        Object.entries(source).forEach(([k, v]) => {
+            if (this.isPlainObject(v) && this.isPlainObject(target[k])) {
+                this.deepMerge(target[k], v);
+            } else {
+                target[k] = v;
+            }
+        });
+    }
+
+    undoLastPaste() {
+        if (!this.lastPasteBackup || !this.currentFile || this.lastPasteBackup.file !== this.currentFile) {
+            this.showNotification('没有可撤销的粘贴', 'error');
+            return;
+        }
+        this.currentData = JSON.parse(JSON.stringify(this.lastPasteBackup.data));
+        this.hasUnsavedChanges = true;
+        this.tempDataCache[this.currentFile] = this.currentData;
+        this.updateSaveButtonState();
+        this.renderStructuredView();
+        this.renderFlatView();
+        this.setupEditableListeners();
+        this.updateUndoButtonState();
+        this.showNotification('已撤销上次粘贴合并', 'success');
+    }
+
+    ensureSchemaVersion() {
+        if (!this.currentData) return;
+        if (!this.currentData.schema_version) {
+            this.currentData.schema_version = this.generateSchemaVersion();
+            this.hasUnsavedChanges = true;
+            if (this.currentFile) {
+                this.tempDataCache[this.currentFile] = this.currentData;
+            }
+            this.updateSaveButtonState();
+        }
+    }
+
+    generateSchemaVersion() {
+        const d = new Date();
+        const pad = (n) => n.toString().padStart(2, '0');
+        return `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}`;
+    }
+
+    updateSchemaBadge() {
+        const badge = document.getElementById('schemaVersionBadge');
+        if (!badge) return;
+        const version = this.currentData?.schema_version;
+        badge.textContent = version || '-';
+        badge.title = `schema_version: ${version || '未定义（保存时将自动生成日期版本）'}`;
+    }
+
+    updateUndoButtonState() {
+        const undoBtn = document.getElementById('undoPasteBtn');
+        if (!undoBtn) return;
+        const canUndo = this.lastPasteBackup && this.lastPasteBackup.file === this.currentFile;
+        undoBtn.style.display = canUndo ? 'inline-block' : 'none';
+    }
+
     reorderKeys(pathArray, fromKey, toKey) {
         if (!fromKey || !toKey || fromKey === toKey) return;
 
@@ -1406,6 +1554,32 @@ class PaperReviewerApp {
         this.renderStructuredView();
         this.setupEditableListeners();
         this.restoreReorderSelection();
+    }
+
+    deleteField(pathArray, key) {
+        let parent = this.currentData;
+        for (const segment of pathArray) {
+            if (segment && parent && typeof parent === 'object') {
+                parent = parent[segment];
+            }
+        }
+        if (!parent || typeof parent !== 'object') return;
+        if (!parent.hasOwnProperty(key)) return;
+
+        delete parent[key];
+        const locKey = key + '_loc';
+        if (parent.hasOwnProperty(locKey)) {
+            delete parent[locKey];
+        }
+
+        this.hasUnsavedChanges = true;
+        this.tempDataCache[this.currentFile] = this.currentData;
+        this.updateSaveButtonState();
+        this.renderStructuredView();
+        this.renderFlatView();
+        this.setupEditableListeners();
+        this.restoreReorderSelection();
+        this.showNotification(`已删除字段: ${key}`, 'info');
     }
 
     updateAllSectionsCollapseState(collapsed) {
@@ -2550,11 +2724,22 @@ class PaperReviewerApp {
         this.renderStructuredView();
         this.renderFlatView();
         this.setupEditableListeners();
+        this.updateUndoButtonState();
 
         this.closeEditModal();
         
         // 提示已暂存
         this.showNotification('✓ 修改已暂存（未保存到文件）', 'info');
+    }
+
+    deleteCurrentField() {
+        if (!this.editingPath) return;
+        const lastKey = this.editingPath[this.editingPath.length - 1];
+        const parentPath = this.editingPath.slice(0, -1);
+        if (confirm(`确定删除字段 "${lastKey}" 及其 _loc 信息？`)) {
+            this.deleteField(parentPath, lastKey);
+            this.closeEditModal();
+        }
     }
 
     updateSaveButtonState() {
@@ -2773,34 +2958,34 @@ class PaperReviewerApp {
         // 确定要使用的键名
         const key = category === 'custom' ? customKey : category;
 
-        // 初始化数组（如果不存在）
-        if (!this.currentData[key]) {
-            this.currentData[key] = [];
-        }
-
-        // 构建新条目
         const newItem = content.trim();
-        
-        // 添加到数组
+        const locPayload = {
+            pdf_page_index: pageNumber ? parseInt(pageNumber) : null,
+            page_label: pageNumber ? pageNumber.toString() : '',
+            pdf_open_params: pageNumber ? `#page=${pageNumber}` : '',
+            quote: quotes
+        };
+
+        // 处理不同数据形态：如果已有数组则push；如果不存在则按字符串+loc对象；如果已有非数组则直接覆盖
         if (Array.isArray(this.currentData[key])) {
             this.currentData[key].push(newItem);
-            
-            // 如果有页码或引用，添加location
             if (pageNumber || quotes.length > 0) {
                 const locKey = key + '_loc';
-                if (!this.currentData[locKey]) {
+                if (!Array.isArray(this.currentData[locKey])) {
                     this.currentData[locKey] = [];
                 }
-                this.currentData[locKey].push({
-                    pdf_page_index: pageNumber ? parseInt(pageNumber) : null,
-                    page_label: pageNumber ? pageNumber.toString() : '',
-                    pdf_open_params: pageNumber ? `#page=${pageNumber}` : '',
-                    quote: quotes
-                });
+                this.currentData[locKey].push(locPayload);
             }
+        } else if (this.currentData[key] === undefined) {
+            // 新建为标量字段，loc为对象
+            this.currentData[key] = newItem;
+            const locKey = key + '_loc';
+            this.currentData[locKey] = locPayload;
         } else {
-            this.showNotification('该键已存在且不是数组类型', 'error');
-            return;
+            // 已存在但不是数组：覆盖现有值及loc
+            this.currentData[key] = newItem;
+            const locKey = key + '_loc';
+            this.currentData[locKey] = locPayload;
         }
 
         // 标记为有未保存的修改
@@ -2870,6 +3055,40 @@ class PaperReviewerApp {
         };
         
         document.addEventListener('click', this._locationLinkHandler);
+
+        // 右键删除字段
+        if (this._fieldContextHandler) {
+            document.removeEventListener('contextmenu', this._fieldContextHandler);
+        }
+        this._fieldContextHandler = (e) => {
+            const row = e.target.closest('tr[data-key]');
+            const section = e.target.closest('.collapsible-section');
+            if (!this.isReorderMode) return;
+
+            // 行删除
+            if (row) {
+                e.preventDefault();
+                const table = row.closest('table');
+                const tablePath = table?.dataset.path ? table.dataset.path.split('.').filter(Boolean) : [];
+                const key = row.dataset.key;
+                if (!key) return;
+                if (confirm(`删除字段 "${key}" 及其 _loc 信息？`)) {
+                    this.deleteField(tablePath, key);
+                }
+                return;
+            }
+
+            // 章节删除
+            if (section) {
+                e.preventDefault();
+                const secKey = section.dataset.sectionKey;
+                if (!secKey) return;
+                if (confirm(`删除类 "${secKey}" 及其内容？`)) {
+                    this.deleteField([], secKey);
+                }
+            }
+        };
+        document.addEventListener('contextmenu', this._fieldContextHandler);
     }
 
     // 获取指定字段的quote数量

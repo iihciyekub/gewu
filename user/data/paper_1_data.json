@@ -1,4 +1,5 @@
 {
+  "schema_version": "1.0",
   "meta_info": {
     "doi": "10.1002/joom.1169",
     "pdf_path": "user/papers/joom.1169_1.pdf",
@@ -104,26 +105,6 @@
       "quote": "The impact of foreign competition on product quality"
     }
   },
-  "robustness_checks": {
-    "endogeneity_method": "PSM (Propensity Score Matching) + DID",
-    "endogeneity_method_loc": {
-      "page_label": "2045",
-      "pdf_page_index": 8,
-      "pdf_open_params": "#page=8",
-      "quote": [
-        "Table 4 presents the results from our PSM-DID analysis"
-      ]
-    },
-    "parallel_trend_check": "Implicit (Assumed via DID design)",
-    "parallel_trend_check_loc": {
-      "page_label": "2044",
-      "pdf_page_index": 7,
-      "pdf_open_params": "#page=7",
-      "quote": [
-        "assumed that the time effects are common across treated and untreated individuals"
-      ]
-    }
-  },
   "key_findings": {
     "primary_result": "Significant Reduction in LOS Deviation (Coeff: -2.655 for RFID)",
     "primary_result_loc": {
@@ -144,27 +125,26 @@
       ]
     }
   },
-  "contributions": [
-    "e",
-    "w"
-  ],
-  "contributions_loc": [
-    {
-      "pdf_page_index": 3,
-      "quote": "e"
+  "robustness_checks": {
+    "endogeneity_method": "PSM (Propensity Score Matching) + DID",
+    "endogeneity_method_loc": {
+      "page_label": "2045",
+      "pdf_page_index": 8,
+      "pdf_open_params": "#page=8",
+      "quote": [
+        "Table 4 presents the results from our PSM-DID analysis"
+      ]
     },
-    {
-      "pdf_page_index": 2,
-      "quote": "2"
+    "parallel_trend_check": "Implicit (Assumed via DID design)",
+    "parallel_trend_check_loc": {
+      "page_label": "2044",
+      "pdf_page_index": 7,
+      "pdf_open_params": "#page=7",
+      "quote": [
+        "assumed that the time effects are common across treated and untreated individuals"
+      ]
     }
-  ],
-  "Key Findings": [
-    "2"
-  ],
-  "Key Findings_loc": [
-    {
-      "pdf_page_index": 2,
-      "quote": "3"
-    }
-  ]
+  }
 }
+
+

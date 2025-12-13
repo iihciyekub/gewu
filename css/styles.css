@@ -77,6 +77,21 @@ body {
     font-family: 'Arial', sans-serif;
 }
 
+.btn-danger {
+    background: #c62828;
+    color: white;
+    border: none;
+    border-radius: 2px;
+    cursor: pointer;
+    font-size: 11px;
+    padding: 4px 10px;
+}
+
+.btn-danger:hover {
+    background: #b71c1c;
+    box-shadow: 0 2px 4px rgba(198, 40, 40, 0.3);
+}
+
 .btn-primary:hover {
     background: var(--wos-blue-dark);
     box-shadow: 0 2px 4px rgba(0, 62, 116, 0.2);
@@ -239,6 +254,20 @@ body {
 .file-info i {
     color: var(--wos-blue);
     font-size: 12px;
+}
+
+.schema-badge {
+    background: #111;
+    color: #fff;
+    border-radius: 10px;
+    padding: 2px 6px;
+    font-size: 10px;
+    line-height: 1.2;
+    min-width: 40px;
+    text-align: center;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
 }
 
 .header-actions {

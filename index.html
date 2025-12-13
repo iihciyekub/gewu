@@ -102,6 +102,7 @@
                 <div class="file-info">
                     <i class="fas fa-file-code"></i>
                     <span id="currentFileName">未选择文件</span>
+                    <span class="schema-badge" id="schemaVersionBadge" title="schema_version">-</span>
                 </div>
                 <div class="header-actions">
                     <button id="addItemBtn" class="btn-add-item" style="display: none;" onclick="window.paperReviewerApp.openAddItemModal()">
@@ -109,6 +110,9 @@
                     </button>
                     <button id="saveBtn" class="btn-save" style="display: none;" onclick="window.paperReviewerApp.saveToFile()">
                         <i class="fas fa-save"></i> 保存修改
+                    </button>
+                    <button id="undoPasteBtn" class="btn-save" style="display: none;" title="撤销上次粘贴合并" onclick="window.paperReviewerApp.undoLastPaste()">
+                        <i class="fas fa-undo"></i>
                     </button>
                     <div class="view-tabs">
                         <button class="tab-btn active" data-view="structured">
@@ -205,6 +209,7 @@
                 </div>
             </div>
             <div class="modal-footer">
+                <button class="btn btn-danger" id="deleteEdit">删除字段</button>
                 <button class="btn btn-cancel" id="cancelEdit">取消</button>
                 <button class="btn btn-primary" id="saveEdit">保存</button>
             </div>
