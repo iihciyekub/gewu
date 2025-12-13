@@ -8,6 +8,9 @@ class PaperReviewerApp {
         this.currentPdfPath = null; // 记录PDF相对于项目的路径
         this.currentPdfViewerUrl = null;
         this.editingPath = null;
+        this.isReorderMode = false; // 表格拖拽重排模式
+        this.isCollapseAll = false; // 折叠全部开关
+        this.reorderSelected = null; // { path: [], key }
         this.hasUnsavedChanges = false;
         this.tempDataCache = {}; // 临时数据缓存 {filename: data}
         this.currentQuoteIndex = {}; // 跟踪每个字段当前显示的quote索引 {valuePath: index}
@@ -115,6 +118,27 @@ class PaperReviewerApp {
             if (e.ctrlKey && e.key === 's') {
                 e.preventDefault();
                 if (this.hasUnsavedChanges) this.saveToFile();
+            }
+            if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+                e.preventDefault();
+                // 同键切换：重排模式 + 折叠/展开全局开关
+                this.isReorderMode = !this.isReorderMode;
+                this.isCollapseAll = !this.isCollapseAll;
+                this.reorderSelected = null;
+                this.renderStructuredView();
+                this.setupEditableListeners();
+                this.updateAllSectionsCollapseState(this.isCollapseAll);
+                const msg = [
+                    this.isReorderMode ? '排序模式开启（拖动左侧列调整顺序）' : '排序模式关闭',
+                    this.isCollapseAll ? '已折叠全部' : '已展开全部'
+                ].join(' | ');
+                this.showNotification(msg, 'info');
+                return;
+            }
+            if (this.isReorderMode && this.reorderSelected && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
+                e.preventDefault();
+                const offset = e.key === 'ArrowUp' ? -1 : 1;
+                this.moveKey(this.reorderSelected.path, this.reorderSelected.key, offset);
             }
             if (e.key === 'Escape') {
                 this.closeEditModal();
@@ -317,6 +341,11 @@ class PaperReviewerApp {
                 const icon = middleToggle.querySelector('i');
                 if (rightPanel.classList.contains('panel-collapsed')) {
                     rightPanel.classList.remove('panel-collapsed');
+                    // 若之前宽度为0，默认恢复为容器宽度的33%
+                    if (!lastRightWidth || lastRightWidth <= 1) {
+                        const containerWidth = container?.getBoundingClientRect().width || window.innerWidth;
+                        lastRightWidth = Math.max(200, Math.floor(containerWidth * 0.33));
+                    }
                     rightPanel.style.width = lastRightWidth + 'px';
                     middleToggle.title = '点击隐藏右侧面板';
                     if (icon) icon.style.transform = 'rotate(0deg)';
@@ -997,7 +1026,14 @@ class PaperReviewerApp {
             const section = this.createCollapsibleSection(sectionKey, sectionValue, [sectionKey]);
             container.appendChild(section);
         }
-        
+
+        // 统一应用折叠/展开状态
+        this.updateAllSectionsCollapseState(this.isCollapseAll);
+
+        if (this.isReorderMode) {
+            this.restoreReorderSelection();
+        }
+
         // 渲染完成后触发MathJax
         this.renderMath();
     }
@@ -1005,10 +1041,15 @@ class PaperReviewerApp {
     createCollapsibleSection(title, data, path) {
         const wrapper = document.createElement('div');
         wrapper.className = 'collapsible-section';
-
+        wrapper.dataset.sectionKey = title;
+        wrapper.draggable = this.isReorderMode;
+        
         // Header with toggle
         const header = document.createElement('div');
-        header.className = 'collapsible-header active';
+        header.className = 'collapsible-header';
+        if (!this.isCollapseAll) {
+            header.classList.add('active');
+        }
         header.innerHTML = `
             <span class="collapsible-title">${this.formatKey(title)}</span>
             <i class="fas fa-chevron-right collapsible-toggle"></i>
@@ -1016,18 +1057,59 @@ class PaperReviewerApp {
         
         // Content
         const content = document.createElement('div');
-        content.className = 'collapsible-content active';
+        content.className = 'collapsible-content';
+        if (!this.isCollapseAll) {
+            content.classList.add('active');
+        }
         
         const table = document.createElement('table');
         table.className = 'json-table';
+        table.dataset.path = path.join('.');
+        if (this.isReorderMode) {
+            table.classList.add('reorder-mode');
+        }
         this.renderObject(data, table, path);
         content.appendChild(table);
         
-        // Toggle functionality
-        header.addEventListener('click', () => {
-            const isActive = header.classList.toggle('active');
-            content.classList.toggle('active');
-        });
+        // Toggle functionality / Reorder selection
+        if (this.isReorderMode) {
+            header.addEventListener('click', (e) => {
+                e.preventDefault();
+                this.setReorderSelection([], title);
+            });
+        } else {
+            header.addEventListener('click', () => {
+                const isActive = header.classList.toggle('active');
+                content.classList.toggle('active');
+            });
+        }
+
+        // Section拖拽排序
+        if (this.isReorderMode) {
+            wrapper.addEventListener('dragstart', (e) => {
+                e.dataTransfer.setData('text/plain', title);
+                e.dataTransfer.effectAllowed = 'move';
+                wrapper.classList.add('dragging');
+            });
+            wrapper.addEventListener('dragend', () => {
+                wrapper.classList.remove('dragging');
+            });
+            wrapper.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                e.dataTransfer.dropEffect = 'move';
+                wrapper.classList.add('drag-over');
+            });
+            wrapper.addEventListener('dragleave', () => {
+                wrapper.classList.remove('drag-over');
+            });
+            wrapper.addEventListener('drop', (e) => {
+                e.preventDefault();
+                wrapper.classList.remove('drag-over');
+                const fromKey = e.dataTransfer.getData('text/plain');
+                const toKey = title;
+                this.reorderKeys([], fromKey, toKey);
+            });
+        }
         
         wrapper.appendChild(header);
         wrapper.appendChild(content);
@@ -1041,6 +1123,8 @@ class PaperReviewerApp {
             if (key.endsWith('_loc')) continue;
 
             const row = document.createElement('tr');
+            row.dataset.key = key;
+            row.draggable = this.isReorderMode;
             const toggleCell = document.createElement('td');
             const keyCell = document.createElement('td');
             const valueCell = document.createElement('td');
@@ -1051,22 +1135,68 @@ class PaperReviewerApp {
 
             // 第一列：保留占位但不放置可点击的展开按钮
             toggleCell.className = 'toggle-cell';
-            toggleCell.innerHTML = `<i class="fas fa-pen-to-square edit-cell-icon" title="点击编辑"></i>`;
-            toggleCell.addEventListener('click', (e) => {
-                e.stopPropagation();
-                const currentPath = [...basePath, key];
-                let valueForEdit = value;
-                if (typeof value === 'object' && value !== null) {
-                    valueForEdit = Array.isArray(value) ? JSON.stringify(value) : JSON.stringify(value, null, 2);
-                }
-                this.openEditModal(currentPath, valueForEdit);
-            });
+            if (this.isReorderMode) {
+                toggleCell.innerHTML = `<i class="fas fa-up-down-left-right edit-cell-icon" title="拖动调整顺序"></i>`;
+            } else {
+                toggleCell.innerHTML = `<i class="fas fa-pen-to-square edit-cell-icon" title="点击编辑"></i>`;
+                toggleCell.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    const currentPath = [...basePath, key];
+                    let valueForEdit = value;
+                    if (typeof value === 'object' && value !== null) {
+                        valueForEdit = Array.isArray(value) ? JSON.stringify(value) : JSON.stringify(value, null, 2);
+                    }
+                    this.openEditModal(currentPath, valueForEdit);
+                });
+            }
 
             // 第二列：Key可编辑
             const keyDisplay = `<span class="editable-key" data-path="${basePath.join('.')}" data-key="${key}">${this.formatKey(key)}</span>`;
-            
+
             keyCell.innerHTML = keyDisplay;
             const currentPath = [...basePath, key];
+
+            // 拖拽排序事件
+            if (this.isReorderMode) {
+                row.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    this.setReorderSelection(basePath, key);
+                });
+                row.addEventListener('dragstart', (e) => {
+                    e.dataTransfer.setData('text/plain', key);
+                    e.dataTransfer.effectAllowed = 'move';
+                    row.classList.add('dragging');
+                });
+                row.addEventListener('dragend', () => {
+                    row.classList.remove('dragging');
+                });
+                row.addEventListener('dragover', (e) => {
+                    e.preventDefault();
+                    e.dataTransfer.dropEffect = 'move';
+                    row.classList.add('drag-over');
+                });
+                row.addEventListener('dragleave', () => {
+                    row.classList.remove('drag-over');
+                });
+                row.addEventListener('drop', (e) => {
+                    e.preventDefault();
+                    row.classList.remove('drag-over');
+                    const fromKey = e.dataTransfer.getData('text/plain');
+                    const toKey = key;
+                    const tablePath = table.dataset.path ? table.dataset.path.split('.').filter(Boolean) : [];
+                    this.reorderKeys(tablePath, fromKey, toKey);
+                });
+                // 点击左列，上移/下移
+                toggleCell.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    const tablePath = table.dataset.path ? table.dataset.path.split('.').filter(Boolean) : [];
+                    if (e.shiftKey) {
+                        this.moveKey(tablePath, key, 1); // 下移
+                    } else {
+                        this.moveKey(tablePath, key, -1); // 上移
+                    }
+                });
+            }
 
             // 第三列：Value值的显示
             if (typeof value === 'object' && value !== null) {
@@ -1183,6 +1313,130 @@ class PaperReviewerApp {
     normalizeProjectPathString(pathStr) {
         if (!pathStr) return '';
         return pathStr.replace(/\\/g, '/').replace(/\/+$/, '');
+    }
+
+    reorderKeys(pathArray, fromKey, toKey) {
+        if (!fromKey || !toKey || fromKey === toKey) return;
+
+        // 获取目标对象
+        let parent = this.currentData;
+        for (const segment of pathArray) {
+            if (segment && parent && typeof parent === 'object') {
+                parent = parent[segment];
+            }
+        }
+        if (!parent || typeof parent !== 'object') return;
+
+        const keys = Object.keys(parent).filter(k => !k.endsWith('_loc'));
+        const fromIndex = keys.indexOf(fromKey);
+        const toIndex = keys.indexOf(toKey);
+        if (fromIndex === -1 || toIndex === -1) return;
+
+        // 重新排序主键列表
+        keys.splice(fromIndex, 1);
+        keys.splice(toIndex, 0, fromKey);
+
+        // 构建新的有序对象（保留 _loc 紧跟其对应字段之后）
+        const newObj = {};
+        keys.forEach(k => {
+            newObj[k] = parent[k];
+            const locKey = k + '_loc';
+            if (parent.hasOwnProperty(locKey)) {
+                newObj[locKey] = parent[locKey];
+            }
+        });
+        // 追加其它未包含的键（安全兜底）
+        Object.keys(parent).forEach(k => {
+            if (!newObj.hasOwnProperty(k)) {
+                newObj[k] = parent[k];
+            }
+        });
+
+        // 替换原对象的属性顺序
+        Object.keys(parent).forEach(k => delete parent[k]);
+        Object.entries(newObj).forEach(([k, v]) => {
+            parent[k] = v;
+        });
+
+        this.hasUnsavedChanges = true;
+        this.tempDataCache[this.currentFile] = this.currentData;
+        this.updateSaveButtonState();
+        this.renderStructuredView();
+        this.setupEditableListeners();
+        this.restoreReorderSelection();
+    }
+
+    moveKey(pathArray, key, offset) {
+        if (!key || offset === 0) return;
+        let parent = this.currentData;
+        for (const segment of pathArray) {
+            if (segment && parent && typeof parent === 'object') {
+                parent = parent[segment];
+            }
+        }
+        if (!parent || typeof parent !== 'object') return;
+
+        const keys = Object.keys(parent).filter(k => !k.endsWith('_loc'));
+        const index = keys.indexOf(key);
+        if (index === -1) return;
+
+        let targetIndex = index + offset;
+        targetIndex = Math.max(0, Math.min(keys.length - 1, targetIndex));
+        if (targetIndex === index) return;
+
+        keys.splice(index, 1);
+        keys.splice(targetIndex, 0, key);
+
+        const newObj = {};
+        keys.forEach(k => {
+            newObj[k] = parent[k];
+            const locKey = k + '_loc';
+            if (parent.hasOwnProperty(locKey)) {
+                newObj[locKey] = parent[locKey];
+            }
+        });
+        Object.keys(parent).forEach(k => delete parent[k]);
+        Object.entries(newObj).forEach(([k, v]) => {
+            parent[k] = v;
+        });
+
+        this.hasUnsavedChanges = true;
+        this.tempDataCache[this.currentFile] = this.currentData;
+        this.updateSaveButtonState();
+        this.renderStructuredView();
+        this.setupEditableListeners();
+        this.restoreReorderSelection();
+    }
+
+    updateAllSectionsCollapseState(collapsed) {
+        const headers = document.querySelectorAll('.collapsible-header');
+        const contents = document.querySelectorAll('.collapsible-content');
+        headers.forEach(h => h.classList.toggle('active', !collapsed));
+        contents.forEach(c => c.classList.toggle('active', !collapsed));
+    }
+
+    setReorderSelection(pathArray, key) {
+        this.reorderSelected = { path: [...pathArray], key };
+        document.querySelectorAll('.reorder-selected').forEach(el => el.classList.remove('reorder-selected'));
+        this.highlightSelectionElement();
+    }
+
+    highlightSelectionElement() {
+        if (!this.reorderSelected) return;
+        const { path, key } = this.reorderSelected;
+        let target = null;
+        if (path.length === 0) {
+            target = document.querySelector(`.collapsible-section[data-section-key="${CSS.escape(key)}"]`);
+        } else {
+            const tablePath = path.join('.');
+            target = document.querySelector(`table.json-table[data-path="${CSS.escape(tablePath)}"] tr[data-key="${CSS.escape(key)}"]`);
+        }
+        if (target) target.classList.add('reorder-selected');
+    }
+
+    restoreReorderSelection() {
+        document.querySelectorAll('.reorder-selected').forEach(el => el.classList.remove('reorder-selected'));
+        this.highlightSelectionElement();
     }
 
     async copyWosAideSource() {

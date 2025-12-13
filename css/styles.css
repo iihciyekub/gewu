@@ -1,4 +1,3 @@
-
 @import url('panel-collapsed.css');
 /* Paper Reviewer System - Web of Science Academic Style */
 
@@ -16,7 +15,7 @@
     --wos-text-light: #6B7280;
     --wos-hover: #EBF5FF;
     --wos-active: #DBEAFE;
-    
+
     /* 学术灰色系 */
     --gray-50: #F9FAFB;
     --gray-100: #F3F4F6;
@@ -80,7 +79,7 @@ body {
 
 .btn-primary:hover {
     background: var(--wos-blue-dark);
-    box-shadow: 0 2px 4px rgba(0,62,116,0.2);
+    box-shadow: 0 2px 4px rgba(0, 62, 116, 0.2);
 }
 
 .btn-success {
@@ -91,7 +90,7 @@ body {
 
 .btn-success:hover {
     background: var(--wos-blue);
-    box-shadow: 0 2px 4px rgba(0,62,116,0.2);
+    box-shadow: 0 2px 4px rgba(0, 62, 116, 0.2);
 }
 
 /* Left Panel - File List - WoS Academic Style */
@@ -104,7 +103,7 @@ body {
     flex-direction: column;
     overflow: hidden;
     flex-shrink: 0;
-    box-shadow: 2px 0 4px rgba(0,0,0,0.05);
+    box-shadow: 2px 0 4px rgba(0, 0, 0, 0.05);
 }
 
 .panel-header {
@@ -265,7 +264,7 @@ body {
 
 .btn-save:hover {
     background: var(--wos-blue-dark);
-    box-shadow: 0 2px 4px rgba(0,62,116,0.3);
+    box-shadow: 0 2px 4px rgba(0, 62, 116, 0.3);
 }
 
 .btn-save i {
@@ -386,6 +385,37 @@ body {
     transform: scale(1.1);
     opacity: 1;
     pointer-events: auto;
+}
+
+.json-table tr.drag-over {
+    outline: 1px dashed var(--wos-blue);
+}
+
+.json-table.reorder-mode td.toggle-cell {
+    cursor: move;
+    background: #eef2ff;
+}
+
+.json-table.reorder-mode tr {
+    cursor: move;
+}
+
+.collapsible-section.drag-over {
+    outline: 1px dashed var(--wos-blue);
+}
+
+.reorder-selected {
+    background: #e8f0ff !important;
+    border-left: 4px solid #000 !important;
+    padding-left: 6px;
+}
+
+.reorder-selected td {
+    background: #e8f0ff !important;
+}
+
+.reorder-selected td:first-child {
+    box-shadow: inset 4px 0 0 #000;
 }
 
 /* 第二列：Key字段列 */
@@ -552,7 +582,7 @@ body {
 .location-link:hover {
     background: var(--wos-blue);
     color: white;
-    box-shadow: 0 2px 4px rgba(0,62,116,0.3);
+    box-shadow: 0 2px 4px rgba(0, 62, 116, 0.3);
     transform: translateY(-1px);
 }
 
@@ -747,8 +777,13 @@ body {
 }
 
 @keyframes spin {
-    0% { transform: rotate(0deg); }
-    100% { transform: rotate(360deg); }
+    0% {
+        transform: rotate(0deg);
+    }
+
+    100% {
+        transform: rotate(360deg);
+    }
 }
 
 /* Empty State - 紧凑版 */
@@ -804,7 +839,7 @@ body {
 .btn-add-quote:hover {
     background: var(--wos-blue-light);
     transform: translateY(-1px);
-    box-shadow: 0 2px 6px rgba(0,62,116,0.25);
+    box-shadow: 0 2px 6px rgba(0, 62, 116, 0.25);
 }
 
 .quote-actions {
@@ -922,7 +957,8 @@ body {
     z-index: 2000;
     justify-content: center;
     align-items: center;
-    pointer-events: none; /* 允许与下方PDF交互 */
+    pointer-events: none;
+    /* 允许与下方PDF交互 */
 }
 
 .modal.active {
@@ -944,7 +980,8 @@ body {
     top: 50%;
     transform: translate(-50%, -50%);
     box-shadow: 0 10px 28px rgba(0, 0, 0, 0.25);
-    pointer-events: auto; /* 允许操作自身 */
+    pointer-events: auto;
+    /* 允许操作自身 */
 }
 
 .modal-header {
@@ -1011,7 +1048,7 @@ body {
 
 .btn-cancel:hover {
     background: var(--gray-600);
-    box-shadow: 0 1px 3px rgba(0,0,0,0.12);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
 }
 
 /* Resizable Panels - WoS Academic Style */
@@ -1037,7 +1074,7 @@ body {
     transform: translate(-50%, -50%);
     background: #fff;
     border-radius: 50%;
-    box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
     width: 22px;
     height: 22px;
     display: flex;
@@ -1048,9 +1085,11 @@ body {
     pointer-events: auto;
     transition: background 0.15s;
 }
+
 .resizer-toggle:hover {
     background: #e0e0e0;
 }
+
 .resizer-toggle i {
     font-size: 14px;
     color: #888;
@@ -1123,7 +1162,8 @@ body {
     font-size: 11px;
 }
 
-ul.json-dict, ol.json-array {
+ul.json-dict,
+ol.json-array {
     margin: 0 0 0 1px;
     padding-left: 1.5em;
 }
@@ -1145,7 +1185,7 @@ ul.json-dict, ol.json-array {
     right: 20px;
     padding: 12px 20px;
     border-radius: 6px;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.25);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
     z-index: 10000;
     font-size: 13px;
     display: flex;
@@ -1161,6 +1201,7 @@ ul.json-dict, ol.json-array {
         transform: translateX(400px);
         opacity: 0;
     }
+
     to {
         transform: translateX(0);
         opacity: 1;
@@ -1171,6 +1212,7 @@ ul.json-dict, ol.json-array {
     from {
         opacity: 1;
     }
+
     to {
         opacity: 0;
     }
@@ -1179,7 +1221,7 @@ ul.json-dict, ol.json-array {
 .notification-toast.success {
     background: var(--wos-blue);
     color: white;
-    box-shadow: 0 4px 12px rgba(0,62,116,0.3);
+    box-shadow: 0 4px 12px rgba(0, 62, 116, 0.3);
 }
 
 .notification-toast.error {
@@ -1203,9 +1245,11 @@ ul.json-dict, ol.json-array {
     0% {
         background-color: transparent;
     }
+
     50% {
         background-color: var(--wos-hover);
     }
+
     100% {
         background-color: transparent;
     }
@@ -1300,7 +1344,7 @@ ul.json-dict, ol.json-array {
 .form-group textarea:focus {
     outline: none;
     border-color: var(--wos-blue);
-    box-shadow: 0 0 0 2px rgba(0,62,116,0.1);
+    box-shadow: 0 0 0 2px rgba(0, 62, 116, 0.1);
 }
 
 .form-row {
@@ -1367,7 +1411,7 @@ ul.json-dict, ol.json-array {
     background: white;
     border: 1px solid #ddd;
     border-radius: 4px;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
     z-index: 10000;
     min-width: 140px;
     padding: 4px 0;
