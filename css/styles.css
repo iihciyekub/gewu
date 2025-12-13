@@ -370,6 +370,22 @@ body {
     text-align: center;
     background: var(--gray-50);
     border-right: 1px solid var(--gray-300);
+    cursor: pointer;
+}
+
+.json-table .edit-cell-icon {
+    color: var(--gray-500);
+    font-size: 12px;
+    transition: color 0.2s, transform 0.2s, opacity 0.15s;
+    opacity: 0;
+    pointer-events: none;
+}
+
+.json-table td.toggle-cell:hover .edit-cell-icon {
+    color: var(--wos-blue);
+    transform: scale(1.1);
+    opacity: 1;
+    pointer-events: auto;
 }
 
 /* 第二列：Key字段列 */
@@ -786,9 +802,15 @@ body {
 }
 
 .btn-add-quote:hover {
-    background: var(--wos-light-blue);
+    background: var(--wos-blue-light);
     transform: translateY(-1px);
-    box-shadow: 0 2px 4px rgba(0,62,116,0.2);
+    box-shadow: 0 2px 6px rgba(0,62,116,0.25);
+}
+
+.quote-actions {
+    display: flex;
+    gap: 6px;
+    align-items: center;
 }
 
 .quote-tabs {
@@ -896,11 +918,11 @@ body {
     left: 0;
     width: 100%;
     height: 100%;
-    background: rgba(33, 33, 33, 0.6);
+    background: transparent;
     z-index: 2000;
     justify-content: center;
     align-items: center;
-    backdrop-filter: blur(2px);
+    pointer-events: none; /* 允许与下方PDF交互 */
 }
 
 .modal.active {
@@ -917,6 +939,12 @@ body {
     overflow: hidden;
     display: flex;
     flex-direction: column;
+    position: fixed;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    box-shadow: 0 10px 28px rgba(0, 0, 0, 0.25);
+    pointer-events: auto; /* 允许操作自身 */
 }
 
 .modal-header {
@@ -929,6 +957,7 @@ body {
     display: flex;
     align-items: center;
     justify-content: space-between;
+    cursor: move;
 }
 
 .modal-body {
@@ -1480,57 +1509,46 @@ ul.json-dict, ol.json-array {
 }
 
 .recent-projects-list {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
+    display: block;
     max-height: 150px;
     overflow-y: auto;
+    overflow-x: hidden;
 }
 
 .recent-project-item {
-    padding: 5px 8px;
-    background: white;
-    border: 1px solid var(--gray-300);
-    border-radius: 2px;
+    display: block;
+    padding: 6px 0;
+    margin: 4px 0;
     cursor: pointer;
-    transition: all 0.12s ease;
+    color: var(--wos-blue);
+    font-size: 11px;
+    text-decoration: none;
+    white-space: normal;
+    word-break: break-all;
+    border-bottom: 1px dashed var(--gray-200);
     display: flex;
     align-items: center;
     gap: 6px;
 }
 
+.recent-project-item:last-child {
+    border-bottom: none;
+}
+
 .recent-project-item:hover {
-    background: var(--gray-50);
-    border-color: var(--wos-blue);
-    transform: translateX(2px);
-    box-shadow: 0 1px 3px rgba(0,0,0,0.08);
-}
-
-.recent-project-item i {
-    color: var(--wos-blue);
-    font-size: 10px;
-    flex-shrink: 0;
-}
-
-.recent-project-info {
-    flex: 1;
-    min-width: 0;
-}
-
-.recent-project-name {
-    font-weight: 500;
-    font-size: 10px;
-    color: var(--wos-text);
-    margin-bottom: 1px;
+    color: var(--wos-blue-dark);
+    background: transparent;
+    transform: none;
 }
 
 .recent-project-path {
     font-size: 9px;
     color: var(--wos-text-light);
     font-family: 'Courier New', monospace;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    display: inline-block;
+    margin-top: 2px;
+    word-break: break-all;
+    text-decoration: underline;
 }
 
 .close-btn {

@@ -5,6 +5,8 @@ class PaperReviewerApp {
         this.currentFile = null;
         this.currentData = null;
         this.currentPdfUrl = null;
+        this.currentPdfPath = null; // 记录PDF相对于项目的路径
+        this.currentPdfViewerUrl = null;
         this.editingPath = null;
         this.hasUnsavedChanges = false;
         this.tempDataCache = {}; // 临时数据缓存 {filename: data}
@@ -35,6 +37,7 @@ class PaperReviewerApp {
         
         this.setupEventListeners();
         this.setupResizers();
+        this.setupDraggableModal();
     }
 
     async initializeProject() {
@@ -94,10 +97,6 @@ class PaperReviewerApp {
         // Modal controls
         document.getElementById('cancelEdit').addEventListener('click', () => this.closeEditModal());
         document.getElementById('saveEdit').addEventListener('click', () => this.saveEditedValue());
-        document.getElementById('editModal').addEventListener('click', (e) => {
-            if (e.target.id === 'editModal') this.closeEditModal();
-        });
-
         // Add Item Modal controls
         document.getElementById('cancelAddItem').addEventListener('click', () => this.closeAddItemModal());
         document.getElementById('saveAddItem').addEventListener('click', () => this.saveNewItem());
@@ -406,16 +405,60 @@ class PaperReviewerApp {
             item.className = 'recent-project-item';
             item.innerHTML = `
                 <i class="fas fa-folder"></i>
-                <div class="recent-project-info">
-                    <div class="recent-project-name">${this.escapeHtml(project.name)}</div>
-                    <div class="recent-project-path">${this.escapeHtml(project.path)}</div>
-                </div>
+                <a class="recent-project-path" href="file://${this.escapeHtml(project.path)}" target="_blank" title="打开项目目录（本机）">
+                    ${this.escapeHtml(project.path)}
+                </a>
             `;
             item.addEventListener('click', () => {
-                this.switchProject(project);
+                if (confirm(`切换到项目: ${project.path} ?`)) {
+                    this.switchProject(project);
+                }
             });
+            // 阻止子链接触发切换
+            const link = item.querySelector('.recent-project-path');
+            if (link) {
+                link.addEventListener('click', (e) => e.stopPropagation());
+            }
             container.appendChild(item);
         });
+    }
+
+    setupDraggableModal() {
+        const modal = document.getElementById('editModal');
+        const content = modal?.querySelector('.modal-content');
+        const handle = modal?.querySelector('.modal-header');
+        if (!modal || !content || !handle) return;
+
+        const onMouseDown = (e) => {
+            e.preventDefault();
+            const rect = content.getBoundingClientRect();
+            let startX = e.clientX;
+            let startY = e.clientY;
+            let startLeft = rect.left;
+            let startTop = rect.top;
+
+            content.style.position = 'fixed';
+            content.style.transform = 'none';
+            content.style.left = `${startLeft}px`;
+            content.style.top = `${startTop}px`;
+
+            const onMouseMove = (evt) => {
+                const dx = evt.clientX - startX;
+                const dy = evt.clientY - startY;
+                content.style.left = `${startLeft + dx}px`;
+                content.style.top = `${startTop + dy}px`;
+            };
+
+            const onMouseUp = () => {
+                document.removeEventListener('mousemove', onMouseMove);
+                document.removeEventListener('mouseup', onMouseUp);
+            };
+
+            document.addEventListener('mousemove', onMouseMove);
+            document.addEventListener('mouseup', onMouseUp);
+        };
+
+        handle.addEventListener('mousedown', onMouseDown);
     }
     
     async loadSelectedProject() {
@@ -431,10 +474,10 @@ class PaperReviewerApp {
         const pathParts = projectPath.replace(/\\/g, '/').split('/').filter(p => p);
         const projectName = pathParts[pathParts.length - 1];
         
-        const project = {
-            name: projectName,
-            path: projectPath
-        };
+            const project = {
+                name: projectName,
+                path: this.normalizeProjectPathString(projectPath)
+            };
         
         await this.switchProject(project);
     }
@@ -493,10 +536,15 @@ class PaperReviewerApp {
     
     updateRecentProjects(project) {
         // 移除已存在的相同项目
-        this.recentProjects = this.recentProjects.filter(p => p.path !== project.path);
+        const normalizedPath = this.normalizeProjectPathString(project.path);
+        const normalizedProject = { ...project, path: normalizedPath };
+
+        this.recentProjects = this.recentProjects.filter(
+            p => this.normalizeProjectPathString(p.path) !== normalizedPath
+        );
         
         // 添加到开头
-        this.recentProjects.unshift(project);
+        this.recentProjects.unshift(normalizedProject);
         
         // 最多保留5个
         if (this.recentProjects.length > 5) {
@@ -983,43 +1031,33 @@ class PaperReviewerApp {
 
     renderObject(obj, table, basePath) {
         for (const [key, value] of Object.entries(obj)) {
+            // 跳过 *_loc 字段，使其不渲染到表格
+            if (key.endsWith('_loc')) continue;
+
             const row = document.createElement('tr');
             const toggleCell = document.createElement('td');
             const keyCell = document.createElement('td');
             const valueCell = document.createElement('td');
 
-            // 判断是否是_loc字段
-            const isLocField = key.endsWith('_loc');
-            
-            // _loc字段默认隐藏，添加特殊样式
-            if (isLocField) {
-                row.classList.add('loc-field-row', 'collapsed');
-            }
-
             // 检查是否有对应的 location 信息
             const locKey = key + '_loc';
-            const locationInfo = (!isLocField && obj[locKey]) ? obj[locKey] : null;
+            const locationInfo = obj[locKey] || null;
 
-            // 第一列：展开/折叠按钮（如果有对应的_loc字段）
+            // 第一列：保留占位但不放置可点击的展开按钮
             toggleCell.className = 'toggle-cell';
-            if (!isLocField && obj[locKey]) {
-                const toggleBtn = document.createElement('button');
-                toggleBtn.className = 'loc-toggle-btn';
-                toggleBtn.innerHTML = '<i class="fas fa-chevron-down"></i>';
-                toggleBtn.title = '显示/隐藏位置信息';
-                toggleBtn.addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    this.toggleLocField(table, key);
-                });
-                toggleCell.appendChild(toggleBtn);
-            }
+            toggleCell.innerHTML = `<i class="fas fa-pen-to-square edit-cell-icon" title="点击编辑"></i>`;
+            toggleCell.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const currentPath = [...basePath, key];
+                let valueForEdit = value;
+                if (typeof value === 'object' && value !== null) {
+                    valueForEdit = Array.isArray(value) ? JSON.stringify(value) : JSON.stringify(value, null, 2);
+                }
+                this.openEditModal(currentPath, valueForEdit);
+            });
 
             // 第二列：Key可编辑
-            const keyDisplay = isLocField 
-                ? `<span class="editable-key loc-key" data-path="${basePath.join('.')}" data-key="${key}">
-                     <i class="fas fa-info-circle"></i> ${this.formatKey(key)}
-                   </span>`
-                : `<span class="editable-key" data-path="${basePath.join('.')}" data-key="${key}">${this.formatKey(key)}</span>`;
+            const keyDisplay = `<span class="editable-key" data-path="${basePath.join('.')}" data-key="${key}">${this.formatKey(key)}</span>`;
             
             keyCell.innerHTML = keyDisplay;
             const currentPath = [...basePath, key];
@@ -1098,16 +1136,18 @@ class PaperReviewerApp {
             // 如果quote是数组，为每个quote创建一个引用图标
             if (Array.isArray(quotes) && quotes.length > 0) {
                 const validQuotes = quotes.filter(q => q && q.trim());
-                validQuotes.forEach((quote, index) => {
-                    // 所有图标使用相同valuePath，通过点击处理器循环切换
-                    html += `<a href="#" class="location-link" 
-                        data-page="${page}" 
-                        data-value-path="${valuePath}"
-                        data-quote-index="${index}"
-                        title="跳转到 PDF 第 ${page} 页并高亮 (循环 ${index + 1}/${validQuotes.length})">
-                        <i class="fa-solid fa-quote-right"></i>
-                    </a>`;
-                });
+                if (validQuotes.length > 0) {
+                    validQuotes.forEach((quote, index) => {
+                        // 所有图标使用相同valuePath，通过点击处理器循环切换
+                        html += `<a href="#" class="location-link" 
+                            data-page="${page}" 
+                            data-value-path="${valuePath}"
+                            data-quote-index="${index}"
+                            title="跳转到 PDF 第 ${page} 页并高亮 (循环 ${index + 1}/${validQuotes.length})">
+                            <i class="fa-solid fa-quote-right"></i>
+                        </a>`;
+                    });
+                }
             } else if (typeof quotes === 'string' && quotes.trim()) {
                 // 兼容旧的字符串格式
                 html += `<a href="#" class="location-link" 
@@ -1117,15 +1157,7 @@ class PaperReviewerApp {
                     title="跳转到 PDF 第 ${page} 页并高亮文本">
                     <i class="fa-solid fa-quote-right"></i>
                 </a>`;
-            } else {
-                // 没有quote，只显示页码图标
-                html += `<a href="#" class="location-link" 
-                    data-page="${page}" 
-                    data-value-path="${valuePath}"
-                    title="跳转到 PDF 第 ${page} 页">
-                    <i class="fa-solid fa-quote-right"></i>
-                </a>`;
-            }
+            } // 无有效引用文本则不显示跳转图标
         }
 
         return html;
@@ -1140,6 +1172,11 @@ class PaperReviewerApp {
         }];
         const jsonStr = encodeURIComponent(JSON.stringify(query));
         return `https://www.webofscience.com/wos/woscc/general-summary?queryJson=${jsonStr}`;
+    }
+
+    normalizeProjectPathString(pathStr) {
+        if (!pathStr) return '';
+        return pathStr.replace(/\\/g, '/').replace(/\/+$/, '');
     }
 
     renderFlatView() {
@@ -1930,7 +1967,13 @@ class PaperReviewerApp {
             this.initQuoteTabs([]);
         }
         
-        document.getElementById('editModal').classList.add('active');
+        const modal = document.getElementById('editModal');
+        const content = modal.querySelector('.modal-content');
+        // 重新居中并显示
+        content.style.left = '50%';
+        content.style.top = '50%';
+        content.style.transform = 'translate(-50%, -50%)';
+        modal.classList.add('active');
     }
 
     // 初始化引用标签页
@@ -1961,6 +2004,18 @@ class PaperReviewerApp {
         // 绑定添加按钮
         const btnAdd = document.getElementById('btnAddQuote');
         btnAdd.onclick = () => this.addQuoteTab('', tabsContainer.children.length, true);
+
+        // 绑定一键整理按钮
+        const btnFlatten = document.getElementById('btnFlattenQuote');
+        if (btnFlatten) {
+            btnFlatten.onclick = () => this.flattenActiveQuote();
+        }
+
+        // 绑定测试搜索按钮：使用当前选中引用文本，执行PDF搜索并跳转
+        const btnTestSearch = document.getElementById('btnTestSearch');
+        if (btnTestSearch) {
+            btnTestSearch.onclick = () => this.testSearchFromActiveQuote();
+        }
     }
 
     // 添加引用标签页
@@ -2007,6 +2062,55 @@ class PaperReviewerApp {
         if (setActive) {
             this.switchQuoteTab(index);
         }
+    }
+
+    // 将当前引用文本整理为单行，并修正因换行产生的连字符
+    flattenActiveQuote() {
+        const activeTextarea = document.querySelector('.quote-panel.active textarea');
+        if (!activeTextarea) {
+            this.showNotification('未找到可整理的引用文本', 'error');
+            return;
+        }
+
+        const raw = activeTextarea.value || '';
+        // 处理跨行的连字符单词（例如 "exam-\nple" => "example"）
+        const noHyphenBreaks = raw.replace(/-\s*\n\s*/g, '');
+        // 将换行统一为空格并压缩多余空格
+        const singleLine = noHyphenBreaks.replace(/\s*\n\s*/g, ' ').replace(/\s+/g, ' ').trim();
+        activeTextarea.value = singleLine;
+        this.showNotification('已整理为单行并修正连字符断行', 'success');
+    }
+
+    // 从当前引用文本触发PDF搜索并跳转
+    testSearchFromActiveQuote() {
+        const activeTextarea = document.querySelector('.quote-panel.active textarea');
+        if (!activeTextarea) {
+            this.showNotification('未找到引用文本', 'error');
+            return;
+        }
+
+        const text = (activeTextarea.value || '').trim();
+        if (!text) {
+            this.showNotification('引用文本为空，无法搜索', 'error');
+            return;
+        }
+
+        // 使用现有搜索逻辑，跳转到找到的第一个匹配
+        const pdfViewer = document.getElementById('pdfViewer');
+        if (!pdfViewer || !this.currentPdfUrl) {
+            this.showNotification('PDF 未加载', 'error');
+            return;
+        }
+
+        const pdfWindow = pdfViewer.contentWindow;
+        const pdfApp = pdfWindow?.PDFViewerApplication;
+        if (!pdfApp) {
+            this.showNotification('PDF.js 未初始化', 'error');
+            return;
+        }
+
+        this.executeSearchAndScroll(pdfApp, text, null);
+        this.showNotification('已发起PDF搜索', 'info');
     }
 
     // 切换标签页

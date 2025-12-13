@@ -28,6 +28,14 @@
       "pdf_page_index": null,
       "pdf_open_params": "",
       "quote": []
+    },
+    "doi_loc": {
+      "page_label": "",
+      "pdf_page_index": null,
+      "pdf_open_params": "",
+      "quote": [
+        "quasi-natural experiment in the US, in which significant reductions in import tariff"
+      ]
     }
   },
   "did_design_setup": {
@@ -46,8 +54,7 @@
       "pdf_page_index": 7,
       "pdf_open_params": "#page=7",
       "quote": [
-        "Equation (1)",
-        "ere"
+        "as well as differentiating among its own products (Iyer et al., 2005). We measure cost leadership based on the cos"
       ]
     },
     "variable_y": "LOS Deviation (Actual LOS - GMLOS)",

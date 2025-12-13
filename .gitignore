@@ -1,3 +1,16 @@
 js/pdfjs
 src/papers
 js/core
+user
+src
+test
+.DS_Store
+.vscode
+node_modules
+dist
+build
+.env
+coverage
+logs
+*.log
+npm-debug.log*
