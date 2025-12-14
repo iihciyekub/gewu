@@ -28,6 +28,11 @@
         };
     </script>
     <script src="js/core/MathJax-3.2.2/es5/tex-mml-chtml.js" id="MathJax-script"></script>
+    <script src="js/core/markdown-it.min.js"></script>
+    <script src="js/core/markdown-it-footnote.min.js"></script>
+    <script src="js/core/markdown-it-deflist.min.js"></script>
+    <script src="js/core/markdown-it-sub.min.js"></script>
+    <script src="js/core/markdown-it-sup.min.js"></script>
 </head>
 <body>
     <!-- Project Selector Modal -->
@@ -114,8 +119,8 @@
                         <button class="tab-btn active" data-view="structured">
                             <i class="fas fa-table"></i>
                         </button>
-                        <button class="tab-btn" data-view="flat">
-                            <i class="fas fa-code"></i>
+                        <button class="tab-btn" data-view="markdown">
+                            <i class="fas fa-file-alt"></i>
                         </button>
                     </div>
                     <button id="copyWosAideBtn" class="btn btn-success" title="复制 wosAide.js 源码到剪贴板">
@@ -138,11 +143,30 @@
                         </button>
                     </div>
                 </div>
-                <div class="flat-view" id="flatView">
-                    <div class="empty-state">
-                        <i class="fas fa-file-code"></i>
-                        <h3>No File Selected</h3>
-                        <p>Select a JSON file from the left panel to view JSON data</p>
+                <div class="markdown-view" id="markdownView">
+                    <div class="markdown-toolbar">
+                        <div class="markdown-toolbar-left">
+                            <button class="btn btn-primary" id="createMarkdownBtn" style="display:none;">
+                                <i class="fas fa-file-medical"></i> 创建同名 MD
+                            </button>
+                            <button class="btn btn-success" id="editMarkdownBtn" disabled>
+                                <i class="fas fa-pen"></i> 编辑
+                            </button>
+                            <button class="btn btn-primary" id="saveMarkdownBtn" disabled>
+                                <i class="fas fa-save"></i> 保存
+                            </button>
+                        </div>
+                        <div class="markdown-status" id="markdownStatus">未加载</div>
+                    </div>
+                    <div class="markdown-body" id="markdownRender">
+                        <div class="empty-state">
+                            <i class="fas fa-file-alt"></i>
+                            <h3>No File Selected</h3>
+                            <p>选择左侧 JSON 文件以查看对应的 Markdown 笔记</p>
+                        </div>
+                    </div>
+                    <div class="markdown-editor" id="markdownEditor" style="display:none;">
+                        <textarea id="markdownTextarea" spellcheck="false"></textarea>
                     </div>
                 </div>
             </div>

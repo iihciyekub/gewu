@@ -38,6 +38,7 @@ const mimeTypes = {
     '.mjs': 'text/javascript',
     '.css': 'text/css',
     '.json': 'application/json',
+    '.md': 'text/markdown',
     '.png': 'image/png',
     '.jpg': 'image/jpg',
     '.gif': 'image/gif',
@@ -181,6 +182,40 @@ const server = http.createServer((req, res) => {
             }
         });
         
+        return;
+    }
+
+    // 处理Markdown保存/创建请求
+    if (req.method === 'POST' && pathname === '/save-md') {
+        let body = '';
+        req.on('data', chunk => {
+            body += chunk.toString();
+        });
+        req.on('end', () => {
+            try {
+                const data = JSON.parse(body);
+                const { projectPath = 'user', filename, content = '' } = data;
+                if (!filename) {
+                    res.writeHead(400, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ success: false, error: 'Missing filename' }));
+                    return;
+                }
+                const { fullPath } = normalizeProjectPath(projectPath);
+                const filePath = path.join(fullPath, 'data', filename);
+                const dir = path.dirname(filePath);
+                if (!fs.existsSync(dir)) {
+                    fs.mkdirSync(dir, { recursive: true });
+                }
+                fs.writeFileSync(filePath, content, 'utf8');
+                console.log(`✓ Saved Markdown: ${filePath}`);
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ success: true, path: filePath }));
+            } catch (error) {
+                console.error('✗ Error saving markdown:', error);
+                res.writeHead(500, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ success: false, error: error.message }));
+            }
+        });
         return;
     }
 

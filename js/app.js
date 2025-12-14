@@ -20,6 +20,12 @@ class PaperReviewerApp {
         this.searchMatchCount = 0; // 当前搜索的匹配数量
         this.currentMatchIndex = 0; // 当前显示的匹配索引
         this.previewHoverTimer = null; // 类预览悬停防抖
+        this.currentMarkdownText = '';
+        this.currentMarkdownFile = '';
+        this.markdownParser = null;
+        this.currentMarkdownExists = false;
+        this.isMarkdownEditing = false;
+        this.saveMdEndpoint = '/save-md';
 
         // 项目管理
         this.currentProject = null; // { name, path }
@@ -98,6 +104,18 @@ class PaperReviewerApp {
         document.querySelectorAll('.tab-btn').forEach(btn => {
             btn.addEventListener('click', (e) => this.switchView(e.target.closest('.tab-btn')));
         });
+        const createMdBtn = document.getElementById('createMarkdownBtn');
+        if (createMdBtn) {
+            createMdBtn.addEventListener('click', () => this.createMarkdownFile());
+        }
+        const editMdBtn = document.getElementById('editMarkdownBtn');
+        if (editMdBtn) {
+            editMdBtn.addEventListener('click', () => this.toggleMarkdownEdit(true));
+        }
+        const saveMdBtn = document.getElementById('saveMarkdownBtn');
+        if (saveMdBtn) {
+            saveMdBtn.addEventListener('click', () => this.saveMarkdownFromEditor());
+        }
 
         // Modal controls
         document.getElementById('cancelEdit').addEventListener('click', () => this.closeEditModal());
@@ -1045,7 +1063,7 @@ class PaperReviewerApp {
 
             // Render data
             this.renderStructuredView();
-            this.renderFlatView();
+            await this.loadMarkdownForCurrentFile();
 
             // Load PDF if available
             if (this.currentData.meta_info && this.currentData.meta_info.pdf_path) {
@@ -1063,10 +1081,12 @@ class PaperReviewerApp {
 
     showLoading() {
         const structuredView = document.getElementById('structuredContent') || document.getElementById('structuredView');
-        const flatView = document.getElementById('flatView');
+        const markdownView = document.getElementById('markdownRender');
         
         structuredView.innerHTML = '<div class="loading"><div class="spinner"></div>Loading data...</div>';
-        flatView.innerHTML = '<div class="loading"><div class="spinner"></div>Loading data...</div>';
+        if (markdownView) {
+            markdownView.innerHTML = '<div class="loading"><div class="spinner"></div>Loading markdown...</div>';
+        }
     }
 
     renderStructuredView() {
@@ -1723,6 +1743,7 @@ class PaperReviewerApp {
 
     renderFlatView() {
         const container = document.getElementById('flatView');
+        if (!container) return;
         container.innerHTML = '<div id="jsonViewer"></div>';
 
         // Use jQuery json-viewer
@@ -1734,6 +1755,211 @@ class PaperReviewerApp {
         
         // 渲染完成后触发MathJax
         this.renderMath();
+    }
+    
+    getMarkdownParser() {
+        if (!this.markdownParser && window.markdownit) {
+            const md = window.markdownit({
+                html: false,
+                linkify: true,
+                typographer: true,
+                breaks: true
+            });
+            if (window.markdownitFootnote) md.use(window.markdownitFootnote);
+            if (window.markdownitDeflist) md.use(window.markdownitDeflist);
+            if (window.markdownitSub) md.use(window.markdownitSub);
+            if (window.markdownitSup) md.use(window.markdownitSup);
+            this.markdownParser = md;
+        }
+        return this.markdownParser;
+    }
+
+    getMarkdownFilename(jsonFilename) {
+        if (!jsonFilename) return '';
+        return jsonFilename.replace(/\.json$/i, '') + '.md';
+    }
+
+    async persistMarkdown(filename, content) {
+        const projectPath = this.currentProject ? this.currentProject.path : 'user';
+        const payload = {
+            projectPath,
+            filename,
+            content
+        };
+
+        // 优先尝试 /save-md，404 时回退到 /save-json（与 JSON 保存逻辑一致，保证兼容旧服务）
+        const trySave = async (url) => {
+            const resp = await fetch(url, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            if (!resp.ok) {
+                const text = await resp.text();
+                const err = new Error(text || `请求失败: ${resp.status}`);
+                err.status = resp.status;
+                throw err;
+            }
+            return resp;
+        };
+
+        try {
+            await trySave(this.saveMdEndpoint);
+        } catch (err) {
+            if (err.status === 404) {
+                // 回退到已有的 JSON 保存接口，保证在老版本 server.js 上也能工作
+                await trySave('/save-json');
+            } else {
+                throw err;
+            }
+        }
+    }
+
+    buildDefaultMarkdown() {
+        const base = this.currentFile ? this.currentFile.replace(/\.json$/i, '') : 'notes';
+        return `# ${base}\n\n> 自动创建的 Markdown 笔记文件。\n\n- 可添加章节、要点、引用等。\n- 与 JSON 同名，便于版本记录。\n`;
+    }
+
+    updateMarkdownToolbar() {
+        const createBtn = document.getElementById('createMarkdownBtn');
+        const editBtn = document.getElementById('editMarkdownBtn');
+        const saveBtn = document.getElementById('saveMarkdownBtn');
+        const statusEl = document.getElementById('markdownStatus');
+        const editor = document.getElementById('markdownEditor');
+        const render = document.getElementById('markdownRender');
+        if (!createBtn || !editBtn || !saveBtn || !statusEl) return;
+
+        createBtn.style.display = this.currentMarkdownExists ? 'none' : 'inline-flex';
+        editBtn.disabled = !this.currentMarkdownExists;
+        saveBtn.disabled = !this.currentMarkdownExists;
+        statusEl.textContent = this.currentFile
+            ? (this.currentMarkdownExists ? `已加载: ${this.currentMarkdownFile}` : '未找到同名 MD，点击创建')
+            : '未加载文件';
+
+        if (this.isMarkdownEditing) {
+            if (editor) editor.style.display = 'block';
+            if (render) render.style.display = 'none';
+            editBtn.disabled = true;
+        } else {
+            if (editor) editor.style.display = 'none';
+            if (render) render.style.display = 'block';
+        }
+    }
+
+    async loadMarkdownForCurrentFile() {
+        if (!this.currentFile) {
+            this.currentMarkdownExists = false;
+            this.currentMarkdownText = '';
+            this.currentMarkdownFile = '';
+            this.renderMarkdownView('');
+            this.updateMarkdownToolbar();
+            return;
+        }
+        const mdFilename = this.getMarkdownFilename(this.currentFile);
+        const projectPath = this.currentProject ? this.currentProject.path : 'user';
+        const mdUrl = `${projectPath}/data/${mdFilename}`;
+        const render = document.getElementById('markdownRender');
+        if (render) {
+            render.innerHTML = '<div class="loading"><div class="spinner"></div>Loading markdown...</div>';
+        }
+        try {
+            let text = '';
+            const resp = await fetch(mdUrl, { cache: 'no-store' });
+            if (resp.ok) {
+                text = await resp.text();
+                this.currentMarkdownExists = true;
+            } else if (resp.status === 404) {
+                this.currentMarkdownExists = false;
+                text = '';
+            } else {
+                throw new Error(`加载失败：${resp.status}`);
+            }
+            this.currentMarkdownFile = mdFilename;
+            this.currentMarkdownText = text;
+            this.isMarkdownEditing = false;
+            this.renderMarkdownView(text);
+        } catch (err) {
+            console.warn('Markdown load error:', err);
+            if (render) {
+                render.innerHTML = `<div class="empty-state"><i class="fas fa-exclamation-triangle"></i><h3>Markdown 加载失败</h3><p>${err.message}</p></div>`;
+            }
+        } finally {
+            this.updateMarkdownToolbar();
+        }
+    }
+
+    renderMarkdownView(text) {
+        const render = document.getElementById('markdownRender');
+        const textarea = document.getElementById('markdownTextarea');
+        if (textarea) textarea.value = text || this.buildDefaultMarkdown();
+        if (!render) return;
+        if (!text) {
+            render.innerHTML = '<div class="empty-state"><i class="fas fa-file-alt"></i><h3>No Markdown</h3><p>未找到同名 Markdown，点击上方按钮创建</p></div>';
+            return;
+        }
+        const md = this.getMarkdownParser();
+        if (!md) {
+            render.innerHTML = '<div class="empty-state"><i class="fas fa-file-alt"></i><h3>Markdown 引擎不可用</h3></div>';
+            return;
+        }
+        const html = md.render(text);
+        render.innerHTML = `<article class="markdown-body">${html}</article>`;
+        this.renderMath();
+        const statusEl = document.getElementById('markdownStatus');
+        if (statusEl) statusEl.textContent = this.currentMarkdownExists ? `已加载: ${this.currentMarkdownFile}` : '未找到同名 MD';
+    }
+
+    async createMarkdownFile() {
+        if (!this.currentFile) return;
+        const mdFilename = this.getMarkdownFilename(this.currentFile);
+        const projectPath = this.currentProject ? this.currentProject.path : 'user';
+        const content = this.buildDefaultMarkdown();
+        try {
+            await this.persistMarkdown(mdFilename, content);
+            this.currentMarkdownExists = true;
+            this.currentMarkdownFile = mdFilename;
+            this.currentMarkdownText = content;
+            this.isMarkdownEditing = true;
+            this.renderMarkdownView(content);
+            this.updateMarkdownToolbar();
+            const statusEl = document.getElementById('markdownStatus');
+            if (statusEl) statusEl.textContent = `已创建: ${mdFilename}`;
+        } catch (err) {
+            console.error('创建 Markdown 失败:', err);
+            this.showNotification(`创建 Markdown 失败: ${err.message}`, 'error');
+        }
+    }
+
+    toggleMarkdownEdit(editing) {
+        if (!this.currentMarkdownExists) return;
+        this.isMarkdownEditing = editing;
+        const textarea = document.getElementById('markdownTextarea');
+        if (textarea && editing) {
+            textarea.value = this.currentMarkdownText || this.buildDefaultMarkdown();
+        }
+        this.updateMarkdownToolbar();
+    }
+
+    async saveMarkdownFromEditor() {
+        if (!this.currentFile || !this.currentMarkdownExists) return;
+        const textarea = document.getElementById('markdownTextarea');
+        if (!textarea) return;
+        const content = textarea.value;
+        const mdFilename = this.getMarkdownFilename(this.currentFile);
+        try {
+            await this.persistMarkdown(mdFilename, content);
+            this.currentMarkdownText = content;
+            this.isMarkdownEditing = false;
+            this.currentMarkdownExists = true;
+            this.renderMarkdownView(content);
+            this.updateMarkdownToolbar();
+            this.showNotification(`✓ Markdown 已保存: ${mdFilename}`, 'success');
+            const statusEl = document.getElementById('markdownStatus');
+            if (statusEl) statusEl.textContent = `已保存: ${mdFilename}`;
+        } catch (err) {
+            console.error('保存 Markdown 失败:', err);
+            this.showNotification(`保存 Markdown 失败: ${err.message}`, 'error');
+        }
     }
     
     // 触发MathJax渲染数学公式
@@ -1753,12 +1979,13 @@ class PaperReviewerApp {
         // Switch views
         const view = btn.dataset.view;
         document.getElementById('structuredView').classList.remove('active');
-        document.getElementById('flatView').classList.remove('active');
+        const markdown = document.getElementById('markdownView');
+        if (markdown) markdown.classList.remove('active');
 
         if (view === 'structured') {
             document.getElementById('structuredView').classList.add('active');
-        } else {
-            document.getElementById('flatView').classList.add('active');
+        } else if (view === 'markdown') {
+            if (markdown) markdown.classList.add('active');
         }
     }
 
