@@ -1868,9 +1868,10 @@ class PaperReviewerApp {
             const padding = 8;
             const vw = window.innerWidth;
             const vh = window.innerHeight;
+            const maxWidth = Math.floor(vw * 0.9);
             let top = rect.bottom + padding;
             let left = rect.left;
-            preview.style.maxWidth = '400px';
+            preview.style.maxWidth = `${maxWidth}px`;
             preview.style.visibility = 'hidden';
             preview.style.display = 'block';
             const preRect = preview.getBoundingClientRect();

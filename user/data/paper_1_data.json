@@ -55,48 +55,47 @@
   "did_design_setup": {
     "model_type": "Staggered DID (多时点/交错DID)",
     "model_type_loc": {
-      "page_label": "2044",
-      "pdf_page_index": 7,
-      "pdf_open_params": "#page=7",
+      "page_label": "2043",
+      "pdf_page_index": 6,
+      "pdf_open_params": "#page=6",
       "quote": [
-        "observe the implementation year for each HIT application... DID mimics a quasi-experiment"
+        "In order to estimate the impact of HIT on the deviation of LOS from GMLOS, we adopt a difference-in-difference (DID) estimation method and a propensity score matching approach."
       ]
     },
-    "regression_equation": "$\\sum_{y}^x=1 \\frac{b}{b} \\sum_i^i$",
+    "regression_equation": "$y_{ijkt}=\\alpha_{1} \\text{ HealthIT App}_{ijk} + \\alpha_{2} \\text{ AfterHealthIT App}_{ijkt} + \\beta \\text{ HealthIT App}_{ijk} \\cdot \\text{ AfterHealthIT App}_{ijkt} + \\epsilon_{ijkt}$",
     "regression_equation_loc": {
       "page_label": "7",
       "pdf_page_index": 7,
       "pdf_open_params": "#page=7",
       "quote": [
-        "as well as differentiating among its own products (Iyer et al., 2005). We measure cost leadership based on the cos"
+        "We code the HIT application as a binary variable where one indicates that it has been implemented and operational, and zero indicates otherwise. Therefore, we can track the change in an application's status turning from inactive to fully operational. Observing such a marker for each application, we compare the before and after effects of HIT implementation using the regression model specified in Equation (1),"
       ]
     },
-    "variable_y": "LOS Deviation (Actual LOS - GMLOS)",
+    "variable_y": "LOS与GMLOS的偏差 (deviation of LOS from GMLOS)",
     "variable_y_loc": {
-      "page_label": "2042",
-      "pdf_page_index": 5,
-      "pdf_open_params": "#page=5",
-      "quote": [
-        "measure the deviation in length of stay from GMLOS"
-      ]
-    },
-    "variable_treat": "HealthITApp (Binary: Hospital has HIT)",
-    "variable_treat_loc": {
-      "page_label": "7",
+      "page_label": "2044",
       "pdf_page_index": 7,
       "pdf_open_params": "#page=7",
       "quote": [
-        "HealthITApp_ijk takes a value of one if... HIT application k has been implemented",
-        "2332"
+        "where y is the outcome, denoting the deviation of LOS from GMLOS, i indexes individual discharge (of a patient's in-hospital visit), j represents the hospital, k denotes an individual HIT application, t is the time (in year),"
       ]
     },
-    "variable_post": "AfterHealthITApp (Binary: Post-Implementation)",
+    "variable_treat": "HealthITAppijk (HIT应用k在医院j的实施状态)",
+    "variable_treat_loc": {
+      "page_label": "2044",
+      "pdf_page_index": 7,
+      "pdf_open_params": "#page=7",
+      "quote": [
+        "HealthITAppijk takes a value of one if patient i visits hospital j where HIT application k has been implemented, while the variable AfterHealthITAppijkt takes a value of one"
+      ]
+    },
+    "variable_post": "AfterHealthITAppijkt (患者访问时间是否处于HIT实施后的事后时期)",
     "variable_post_loc": {
       "page_label": "2044",
       "pdf_page_index": 7,
       "pdf_open_params": "#page=7",
       "quote": [
-        "s US firms. In other words, we aim to identify factors that make US firms less likely to “cut corners” at the\nexpen"
+        "while the variable AfterHealthITAppijkt takes a value of one if patient i's visit to hospital j during time period t occurs during the post-treatment (after implementation) period."
       ]
     }
   },
@@ -158,5 +157,5 @@
       ]
     }
   },
-  "lastupdate": "2025-12-14 20:25:34"
+  "lastupdate": "2025-12-15 00:22:25"
 }

@@ -418,6 +418,13 @@ body {
 .json-table {
     width: 100%;
     border-collapse: collapse;
+    position: relative;
+    transition: box-shadow 0.18s ease, background-color 0.18s ease;
+}
+
+.json-table:hover {
+    background-color: var(--wos-hover);
+    box-shadow: 0 0 0 2px var(--wos-active);
 }
 
 .json-table tr {
@@ -591,7 +598,9 @@ body {
     padding: 2px 2px;
     border-radius: 2px;
     transition: all 0.2s;
-    display: inline-block;
+    display: block;
+    width: 100%;
+    max-width: 100%;
     min-width: 60px;
     word-break: break-word;
     position: relative;
@@ -600,8 +609,10 @@ body {
 
 /* MathJax 数学公式样式 */
 .editable-value mjx-container {
-    display: inline-block !important;
+    display: block !important;
     margin: 0 2px;
+    width: 100% !important;
+    overflow-x: auto;
 }
 
 .editable-value .MathJax {
@@ -960,9 +971,10 @@ body {
     border-radius: 6px;
     padding: 10px 12px;
     box-shadow: 0 4px 20px rgba(0,0,0,0.18);
-    max-width: 400px;
+    max-width: 90vw;
     color: #222;
     display: none;
+    width: auto;
 }
 
 .math-preview.active {
@@ -972,7 +984,7 @@ body {
 .math-preview-content {
     font-size: 18px;
     line-height: 1.6;
-    white-space: pre-wrap;
+    white-space: normal;
 }
 
 .preview-section {
@@ -1355,6 +1367,19 @@ ol.json-array {
     border-radius: 2px;
     overflow: hidden;
     background: white;
+    position: relative;
+    transition: box-shadow 0.18s ease, border-color 0.18s ease, background-color 0.18s ease;
+}
+
+.collapsible-section:hover {
+    border-color: var(--wos-blue);
+    box-shadow: 0 0 0 1px var(--wos-active);
+    background: var(--wos-hover);
+}
+
+.collapsible-section:hover .json-table {
+    background-color: var(--wos-hover);
+    box-shadow: 0 0 0 2px var(--wos-active);
 }
 
 .collapsible-header {
