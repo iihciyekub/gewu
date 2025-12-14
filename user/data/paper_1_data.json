@@ -14,7 +14,6 @@
       ]
     },
     "authors": "Jeong-ha (Cath) Oh; Zhiqiang (Eric) Zheng; Indranil R. Bardhan",
-    "journal_year": "POMS, 2018",
     "authors_loc": {
       "page_label": "8",
       "pdf_page_index": 8,
@@ -37,6 +36,20 @@
       "quote": [
         "quasi-natural experiment in the US, in which significant reductions in import tariff"
       ]
+    },
+    "eer ": "POMS, 2018",
+    "eer _loc": {
+      "page_label": "",
+      "pdf_page_index": null,
+      "pdf_open_params": "",
+      "quote": []
+    },
+    "wosid": "WOS:000744677800001",
+    "wosid_loc": {
+      "page_label": "",
+      "pdf_page_index": null,
+      "pdf_open_params": "",
+      "quote": []
     }
   },
   "did_design_setup": {
@@ -49,7 +62,7 @@
         "observe the implementation year for each HIT application... DID mimics a quasi-experiment"
       ]
     },
-    "regression_equation": "$\\sum_{y}^x=1$",
+    "regression_equation": "$\\sum_{y}^x=1 \\frac{b}{b} \\sum_i^i$",
     "regression_equation_loc": {
       "page_label": "7",
       "pdf_page_index": 7,
@@ -145,5 +158,5 @@
       ]
     }
   },
-  "lastupdate": "2025-12-14 15:47:28"
+  "lastupdate": "2025-12-14 20:25:34"
 }

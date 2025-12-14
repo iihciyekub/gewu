@@ -1142,6 +1142,14 @@ class PaperReviewerApp {
                     this.openEditKeyModal([], title);
                 });
             }
+            // 双击标题栏空白处，编辑整个类对象
+            header.addEventListener('dblclick', (e) => {
+                if (e.target.closest('.collapsible-toggle') || e.target.closest('.header-delete') || e.target.closest('.header-add') || e.target.closest('.collapsible-title')) {
+                    return;
+                }
+                const valueForEdit = JSON.stringify(data, null, 2);
+                this.openEditModal([title], valueForEdit);
+            });
         }
 
         // 删除按钮
@@ -1343,12 +1351,25 @@ class PaperReviewerApp {
     createEditableValue(value, path, location = null, key = null) {
         const displayValue = typeof value === 'string' ? value : JSON.stringify(value);
         
+        const keyLower = (key || '').toLowerCase();
         // 特殊处理: DOI 字段，添加 Web of Science 链接
-        if (key === 'doi' && typeof value === 'string' && value.trim()) {
+        if (keyLower === 'doi' && typeof value === 'string' && value.trim()) {
             const wosUrl = this.generateWosUrl(value.trim());
-            return `<a href="${wosUrl}" target="_blank" class="doi-link" title="在 Web of Science 中查看">
+            return `<a href="${wosUrl}" target="_blank" class="doi-link" title="View on Web of Science">
                 <i class="fas fa-external-link-alt"></i> ${this.escapeHtml(displayValue)}
             </a>`;
+        }
+        // 特殊处理: WOSID 字段，跳转 Web of Science Full Record
+        if (keyLower.includes('wos') && typeof value === 'string') {
+            const trimmed = value.trim();
+            const match = trimmed.match(/WOS:[^\\s]+/i);
+            const wosId = match ? match[0] : trimmed;
+            if (wosId) {
+                const url = `https://www.webofscience.com/wos/woscc/full-record/${encodeURIComponent(wosId)}`;
+                return `<a href="${url}" target="_blank" class="doi-link" title="View full record on Web of Science">
+                    <i class="fas fa-external-link-alt"></i> ${this.escapeHtml(displayValue)}
+                </a>`;
+            }
         }
         
         const rawValueAttr = this.escapeHtml(displayValue);
@@ -1748,6 +1769,73 @@ class PaperReviewerApp {
         const div = document.createElement('div');
         div.textContent = text;
         return div.innerHTML;
+    }
+
+    containsMathSyntax(text) {
+        if (!text) return false;
+        // 支持 $$...$$ 块、\( \) 或 \[ \]，以及单行 $...$
+        return (
+            /\$\$[\s\S]+?\$\$/.test(text) ||
+            /\\\(.+?\\\)/.test(text) ||
+            /\\\[([\s\S]+?)\\\]/.test(text) ||
+            /(?<!\$)\$(?!\$)(.+?)(?<!\$)\$(?!\$)/.test(text)
+        );
+    }
+
+    getMathPreviewElement() {
+        let el = document.querySelector('.math-preview');
+        if (!el) {
+            el = document.createElement('div');
+            el.className = 'math-preview';
+            el.innerHTML = '<div class="math-preview-content"></div>';
+            document.body.appendChild(el);
+        }
+        return el;
+    }
+
+    showMathPreview(text, anchorEl) {
+        try {
+            const preview = this.getMathPreviewElement();
+            const content = preview.querySelector('.math-preview-content');
+            if (!content) return;
+            content.textContent = text;
+            preview.classList.add('active');
+
+            // 位置：默认锚点下方，超出则调整
+            const rect = anchorEl.getBoundingClientRect();
+            const padding = 8;
+            const vw = window.innerWidth;
+            const vh = window.innerHeight;
+            let top = rect.bottom + padding;
+            let left = rect.left;
+            preview.style.maxWidth = '400px';
+            preview.style.visibility = 'hidden';
+            preview.style.display = 'block';
+            const preRect = preview.getBoundingClientRect();
+            if (left + preRect.width > vw - padding) {
+                left = Math.max(padding, vw - preRect.width - padding);
+            }
+            if (top + preRect.height > vh - padding) {
+                top = rect.top - preRect.height - padding;
+            }
+            preview.style.left = `${left}px`;
+            preview.style.top = `${top}px`;
+            preview.style.visibility = 'visible';
+
+            if (window.MathJax && window.MathJax.typesetPromise) {
+                MathJax.typesetPromise([preview]).catch(err => console.warn('MathJax render failed:', err));
+            }
+        } catch (err) {
+            console.warn('Math preview error:', err);
+        }
+    }
+
+    hideMathPreview() {
+        const preview = document.querySelector('.math-preview');
+        if (preview) {
+            preview.classList.remove('active');
+            preview.style.display = 'none';
+        }
     }
 
     // PDF Functions - 使用iframe加载完整的PDF.js viewer
@@ -2438,6 +2526,10 @@ class PaperReviewerApp {
         this.editingPath = path;
         const lastKey = path[path.length - 1];
         document.getElementById('modalTitle').textContent = `编辑: ${this.formatKey(lastKey)}`;
+        const keyInput = document.getElementById('editKeyInput');
+        if (keyInput) {
+            keyInput.value = lastKey;
+        }
         document.getElementById('editTextarea').value = currentValue;
         
         // 检查是否有对应的_loc字段
@@ -2707,6 +2799,8 @@ class PaperReviewerApp {
 
         const newValue = document.getElementById('editTextarea').value;
         const pageNumber = document.getElementById('editPageNumber').value;
+        const keyInput = document.getElementById('editKeyInput');
+        const inputKey = keyInput ? keyInput.value.trim() : '';
         
         // 从标签页收集所有引用文本
         const quotePanels = document.querySelectorAll('.quote-panel textarea');
@@ -2720,7 +2814,25 @@ class PaperReviewerApp {
             current = current[this.editingPath[i]];
         }
         
-        const lastKey = this.editingPath[this.editingPath.length - 1];
+        let lastKey = this.editingPath[this.editingPath.length - 1];
+
+        // 如果用户修改了字段名，进行重命名（含 _loc）
+        if (inputKey && inputKey !== lastKey) {
+            if (current.hasOwnProperty(inputKey)) {
+                this.showNotification(`字段名已存在: ${inputKey}`, 'error');
+                return;
+            }
+            const oldLocKey = lastKey + '_loc';
+            const newLocKey = inputKey + '_loc';
+            current[inputKey] = current[lastKey];
+            delete current[lastKey];
+            if (current.hasOwnProperty(oldLocKey)) {
+                current[newLocKey] = current[oldLocKey];
+                delete current[oldLocKey];
+            }
+            lastKey = inputKey;
+            this.editingPath[this.editingPath.length - 1] = inputKey;
+        }
         
         // Update主字段值
         try {
@@ -3267,6 +3379,32 @@ class PaperReviewerApp {
             }
         };
         document.addEventListener('contextmenu', this._fieldContextHandler);
+
+        // 数学公式预览
+        if (this._mathHoverHandler) {
+            document.removeEventListener('mouseover', this._mathHoverHandler);
+        }
+        this._mathHoverHandler = (e) => {
+            const el = e.target.closest('.editable-value');
+            if (!el) return;
+            const text = el.dataset.rawValue !== undefined ? el.dataset.rawValue : el.textContent;
+            if (!this.containsMathSyntax(text)) return;
+            this.showMathPreview(text, el);
+        };
+        document.addEventListener('mouseover', this._mathHoverHandler);
+
+        if (this._mathLeaveHandler) {
+            document.removeEventListener('mouseout', this._mathLeaveHandler);
+        }
+        this._mathLeaveHandler = (e) => {
+            const el = e.target.closest('.editable-value');
+            const related = e.relatedTarget;
+            if (el && related && related.closest && related.closest('.math-preview')) {
+                return;
+            }
+            this.hideMathPreview();
+        };
+        document.addEventListener('mouseout', this._mathLeaveHandler);
     }
 
     // 获取指定字段的quote数量

@@ -531,20 +531,6 @@ body {
     box-shadow: 0 0 0 1px var(--wos-blue);
 }
 
-.editable-key:hover::after {
-    content: '双击编辑字段名';
-    position: absolute;
-    bottom: -20px;
-    left: 0;
-    background: var(--wos-blue);
-    color: white;
-    padding: 2px 6px;
-    border-radius: 2px;
-    font-size: 10px;
-    white-space: nowrap;
-    z-index: 10;
-}
-
 /* _loc字段专用样式 */
 .loc-key {
     color: #757575;
@@ -627,20 +613,6 @@ body {
     box-shadow: 0 0 0 1px #F0C419;
 }
 
-.editable-value:hover::after {
-    content: '双击编辑';
-    position: absolute;
-    bottom: -20px;
-    left: 0;
-    background: var(--wos-text);
-    color: white;
-    padding: 2px 6px;
-    border-radius: 2px;
-    font-size: 10px;
-    white-space: nowrap;
-    z-index: 10;
-}
-
 .location-link {
     display: inline-flex;
     align-items: center;
@@ -718,26 +690,26 @@ body {
     display: inline-flex;
     align-items: center;
     gap: 4px;
-    color: #1976d2;
+    color: #0a3b66;
     text-decoration: none;
     padding: 2px 6px;
     border-radius: 3px;
-    background: #e8f4f8;
+    background: #e0eaf3;
     transition: all 0.2s ease;
     font-family: 'Courier New', monospace;
     font-size: 10px;
 }
 
 .doi-link:hover {
-    background: #1976d2;
-    color: white;
+    background: #0a3b66;
+    color: #f7fbff;
     transform: translateY(-1px);
-    box-shadow: 0 2px 4px rgba(25, 118, 210, 0.3);
+    box-shadow: 0 2px 6px rgba(10, 59, 102, 0.35);
 }
 
 .doi-link i {
     font-size: 9px;
-    opacity: 0.8;
+    opacity: 0.9;
 }
 
 .doi-link:hover i {
@@ -978,6 +950,29 @@ body {
 .quote-tab .tab-remove:hover {
     color: #d32f2f;
     background: rgba(211, 47, 47, 0.1);
+}
+
+.math-preview {
+    position: fixed;
+    z-index: 9999;
+    background: #fff;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    padding: 10px 12px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.18);
+    max-width: 400px;
+    color: #222;
+    display: none;
+}
+
+.math-preview.active {
+    display: block;
+}
+
+.math-preview-content {
+    font-size: 18px;
+    line-height: 1.6;
+    white-space: pre-wrap;
 }
 
 .quote-panels {
