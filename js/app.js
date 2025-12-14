@@ -19,7 +19,8 @@ class PaperReviewerApp {
         this.lastSearchValuePath = null; // 跟踪上次搜索的字段路径
         this.searchMatchCount = 0; // 当前搜索的匹配数量
         this.currentMatchIndex = 0; // 当前显示的匹配索引
-        
+        this.previewHoverTimer = null; // 类预览悬停防抖
+
         // 项目管理
         this.currentProject = null; // { name, path }
         this.recentProjects = [];
@@ -1787,6 +1788,7 @@ class PaperReviewerApp {
 
     showSectionPreviewInline() {
         if (!this.currentData) return;
+        if (document.getElementById('previewSectionGhost')) return; // 已存在预览，避免重复创建
         const container = document.getElementById('structuredContent') || document.getElementById('structuredView');
         if (!container) return;
         this.hideSectionPreview();
@@ -1816,13 +1818,18 @@ class PaperReviewerApp {
                 </table>
             </div>
         `;
-        container.appendChild(preview);
+        const rect = container.getBoundingClientRect();
+        preview.style.position = 'fixed';
+        preview.style.left = `${rect.left}px`;
+        preview.style.top = `${rect.bottom + 6}px`;
+        preview.style.width = `${rect.width}px`;
+        document.body.appendChild(preview);
     }
 
     hideSectionPreview() {
         const ghost = document.getElementById('previewSectionGhost');
-        if (ghost && ghost.parentElement) {
-            ghost.parentElement.removeChild(ghost);
+        if (ghost) {
+            ghost.remove();
         }
     }
 
@@ -3002,8 +3009,17 @@ class PaperReviewerApp {
                 this.hideSectionPreview();
                 this.createEmptySectionTemplate();
             };
-            addSectionBtn.addEventListener('mouseenter', () => this.showSectionPreviewInline());
-            addSectionBtn.addEventListener('mouseleave', () => this.hideSectionPreview());
+            addSectionBtn.addEventListener('mouseenter', () => {
+                if (this.previewHoverTimer) clearTimeout(this.previewHoverTimer);
+                this.previewHoverTimer = setTimeout(() => this.showSectionPreviewInline(), 120);
+            });
+            addSectionBtn.addEventListener('mouseleave', () => {
+                if (this.previewHoverTimer) {
+                    clearTimeout(this.previewHoverTimer);
+                    this.previewHoverTimer = null;
+                }
+                this.hideSectionPreview();
+            });
         }
         
         // 更新文件名显示，标记未保存状态
