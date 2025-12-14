@@ -1033,6 +1033,7 @@ class PaperReviewerApp {
                 this.hasUnsavedChanges = false;
             }
             this.ensureSchemaVersion();
+            this.ensureLastUpdate();
             
             this.currentFile = filename;
 
@@ -1060,7 +1061,7 @@ class PaperReviewerApp {
     }
 
     showLoading() {
-        const structuredView = document.getElementById('structuredView');
+        const structuredView = document.getElementById('structuredContent') || document.getElementById('structuredView');
         const flatView = document.getElementById('flatView');
         
         structuredView.innerHTML = '<div class="loading"><div class="spinner"></div>Loading data...</div>';
@@ -1068,13 +1069,13 @@ class PaperReviewerApp {
     }
 
     renderStructuredView() {
-        const container = document.getElementById('structuredView');
+        const container = document.getElementById('structuredContent') || document.getElementById('structuredView');
         container.innerHTML = '';
 
         // Iterate through top-level sections with collapsible support
         for (const [sectionKey, sectionValue] of Object.entries(this.currentData)) {
-            // 跳过_loc字段和schema_version字段
-            if (sectionKey.endsWith('_loc') || sectionKey === 'schema_version') continue;
+            // Skip aux fields that should not render in table
+            if (sectionKey.endsWith('_loc') || sectionKey === 'schema_version' || sectionKey === 'lastupdate') continue;
             
             const section = this.createCollapsibleSection(sectionKey, sectionValue, [sectionKey]);
             container.appendChild(section);
@@ -1104,8 +1105,10 @@ class PaperReviewerApp {
             header.classList.add('active');
         }
         header.innerHTML = `
+            <i class="fas fa-chevron-right collapsible-toggle" title="展开/折叠"></i>
             <span class="collapsible-title">${this.formatKey(title)}</span>
-            <i class="fas fa-chevron-right collapsible-toggle"></i>
+            <i class="fas fa-plus header-add" title="在此类下添加子条目"></i>
+            <i class="fas fa-trash header-delete" title="删除该字段"></i>
         `;
         
         // Content
@@ -1124,24 +1127,50 @@ class PaperReviewerApp {
         this.renderObject(data, table, path);
         content.appendChild(table);
         
-        // Toggle functionality / Reorder selection
+        // Toggle functionality / Reorder selection / Delete
         if (this.isReorderMode) {
             header.addEventListener('click', (e) => {
                 e.preventDefault();
                 this.setReorderSelection([], title);
             });
         } else {
-            header.addEventListener('click', () => {
-                const isActive = header.classList.toggle('active');
-                content.classList.toggle('active');
-            });
-            header.addEventListener('dblclick', (e) => {
-                e.preventDefault();
+            // 双击类名编辑（重命名）- 仅作用于标题文本，避免误触折叠
+            const titleEl = header.querySelector('.collapsible-title');
+            if (titleEl) {
+                titleEl.addEventListener('dblclick', (e) => {
+                    e.preventDefault();
+                    this.openEditKeyModal([], title);
+                });
+            }
+        }
+
+        // 删除按钮
+        const deleteBtn = header.querySelector('.header-delete');
+        if (deleteBtn) {
+            deleteBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
                 const firstConfirm = confirm(`确定删除整个字段 "${title}" 及其所有内容？`);
                 if (!firstConfirm) return;
                 const secondConfirm = confirm('再次确认：删除后不可恢复，是否继续？');
                 if (!secondConfirm) return;
                 this.deleteField([], title);
+            });
+        }
+        // 添加子条目按钮
+        const addBtn = header.querySelector('.header-add');
+        if (addBtn) {
+            addBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                this.addChildField(title);
+            });
+        }
+        // 折叠/展开按钮
+        const toggleBtn = header.querySelector('.collapsible-toggle');
+        if (toggleBtn) {
+            toggleBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const isActive = header.classList.toggle('active');
+                content.classList.toggle('active');
             });
         }
 
@@ -1394,6 +1423,18 @@ class PaperReviewerApp {
                 this.deepMerge(this.currentData[key], value);
             } else {
                 this.currentData[key] = value;
+                // 若存在对应 _loc，且源也有 _loc，则合并
+                const locKey = `${key}_loc`;
+                if (sourceObj.hasOwnProperty(locKey)) {
+                    if (!this.currentData[locKey]) {
+                        this.currentData[locKey] = {};
+                    }
+                    if (this.isPlainObject(sourceObj[locKey]) && this.isPlainObject(this.currentData[locKey])) {
+                        this.deepMerge(this.currentData[locKey], sourceObj[locKey]);
+                    } else {
+                        this.currentData[locKey] = sourceObj[locKey];
+                    }
+                }
             }
             changed = true;
         });
@@ -1442,10 +1483,28 @@ class PaperReviewerApp {
         }
     }
 
+    ensureLastUpdate() {
+        if (!this.currentData) return;
+        if (!this.currentData.lastupdate) {
+            this.currentData.lastupdate = this.generateLastUpdate();
+            this.hasUnsavedChanges = true;
+            if (this.currentFile) {
+                this.tempDataCache[this.currentFile] = this.currentData;
+            }
+            this.updateSaveButtonState();
+        }
+    }
+
     generateSchemaVersion() {
         const d = new Date();
         const pad = (n) => n.toString().padStart(2, '0');
         return `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}`;
+    }
+
+    generateLastUpdate() {
+        const d = new Date();
+        const pad = (n) => n.toString().padStart(2, '0');
+        return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
     }
 
     updateSchemaBadge() {
@@ -2744,8 +2803,7 @@ class PaperReviewerApp {
 
     updateSaveButtonState() {
         const saveBtn = document.getElementById('saveBtn');
-        const addItemBtn = document.getElementById('addItemBtn');
-        const fileNameEl = document.getElementById('currentFileName');
+        const lastUpdateEl = document.getElementById('lastUpdateDisplay');
         
         if (saveBtn) {
             if (this.hasUnsavedChanges) {
@@ -2756,14 +2814,20 @@ class PaperReviewerApp {
             }
         }
         
-        // 显示/隐藏添加条目按钮
-        if (addItemBtn) {
-            addItemBtn.style.display = this.currentData ? 'inline-flex' : 'none';
+        const addSectionBtn = document.getElementById('addSectionBtn');
+        if (addSectionBtn) {
+            addSectionBtn.style.display = this.currentData ? 'inline-flex' : 'none';
+            addSectionBtn.onclick = () => this.createEmptySectionTemplate();
         }
         
         // 更新文件名显示，标记未保存状态
-        if (fileNameEl && this.currentFile) {
-            fileNameEl.textContent = this.currentFile + (this.hasUnsavedChanges ? ' *' : '');
+        if (lastUpdateEl) {
+            const ts = this.currentData?.lastupdate ? this.currentData.lastupdate : '-';
+            const unsavedIcon = this.hasUnsavedChanges
+                ? `<i class="fas fa-exclamation-triangle unsaved-icon" title="Unsaved changes"></i>`
+                : '';
+            lastUpdateEl.innerHTML = `Last update: ${ts} ${unsavedIcon}`.trim();
+            lastUpdateEl.classList.toggle('unsaved-state', !!this.hasUnsavedChanges);
         }
     }
 
@@ -3000,6 +3064,120 @@ class PaperReviewerApp {
 
         this.closeAddItemModal();
         this.showNotification(`✓ 已添加到 ${key}`, 'success');
+    }
+    
+    // 创建一个空的类字段模板，便于用户快速编辑
+    createEmptySectionTemplate() {
+        if (!this.currentData) {
+            this.showNotification('请先加载一个JSON文件', 'error');
+            return;
+        }
+
+        let sectionName = prompt('请输入新类字段名称（顶级键）:', 'new_section');
+        if (!sectionName) return;
+        sectionName = sectionName.trim();
+        if (!sectionName) return;
+
+        if (this.currentData.hasOwnProperty(sectionName)) {
+            this.showNotification(`字段 "${sectionName}" 已存在`, 'error');
+            return;
+        }
+
+        // 提供一个可编辑的占位结构，包含loc信息
+        const template = {
+            placeholder_field: '',
+            placeholder_field_loc: {
+                page_label: '',
+                pdf_page_index: null,
+                pdf_open_params: '',
+                quote: []
+            }
+        };
+
+        this.currentData[sectionName] = template;
+
+        this.hasUnsavedChanges = true;
+        this.tempDataCache[this.currentFile] = this.currentData;
+        this.updateSaveButtonState();
+        this.renderStructuredView();
+        this.renderFlatView();
+        this.setupEditableListeners();
+        this.showNotification(`已创建类字段 "${sectionName}"，可双击键或值进行编辑`, 'success');
+    }
+
+    // 在指定类下添加子条目（带_loc占位）
+    addChildField(sectionKey) {
+        if (!this.currentData || !this.currentData[sectionKey] || typeof this.currentData[sectionKey] !== 'object') {
+            this.showNotification('当前类不可用，无法添加条目', 'error');
+            return;
+        }
+
+        const parent = this.currentData[sectionKey];
+        let key = prompt(`在 "${sectionKey}" 下添加子字段，输入字段名:`, 'new_field');
+        if (!key) return;
+        key = key.trim();
+        if (!key) return;
+
+        // 若存在同名，自动追加序号
+        let finalKey = key;
+        let idx = 1;
+        while (parent.hasOwnProperty(finalKey) || parent.hasOwnProperty(finalKey + '_loc')) {
+            finalKey = `${key}_${idx++}`;
+        }
+
+        parent[finalKey] = '';
+        parent[finalKey + '_loc'] = {
+            page_label: '',
+            pdf_page_index: null,
+            pdf_open_params: '',
+            quote: []
+        };
+
+        this.hasUnsavedChanges = true;
+        this.tempDataCache[this.currentFile] = this.currentData;
+        this.updateSaveButtonState();
+        this.renderStructuredView();
+        this.renderFlatView();
+        this.setupEditableListeners();
+        this.showNotification(`已添加子字段 "${finalKey}"，可双击编辑`, 'success');
+    }
+
+    // 快速插入稳健性检查模板
+    createRobustnessTemplate() {
+        if (!this.currentData) {
+            this.showNotification('请先加载一个JSON文件', 'error');
+            return;
+        }
+
+        const tplKey = 'robustness_checks';
+        if (this.currentData[tplKey]) {
+            if (!confirm('已存在 robustness_checks，是否覆盖现有内容？')) return;
+        }
+
+        this.currentData[tplKey] = {
+            endogeneity_method: '',
+            endogeneity_method_loc: {
+                page_label: '',
+                pdf_page_index: null,
+                pdf_open_params: '',
+                quote: []
+            },
+            parallel_trend_check: '',
+            parallel_trend_check_loc: {
+                page_label: '',
+                pdf_page_index: null,
+                pdf_open_params: '',
+                quote: []
+            }
+        };
+
+        this.hasUnsavedChanges = true;
+        this.tempDataCache[this.currentFile] = this.currentData;
+        this.updateSaveButtonState();
+        this.renderStructuredView();
+        this.renderFlatView();
+        this.setupEditableListeners();
+        this.showNotification('已添加稳健性检查模板，可直接编辑字段', 'success');
     }
 
     setupEditableListeners() {
@@ -3346,8 +3524,15 @@ class PaperReviewerApp {
 
     async saveToFile() {
         if (!this.currentFile || !this.currentData) return;
+        // Only save when there are pending changes; avoid touching lastupdate otherwise
+        if (!this.hasUnsavedChanges) {
+            this.showNotification('No changes to save', 'info');
+            return;
+        }
 
         try {
+            // 更新最后保存时间戳
+            this.currentData.lastupdate = this.generateLastUpdate();
             const jsonString = JSON.stringify(this.currentData, null, 2);
             
             // 发送POST请求到服务器保存文件

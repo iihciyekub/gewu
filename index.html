@@ -97,20 +97,16 @@
         </div>
 
         <!-- Middle Panel - JSON Editor -->
-        <div class="middle-panel">
-            <div class="middle-header">
-                <div class="file-info">
-                    <i class="fas fa-file-code"></i>
-                    <span id="currentFileName">未选择文件</span>
-                    <span class="schema-badge" id="schemaVersionBadge" title="schema_version">-</span>
-                </div>
-                <div class="header-actions">
-                    <button id="addItemBtn" class="btn-add-item" style="display: none;" onclick="window.paperReviewerApp.openAddItemModal()">
-                        <i class="fas fa-plus"></i> 添加条目
-                    </button>
-                    <button id="saveBtn" class="btn-save" style="display: none;" onclick="window.paperReviewerApp.saveToFile()">
-                        <i class="fas fa-save"></i> 保存修改
-                    </button>
+            <div class="middle-panel">
+                <div class="middle-header">
+                    <div class="file-info">
+                        <i class="fas fa-clock"></i>
+                        <span id="lastUpdateDisplay">Last update: -</span>
+                    </div>
+                    <div class="header-actions">
+                        <button id="saveBtn" class="btn-save" style="display: none;" onclick="window.paperReviewerApp.saveToFile()">
+                            <i class="fas fa-save"></i> 保存修改
+                        </button>
                     <button id="undoPasteBtn" class="btn-save" style="display: none;" title="撤销上次粘贴合并" onclick="window.paperReviewerApp.undoLastPaste()">
                         <i class="fas fa-undo"></i>
                     </button>
@@ -129,10 +125,17 @@
             </div>
             <div class="editor-container">
                 <div class="structured-view active" id="structuredView">
-                    <div class="empty-state">
-                        <i class="fas fa-file-alt"></i>
-                        <h3>No File Selected</h3>
-                        <p>Select a JSON file from the left panel to start editing</p>
+                    <div id="structuredContent">
+                        <div class="empty-state">
+                            <i class="fas fa-file-alt"></i>
+                            <h3>No File Selected</h3>
+                            <p>Select a JSON file from the left panel to start editing</p>
+                        </div>
+                    </div>
+                    <div class="structured-footer">
+                        <button id="addSectionBtn" class="btn-add-section" style="display: none;">
+                            <i class="fas fa-plus"></i> 添加类字段
+                        </button>
                     </div>
                 </div>
                 <div class="flat-view" id="flatView">

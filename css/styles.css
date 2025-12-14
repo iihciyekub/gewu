@@ -270,6 +270,24 @@ body {
     justify-content: center;
 }
 
+.unsaved-icon {
+    color: #f4b400;
+    margin-left: 6px;
+    font-size: 12px;
+    vertical-align: middle;
+    filter: drop-shadow(0 0 2px rgba(244, 180, 0, 0.7));
+}
+
+#lastUpdateDisplay.unsaved-state {
+    background: #fff7d6;
+    color: #8a6d00;
+    padding: 2px 8px;
+    border-radius: 4px;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+
 .header-actions {
     display: flex;
     align-items: center;
@@ -346,6 +364,38 @@ body {
 
 .structured-view.active {
     display: block;
+    position: relative;
+    padding-bottom: 40px;
+}
+
+.structured-footer {
+    margin-top: 10px;
+    display: flex;
+    justify-content: center;
+}
+
+.btn-add-section {
+    padding: 6px 10px;
+    font-size: 11px;
+    background: var(--wos-blue);
+    color: #fff;
+    border: none;
+    border-radius: 3px;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    box-shadow: 0 2px 6px rgba(0,62,116,0.25);
+}
+
+.btn-add-section.icon-only {
+    width: 32px;
+    padding: 6px;
+    justify-content: center;
+}
+
+.btn-add-section:hover {
+    background: var(--wos-blue-dark);
 }
 
 .json-section {
@@ -1299,13 +1349,14 @@ ol.json-array {
 
 .collapsible-header {
     background: var(--gray-100);
-    padding: 0px 8px 0px 2px;
+    padding: 2px 10px 2px 6px;
     cursor: pointer;
     display: flex;
     justify-content: space-between;
     align-items: center;
     user-select: none;
     transition: background 0.12s ease;
+    gap: 10px;
 }
 
 .collapsible-header:hover {
@@ -1321,6 +1372,30 @@ ol.json-array {
     font-weight: 500;
     color: var(--gray-800);
     font-size: 11px;
+    flex: 1;
+    padding-left: 8px; /* 让双击区域远离折叠图标，防止误触 */
+}
+
+.collapsible-toggle {
+    color: #666;
+    transition: transform 0.2s;
+    cursor: pointer;
+    margin-right: 8px; /* 给折叠图标留出左边距 */
+}
+
+.collapsible-header.active .collapsible-toggle {
+    transform: rotate(90deg);
+}
+
+.header-delete {
+    cursor: pointer;
+    color: var(--gray-600);
+    font-size: 12px;
+    transition: color 0.2s;
+}
+
+.header-delete:hover {
+    color: var(--wos-blue);
 }
 
 .collapsible-toggle {
@@ -1407,31 +1482,6 @@ ol.json-array {
 
 .location-edit-section textarea {
     min-height: 60px !important;
-}
-
-/* 添加条目按钮 */
-.btn-add-item {
-    background: #1976d2;
-    color: white;
-    padding: 4px 10px;
-    border: none;
-    border-radius: 3px;
-    cursor: pointer;
-    font-size: 10px;
-    transition: all 0.2s;
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-}
-
-.btn-add-item:hover {
-    background: #1565c0;
-    transform: translateY(-1px);
-    box-shadow: 0 2px 5px rgba(25, 118, 210, 0.3);
-}
-
-.btn-add-item i {
-    font-size: 9px;
 }
 
 /* 右键菜单 */
