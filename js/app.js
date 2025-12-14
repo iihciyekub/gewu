@@ -1069,6 +1069,8 @@ class PaperReviewerApp {
     }
 
     renderStructuredView() {
+        // 清理悬浮预览
+        this.hideSectionPreview();
         const container = document.getElementById('structuredContent') || document.getElementById('structuredView');
         container.innerHTML = '';
 
@@ -1771,6 +1773,59 @@ class PaperReviewerApp {
         return div.innerHTML;
     }
 
+    getValueByPath(pathArr) {
+        let cur = this.currentData;
+        for (const seg of pathArr) {
+            if (cur && Object.prototype.hasOwnProperty.call(cur, seg)) {
+                cur = cur[seg];
+            } else {
+                return null;
+            }
+        }
+        return cur;
+    }
+
+    showSectionPreviewInline() {
+        if (!this.currentData) return;
+        const container = document.getElementById('structuredContent') || document.getElementById('structuredView');
+        if (!container) return;
+        this.hideSectionPreview();
+
+        const preview = document.createElement('div');
+        preview.className = 'collapsible-section preview-section';
+        preview.id = 'previewSectionGhost';
+        preview.innerHTML = `
+            <div class="collapsible-header active">
+                <i class="fas fa-chevron-right collapsible-toggle"></i>
+                <span class="collapsible-title">New Section (preview)</span>
+                <i class="fas fa-plus header-add"></i>
+                <i class="fas fa-trash header-delete"></i>
+            </div>
+            <div class="collapsible-content active">
+                <table class="json-table preview-table">
+                    <tr>
+                        <td class="toggle-cell"><i class="fas fa-pen-to-square edit-cell-icon"></i></td>
+                        <td>${this.formatKey('placeholder_field')}</td>
+                        <td class="preview-dim">value</td>
+                    </tr>
+                    <tr>
+                        <td class="toggle-cell"></td>
+                        <td>${this.formatKey('placeholder_field_loc')}</td>
+                        <td class="preview-dim">{ page_label:"", pdf_page_index:null }</td>
+                    </tr>
+                </table>
+            </div>
+        `;
+        container.appendChild(preview);
+    }
+
+    hideSectionPreview() {
+        const ghost = document.getElementById('previewSectionGhost');
+        if (ghost && ghost.parentElement) {
+            ghost.parentElement.removeChild(ghost);
+        }
+    }
+
     containsMathSyntax(text) {
         if (!text) return false;
         // 支持 $$...$$ 块、\( \) 或 \[ \]，以及单行 $...$
@@ -1851,7 +1906,21 @@ class PaperReviewerApp {
             
             // 监听iframe加载完成（如需自定义滚动行为，可在此扩展）
             pdfViewer.onload = () => {
-                // 保持空实现，避免自动设置滚动动画
+                try {
+                    const win = pdfViewer.contentWindow;
+                    if (win) {
+                        // 禁用 PDF.js 内部的 alert/confirm/prompt 弹窗
+                        win.alert = () => {};
+                        win.confirm = () => true;
+                        win.prompt = () => null;
+                        // 部分 overlay 弹窗（如删除时的提示）直接关闭
+                        if (win.PDFViewerApplication?.overlayManager?.closeAll) {
+                            win.PDFViewerApplication.overlayManager.closeAll();
+                        }
+                    }
+                } catch (err) {
+                    console.warn('Suppress PDF.js prompts failed:', err);
+                }
             };
             
             this.showNotification('PDF 加载完成', 'success');
@@ -2929,7 +2998,12 @@ class PaperReviewerApp {
         const addSectionBtn = document.getElementById('addSectionBtn');
         if (addSectionBtn) {
             addSectionBtn.style.display = this.currentData ? 'inline-flex' : 'none';
-            addSectionBtn.onclick = () => this.createEmptySectionTemplate();
+            addSectionBtn.onclick = () => {
+                this.hideSectionPreview();
+                this.createEmptySectionTemplate();
+            };
+            addSectionBtn.addEventListener('mouseenter', () => this.showSectionPreviewInline());
+            addSectionBtn.addEventListener('mouseleave', () => this.hideSectionPreview());
         }
         
         // 更新文件名显示，标记未保存状态

@@ -975,6 +975,21 @@ body {
     white-space: pre-wrap;
 }
 
+.preview-section {
+    opacity: 0.6;
+    pointer-events: none;
+    border-style: dashed;
+}
+
+.preview-table {
+    opacity: 0.8;
+    transform: scale(0.98);
+}
+
+.preview-dim {
+    color: #7a8a99;
+}
+
 .quote-panels {
     min-height: 100px;
 }
