@@ -100,9 +100,9 @@
     }
   },
   "data_metrics": {
-    "sample_size": "the reliability of the KLD",
+    "sample_size": "the reliability of the KLD遥遥遥遥 ",
     "sample_size_loc": {
-      "page_label": "2041",
+      "page_label": "4",
       "pdf_page_index": 4,
       "pdf_open_params": "#page=4",
       "quote": [
@@ -157,5 +157,5 @@
       ]
     }
   },
-  "lastupdate": "2025-12-15 00:53:12"
+  "lastupdate": "2025-12-15 01:08:17"
 }

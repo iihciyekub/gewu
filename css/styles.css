@@ -607,6 +607,27 @@ body {
     font-size: 11px;
 }
 
+.editable-value.math-collapsed {
+    overflow: hidden;
+}
+
+.math-placeholder {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 4px;
+    background: var(--wos-hover);
+    border: 1px dashed var(--wos-blue);
+    border-radius: 4px;
+    color: var(--wos-blue);
+    font-weight: 600;
+    font-size: 11px;
+}
+
+.math-placeholder i {
+    font-size: 12px;
+}
+
 /* MathJax 数学公式样式 */
 .editable-value mjx-container {
     display: block !important;
@@ -639,6 +660,14 @@ body {
     white-space: nowrap;
     vertical-align: middle;
     position: relative;
+}
+
+.location-links {
+    display: inline-flex;
+    flex-wrap: nowrap;
+    gap: 2px;
+    align-items: center;
+    white-space: nowrap;
 }
 
 .location-link:hover {

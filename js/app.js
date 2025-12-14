@@ -660,8 +660,8 @@ class PaperReviewerApp {
         // 获取当前已存在的文件项
         const existingItems = new Map();
         Array.from(fileListEl.querySelectorAll('.file-item')).forEach(item => {
-            const filename = item.querySelector('span').textContent;
-            existingItems.set(filename, item);
+            const filename = item.dataset.filename;
+            if (filename) existingItems.set(filename, item);
         });
         
         // 按文件名排序
@@ -672,18 +672,23 @@ class PaperReviewerApp {
         
         sortedFiles.forEach((file, index) => {
             let fileItem;
+            const displayName = file.replace(/\.[^.]+$/, '');
             
             // 复用现有的DOM元素
             if (existingItems.has(file)) {
                 fileItem = existingItems.get(file);
                 existingItems.delete(file); // 标记为已使用
+                const span = fileItem.querySelector('span');
+                if (span) span.textContent = displayName;
+                fileItem.dataset.filename = file;
             } else {
                 // 创建新元素
                 fileItem = document.createElement('div');
                 fileItem.className = 'file-item';
+                fileItem.dataset.filename = file;
                 fileItem.innerHTML = `
                     <i class="fas fa-file-alt"></i>
-                    <span>${file}</span>
+                    <span>${displayName}</span>
                 `;
                 
                 // 左键点击加载文件
@@ -1396,7 +1401,16 @@ class PaperReviewerApp {
         }
         
         const rawValueAttr = this.escapeHtml(displayValue);
-        let html = `<span class="editable-value" data-path="${path.join('.')}" data-raw-value="${rawValueAttr}">${this.escapeHtml(displayValue)}</span>`;
+        const isMath = this.containsMathSyntax(displayValue);
+        const isLongMath = isMath && displayValue.length > 120;
+        let valueContent = this.escapeHtml(displayValue);
+
+        // 对超长公式使用图标占位，避免表格横向撑开
+        if (isLongMath) {
+            valueContent = `<span class="math-placeholder" title="Click to view/edit formula"><i class="fas fa-square-root-variable"></i></span>`;
+        }
+
+        let html = `<span class="editable-value${isLongMath ? ' math-collapsed' : ''}" data-path="${path.join('.')}" data-raw-value="${rawValueAttr}">${valueContent}</span>`;
         
         if (location) {
             const page = location.pdf_page_index || 1;
@@ -1407,16 +1421,16 @@ class PaperReviewerApp {
             if (Array.isArray(quotes) && quotes.length > 0) {
                 const validQuotes = quotes.filter(q => q && q.trim());
                 if (validQuotes.length > 0) {
-                    validQuotes.forEach((quote, index) => {
-                        // 所有图标使用相同valuePath，通过点击处理器循环切换
-                        html += `<a href="#" class="location-link" 
+                    const links = validQuotes.map((quote, index) => {
+                        return `<a href="#" class="location-link" 
                             data-page="${page}" 
                             data-value-path="${valuePath}"
                             data-quote-index="${index}"
-                            title="跳转到 PDF 第 ${page} 页并高亮 (循环 ${index + 1}/${validQuotes.length})">
+                            title="Jump to PDF page ${page} (cycle ${index + 1}/${validQuotes.length})">
                             <i class="fa-solid fa-quote-right"></i>
                         </a>`;
-                    });
+                    }).join('');
+                    html += `<span class="location-links">${links}</span>`;
                 }
             } else if (typeof quotes === 'string' && quotes.trim()) {
                 // 兼容旧的字符串格式
@@ -1424,7 +1438,7 @@ class PaperReviewerApp {
                     data-page="${page}" 
                     data-value-path="${valuePath}"
                     data-quote-index="0"
-                    title="跳转到 PDF 第 ${page} 页并高亮文本">
+                    title="Jump to PDF page ${page}">
                     <i class="fa-solid fa-quote-right"></i>
                 </a>`;
             } // 无有效引用文本则不显示跳转图标
