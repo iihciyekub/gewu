@@ -26,6 +26,8 @@ class PaperReviewerApp {
         this.currentMarkdownExists = false;
         this.isMarkdownEditing = false;
         this.saveMdEndpoint = '/save-md';
+        this.blankDragImage = null;
+        this.selectedItem = null; // { type: 'row' | 'section', path: string[], key: string }
         try {
             this.currentView = localStorage.getItem('lastViewMode') || 'structured';
         } catch (_e) {
@@ -80,6 +82,15 @@ class PaperReviewerApp {
         if (ph.parentElement !== parent) this.clearDragPlaceholder();
         parent.insertBefore(ph, placeAfter ? row.nextElementSibling : row);
         this.placeholderState = { scope: 'row', target: targetKey, after: placeAfter };
+    }
+
+    getBlankDragImage() {
+        if (this.blankDragImage) return this.blankDragImage;
+        const canvas = document.createElement('canvas');
+        canvas.width = 1;
+        canvas.height = 1;
+        this.blankDragImage = canvas;
+        return canvas;
     }
 
     applyRawJsonChanges() {
@@ -260,6 +271,11 @@ class PaperReviewerApp {
                 e.preventDefault();
                 const offset = e.key === 'ArrowUp' ? -1 : 1;
                 this.moveKey(this.reorderSelected.path, this.reorderSelected.key, offset);
+            } else if (!this.isReorderMode && this.selectedItem && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
+                if (['INPUT', 'TEXTAREA'].includes(e.target.tagName) || e.target.isContentEditable) return;
+                e.preventDefault();
+                const offset = e.key === 'ArrowUp' ? -1 : 1;
+                this.moveSelectedItem(offset);
             }
             if (e.key === 'Escape') {
                 this.closeEditModal();
@@ -289,6 +305,35 @@ class PaperReviewerApp {
         const undoPasteBtn = document.getElementById('undoPasteBtn');
         if (undoPasteBtn) {
             undoPasteBtn.addEventListener('click', () => this.undoLastPaste());
+        }
+
+        // 左侧文件列表：鼠标激活后可用上下键快速切换
+        const fileListEl = document.getElementById('fileList');
+        if (fileListEl) {
+            fileListEl.tabIndex = 0;
+            fileListEl.addEventListener('mouseenter', () => {
+                fileListEl.focus({ preventScroll: true });
+            });
+            fileListEl.addEventListener('keydown', (e) => {
+                if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
+                const items = Array.from(fileListEl.querySelectorAll('.file-item'));
+                if (!items.length) return;
+                e.preventDefault();
+                const active = fileListEl.querySelector('.file-item.active');
+                let idx = items.indexOf(active);
+                if (idx < 0) idx = 0;
+                idx += e.key === 'ArrowDown' ? 1 : -1;
+                if (idx < 0) idx = 0;
+                if (idx >= items.length) idx = items.length - 1;
+                const target = items[idx];
+                if (target) {
+                    items.forEach(el => el.classList.remove('active'));
+                    target.classList.add('active');
+                    target.scrollIntoView({ block: 'nearest' });
+                    const fname = target.dataset.filename;
+                    if (fname) this.loadFile(fname, target);
+                }
+            });
         }
 
         // 粘贴事件监听
@@ -1238,6 +1283,9 @@ class PaperReviewerApp {
         // 统一应用折叠/展开状态
         this.updateAllSectionsCollapseState(this.isCollapseAll);
 
+        // 恢复已选中元素的高亮
+        this.highlightSelectedItem();
+
         if (this.isReorderMode) {
             this.restoreReorderSelection();
         }
@@ -1247,7 +1295,6 @@ class PaperReviewerApp {
     }
 
     createCollapsibleSection(title, data, path) {
-        const SECTION_DRAG_TYPE = 'application/x-section-key';
         const wrapper = document.createElement('div');
         wrapper.className = 'collapsible-section';
         wrapper.dataset.sectionKey = title;
@@ -1332,62 +1379,30 @@ class PaperReviewerApp {
                 content.classList.toggle('active');
             });
         }
+        // 点击标题区域：选中该类，便于键盘上下移动
+        header.addEventListener('click', (e) => {
+            if (e.target.closest('.header-delete') || e.target.closest('.header-add') || e.target.closest('.collapsible-toggle') || e.target.closest('.section-drag-handle')) {
+                return;
+            }
+            this.setSelectedItem({ type: 'section', path: [], key: title });
+        });
 
-        // Section拖拽排序（使用拖动图标触发，仅作用于顶层类）
-        const sectionHandle = header.querySelector('.section-drag-handle');
-        if (sectionHandle) {
-            sectionHandle.draggable = true;
-            sectionHandle.addEventListener('dragstart', (e) => {
-                e.dataTransfer.setData(SECTION_DRAG_TYPE, title);
-                e.dataTransfer.setData('text/plain', title);
-                e.dataTransfer.effectAllowed = 'move';
-                this.draggingSectionKey = title;
-                wrapper.classList.add('dragging');
-                this.clearDragPlaceholder();
-            });
-            sectionHandle.addEventListener('dragend', () => {
-                this.draggingSectionKey = null;
-                wrapper.classList.remove('dragging');
-                this.clearDragPlaceholder();
-            });
-        }
-        wrapper.addEventListener('dragenter', (e) => {
-            if (!e.dataTransfer.types.includes(SECTION_DRAG_TYPE)) return;
-            if (!this.draggingSectionKey || this.draggingSectionKey === title) return;
-            const rect = wrapper.getBoundingClientRect();
-            const placeAfter = e.clientY > rect.top + rect.height / 2;
-            this.insertSectionPlaceholder(wrapper, placeAfter);
+        // Section拖拽排序逻辑已移除，改为点击选中 + 键盘上下调整
+
+        // 悬停700ms自动选中该类，便于键盘上下移动
+        let hoverTimer = null;
+        header.addEventListener('mouseenter', () => {
+            hoverTimer = setTimeout(() => {
+                this.setSelectedItem({ type: 'section', path: [], key: title });
+            }, 700);
         });
-        wrapper.addEventListener('dragover', (e) => {
-            if (!e.dataTransfer.types.includes(SECTION_DRAG_TYPE)) return;
-            e.preventDefault();
-            e.dataTransfer.dropEffect = 'move';
-            wrapper.classList.add('drag-over');
-        });
-        wrapper.addEventListener('dragleave', () => {
-            wrapper.classList.remove('drag-over');
-        });
-        wrapper.addEventListener('drop', (e) => {
-            if (!e.dataTransfer.types.includes(SECTION_DRAG_TYPE)) return;
-            e.preventDefault();
-            wrapper.classList.remove('drag-over');
-            const fromKey = e.dataTransfer.getData(SECTION_DRAG_TYPE);
-            let toKey = title;
-            const ph = this.dragPlaceholder;
-            if (ph && this.placeholderState.scope === 'section' && ph.parentElement === wrapper.parentElement) {
-                const next = ph.nextElementSibling;
-                if (next && next.dataset && next.dataset.sectionKey) {
-                    toKey = next.dataset.sectionKey;
-                } else if (ph.previousElementSibling && ph.previousElementSibling.dataset?.sectionKey) {
-                    toKey = ph.previousElementSibling.dataset.sectionKey;
-                }
-            }
-            this.clearDragPlaceholder();
-            if (fromKey && fromKey !== toKey) {
-                this.reorderKeys([], fromKey, toKey);
+        header.addEventListener('mouseleave', () => {
+            if (hoverTimer) {
+                clearTimeout(hoverTimer);
+                hoverTimer = null;
             }
         });
-        
+
         wrapper.appendChild(header);
         wrapper.appendChild(content);
         
@@ -1401,7 +1416,8 @@ class PaperReviewerApp {
 
             const row = document.createElement('tr');
             row.dataset.key = key;
-            row.draggable = true;
+            row.dataset.path = basePath.join('.');
+            row.draggable = false;
             const toggleCell = document.createElement('td');
             const keyCell = document.createElement('td');
             const valueCell = document.createElement('td');
@@ -1413,7 +1429,7 @@ class PaperReviewerApp {
             // 第一列：保留占位但不放置可点击的展开按钮
             toggleCell.className = 'toggle-cell';
             toggleCell.innerHTML = `
-                <i class="fa-solid fa-bars drag-handle edit-cell-icon" title="拖动调整顺序"></i>
+                <i class="fa-solid fa-circle-check row-select-indicator" title="点击选择，已选中可上下移动"></i>
             `;
 
             // 第二列：Key可编辑
@@ -1422,58 +1438,38 @@ class PaperReviewerApp {
             keyCell.innerHTML = keyDisplay;
             const currentPath = [...basePath, key];
 
-            // 行拖拽排序事件（子item）
-            row.addEventListener('dragstart', (e) => {
-                e.dataTransfer.setData('application/x-row-key', key);
-                e.dataTransfer.setData('text/plain', key);
-                e.dataTransfer.effectAllowed = 'move';
-                row.classList.add('dragging');
-                this.clearDragPlaceholder();
-            });
-            row.addEventListener('dragend', () => {
-                row.classList.remove('dragging');
-                this.clearDragPlaceholder();
-            });
-            row.addEventListener('dragover', (e) => {
-                if (e.dataTransfer.types.includes('application/x-section-key')) return;
-                e.preventDefault();
-                e.dataTransfer.dropEffect = 'move';
-                row.classList.add('drag-over');
-                const rect = row.getBoundingClientRect();
-                const placeAfter = e.clientY > rect.top + rect.height / 2;
-                this.insertRowPlaceholder(row, placeAfter);
-            });
-            row.addEventListener('dragleave', () => {
-                row.classList.remove('drag-over');
-            });
-            row.addEventListener('drop', (e) => {
-                if (e.dataTransfer.types.includes('application/x-section-key')) return;
-                e.preventDefault();
-                row.classList.remove('drag-over');
-                const fromKey = e.dataTransfer.getData('text/plain');
-                let toKey = key;
-                const ph = this.dragPlaceholder;
-                if (ph && this.placeholderState.scope === 'row' && ph.parentElement === row.parentElement) {
-                    const next = ph.nextElementSibling;
-                    if (next && next.dataset && next.dataset.key) {
-                        toKey = next.dataset.key;
-                    } else if (ph.previousElementSibling && ph.previousElementSibling.dataset?.key) {
-                        toKey = ph.previousElementSibling.dataset.key;
-                    }
-                }
-                const tablePath = table.dataset.path ? table.dataset.path.split('.').filter(Boolean) : [];
-                this.clearDragPlaceholder();
-                this.reorderKeys(tablePath, fromKey, toKey);
-            });
-            // 点击左列，上移/下移（Shift为下移）
+            // 点击左列：仅切换选中状态（不再触发移动）
             toggleCell.addEventListener('click', (e) => {
                 e.stopPropagation();
                 const tablePath = table.dataset.path ? table.dataset.path.split('.').filter(Boolean) : [];
-                if (e.shiftKey) {
-                    this.moveKey(tablePath, key, 1); // 下移
+                const isSameSelected = this.selectedItem && this.selectedItem.type === 'row' &&
+                    this.selectedItem.key === key &&
+                    JSON.stringify(this.selectedItem.path || []) === JSON.stringify(tablePath);
+                if (isSameSelected) {
+                    this.setSelectedItem(null);
                 } else {
-                    this.moveKey(tablePath, key, -1); // 上移
+                    this.setSelectedItem({ type: 'row', path: tablePath, key });
                 }
+            });
+            // 单击行：编辑字段/值或选中，便于键盘上下移动
+            row.addEventListener('click', (e) => {
+                if (e.target.closest('a')) return; // 跳过链接点击
+                const tablePath = table.dataset.path ? table.dataset.path.split('.').filter(Boolean) : [];
+                const valueEl = e.target.closest('.editable-value');
+                if (valueEl) {
+                    const pathArr = valueEl.dataset.path ? valueEl.dataset.path.split('.').filter(Boolean) : [];
+                    const raw = valueEl.dataset.rawValue !== undefined ? valueEl.dataset.rawValue : valueEl.textContent;
+                    this.openEditModal(pathArr, raw);
+                    return;
+                }
+                const keyEl = e.target.closest('.editable-key');
+                if (keyEl) {
+                    const parentPath = keyEl.dataset.path ? keyEl.dataset.path.split('.').filter(Boolean) : [];
+                    const oldKey = keyEl.dataset.key;
+                    this.openEditKeyModal(parentPath, oldKey);
+                    return;
+                }
+                this.setSelectedItem({ type: 'row', path: tablePath, key });
             });
 
             // 第三列：Value值的显示
@@ -1864,6 +1860,47 @@ class PaperReviewerApp {
         this.highlightSelectionElement();
     }
 
+    setSelectedItem(item) {
+        this.selectedItem = item ? { ...item, path: [...(item.path || [])] } : null;
+        this.highlightSelectedItem();
+    }
+
+    highlightSelectedItem() {
+        document.querySelectorAll('.row-selected').forEach(el => el.classList.remove('row-selected'));
+        document.querySelectorAll('.section-selected').forEach(el => el.classList.remove('section-selected'));
+        if (!this.selectedItem) return;
+        const { type, path, key } = this.selectedItem;
+        if (type === 'section') {
+            const sectionEl = document.querySelector(`.collapsible-section[data-section-key="${CSS.escape(key)}"]`);
+            if (sectionEl) {
+                sectionEl.classList.add('section-selected');
+            }
+        } else if (type === 'row') {
+            const tablePath = path.join('.');
+            const rowEl = document.querySelector(`table.json-table[data-path="${CSS.escape(tablePath)}"] tr[data-key="${CSS.escape(key)}"]`);
+            if (rowEl) {
+                rowEl.classList.add('row-selected');
+            }
+        }
+    }
+
+    moveSelectedItem(offset) {
+        if (!this.selectedItem || !offset) return;
+        if (this.selectedItem.type === 'row') {
+            const pathArr = [...(this.selectedItem.path || [])];
+            const key = this.selectedItem.key;
+            this.moveKey(pathArr, key, offset);
+            // 保持选中
+            this.setSelectedItem({ type: 'row', path: pathArr, key });
+            setTimeout(() => this.highlightSelectedItem(), 0);
+        } else if (this.selectedItem.type === 'section') {
+            const key = this.selectedItem.key;
+            this.moveSection(key, offset);
+            this.setSelectedItem({ type: 'section', path: [], key });
+            setTimeout(() => this.highlightSelectedItem(), 0);
+        }
+    }
+
     highlightSelectionElement() {
         if (!this.reorderSelected) return;
         const { path, key } = this.reorderSelected;
@@ -1880,6 +1917,39 @@ class PaperReviewerApp {
     restoreReorderSelection() {
         document.querySelectorAll('.reorder-selected').forEach(el => el.classList.remove('reorder-selected'));
         this.highlightSelectionElement();
+    }
+
+    moveSection(key, offset) {
+        if (!key || !this.currentData) return;
+        const keys = Object.keys(this.currentData).filter(k => !k.endsWith('_loc') && k !== 'schema_version' && k !== 'lastupdate');
+        const idx = keys.indexOf(key);
+        if (idx === -1) return;
+        let target = idx + offset;
+        target = Math.max(0, Math.min(keys.length - 1, target));
+        if (target === idx) return;
+        keys.splice(idx, 1);
+        keys.splice(target, 0, key);
+        const newObj = {};
+        keys.forEach(k => {
+            newObj[k] = this.currentData[k];
+            const locKey = k + '_loc';
+            if (this.currentData.hasOwnProperty(locKey)) {
+                newObj[locKey] = this.currentData[locKey];
+            }
+        });
+        // append remaining fields such as schema_version / lastupdate
+        Object.keys(this.currentData).forEach(k => {
+            if (!newObj.hasOwnProperty(k)) newObj[k] = this.currentData[k];
+        });
+        Object.keys(this.currentData).forEach(k => delete this.currentData[k]);
+        Object.entries(newObj).forEach(([k, v]) => {
+            this.currentData[k] = v;
+        });
+        this.hasUnsavedChanges = true;
+        if (this.currentFile) this.tempDataCache[this.currentFile] = this.currentData;
+        this.updateSaveButtonState();
+        this.renderStructuredView();
+        this.setupEditableListeners();
     }
 
     async copyWosAideSource() {
@@ -2331,6 +2401,7 @@ class PaperReviewerApp {
         preview.id = 'previewSectionGhost';
         preview.innerHTML = `
             <div class="collapsible-header active">
+                <i class="fa-solid fa-bars section-drag-handle"></i>
                 <i class="fas fa-chevron-right collapsible-toggle"></i>
                 <span class="collapsible-title">New Section (preview)</span>
                 <i class="fas fa-plus header-add"></i>
@@ -2339,14 +2410,14 @@ class PaperReviewerApp {
             <div class="collapsible-content active">
                 <table class="json-table preview-table">
                     <tr>
-                        <td class="toggle-cell"><i class="fas fa-pen-to-square edit-cell-icon"></i></td>
-                        <td>${this.formatKey('placeholder_field')}</td>
+                        <td class="toggle-cell"><i class="fa-solid fa-circle-check row-select-indicator"></i></td>
+                        <td class="preview-key">${this.formatKey('placeholder_field')}</td>
                         <td class="preview-dim">value</td>
                     </tr>
                     <tr>
                         <td class="toggle-cell"></td>
-                        <td>${this.formatKey('placeholder_field_loc')}</td>
-                        <td class="preview-dim">{ page_label:"", pdf_page_index:null }</td>
+                        <td class="preview-key">${this.formatKey('placeholder_field_loc')}</td>
+                        <td class="preview-dim">{ page_label:"", pdf_page_index:null, quote: [] }</td>
                     </tr>
                 </table>
             </div>
@@ -3969,20 +4040,26 @@ class PaperReviewerApp {
                 this.openEditKeyModal(parentPath, oldKey);
                 return;
             }
-            
-            // 处理双击 editable-value（编辑值）
-            if (target.classList.contains('editable-value') || target.closest('.editable-value')) {
-                const el = target.classList.contains('editable-value') ? target : target.closest('.editable-value');
-                const path = el.dataset.path.split('.');
-                const value = el.dataset.rawValue !== undefined ? el.dataset.rawValue : el.textContent;
-                this.openEditModal(path, value);
-                return;
-            }
         };
         
         // 使用事件委托，绑定到document
         document.addEventListener('dblclick', this._editableClickHandler);
-        
+
+        // 单击 editable-value（编辑值）
+        if (this._editableValueClickHandler) {
+            document.removeEventListener('click', this._editableValueClickHandler);
+        }
+        this._editableValueClickHandler = (e) => {
+            const el = e.target.closest('.editable-value');
+            if (!el) return;
+            // 避免点击跳转链接时触发
+            if (e.target.closest('a')) return;
+            const path = el.dataset.path ? el.dataset.path.split('.').filter(Boolean) : [];
+            const value = el.dataset.rawValue !== undefined ? el.dataset.rawValue : el.textContent;
+            this.openEditModal(path, value);
+        };
+        document.addEventListener('click', this._editableValueClickHandler);
+
         // 处理 location-link 点击事件（也使用事件委托）
         if (this._locationLinkHandler) {
             document.removeEventListener('click', this._locationLinkHandler);

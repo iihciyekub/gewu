@@ -484,35 +484,17 @@ body {
     position: relative;
 }
 
-.json-table .edit-cell-icon {
-    color: var(--gray-500);
+.json-table .row-select-indicator {
+    color: var(--wos-blue);
     font-size: 12px;
     transition: color 0.2s, transform 0.2s, opacity 0.15s;
     opacity: 0;
-    pointer-events: none;
+    visibility: hidden;
 }
 
-.json-table td.toggle-cell:hover .edit-cell-icon {
-    color: var(--wos-blue);
-    transform: scale(1.1);
+.json-table tr.row-selected .row-select-indicator {
     opacity: 1;
-    pointer-events: auto;
-}
-
-.json-table .drag-handle {
-    cursor: grab;
-    transition: transform 0.15s ease, color 0.15s ease, opacity 0.15s ease;
-    opacity: 0;
-    font-size: 13px;
-}
-
-.json-table td.toggle-cell:hover .drag-handle {
-    opacity: 1;
-    color: var(--wos-blue);
-}
-
-.json-table .drag-handle:active {
-    cursor: grabbing;
+    visibility: visible;
     transform: scale(1.08);
 }
 
@@ -523,6 +505,11 @@ body {
 .json-table tr.dragging {
     opacity: 0.75;
     transform: translateX(2px);
+}
+
+.json-table tr.row-selected {
+    background: #e8f1ff;
+    box-shadow: inset 2px 0 0 var(--wos-blue);
 }
 
 .drag-placeholder {
@@ -558,6 +545,11 @@ body {
 
 .collapsible-section.drag-over {
     outline: 1px dashed var(--wos-blue);
+}
+
+.collapsible-section.section-selected > .collapsible-header {
+    background: #e8f1ff;
+    box-shadow: inset 2px 0 0 var(--wos-blue);
 }
 
 .reorder-selected {
@@ -717,6 +709,7 @@ body {
 
 .location-link {
     display: inline-flex;
+    flex: 0 0 auto;
     align-items: center;
     gap: 2px;
     color: var(--wos-blue);
@@ -738,6 +731,8 @@ body {
     gap: 2px;
     align-items: center;
     white-space: nowrap;
+    overflow: hidden;
+    flex: 0 0 auto;
 }
 
 .location-link:hover {
@@ -1720,9 +1715,9 @@ ol.json-array {
 
 .section-drag-handle {
     cursor: grab;
-    opacity: 0;
-    visibility: hidden;
-    transition: opacity 0.15s ease, transform 0.15s ease, color 0.15s ease;
+    opacity: 1;
+    visibility: visible;
+    transition: transform 0.15s ease, color 0.15s ease;
     color: var(--gray-500);
     font-size: 12px;
     display: inline-flex;
@@ -1732,8 +1727,6 @@ ol.json-array {
 }
 
 .collapsible-header:hover .section-drag-handle {
-    opacity: 1;
-    visibility: visible;
     color: var(--wos-blue);
 }
 
