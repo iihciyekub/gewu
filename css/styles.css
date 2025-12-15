@@ -181,6 +181,34 @@ body {
     font-size: 10px;
 }
 
+.file-filter {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 8px;
+    border-bottom: 1px solid var(--wos-border);
+    background: white;
+}
+
+.file-filter i {
+    color: var(--gray-500);
+    font-size: 12px;
+}
+
+.file-filter input {
+    flex: 1;
+    border: 1px solid var(--wos-border);
+    border-radius: 3px;
+    padding: 4px 6px;
+    font-size: 11px;
+    outline: none;
+}
+
+.file-filter input:focus {
+    border-color: var(--wos-blue-light);
+    box-shadow: 0 0 0 2px rgba(0, 62, 116, 0.08);
+}
+
 .file-list {
     flex: 1;
     overflow-y: auto;

@@ -29,6 +29,7 @@ class PaperReviewerApp {
         this.blankDragImage = null;
         this.selectedItem = null; // { type: 'row' | 'section', path: string[], key: string }
         this.isMiddleActive = false; // 鼠标是否在中间栏，用于键盘上下移动的激活判定
+        this.fileFilter = '';
         try {
             this.currentView = localStorage.getItem('lastViewMode') || 'structured';
         } catch (_e) {
@@ -41,6 +42,8 @@ class PaperReviewerApp {
         // 项目管理
         this.currentProject = null; // { name, path }
         this.recentProjects = [];
+        this.fileOrders = {}; // { projectPath: [filename1, filename2, ...] }
+        this.currentFileList = [];
 
         this.init();
     }
@@ -153,6 +156,7 @@ class PaperReviewerApp {
                 const data = JSON.parse(config);
                 this.currentProject = data.currentProject;
                 this.recentProjects = data.recentProjects || [];
+                this.fileOrders = data.fileOrders || {};
             }
         } catch (error) {
             console.error('Failed to load project config:', error);
@@ -164,7 +168,8 @@ class PaperReviewerApp {
         try {
             const config = {
                 currentProject: this.currentProject,
-                recentProjects: this.recentProjects
+                recentProjects: this.recentProjects,
+                fileOrders: this.fileOrders
             };
             localStorage.setItem('reviewerProjectConfig', JSON.stringify(config));
         } catch (error) {
@@ -324,24 +329,43 @@ class PaperReviewerApp {
                 fileListEl.focus({ preventScroll: true });
             });
             fileListEl.addEventListener('keydown', (e) => {
-                if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
+                if (!['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) return;
                 const items = Array.from(fileListEl.querySelectorAll('.file-item'));
                 if (!items.length) return;
-                e.preventDefault();
                 const active = fileListEl.querySelector('.file-item.active');
                 let idx = items.indexOf(active);
                 if (idx < 0) idx = 0;
-                idx += e.key === 'ArrowDown' ? 1 : -1;
-                if (idx < 0) idx = 0;
-                if (idx >= items.length) idx = items.length - 1;
-                const target = items[idx];
-                if (target) {
-                    items.forEach(el => el.classList.remove('active'));
-                    target.classList.add('active');
-                    target.scrollIntoView({ block: 'nearest' });
-                    const fname = target.dataset.filename;
-                    if (fname) this.loadFile(fname, target);
+
+                if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+                    e.preventDefault();
+                    idx += e.key === 'ArrowDown' ? 1 : -1;
+                    if (idx < 0) idx = 0;
+                    if (idx >= items.length) idx = items.length - 1;
+                    const target = items[idx];
+                    if (target) {
+                        items.forEach(el => el.classList.remove('active'));
+                        target.classList.add('active');
+                        target.scrollIntoView({ block: 'nearest' });
+                        const fname = target.dataset.filename;
+                        if (fname) this.loadFile(fname, target);
+                    }
+                } else if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+                    e.preventDefault();
+                    const filename = active?.dataset.filename;
+                    if (!filename) return;
+                    const offset = e.key === 'ArrowLeft' ? -1 : 1;
+                    this.reorderFileItem(filename, offset);
                 }
+            });
+        }
+
+        // 文件过滤
+        const fileFilterInput = document.getElementById('fileFilterInput');
+        if (fileFilterInput) {
+            fileFilterInput.value = this.fileFilter;
+            fileFilterInput.addEventListener('input', (e) => {
+                this.fileFilter = (e.target.value || '').trim();
+                this.renderFileList(this.currentFileList || [], this.currentFile, true);
             });
         }
 
@@ -555,6 +579,43 @@ class PaperReviewerApp {
         document.addEventListener('mouseleave', stopResize);
     }
 
+    applyFileOrder(files = []) {
+        const projectKey = this.currentProject ? this.normalizeProjectPathString(this.currentProject.path) : 'user';
+        const stored = this.fileOrders?.[projectKey] || [];
+        const inStored = [];
+        const seen = new Set();
+        stored.forEach(f => {
+            if (files.includes(f) && !seen.has(f)) {
+                inStored.push(f);
+                seen.add(f);
+            }
+        });
+        const remaining = files.filter(f => !seen.has(f)).sort();
+        return [...inStored, ...remaining];
+    }
+
+    saveFileOrderForProject(order = []) {
+        const projectKey = this.currentProject ? this.normalizeProjectPathString(this.currentProject.path) : 'user';
+        this.fileOrders[projectKey] = [...order];
+        this.saveProjectConfig();
+    }
+
+    reorderFileItem(filename, offset = 0) {
+        if (!offset) return;
+        const files = this.currentFileList && this.currentFileList.length ? [...this.currentFileList] : [];
+        if (!files.length) return;
+        const idx = files.indexOf(filename);
+        if (idx < 0) return;
+        let target = idx + offset;
+        if (target < 0 || target >= files.length) return;
+        const temp = files[idx];
+        files[idx] = files[target];
+        files[target] = temp;
+        this.currentFileList = files;
+        this.saveFileOrderForProject(files);
+        this.renderFileList(files, filename, true);
+    }
+
     // 保存面板宽度到本地存储
     savePanelWidths(leftPanel, rightPanel, extras = {}) {
         try {
@@ -734,6 +795,7 @@ class PaperReviewerApp {
             
             // 保存当前项目
             this.currentProject = project;
+            this.currentFileList = [];
             
             // 更新最近项目列表
             this.updateRecentProjects(project);
@@ -810,9 +872,12 @@ class PaperReviewerApp {
             
             const data = await response.json();
             const files = data.files || [];
+            // 应用自定义排序（若有），否则按字母排序
+            const ordered = this.applyFileOrder(files);
+            this.currentFileList = ordered;
             // 避免在加载列表时批量创建/检查 Markdown，以减少切换文件时的卡顿。
             // Markdown 的存在校验改为按需在 loadFile 阶段处理。
-            this.renderFileList(files, keepSelection ? currentSelected : null);
+            this.renderFileList(ordered, keepSelection ? currentSelected : null, true);
         } catch (error) {
             console.error('Error loading file list:', error);
             this.showNotification('✗ 加载文件列表失败', 'error');
@@ -820,7 +885,7 @@ class PaperReviewerApp {
         }
     }
 
-    renderFileList(files, keepSelected = null) {
+    renderFileList(files, keepSelected = null, alreadyOrdered = false) {
         const fileListEl = document.getElementById('fileList');
         
         if (files.length === 0) {
@@ -836,12 +901,23 @@ class PaperReviewerApp {
         });
         
         // 按文件名排序
-        const sortedFiles = [...files].sort();
+        const sortedFiles = alreadyOrdered ? [...files] : [...files].sort();
+        const filtered = this.fileFilter
+            ? sortedFiles.filter(f => f.toLowerCase().includes(this.fileFilter.toLowerCase()))
+            : sortedFiles;
+        
+        if (filtered.length === 0) {
+            fileListEl.innerHTML = '<div class="empty-state"><p>无匹配文件</p></div>';
+            return;
+        }
         
         // 创建新的文件列表结构
         const newFileListEl = document.createElement('div');
         
-        sortedFiles.forEach((file, index) => {
+        const selectedStillVisible = keepSelected && filtered.includes(keepSelected) ? keepSelected : null;
+        const activeTarget = selectedStillVisible || (!keepSelected && this.currentFile ? this.currentFile : null);
+
+        filtered.forEach((file, index) => {
             let fileItem;
             const displayName = file.replace(/\.[^.]+$/, '');
             
@@ -875,13 +951,17 @@ class PaperReviewerApp {
             }
             
             // 保持或恢复选中状态
-            if (keepSelected && file === keepSelected) {
+            if (selectedStillVisible && file === selectedStillVisible) {
                 fileItem.classList.add('active');
-            } else if (!keepSelected && index === 0 && !this.currentFile) {
-                // 首次加载，自动选择第一个文件
-                setTimeout(() => {
-                    window.paperReviewerApp.loadFile(file, fileItem);
-                }, 100);
+            } else if (!selectedStillVisible) {
+                const noValidCurrent = !this.currentFile || !filtered.includes(this.currentFile);
+                const shouldAutoSelect = (noValidCurrent && index === 0) || (activeTarget && file === activeTarget);
+                if (shouldAutoSelect) {
+                    fileItem.classList.add('active');
+                    setTimeout(() => {
+                        window.paperReviewerApp.loadFile(file, fileItem);
+                    }, 50);
+                }
             }
             
             newFileListEl.appendChild(fileItem);
@@ -1285,10 +1365,16 @@ class PaperReviewerApp {
 
             // Load PDF if available
             if (this.currentData.meta_info && this.currentData.meta_info.pdf_path) {
-                const pdfPath = this.currentData.meta_info.pdf_path;
-                // Convert path like "src/papers/joom.1169.pdf" to "user/papers/joom.1169.pdf"
+                const rawPdfPath = this.currentData.meta_info.pdf_path;
+                const pdfFile = this.normalizePdfPathValue(rawPdfPath);
+                // 若发现带路径的值，自动规范化为仅文件名，提示需要保存
+                if (pdfFile && rawPdfPath !== pdfFile) {
+                    this.currentData.meta_info.pdf_path = pdfFile;
+                    this.hasUnsavedChanges = true;
+                    this.tempDataCache[this.currentFile] = this.currentData;
+                    this.updateSaveButtonState();
+                }
                 const projectPath = this.currentProject ? this.currentProject.path : 'user';
-                const pdfFile = pdfPath.split('/').pop();
                 await this.loadPDF(`${projectPath}/papers/${pdfFile}`);
             }
             this.applyCurrentView();
@@ -1650,6 +1736,12 @@ class PaperReviewerApp {
     normalizeProjectPathString(pathStr) {
         if (!pathStr) return '';
         return pathStr.replace(/\\/g, '/').replace(/\/+$/, '');
+    }
+
+    normalizePdfPathValue(pathStr) {
+        if (!pathStr) return '';
+        const parts = pathStr.split(/[/\\]+/).filter(Boolean);
+        return parts.length ? parts[parts.length - 1] : pathStr;
     }
 
     mergeIntoCurrentData(sourceObj, backup = false) {
@@ -3578,6 +3670,10 @@ class PaperReviewerApp {
                 current[lastKey] = JSON.parse(newValue);
             } else {
                 current[lastKey] = newValue;
+            }
+            // 规范化 pdf_path 仅保留文件名
+            if (lastKey.toLowerCase() === 'pdf_path') {
+                current[lastKey] = this.normalizePdfPathValue(current[lastKey]);
             }
         } catch (e) {
             current[lastKey] = newValue;
