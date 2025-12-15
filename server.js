@@ -421,8 +421,14 @@ const server = http.createServer((req, res) => {
         return;
     }
 
-    // 处理静态文件请求
-    let filePath = '.' + pathname;
+    // 处理静态文件请求（解码URL，支持空格等字符）
+    let safePathname = pathname;
+    try {
+        safePathname = decodeURIComponent(pathname);
+    } catch (_e) {
+        safePathname = pathname;
+    }
+    let filePath = '.' + safePathname;
     if (filePath === './') {
         filePath = './index.html';
     }

@@ -887,6 +887,7 @@ body {
     padding: 8px;
     border-radius: 4px;
     overflow: auto;
+    position: relative;
 }
 
 .markdown-body blockquote {
@@ -895,6 +896,59 @@ body {
     margin: 8px 0;
     color: var(--gray-700);
     background: var(--gray-50);
+}
+
+.markdown-body .note-block {
+    border-left: 3px solid var(--wos-blue);
+    background: #f4f8ff;
+    padding: 10px 12px;
+    margin: 10px 0;
+    color: var(--gray-700);
+    border-radius: 4px;
+    box-shadow: inset 0 0 0 1px rgba(0, 62, 116, 0.08);
+}
+
+.markdown-body .note-block::before {
+    content: "  Note";
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-weight: 700;
+    color: #0b5394;
+    margin-bottom: 6px;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    padding: 2px 6px;
+    background: rgba(0, 62, 116, 0.12);
+    border-radius: 999px;
+    font-family: "Font Awesome 6 Free", "Font Awesome 6 Pro", "Font Awesome 5 Free", "Font Awesome 5 Pro", "FontAwesome", sans-serif;
+}
+
+.code-copy-btn {
+    position: absolute;
+    top: 6px;
+    right: 6px;
+    border: none;
+    background: rgba(0,0,0,0.55);
+    color: #fff;
+    border-radius: 4px;
+    padding: 2px 6px;
+    font-size: 11px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    opacity: 0;
+    transition: opacity 0.15s ease;
+}
+
+.code-copy-btn i {
+    font-size: 10px;
+}
+
+.markdown-body pre:hover .code-copy-btn {
+    opacity: 1;
 }
 
 .markdown-editor {

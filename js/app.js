@@ -26,6 +26,11 @@ class PaperReviewerApp {
         this.currentMarkdownExists = false;
         this.isMarkdownEditing = false;
         this.saveMdEndpoint = '/save-md';
+        try {
+            this.currentView = localStorage.getItem('lastViewMode') || 'structured';
+        } catch (_e) {
+            this.currentView = 'structured';
+        }
 
         // 项目管理
         this.currentProject = null; // { name, path }
@@ -137,6 +142,23 @@ class PaperReviewerApp {
             if (mod && e.key.toLowerCase() === 'e') {
                 e.preventDefault();
                 this.toggleTableMarkdownView();
+                return;
+            }
+            if (mod && e.key === '/') {
+                e.preventDefault();
+                if (this.currentView !== 'markdown') {
+                    const mdBtn = document.querySelector('.tab-btn[data-view="markdown"]');
+                    if (mdBtn) this.switchView(mdBtn);
+                }
+                if (!this.currentMarkdownExists) {
+                    this.showNotification('No markdown file. Create it first.', 'info');
+                    return;
+                }
+                const newState = !this.isMarkdownEditing;
+                this.toggleMarkdownEdit(newState);
+                if (newState) {
+                    document.getElementById('markdownTextarea')?.focus();
+                }
             }
         });
         const createMdBtn = document.getElementById('createMarkdownBtnHeader');
@@ -691,7 +713,7 @@ class PaperReviewerApp {
             
             const data = await response.json();
             const files = data.files || [];
-            
+            await this.ensureMarkdownForFiles(files);
             this.renderFileList(files, keepSelection ? currentSelected : null);
         } catch (error) {
             console.error('Error loading file list:', error);
@@ -1102,8 +1124,7 @@ class PaperReviewerApp {
             } else {
                 // Fetch JSON file，使用项目路径
                 const projectPath = this.currentProject ? this.currentProject.path : 'user';
-                const encoded = encodeURIComponent(filename);
-                const response = await fetch(`${projectPath}/data/${encoded}`);
+                const response = await fetch(this.getDataUrl(filename));
                 if (!response.ok) throw new Error('Failed to load file');
                 this.currentData = await response.json();
                 this.hasUnsavedChanges = false;
@@ -1122,6 +1143,7 @@ class PaperReviewerApp {
             // Render data
             this.renderStructuredView();
             this.renderFlatView();
+            await this.ensureMarkdownExistsForFile(filename);
             await this.loadMarkdownForCurrentFile();
 
             // Load PDF if available
@@ -1132,9 +1154,12 @@ class PaperReviewerApp {
                 const pdfFile = pdfPath.split('/').pop();
                 await this.loadPDF(`${projectPath}/papers/${pdfFile}`);
             }
+            this.applyCurrentView();
         } catch (error) {
             console.error('Error loading file:', error);
-            alert(`Failed to load file: ${error.message}`);
+            const spaceHint = /\s/.test(filename) ? ' (提示: 文件名包含空格，请去掉空格后重试)' : '';
+            alert(`Failed to load file: ${error.message}${spaceHint}`);
+            this.showNotification(`✗ Failed to load file${spaceHint}`, 'error');
         }
     }
 
@@ -1852,6 +1877,9 @@ class PaperReviewerApp {
             if (window.markdownitDeflist) md.use(window.markdownitDeflist);
             if (window.markdownitSub) md.use(window.markdownitSub);
             if (window.markdownitSup) md.use(window.markdownitSup);
+            if (window.markdownItGithubAlerts) {
+                md.use(window.markdownItGithubAlerts);
+            }
             this.markdownParser = md;
         }
         return this.markdownParser;
@@ -1860,6 +1888,12 @@ class PaperReviewerApp {
     getMarkdownFilename(jsonFilename) {
         if (!jsonFilename) return '';
         return jsonFilename.replace(/\.json$/i, '') + '.md';
+    }
+
+    getDataUrl(filename) {
+        const projectPath = this.currentProject ? this.currentProject.path : 'user';
+        const segments = `${projectPath}/data/${filename}`.split('/').filter(Boolean).map(encodeURIComponent);
+        return `/${segments.join('/')}`;
     }
 
     async persistMarkdown(filename, content) {
@@ -1898,9 +1932,51 @@ class PaperReviewerApp {
         }
     }
 
+    async ensureMarkdownForFiles(files = []) {
+        const tasks = files.map(async (file) => {
+            const mdFilename = this.getMarkdownFilename(file);
+            const url = this.getDataUrl(mdFilename);
+            try {
+                const resp = await fetch(url, { method: 'GET', cache: 'no-store' });
+                if (!resp.ok) {
+                    await this.persistMarkdown(mdFilename, this.buildDefaultMarkdownForFilename(file));
+                }
+            } catch (err) {
+                console.warn('Ensure markdown fetch failed, try create:', mdFilename, err);
+                try {
+                    await this.persistMarkdown(mdFilename, this.buildDefaultMarkdownForFilename(file));
+                } catch (err2) {
+                    console.warn('Ensure markdown create failed:', mdFilename, err2);
+                }
+            }
+        });
+        await Promise.all(tasks);
+    }
+
     buildDefaultMarkdown() {
         const base = this.currentFile ? this.currentFile.replace(/\.json$/i, '') : 'notes';
         return `# ${base}\n\n> 自动创建的 Markdown 笔记文件。\n\n- 可添加章节、要点、引用等。\n- 与 JSON 同名，便于版本记录。\n`;
+    }
+
+    buildDefaultMarkdownForFilename(jsonFilename) {
+        const base = jsonFilename ? jsonFilename.replace(/\.json$/i, '') : 'notes';
+        return `# ${base}\n\n> 自动创建的 Markdown 笔记文件。\n\n- 可添加章节、要点、引用等。\n- 与 JSON 同名，便于版本记录。\n`;
+    }
+
+    async ensureMarkdownExistsForFile(jsonFilename) {
+        if (!jsonFilename) return;
+        const mdFilename = this.getMarkdownFilename(jsonFilename);
+        const projectPath = this.currentProject ? this.currentProject.path : 'user';
+        const mdUrl = this.getDataUrl(mdFilename);
+        try {
+            const resp = await fetch(mdUrl, { method: 'GET', cache: 'no-store' });
+            if (resp.ok) return;
+            if (resp.status === 404) {
+                await this.persistMarkdown(mdFilename, this.buildDefaultMarkdownForFilename(jsonFilename));
+            }
+        } catch (err) {
+            console.warn('ensureMarkdownExistsForFile failed:', jsonFilename, err);
+        }
     }
 
     updateMarkdownToolbar() {
@@ -1952,8 +2028,16 @@ class PaperReviewerApp {
                 text = await resp.text();
                 this.currentMarkdownExists = true;
             } else if (resp.status === 404) {
-                this.currentMarkdownExists = false;
-                text = '';
+                // 自动创建空的同名 Markdown 文件，保证渲染流程正常
+                try {
+                    await this.persistMarkdown(mdFilename, '');
+                    this.currentMarkdownExists = true;
+                    text = '';
+                } catch (errCreate) {
+                    console.warn('自动创建空 Markdown 失败:', errCreate);
+                    this.currentMarkdownExists = false;
+                    text = '';
+                }
             } else {
                 throw new Error(`加载失败：${resp.status}`);
             }
@@ -1988,6 +2072,7 @@ class PaperReviewerApp {
         const html = md.render(text);
         render.innerHTML = `<article class="markdown-body">${html}</article>`;
         this.renderMath();
+        this.highlightCodeBlocks(render);
     }
 
     async createMarkdownFile() {
@@ -2042,7 +2127,44 @@ class PaperReviewerApp {
             this.showNotification(`保存 Markdown 失败: ${err.message}`, 'error');
         }
     }
-    
+
+    highlightCodeBlocks(container) {
+        try {
+            if (!window.hljs || !container) return;
+            container.querySelectorAll('pre code').forEach((block) => {
+                window.hljs.highlightElement(block);
+                this.injectCopyButton(block);
+            });
+        } catch (err) {
+            console.warn('Highlight failed:', err);
+        }
+    }
+
+    injectCopyButton(codeBlock) {
+        const pre = codeBlock.closest('pre');
+        if (!pre || pre.querySelector('.code-copy-btn')) return;
+
+        const btn = document.createElement('button');
+        btn.className = 'code-copy-btn';
+        btn.innerHTML = '<i class="fas fa-copy"></i> Copy';
+        btn.title = 'Copy code';
+        btn.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            const text = codeBlock.innerText;
+            navigator.clipboard.writeText(text).then(() => {
+                this.showNotification('Code copied', 'success');
+            }).catch((err) => {
+                console.warn('Copy failed:', err);
+                this.showNotification('Copy failed', 'error');
+            });
+        });
+
+        pre.style.position = 'relative';
+        pre.appendChild(btn);
+    }
+
+
     // 触发MathJax渲染数学公式
     renderMath() {
         if (window.MathJax) {
@@ -2060,6 +2182,9 @@ class PaperReviewerApp {
         // Switch views
         const view = btn.dataset.view;
         this.currentView = view;
+        try {
+            localStorage.setItem('lastViewMode', view);
+        } catch (_e) {}
         const structured = document.getElementById('structuredView');
         const markdown = document.getElementById('markdownView');
         const flat = document.getElementById('flatView');
@@ -2076,6 +2201,15 @@ class PaperReviewerApp {
         }
 
         this.updateHeaderControls();
+    }
+
+    applyCurrentView() {
+        const view = this.currentView || 'structured';
+        const targetBtn = document.querySelector(`.tab-btn[data-view="${view}"]`) ||
+            document.querySelector('.tab-btn[data-view="structured"]');
+        if (targetBtn) {
+            this.switchView(targetBtn);
+        }
     }
 
     toggleTableMarkdownView() {
