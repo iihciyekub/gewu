@@ -525,6 +525,28 @@ body {
     transform: translateX(2px);
 }
 
+.drag-placeholder {
+    height: 6px;
+    background: rgba(0, 62, 116, 0.2);
+    border-radius: 3px;
+    margin: 2px 0;
+    position: relative;
+    pointer-events: none;
+}
+
+.drag-placeholder::after {
+    content: 'Drop here';
+    position: absolute;
+    top: -14px;
+    left: 6px;
+    font-size: 10px;
+    color: var(--wos-blue);
+    background: #fff;
+    padding: 0 4px;
+    border-radius: 3px;
+    border: 1px solid rgba(0, 62, 116, 0.2);
+}
+
 .json-table.reorder-mode td.toggle-cell {
     cursor: move;
     background: #eef2ff;
@@ -1649,6 +1671,7 @@ ol.json-array {
     user-select: none;
     transition: background 0.12s ease;
     gap: 10px;
+    position: relative;
 }
 
 .collapsible-header:hover {
@@ -1693,6 +1716,35 @@ ol.json-array {
 .collapsible-toggle {
     color: #666;
     transition: transform 0.2s;
+}
+
+.section-drag-handle {
+    cursor: grab;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.15s ease, transform 0.15s ease, color 0.15s ease;
+    color: var(--gray-500);
+    font-size: 12px;
+    display: inline-flex;
+    width: 16px;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.collapsible-header:hover .section-drag-handle {
+    opacity: 1;
+    visibility: visible;
+    color: var(--wos-blue);
+}
+
+.collapsible-section.dragging .section-drag-handle {
+    opacity: 1;
+    visibility: visible;
+}
+
+.section-drag-handle:active {
+    cursor: grabbing;
+    transform: scale(1.05);
 }
 
 .collapsible-header.active .collapsible-toggle {

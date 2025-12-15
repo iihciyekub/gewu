@@ -31,12 +31,55 @@ class PaperReviewerApp {
         } catch (_e) {
             this.currentView = 'structured';
         }
+        this.dragPlaceholder = null;
+        this.draggingSectionKey = null;
+        this.placeholderState = { scope: null, target: null, after: false };
 
         // 项目管理
         this.currentProject = null; // { name, path }
         this.recentProjects = [];
 
         this.init();
+    }
+
+    getDragPlaceholder() {
+        if (!this.dragPlaceholder) {
+            const ph = document.createElement('div');
+            ph.className = 'drag-placeholder';
+            this.dragPlaceholder = ph;
+        }
+        return this.dragPlaceholder;
+    }
+
+    clearDragPlaceholder() {
+        if (this.dragPlaceholder && this.dragPlaceholder.parentElement) {
+            this.dragPlaceholder.parentElement.removeChild(this.dragPlaceholder);
+        }
+        this.placeholderState = { scope: null, target: null, after: false };
+    }
+
+    insertSectionPlaceholder(targetWrapper, placeAfter = false) {
+        const ph = this.getDragPlaceholder();
+        const parent = targetWrapper?.parentElement;
+        if (!parent) return;
+        const targetKey = targetWrapper.dataset.sectionKey;
+        const { scope, target, after } = this.placeholderState;
+        if (scope === 'section' && target === targetKey && after === placeAfter && ph.parentElement === parent) return;
+        if (ph.parentElement !== parent) this.clearDragPlaceholder();
+        parent.insertBefore(ph, placeAfter ? targetWrapper.nextElementSibling : targetWrapper);
+        this.placeholderState = { scope: 'section', target: targetKey, after: placeAfter };
+    }
+
+    insertRowPlaceholder(row, placeAfter = false) {
+        const ph = this.getDragPlaceholder();
+        const parent = row?.parentElement;
+        if (!parent) return;
+        const targetKey = row.dataset.key;
+        const { scope, target, after } = this.placeholderState;
+        if (scope === 'row' && target === targetKey && after === placeAfter && ph.parentElement === parent) return;
+        if (ph.parentElement !== parent) this.clearDragPlaceholder();
+        parent.insertBefore(ph, placeAfter ? row.nextElementSibling : row);
+        this.placeholderState = { scope: 'row', target: targetKey, after: placeAfter };
     }
 
     applyRawJsonChanges() {
@@ -1204,10 +1247,11 @@ class PaperReviewerApp {
     }
 
     createCollapsibleSection(title, data, path) {
+        const SECTION_DRAG_TYPE = 'application/x-section-key';
         const wrapper = document.createElement('div');
         wrapper.className = 'collapsible-section';
         wrapper.dataset.sectionKey = title;
-        wrapper.draggable = this.isReorderMode;
+        wrapper.draggable = false;
         
         // Header with toggle
         const header = document.createElement('div');
@@ -1216,6 +1260,7 @@ class PaperReviewerApp {
             header.classList.add('active');
         }
         header.innerHTML = `
+            <i class="fa-solid fa-bars section-drag-handle" title="拖动调整类顺序"></i>
             <i class="fas fa-chevron-right collapsible-toggle" title="展开/折叠"></i>
             <span class="collapsible-title">${this.formatKey(title)}</span>
             <i class="fas fa-plus header-add" title="在此类下添加子条目"></i>
@@ -1239,12 +1284,7 @@ class PaperReviewerApp {
         content.appendChild(table);
         
         // Toggle functionality / Reorder selection / Delete
-        if (this.isReorderMode) {
-            header.addEventListener('click', (e) => {
-                e.preventDefault();
-                this.setReorderSelection([], title);
-            });
-        } else {
+        if (!this.isReorderMode) {
             // 双击类名编辑（重命名）- 仅作用于标题文本，避免误触折叠
             const titleEl = header.querySelector('.collapsible-title');
             if (titleEl) {
@@ -1255,7 +1295,7 @@ class PaperReviewerApp {
             }
             // 双击标题栏空白处，编辑整个类对象
             header.addEventListener('dblclick', (e) => {
-                if (e.target.closest('.collapsible-toggle') || e.target.closest('.header-delete') || e.target.closest('.header-add') || e.target.closest('.collapsible-title')) {
+                if (e.target.closest('.collapsible-toggle') || e.target.closest('.header-delete') || e.target.closest('.header-add') || e.target.closest('.collapsible-title') || e.target.closest('.section-drag-handle')) {
                     return;
                 }
                 const valueForEdit = JSON.stringify(data, null, 2);
@@ -1293,32 +1333,60 @@ class PaperReviewerApp {
             });
         }
 
-        // Section拖拽排序
-        if (this.isReorderMode) {
-            wrapper.addEventListener('dragstart', (e) => {
+        // Section拖拽排序（使用拖动图标触发，仅作用于顶层类）
+        const sectionHandle = header.querySelector('.section-drag-handle');
+        if (sectionHandle) {
+            sectionHandle.draggable = true;
+            sectionHandle.addEventListener('dragstart', (e) => {
+                e.dataTransfer.setData(SECTION_DRAG_TYPE, title);
                 e.dataTransfer.setData('text/plain', title);
                 e.dataTransfer.effectAllowed = 'move';
+                this.draggingSectionKey = title;
                 wrapper.classList.add('dragging');
+                this.clearDragPlaceholder();
             });
-            wrapper.addEventListener('dragend', () => {
+            sectionHandle.addEventListener('dragend', () => {
+                this.draggingSectionKey = null;
                 wrapper.classList.remove('dragging');
-            });
-            wrapper.addEventListener('dragover', (e) => {
-                e.preventDefault();
-                e.dataTransfer.dropEffect = 'move';
-                wrapper.classList.add('drag-over');
-            });
-            wrapper.addEventListener('dragleave', () => {
-                wrapper.classList.remove('drag-over');
-            });
-            wrapper.addEventListener('drop', (e) => {
-                e.preventDefault();
-                wrapper.classList.remove('drag-over');
-                const fromKey = e.dataTransfer.getData('text/plain');
-                const toKey = title;
-                this.reorderKeys([], fromKey, toKey);
+                this.clearDragPlaceholder();
             });
         }
+        wrapper.addEventListener('dragenter', (e) => {
+            if (!e.dataTransfer.types.includes(SECTION_DRAG_TYPE)) return;
+            if (!this.draggingSectionKey || this.draggingSectionKey === title) return;
+            const rect = wrapper.getBoundingClientRect();
+            const placeAfter = e.clientY > rect.top + rect.height / 2;
+            this.insertSectionPlaceholder(wrapper, placeAfter);
+        });
+        wrapper.addEventListener('dragover', (e) => {
+            if (!e.dataTransfer.types.includes(SECTION_DRAG_TYPE)) return;
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'move';
+            wrapper.classList.add('drag-over');
+        });
+        wrapper.addEventListener('dragleave', () => {
+            wrapper.classList.remove('drag-over');
+        });
+        wrapper.addEventListener('drop', (e) => {
+            if (!e.dataTransfer.types.includes(SECTION_DRAG_TYPE)) return;
+            e.preventDefault();
+            wrapper.classList.remove('drag-over');
+            const fromKey = e.dataTransfer.getData(SECTION_DRAG_TYPE);
+            let toKey = title;
+            const ph = this.dragPlaceholder;
+            if (ph && this.placeholderState.scope === 'section' && ph.parentElement === wrapper.parentElement) {
+                const next = ph.nextElementSibling;
+                if (next && next.dataset && next.dataset.sectionKey) {
+                    toKey = next.dataset.sectionKey;
+                } else if (ph.previousElementSibling && ph.previousElementSibling.dataset?.sectionKey) {
+                    toKey = ph.previousElementSibling.dataset.sectionKey;
+                }
+            }
+            this.clearDragPlaceholder();
+            if (fromKey && fromKey !== toKey) {
+                this.reorderKeys([], fromKey, toKey);
+            }
+        });
         
         wrapper.appendChild(header);
         wrapper.appendChild(content);
@@ -1354,30 +1422,47 @@ class PaperReviewerApp {
             keyCell.innerHTML = keyDisplay;
             const currentPath = [...basePath, key];
 
-            // 拖拽排序事件
-            // 拖拽排序事件（始终可用）
+            // 行拖拽排序事件（子item）
             row.addEventListener('dragstart', (e) => {
+                e.dataTransfer.setData('application/x-row-key', key);
                 e.dataTransfer.setData('text/plain', key);
                 e.dataTransfer.effectAllowed = 'move';
                 row.classList.add('dragging');
+                this.clearDragPlaceholder();
             });
             row.addEventListener('dragend', () => {
                 row.classList.remove('dragging');
+                this.clearDragPlaceholder();
             });
             row.addEventListener('dragover', (e) => {
+                if (e.dataTransfer.types.includes('application/x-section-key')) return;
                 e.preventDefault();
                 e.dataTransfer.dropEffect = 'move';
                 row.classList.add('drag-over');
+                const rect = row.getBoundingClientRect();
+                const placeAfter = e.clientY > rect.top + rect.height / 2;
+                this.insertRowPlaceholder(row, placeAfter);
             });
             row.addEventListener('dragleave', () => {
                 row.classList.remove('drag-over');
             });
             row.addEventListener('drop', (e) => {
+                if (e.dataTransfer.types.includes('application/x-section-key')) return;
                 e.preventDefault();
                 row.classList.remove('drag-over');
                 const fromKey = e.dataTransfer.getData('text/plain');
-                const toKey = key;
+                let toKey = key;
+                const ph = this.dragPlaceholder;
+                if (ph && this.placeholderState.scope === 'row' && ph.parentElement === row.parentElement) {
+                    const next = ph.nextElementSibling;
+                    if (next && next.dataset && next.dataset.key) {
+                        toKey = next.dataset.key;
+                    } else if (ph.previousElementSibling && ph.previousElementSibling.dataset?.key) {
+                        toKey = ph.previousElementSibling.dataset.key;
+                    }
+                }
                 const tablePath = table.dataset.path ? table.dataset.path.split('.').filter(Boolean) : [];
+                this.clearDragPlaceholder();
                 this.reorderKeys(tablePath, fromKey, toKey);
             });
             // 点击左列，上移/下移（Shift为下移）
