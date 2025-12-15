@@ -104,15 +104,15 @@ class PaperReviewerApp {
         document.querySelectorAll('.tab-btn').forEach(btn => {
             btn.addEventListener('click', (e) => this.switchView(e.target.closest('.tab-btn')));
         });
-        const createMdBtn = document.getElementById('createMarkdownBtn');
+        const createMdBtn = document.getElementById('createMarkdownBtnHeader');
         if (createMdBtn) {
             createMdBtn.addEventListener('click', () => this.createMarkdownFile());
         }
-        const editMdBtn = document.getElementById('editMarkdownBtn');
+        const editMdBtn = document.getElementById('editMarkdownBtnHeader');
         if (editMdBtn) {
             editMdBtn.addEventListener('click', () => this.toggleMarkdownEdit(true));
         }
-        const saveMdBtn = document.getElementById('saveMarkdownBtn');
+        const saveMdBtn = document.getElementById('saveMarkdownBtnHeader');
         if (saveMdBtn) {
             saveMdBtn.addEventListener('click', () => this.saveMarkdownFromEditor());
         }
@@ -1051,7 +1051,8 @@ class PaperReviewerApp {
             } else {
                 // Fetch JSON file，使用项目路径
                 const projectPath = this.currentProject ? this.currentProject.path : 'user';
-                const response = await fetch(`${projectPath}/data/${filename}`);
+                const encoded = encodeURIComponent(filename);
+                const response = await fetch(`${projectPath}/data/${encoded}`);
                 if (!response.ok) throw new Error('Failed to load file');
                 this.currentData = await response.json();
                 this.hasUnsavedChanges = false;
@@ -1060,6 +1061,7 @@ class PaperReviewerApp {
             this.ensureLastUpdate();
             
             this.currentFile = filename;
+            this.updateFileMeta();
 
             // 更新UI状态
             this.updateSaveButtonState();
@@ -1068,6 +1070,7 @@ class PaperReviewerApp {
 
             // Render data
             this.renderStructuredView();
+            this.renderFlatView();
             await this.loadMarkdownForCurrentFile();
 
             // Load PDF if available
@@ -1087,10 +1090,14 @@ class PaperReviewerApp {
     showLoading() {
         const structuredView = document.getElementById('structuredContent') || document.getElementById('structuredView');
         const markdownView = document.getElementById('markdownRender');
+        const flatView = document.getElementById('flatView');
         
         structuredView.innerHTML = '<div class="loading"><div class="spinner"></div>Loading data...</div>';
         if (markdownView) {
             markdownView.innerHTML = '<div class="loading"><div class="spinner"></div>Loading markdown...</div>';
+        }
+        if (flatView) {
+            flatView.innerHTML = '<div class="loading"><div class="spinner"></div>Loading data...</div>';
         }
     }
 
@@ -1835,17 +1842,21 @@ class PaperReviewerApp {
     }
 
     updateMarkdownToolbar() {
-        const createBtn = document.getElementById('createMarkdownBtn');
-        const editBtn = document.getElementById('editMarkdownBtn');
-        const saveBtn = document.getElementById('saveMarkdownBtn');
+        const createBtn = document.getElementById('createMarkdownBtnHeader');
+        const editBtn = document.getElementById('editMarkdownBtnHeader');
+        const saveBtn = document.getElementById('saveMarkdownBtnHeader');
         const statusEl = document.getElementById('markdownStatus');
         const editor = document.getElementById('markdownEditor');
         const render = document.getElementById('markdownRender');
         if (!createBtn || !editBtn || !saveBtn || !statusEl) return;
 
-        createBtn.style.display = this.currentMarkdownExists ? 'none' : 'inline-flex';
-        editBtn.disabled = !this.currentMarkdownExists;
-        saveBtn.disabled = !this.currentMarkdownExists;
+        const inMarkdownView = (this.currentView || 'structured') === 'markdown';
+
+        createBtn.style.display = inMarkdownView && !this.currentMarkdownExists ? 'inline-flex' : 'none';
+        editBtn.style.display = inMarkdownView ? 'inline-flex' : 'none';
+        saveBtn.style.display = inMarkdownView ? 'inline-flex' : 'none';
+        editBtn.disabled = !this.currentMarkdownExists || !inMarkdownView || this.isMarkdownEditing;
+        saveBtn.disabled = !this.currentMarkdownExists || !inMarkdownView;
         statusEl.textContent = this.currentFile
             ? (this.currentMarkdownExists ? `已加载: ${this.currentMarkdownFile}` : '未找到同名 MD，点击创建')
             : '未加载文件';
@@ -1871,7 +1882,7 @@ class PaperReviewerApp {
         }
         const mdFilename = this.getMarkdownFilename(this.currentFile);
         const projectPath = this.currentProject ? this.currentProject.path : 'user';
-        const mdUrl = `${projectPath}/data/${mdFilename}`;
+        const mdUrl = `${projectPath}/data/${encodeURIComponent(mdFilename)}`;
         const render = document.getElementById('markdownRender');
         if (render) {
             render.innerHTML = '<div class="loading"><div class="spinner"></div>Loading markdown...</div>';
@@ -1992,15 +2003,23 @@ class PaperReviewerApp {
 
         // Switch views
         const view = btn.dataset.view;
-        document.getElementById('structuredView').classList.remove('active');
+        this.currentView = view;
+        const structured = document.getElementById('structuredView');
         const markdown = document.getElementById('markdownView');
+        const flat = document.getElementById('flatView');
+        if (structured) structured.classList.remove('active');
         if (markdown) markdown.classList.remove('active');
+        if (flat) flat.classList.remove('active');
 
-        if (view === 'structured') {
-            document.getElementById('structuredView').classList.add('active');
-        } else if (view === 'markdown') {
-            if (markdown) markdown.classList.add('active');
+        if (view === 'structured' && structured) {
+            structured.classList.add('active');
+        } else if (view === 'markdown' && markdown) {
+            markdown.classList.add('active');
+        } else if (view === 'flat' && flat) {
+            flat.classList.add('active');
         }
+
+        this.updateHeaderControls();
     }
 
     formatKey(key) {
@@ -3231,7 +3250,40 @@ class PaperReviewerApp {
         }
     }
 
+    updateFileMeta() {
+        const lastUpdateEl = document.getElementById('lastUpdateDisplay');
+        if (lastUpdateEl) {
+            const ts = this.currentData?.lastupdate ? this.currentData.lastupdate : '-';
+            lastUpdateEl.textContent = `Last update: ${ts}`;
+        }
+    }
+
+    updateHeaderControls() {
+        const view = this.currentView || 'structured';
+        const saveBtn = document.getElementById('saveBtn');
+        const undoBtn = document.getElementById('undoPasteBtn');
+        const createBtn = document.getElementById('createMarkdownBtnHeader');
+        const editBtn = document.getElementById('editMarkdownBtnHeader');
+        const saveMdBtn = document.getElementById('saveMarkdownBtnHeader');
+        const flatTab = document.querySelector('.tab-btn[data-view="flat"]');
+
+        const showJsonControls = view === 'structured' || view === 'flat';
+        const showMdControls = view === 'markdown';
+
+        if (saveBtn) saveBtn.style.display = showJsonControls && this.hasUnsavedChanges ? 'inline-block' : 'none';
+        if (undoBtn) undoBtn.style.display = showJsonControls && this.lastPasteBackup && this.lastPasteBackup.file === this.currentFile ? 'inline-block' : 'none';
+
+        if (flatTab) flatTab.style.display = showMdControls ? 'none' : 'inline-flex';
+        if (createBtn) createBtn.style.display = showMdControls && !this.currentMarkdownExists ? 'inline-flex' : 'none';
+        if (editBtn) editBtn.style.display = showMdControls ? 'inline-flex' : 'none';
+        if (saveMdBtn) saveMdBtn.style.display = showMdControls ? 'inline-flex' : 'none';
+
+        if (editBtn) editBtn.disabled = !(showMdControls && this.currentMarkdownExists && !this.isMarkdownEditing);
+        if (saveMdBtn) saveMdBtn.disabled = !(showMdControls && this.currentMarkdownExists);
+    }
+
     updateSaveButtonState() {
+        this.updateFileMeta();
         const saveBtn = document.getElementById('saveBtn');
         const lastUpdateEl = document.getElementById('lastUpdateDisplay');
         
@@ -3273,6 +3325,8 @@ class PaperReviewerApp {
             lastUpdateEl.innerHTML = `Last update: ${ts} ${unsavedIcon}`.trim();
             lastUpdateEl.classList.toggle('unsaved-state', !!this.hasUnsavedChanges);
         }
+
+        this.updateHeaderControls();
     }
 
     // 添加新条目功能
@@ -4030,6 +4084,7 @@ class PaperReviewerApp {
             
             // 更新按钮状态
             this.updateSaveButtonState();
+            this.updateFileMeta();
 
             // 成功通知
             this.showNotification(`✓ ${this.currentFile} 已保存`, 'success');

@@ -238,22 +238,41 @@ body {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    height: 32px;
+    gap: 12px;
+    min-height: 36px;
     flex-shrink: 0;
 }
 
-.file-info {
+.file-meta {
     display: flex;
-    align-items: center;
-    gap: 5px;
-    font-size: 11px;
-    color: var(--gray-700);
-    font-weight: 500;
+    flex-direction: column;
+    gap: 2px;
 }
 
-.file-info i {
-    color: var(--wos-blue);
+.file-sub {
+    display: flex;
+    align-items: center;
+    gap: 10px;
     font-size: 12px;
+    color: var(--gray-700);
+}
+
+.header-actions {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.header-divider {
+    width: 1px;
+    height: 18px;
+    background: var(--gray-300);
+    margin: 0 4px;
+}
+
+.markdown-status {
+    font-size: 11px;
+    color: var(--gray-600);
 }
 
 .schema-badge {
@@ -321,6 +340,7 @@ body {
 .view-tabs {
     display: flex;
     gap: 4px;
+    margin-right: 8px;
 }
 
 .tab-btn {
@@ -730,11 +750,11 @@ body {
     display: inline-flex;
     align-items: center;
     gap: 4px;
-    color: #0a3b66;
+    color: #ffffff;
     text-decoration: none;
     padding: 2px 6px;
     border-radius: 3px;
-    background: #e0eaf3;
+    background: #2d4459;
     transition: all 0.2s ease;
     font-family: 'Courier New', monospace;
     font-size: 10px;
@@ -756,38 +776,29 @@ body {
     opacity: 1;
 }
 
-/* Flat JSON View - 紧凑版 */
+/* Flat JSON / Markdown View */
 .markdown-view {
     display: none;
     height: 100%;
     position: relative;
+    flex-direction: column;
 }
 
 .markdown-view.active {
+    display: flex;
+}
+
+.flat-view {
+    display: none;
+}
+
+.flat-view.active {
     display: block;
 }
 
-.markdown-toolbar {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 10px;
-    padding: 6px 8px;
-    border: 1px solid var(--wos-border);
-    border-radius: 4px;
-    background: var(--gray-50);
-    margin-bottom: 8px;
-}
-
-.markdown-toolbar-left {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-}
-
-.markdown-status {
+#jsonViewer {
+    font-family: 'Courier New', monospace;
     font-size: 11px;
-    color: var(--gray-600);
 }
 
 .markdown-body {
@@ -795,6 +806,8 @@ body {
     font-size: 13px;
     line-height: 1.6;
     color: var(--wos-text);
+    flex: 1;
+    overflow-y: auto;
 }
 
 .markdown-body h1,

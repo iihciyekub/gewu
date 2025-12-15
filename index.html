@@ -104,30 +104,46 @@
         <!-- Middle Panel - JSON Editor -->
             <div class="middle-panel">
                 <div class="middle-header">
-                    <div class="file-info">
-                        <i class="fas fa-clock"></i>
-                        <span id="lastUpdateDisplay">Last update: -</span>
+                    <div class="file-meta">
+                        <div class="file-sub">
+                            <i class="fas fa-clock"></i>
+                            <span id="lastUpdateDisplay">Last update: -</span>
+                            <span class="markdown-status" id="markdownStatus">MD: -</span>
+                        </div>
                     </div>
                     <div class="header-actions">
+                        <div class="view-tabs">
+                            <button class="tab-btn active" data-view="structured" title="JSON table view">
+                                <i class="fas fa-table"></i>
+                            </button>
+                            <button class="tab-btn" data-view="markdown" title="Markdown view">
+                                <i class="fas fa-file-alt"></i>
+                            </button>
+                            <button class="tab-btn" data-view="flat" title="Raw JSON">
+                                <i class="fas fa-code"></i>
+                            </button>
+                        </div>
                         <button id="saveBtn" class="btn-save" style="display: none;" onclick="window.paperReviewerApp.saveToFile()">
                             <i class="fas fa-save"></i> 保存修改
                         </button>
-                    <button id="undoPasteBtn" class="btn-save" style="display: none;" title="撤销上次粘贴合并" onclick="window.paperReviewerApp.undoLastPaste()">
-                        <i class="fas fa-undo"></i>
-                    </button>
-                    <div class="view-tabs">
-                        <button class="tab-btn active" data-view="structured">
-                            <i class="fas fa-table"></i>
+                        <button id="undoPasteBtn" class="btn-save" style="display: none;" title="撤销上次粘贴合并" onclick="window.paperReviewerApp.undoLastPaste()">
+                            <i class="fas fa-undo"></i>
                         </button>
-                        <button class="tab-btn" data-view="markdown">
-                            <i class="fas fa-file-alt"></i>
+                        <button class="btn btn-primary" id="createMarkdownBtnHeader" style="display:none;" title="Create Markdown">
+                            <i class="fas fa-file-medical"></i>
+                        </button>
+                        <button class="btn btn-success" id="editMarkdownBtnHeader" disabled title="Edit Markdown">
+                            <i class="fas fa-pen"></i>
+                        </button>
+                        <button class="btn btn-primary" id="saveMarkdownBtnHeader" disabled title="Save Markdown">
+                            <i class="fas fa-save"></i>
+                        </button>
+                        <div class="header-divider"></div>
+                        <button id="copyWosAideBtn" class="btn btn-success" title="复制 wosAide.js 源码到剪贴板">
+                            <i class="fas fa-copy"></i>
                         </button>
                     </div>
-                    <button id="copyWosAideBtn" class="btn btn-success" title="复制 wosAide.js 源码到剪贴板">
-                        <i class="fas fa-copy"></i>
-                    </button>
                 </div>
-            </div>
             <div class="editor-container">
                 <div class="structured-view active" id="structuredView">
                     <div id="structuredContent">
@@ -144,20 +160,6 @@
                     </div>
                 </div>
                 <div class="markdown-view" id="markdownView">
-                    <div class="markdown-toolbar">
-                        <div class="markdown-toolbar-left">
-                            <button class="btn btn-primary" id="createMarkdownBtn" style="display:none;">
-                                <i class="fas fa-file-medical"></i> 创建同名 MD
-                            </button>
-                            <button class="btn btn-success" id="editMarkdownBtn" disabled>
-                                <i class="fas fa-pen"></i> 编辑
-                            </button>
-                            <button class="btn btn-primary" id="saveMarkdownBtn" disabled>
-                                <i class="fas fa-save"></i> 保存
-                            </button>
-                        </div>
-                        <div class="markdown-status" id="markdownStatus">未加载</div>
-                    </div>
                     <div class="markdown-body" id="markdownRender">
                         <div class="empty-state">
                             <i class="fas fa-file-alt"></i>
@@ -167,6 +169,13 @@
                     </div>
                     <div class="markdown-editor" id="markdownEditor" style="display:none;">
                         <textarea id="markdownTextarea" spellcheck="false"></textarea>
+                    </div>
+                </div>
+                <div class="flat-view" id="flatView">
+                    <div class="empty-state">
+                        <i class="fas fa-code"></i>
+                        <h3>No File Selected</h3>
+                        <p>选择左侧 JSON 查看原始 JSON</p>
                     </div>
                 </div>
             </div>
