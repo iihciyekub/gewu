@@ -1386,22 +1386,7 @@ class PaperReviewerApp {
         
         // Toggle functionality / Reorder selection / Delete
         if (!this.isReorderMode) {
-            // 双击类名编辑（重命名）- 仅作用于标题文本，避免误触折叠
-            const titleEl = header.querySelector('.collapsible-title');
-            if (titleEl) {
-                titleEl.addEventListener('dblclick', (e) => {
-                    e.preventDefault();
-                    this.openEditKeyModal([], title);
-                });
-            }
-            // 双击标题栏空白处，编辑整个类对象
-            header.addEventListener('dblclick', (e) => {
-                if (e.target.closest('.collapsible-toggle') || e.target.closest('.header-delete') || e.target.closest('.header-add') || e.target.closest('.collapsible-title') || e.target.closest('.section-drag-handle')) {
-                    return;
-                }
-                const valueForEdit = JSON.stringify(data, null, 2);
-                this.openEditModal([title], valueForEdit);
-            });
+            // 双击重命名/整体编辑已取消，避免误触
         }
 
         // 删除按钮
@@ -1505,26 +1490,27 @@ class PaperReviewerApp {
                     this.setSelectedItem({ type: 'row', path: tablePath, key });
                 }
             });
-            // 单击行：编辑字段/值或选中，便于键盘上下移动
+            // 单击行：直接打开该字段的完整编辑弹窗（包含引用/页码等）
             row.addEventListener('click', (e) => {
                 const tablePath = table.dataset.path ? table.dataset.path.split('.').filter(Boolean) : [];
-                // 单击行内任意元素时都先选中并高亮该行
+                const valuePath = [...tablePath, key];
                 this.setSelectedItem({ type: 'row', path: tablePath, key });
                 if (e.target.closest('a')) return; // 跳过链接跳转但保留选中状态
-                const valueEl = e.target.closest('.editable-value');
-                if (valueEl) {
-                    const pathArr = valueEl.dataset.path ? valueEl.dataset.path.split('.').filter(Boolean) : [];
-                    const raw = valueEl.dataset.rawValue !== undefined ? valueEl.dataset.rawValue : valueEl.textContent;
-                    this.openEditModal(pathArr, raw);
-                    return;
+                if (e.target.closest('.editable-value')) return; // 点击值区域仅选中，不触发编辑弹窗
+
+                const fullValue = this.getValueByPath(valuePath);
+                let raw = '';
+                if (typeof fullValue === 'object') {
+                    try {
+                        raw = JSON.stringify(fullValue, null, 2);
+                    } catch (_err) {
+                        raw = '';
+                    }
+                } else if (fullValue !== undefined && fullValue !== null) {
+                    raw = fullValue;
                 }
-                const keyEl = e.target.closest('.editable-key');
-                if (keyEl) {
-                    const parentPath = keyEl.dataset.path ? keyEl.dataset.path.split('.').filter(Boolean) : [];
-                    const oldKey = keyEl.dataset.key;
-                    this.openEditKeyModal(parentPath, oldKey);
-                    return;
-                }
+
+                this.openEditModal(valuePath, raw);
             });
 
             // 第三列：Value值的显示
@@ -4100,38 +4086,18 @@ class PaperReviewerApp {
             document.removeEventListener('dblclick', this._editableClickHandler);
         }
         
-        this._editableClickHandler = (e) => {
-            const target = e.target;
-            
-            // 处理双击 editable-key（编辑字段名）
-            if (target.classList.contains('editable-key') || target.closest('.editable-key')) {
-                const el = target.classList.contains('editable-key') ? target : target.closest('.editable-key');
-                const parentPath = el.dataset.path ? el.dataset.path.split('.').filter(p => p) : [];
-                const oldKey = el.dataset.key;
-                this.selectRowFromElement(el);
-                this.openEditKeyModal(parentPath, oldKey);
-                return;
-            }
-        };
-        
-        // 使用事件委托，绑定到document
-        document.addEventListener('dblclick', this._editableClickHandler);
+        // 取消双击字段名的编辑入口，改为单击行打开完整编辑
+        if (this._editableClickHandler) {
+            document.removeEventListener('dblclick', this._editableClickHandler);
+        }
+        this._editableClickHandler = null;
 
         // 单击 editable-value（编辑值）
         if (this._editableValueClickHandler) {
             document.removeEventListener('click', this._editableValueClickHandler);
         }
-        this._editableValueClickHandler = (e) => {
-            const el = e.target.closest('.editable-value');
-            if (!el) return;
-            // 避免点击跳转链接时触发
-            if (e.target.closest('a')) return;
-            const path = el.dataset.path ? el.dataset.path.split('.').filter(Boolean) : [];
-            const value = el.dataset.rawValue !== undefined ? el.dataset.rawValue : el.textContent;
-            this.selectRowFromElement(el);
-            this.openEditModal(path, value);
-        };
-        document.addEventListener('click', this._editableValueClickHandler);
+        // 取消单击值的编辑入口，改为单击整行
+        this._editableValueClickHandler = null;
 
         // 处理 location-link 点击事件（也使用事件委托）
         if (this._locationLinkHandler) {

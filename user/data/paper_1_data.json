@@ -1,6 +1,6 @@
 {
   "schema_version": "20251215",
-  "lastupdate": "2025-12-15 20:57:44",
+  "lastupdate": "2025-12-15 21:20:52",
   "meta_info": {
     "doi": "10.1287/mnsc.1080.0985",
     "doi_loc": {
@@ -11,7 +11,7 @@
         "doi 10.1287/mnsc.1080.0985"
       ]
     },
-    "pdf_path": "user/papers/10.1287_mnsc.1080.0985.pdf",
+    "pdf_path": "user/papers/mnsc.1080.0985.pdf",
     "cite_id": "marx2009",
     "title": "Mobility, Skills, and the Michigan Non-Compete Experiment",
     "title_loc": {
@@ -41,6 +41,36 @@
       "innovation",
       "employee mobility",
       "non-compete agreements"
-    ]
+    ],
+    "journal_loc": {
+      "page_label": "",
+      "pdf_page_index": null,
+      "pdf_open_params": "",
+      "quote": []
+    },
+    "pdf_path_loc": {
+      "page_label": "",
+      "pdf_page_index": null,
+      "pdf_open_params": "",
+      "quote": []
+    },
+    "year_loc": {
+      "page_label": "",
+      "pdf_page_index": null,
+      "pdf_open_params": "",
+      "quote": []
+    },
+    "keywords_loc": {
+      "page_label": "",
+      "pdf_page_index": null,
+      "pdf_open_params": "",
+      "quote": []
+    },
+    "cite_id_loc": {
+      "page_label": "",
+      "pdf_page_index": null,
+      "pdf_open_params": "",
+      "quote": []
+    }
   }
 }
