@@ -943,13 +943,14 @@ class PaperReviewerApp {
         
         // 确保文件名以.json结尾
         const finalFilename = newFilename.endsWith('.json') ? newFilename : newFilename + '.json';
+        const projectPath = this.currentProject ? this.currentProject.path : 'user';
         
         try {
             const response = await fetch('/rename-json', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    projectPath: this.currentProject ? this.currentProject.path : 'user',
+                    projectPath,
                     oldFilename: oldFilename,
                     newFilename: finalFilename
                 })
@@ -957,11 +958,49 @@ class PaperReviewerApp {
             
             if (!response.ok) throw new Error('重命名失败');
             
+            // 如果存在同名 Markdown，则同步重命名
+            const oldMd = this.getMarkdownFilename(oldFilename);
+            const newMd = this.getMarkdownFilename(finalFilename);
+            if (oldMd !== newMd) {
+                let mdExists = false;
+                try {
+                    const mdCheck = await fetch(this.getDataUrl(oldMd), { method: 'GET', cache: 'no-store' });
+                    mdExists = mdCheck.ok;
+                } catch (checkErr) {
+                    console.warn('Check markdown existence failed:', checkErr);
+                }
+
+                if (mdExists) {
+                    try {
+                        const mdResp = await fetch('/rename-json', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                projectPath,
+                                oldFilename: oldMd,
+                                newFilename: newMd
+                            })
+                        });
+                        if (!mdResp.ok) {
+                            const msg = await mdResp.text();
+                            throw new Error(msg || 'Markdown rename failed');
+                        }
+                        this.showNotification(`✓ 同步重命名笔记为 ${newMd}`, 'success');
+                    } catch (mdErr) {
+                        console.warn('Markdown rename failed:', mdErr);
+                        this.showNotification('⚠️ Markdown 重命名失败，请手动检查', 'info');
+                    }
+                } else {
+                    console.info('No markdown to rename for', oldMd);
+                }
+            }
+
             this.showNotification(`✓ 已重命名为 ${finalFilename}`, 'success');
             
             // 如果当前打开的是这个文件，更新当前文件名
             if (this.currentFile === oldFilename) {
                 this.currentFile = finalFilename;
+                this.currentMarkdownFile = this.getMarkdownFilename(finalFilename);
             }
             
             // 优雅更新：只更新文件名显示，保持选中状态

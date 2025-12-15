@@ -202,7 +202,7 @@ body {
 }
 
 .file-item:hover {
-    background: var(--wos-hover);
+    background: transparent;
 }
 
 .file-item.active {
@@ -219,6 +219,14 @@ body {
 
 .file-item.active i {
     color: white;
+}
+
+.file-list:focus,
+.file-list:focus-visible,
+.file-item:focus,
+.file-item:focus-visible {
+    outline: none;
+    box-shadow: none;
 }
 
 /* Middle Panel - JSON Editor - 紧凑版 */
@@ -448,8 +456,8 @@ body {
 }
 
 .json-table:hover {
-    background-color: var(--wos-hover);
-    box-shadow: 0 0 0 2px var(--wos-active);
+    background-color: transparent;
+    box-shadow: none;
 }
 
 .json-table tr {
