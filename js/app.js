@@ -28,6 +28,7 @@ class PaperReviewerApp {
         this.saveMdEndpoint = '/save-md';
         this.blankDragImage = null;
         this.selectedItem = null; // { type: 'row' | 'section', path: string[], key: string }
+        this.isMiddleActive = false; // 鼠标是否在中间栏，用于键盘上下移动的激活判定
         try {
             this.currentView = localStorage.getItem('lastViewMode') || 'structured';
         } catch (_e) {
@@ -228,6 +229,13 @@ class PaperReviewerApp {
             saveMdBtn.addEventListener('click', () => this.saveMarkdownFromEditor());
         }
 
+        // 中间栏激活检测（鼠标进入/离开）
+        const middlePanel = document.querySelector('.middle-panel');
+        if (middlePanel) {
+            middlePanel.addEventListener('mouseenter', () => { this.isMiddleActive = true; });
+            middlePanel.addEventListener('mouseleave', () => { this.isMiddleActive = false; });
+        }
+
         // Modal controls
         document.getElementById('cancelEdit').addEventListener('click', () => this.closeEditModal());
         document.getElementById('saveEdit').addEventListener('click', () => this.saveEditedValue());
@@ -273,6 +281,7 @@ class PaperReviewerApp {
                 this.moveKey(this.reorderSelected.path, this.reorderSelected.key, offset);
             } else if (!this.isReorderMode && this.selectedItem && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
                 if (['INPUT', 'TEXTAREA'].includes(e.target.tagName) || e.target.isContentEditable) return;
+                if (!this.isMiddleActive) return; // 仅当鼠标在中间栏时允许键盘上下移动
                 e.preventDefault();
                 const offset = e.key === 'ArrowUp' ? -1 : 1;
                 this.moveSelectedItem(offset);

@@ -1,5 +1,4 @@
 {
-  "schema_version": "1.0",
   "meta_info": {
     "doi": "10.1002/joom.1169",
     "doi_loc": {
@@ -52,24 +51,6 @@
       "quote": []
     }
   },
-  "data_metrics": {
-    "time_window": "test for the impact of the my klkdr",
-    "time_window_loc": {
-      "page_label": "2041",
-      "pdf_page_index": 4,
-      "pdf_open_params": "#page=4",
-      "quote": "The impact of foreign competition on product quality"
-    },
-    "sample_size": "the reliability of the KLD遥遥遥遥 ",
-    "sample_size_loc": {
-      "page_label": "4",
-      "pdf_page_index": 4,
-      "pdf_open_params": "#page=4",
-      "quote": [
-        "Our data consist of 65,210 patient admissions"
-      ]
-    }
-  },
   "did_design_setup": {
     "model_type": "Staggered DID (多时点/交错DID)",
     "model_type_loc": {
@@ -78,6 +59,15 @@
       "pdf_open_params": "#page=6",
       "quote": [
         "In order to estimate the impact of HIT on the deviation of LOS from GMLOS, we adopt a difference-in-difference (DID) estimation method and a propensity score matching approach."
+      ]
+    },
+    "regression_equation": "$y_{ijkt}=\\alpha_{1} \\text{ HealthIT App}_{ijk} + \\alpha_{2} \\text{ AfterHealthIT App}_{ijkt} + \\beta \\text{ HealthIT App}_{ijk} \\cdot \\text{ AfterHealthIT App}_{ijkt} + \\epsilon_{ijkt}$",
+    "regression_equation_loc": {
+      "page_label": "7",
+      "pdf_page_index": 7,
+      "pdf_open_params": "#page=7",
+      "quote": [
+        "We code the HIT application as a binary variable where one indicates that it has been implemented and operational, and zero indicates otherwise. Therefore, we can track the change in an application's status turning from inactive to fully operational. Observing such a marker for each application, we compare the before and after effects of HIT implementation using the regression model specified in Equation (1),"
       ]
     },
     "variable_y": "LOS与GMLOS的偏差 (deviation of LOS from GMLOS)",
@@ -106,14 +96,23 @@
       "quote": [
         "while the variable AfterHealthITAppijkt takes a value of one if patient i's visit to hospital j during time period t occurs during the post-treatment (after implementation) period."
       ]
+    }
+  },
+  "data_metrics": {
+    "time_window": "test for the impact of the my klkdr",
+    "time_window_loc": {
+      "page_label": "2041",
+      "pdf_page_index": 4,
+      "pdf_open_params": "#page=4",
+      "quote": "The impact of foreign competition on product quality"
     },
-    "regression_equation": "$y_{ijkt}=\\alpha_{1} \\text{ HealthIT App}_{ijk} + \\alpha_{2} \\text{ AfterHealthIT App}_{ijkt} + \\beta \\text{ HealthIT App}_{ijk} \\cdot \\text{ AfterHealthIT App}_{ijkt} + \\epsilon_{ijkt}$",
-    "regression_equation_loc": {
-      "page_label": "7",
-      "pdf_page_index": 7,
-      "pdf_open_params": "#page=7",
+    "sample_size": "the reliability of the KLD遥遥遥遥 ",
+    "sample_size_loc": {
+      "page_label": "4",
+      "pdf_page_index": 4,
+      "pdf_open_params": "#page=4",
       "quote": [
-        "We code the HIT application as a binary variable where one indicates that it has been implemented and operational, and zero indicates otherwise. Therefore, we can track the change in an application's status turning from inactive to fully operational. Observing such a marker for each application, we compare the before and after effects of HIT implementation using the regression model specified in Equation (1),"
+        "Our data consist of 65,210 patient admissions"
       ]
     }
   },
@@ -157,5 +156,6 @@
       ]
     }
   },
-  "lastupdate": "2025-12-15 13:42:13"
+  "schema_version": "1.0",
+  "lastupdate": "2025-12-15 13:48:40"
 }
