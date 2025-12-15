@@ -129,6 +129,7 @@ body {
     font-size: 11px;
     color: white;
     height: 32px;
+    line-height: 32px;
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -239,7 +240,8 @@ body {
     justify-content: space-between;
     align-items: center;
     gap: 12px;
-    min-height: 36px;
+    height: 32px;
+    line-height: 32px;
     flex-shrink: 0;
 }
 
@@ -252,9 +254,11 @@ body {
 .file-sub {
     display: flex;
     align-items: center;
-    gap: 10px;
-    font-size: 12px;
+    gap: 8px;
+    font-size: 11px;
     color: var(--gray-700);
+    min-width: 0;
+    white-space: nowrap;
 }
 
 .header-actions {
@@ -273,6 +277,7 @@ body {
 .markdown-status {
     font-size: 11px;
     color: var(--gray-600);
+    display: none;
 }
 
 .schema-badge {
@@ -793,12 +798,51 @@ body {
 }
 
 .flat-view.active {
-    display: block;
+    display: flex;
+    flex-direction: column;
+    height: 100%;
 }
 
 #jsonViewer {
     font-family: 'Courier New', monospace;
     font-size: 11px;
+}
+
+.flat-editor {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    height: 100%;
+}
+
+.flat-editor-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.flat-editor textarea {
+    flex: 1;
+    width: 100%;
+    min-height: 0;
+    padding: 10px;
+    font-family: 'Courier New', monospace;
+    font-size: 12px;
+    border: 1px solid var(--wos-border);
+    border-radius: 4px;
+    resize: vertical;
+    box-sizing: border-box;
+}
+
+.json-editor-error {
+    color: #c62828;
+    font-size: 11px;
+    min-height: 14px;
+}
+
+.json-editor-status {
+    font-size: 11px;
+    color: var(--gray-700);
 }
 
 .markdown-body {
@@ -858,18 +902,23 @@ body {
     border-radius: 4px;
     overflow: hidden;
     background: white;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
 }
 
 .markdown-editor textarea {
     width: 100%;
-    min-height: 300px;
+    min-height: 0;
+    height: 100%;
     padding: 10px;
     font-family: 'Courier New', monospace;
     font-size: 12px;
-    border: none;
+    border: 1px solid var(--wos-border);
     outline: none;
     resize: vertical;
     box-sizing: border-box;
+    overflow-y: auto;
 }
 
 /* Right Panel - PDF Viewer - 使用iframe */

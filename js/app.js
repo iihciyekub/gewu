@@ -34,6 +34,32 @@ class PaperReviewerApp {
         this.init();
     }
 
+    applyRawJsonChanges() {
+        const textarea = document.getElementById('jsonEditorTextarea');
+        const errEl = document.getElementById('jsonEditorError');
+        const statusEl = document.getElementById('jsonEditorStatus');
+        if (!textarea) return;
+        if (errEl) errEl.textContent = '';
+        const text = textarea.value;
+        try {
+            const parsed = JSON.parse(text);
+            this.currentData = parsed;
+            this.hasUnsavedChanges = true;
+            this.tempDataCache[this.currentFile] = this.currentData;
+            this.ensureSchemaVersion();
+            this.ensureLastUpdate();
+            this.renderStructuredView();
+            this.renderMath();
+            this.updateSaveButtonState();
+            this.updateUndoButtonState();
+            if (statusEl) statusEl.textContent = '已应用到内存，记得保存到文件';
+            this.showNotification('JSON 已应用到内存，记得保存到文件', 'success');
+        } catch (err) {
+            if (errEl) errEl.textContent = `解析错误: ${err.message}`;
+            this.showNotification(`JSON 解析失败: ${err.message}`, 'error');
+        }
+    }
+
     async init() {
         // 先加载项目配置
         this.loadProjectConfig();
@@ -103,6 +129,15 @@ class PaperReviewerApp {
         // Tab switching
         document.querySelectorAll('.tab-btn').forEach(btn => {
             btn.addEventListener('click', (e) => this.switchView(e.target.closest('.tab-btn')));
+        });
+        // 快捷键：Cmd/Ctrl + E 切换表格/Markdown
+        document.addEventListener('keydown', (e) => {
+            const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
+            const mod = isMac ? e.metaKey : e.ctrlKey;
+            if (mod && e.key.toLowerCase() === 'e') {
+                e.preventDefault();
+                this.toggleTableMarkdownView();
+            }
         });
         const createMdBtn = document.getElementById('createMarkdownBtnHeader');
         if (createMdBtn) {
@@ -215,8 +250,8 @@ class PaperReviewerApp {
         const rightPanel = document.querySelector('.right-panel');
         const container = document.querySelector('.container');
 
-        // 从本地存储恢复面板宽度
-        this.restorePanelWidths(leftPanel, rightPanel);
+        // 从本地存储恢复面板宽度与折叠状态
+        const panelState = this.restorePanelWidths(leftPanel, rightPanel);
 
         // 状态管理
         let state = {
@@ -338,8 +373,8 @@ class PaperReviewerApp {
         });
 
         // 只在点击图标时触发隐藏/显示，采用width收缩/展开方式
-        let lastLeftWidth = leftPanel.getBoundingClientRect().width || 200;
-        let lastRightWidth = rightPanel.getBoundingClientRect().width || 320;
+        let lastLeftWidth = panelState.lastLeftWidth || leftPanel.getBoundingClientRect().width || 200;
+        let lastRightWidth = panelState.lastRightWidth || rightPanel.getBoundingClientRect().width || 320;
         const leftToggle = leftResizer.querySelector('.resizer-toggle');
         if (leftToggle) {
             leftToggle.addEventListener('click', (e) => {
@@ -350,12 +385,14 @@ class PaperReviewerApp {
                     leftPanel.style.width = lastLeftWidth + 'px';
                     leftToggle.title = '点击隐藏左侧面板';
                     if (icon) icon.style.transform = 'rotate(0deg)';
+                    this.savePanelWidths(leftPanel, rightPanel, { collapsedLeft: false, lastLeftWidth, lastRightWidth });
                 } else {
                     lastLeftWidth = leftPanel.getBoundingClientRect().width;
                     leftPanel.classList.add('panel-collapsed');
                     leftPanel.style.width = '';
                     leftToggle.title = '点击显示左侧面板';
                     if (icon) icon.style.transform = 'rotate(180deg)';
+                    this.savePanelWidths(leftPanel, rightPanel, { collapsedLeft: true, lastLeftWidth, lastRightWidth });
                 }
             });
         }
@@ -374,12 +411,14 @@ class PaperReviewerApp {
                     rightPanel.style.width = lastRightWidth + 'px';
                     middleToggle.title = '点击隐藏右侧面板';
                     if (icon) icon.style.transform = 'rotate(0deg)';
+                    this.savePanelWidths(leftPanel, rightPanel, { collapsedRight: false, lastLeftWidth, lastRightWidth });
                 } else {
                     lastRightWidth = rightPanel.getBoundingClientRect().width;
                     rightPanel.classList.add('panel-collapsed');
                     rightPanel.style.width = '';
                     middleToggle.title = '点击显示右侧面板';
                     if (icon) icon.style.transform = 'rotate(180deg)';
+                    this.savePanelWidths(leftPanel, rightPanel, { collapsedRight: true, lastLeftWidth, lastRightWidth });
                 }
             });
         }
@@ -398,12 +437,16 @@ class PaperReviewerApp {
     }
 
     // 保存面板宽度到本地存储
-    savePanelWidths(leftPanel, rightPanel) {
+    savePanelWidths(leftPanel, rightPanel, extras = {}) {
         try {
             const widths = {
                 left: leftPanel.getBoundingClientRect().width,
                 right: rightPanel.getBoundingClientRect().width,
-                timestamp: Date.now()
+                timestamp: Date.now(),
+                collapsedLeft: extras.collapsedLeft ?? leftPanel.classList.contains('panel-collapsed'),
+                collapsedRight: extras.collapsedRight ?? rightPanel.classList.contains('panel-collapsed'),
+                lastLeftWidth: extras.lastLeftWidth ?? leftPanel.getBoundingClientRect().width,
+                lastRightWidth: extras.lastRightWidth ?? rightPanel.getBoundingClientRect().width
             };
             localStorage.setItem('panelWidths', JSON.stringify(widths));
             console.log('💾 面板宽度已保存:', widths);
@@ -418,21 +461,29 @@ class PaperReviewerApp {
             const saved = localStorage.getItem('panelWidths');
             if (saved) {
                 const widths = JSON.parse(saved);
-                
-                // 应用保存的宽度
-                leftPanel.style.width = `${widths.left}px`;
-                leftPanel.style.flexShrink = '0';
-                leftPanel.style.flexGrow = '0';
-                
-                rightPanel.style.width = `${widths.right}px`;
-                rightPanel.style.flexShrink = '0';
-                rightPanel.style.flexGrow = '0';
-                
+                if (widths.left) {
+                    leftPanel.style.width = `${widths.left}px`;
+                    leftPanel.style.flexShrink = '0';
+                    leftPanel.style.flexGrow = '0';
+                }
+                if (widths.right) {
+                    rightPanel.style.width = `${widths.right}px`;
+                    rightPanel.style.flexShrink = '0';
+                    rightPanel.style.flexGrow = '0';
+                }
+                if (widths.collapsedLeft) {
+                    leftPanel.classList.add('panel-collapsed');
+                }
+                if (widths.collapsedRight) {
+                    rightPanel.classList.add('panel-collapsed');
+                }
                 console.log('✅ 面板宽度已恢复:', widths);
+                return widths;
             }
         } catch (error) {
             console.error('恢复面板宽度失败:', error);
         }
+        return { collapsedLeft: false, collapsedRight: false };
     }
 
     // ========== 项目管理方法 ==========
@@ -1765,17 +1816,28 @@ class PaperReviewerApp {
     renderFlatView() {
         const container = document.getElementById('flatView');
         if (!container) return;
-        container.innerHTML = '<div id="jsonViewer"></div>';
+        container.innerHTML = `
+            <div class="flat-editor">
+                <div class="flat-editor-toolbar">
+                    <button class="btn btn-primary" id="applyJsonBtn"><i class="fas fa-check"></i> 应用修改</button>
+                    <span class="json-editor-status" id="jsonEditorStatus"></span>
+                </div>
+                <textarea id="jsonEditorTextarea" spellcheck="false"></textarea>
+                <div class="json-editor-error" id="jsonEditorError"></div>
+            </div>
+        `;
 
-        // Use jQuery json-viewer
-        $('#jsonViewer').jsonViewer(this.currentData, {
-            collapsed: false,
-            withQuotes: true,
-            withLinks: true
-        });
-        
-        // 渲染完成后触发MathJax
-        this.renderMath();
+        const textarea = document.getElementById('jsonEditorTextarea');
+        const statusEl = document.getElementById('jsonEditorStatus');
+        if (textarea) {
+            textarea.value = JSON.stringify(this.currentData, null, 2);
+            if (statusEl) statusEl.textContent = '已加载当前 JSON，可直接编辑后应用';
+        }
+
+        const applyBtn = document.getElementById('applyJsonBtn');
+        if (applyBtn) {
+            applyBtn.addEventListener('click', () => this.applyRawJsonChanges());
+        }
     }
     
     getMarkdownParser() {
@@ -1848,7 +1910,7 @@ class PaperReviewerApp {
         const statusEl = document.getElementById('markdownStatus');
         const editor = document.getElementById('markdownEditor');
         const render = document.getElementById('markdownRender');
-        if (!createBtn || !editBtn || !saveBtn || !statusEl) return;
+        if (!createBtn || !editBtn || !saveBtn) return;
 
         const inMarkdownView = (this.currentView || 'structured') === 'markdown';
 
@@ -1857,10 +1919,6 @@ class PaperReviewerApp {
         saveBtn.style.display = inMarkdownView ? 'inline-flex' : 'none';
         editBtn.disabled = !this.currentMarkdownExists || !inMarkdownView || this.isMarkdownEditing;
         saveBtn.disabled = !this.currentMarkdownExists || !inMarkdownView;
-        statusEl.textContent = this.currentFile
-            ? (this.currentMarkdownExists ? `已加载: ${this.currentMarkdownFile}` : '未找到同名 MD，点击创建')
-            : '未加载文件';
-
         if (this.isMarkdownEditing) {
             if (editor) editor.style.display = 'block';
             if (render) render.style.display = 'none';
@@ -1930,8 +1988,6 @@ class PaperReviewerApp {
         const html = md.render(text);
         render.innerHTML = `<article class="markdown-body">${html}</article>`;
         this.renderMath();
-        const statusEl = document.getElementById('markdownStatus');
-        if (statusEl) statusEl.textContent = this.currentMarkdownExists ? `已加载: ${this.currentMarkdownFile}` : '未找到同名 MD';
     }
 
     async createMarkdownFile() {
@@ -2020,6 +2076,20 @@ class PaperReviewerApp {
         }
 
         this.updateHeaderControls();
+    }
+
+    toggleTableMarkdownView() {
+        const current = this.currentView || 'structured';
+        let targetView = 'structured';
+        if (current === 'structured' || current === 'flat') {
+            targetView = 'markdown';
+        } else {
+            targetView = 'structured';
+        }
+        const targetBtn = document.querySelector(`.tab-btn[data-view="${targetView}"]`);
+        if (targetBtn) {
+            this.switchView(targetBtn);
+        }
     }
 
     formatKey(key) {

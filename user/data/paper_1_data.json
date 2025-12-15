@@ -52,6 +52,24 @@
       "quote": []
     }
   },
+  "data_metrics": {
+    "sample_size": "the reliability of the KLD遥遥遥遥 ",
+    "sample_size_loc": {
+      "page_label": "4",
+      "pdf_page_index": 4,
+      "pdf_open_params": "#page=4",
+      "quote": [
+        "Our data consist of 65,210 patient admissions"
+      ]
+    },
+    "time_window": "test for the impact of the my klkdr",
+    "time_window_loc": {
+      "page_label": "2041",
+      "pdf_page_index": 4,
+      "pdf_open_params": "#page=4",
+      "quote": "The impact of foreign competition on product quality"
+    }
+  },
   "did_design_setup": {
     "model_type": "Staggered DID (多时点/交错DID)",
     "model_type_loc": {
@@ -99,24 +117,6 @@
       ]
     }
   },
-  "data_metrics": {
-    "sample_size": "the reliability of the KLD遥遥遥遥 ",
-    "sample_size_loc": {
-      "page_label": "4",
-      "pdf_page_index": 4,
-      "pdf_open_params": "#page=4",
-      "quote": [
-        "Our data consist of 65,210 patient admissions"
-      ]
-    },
-    "time_window": "硅",
-    "time_window_loc": {
-      "page_label": "2041",
-      "pdf_page_index": 4,
-      "pdf_open_params": "#page=4",
-      "quote": "The impact of foreign competition on product quality"
-    }
-  },
   "key_findings": {
     "primary_result": "Significant Reduction in LOS Deviation (Coeff: -2.655 for RFID)",
     "primary_result_loc": {
@@ -157,5 +157,5 @@
       ]
     }
   },
-  "lastupdate": "2025-12-15 01:08:17"
+  "lastupdate": "2025-12-15 10:21:46"
 }
