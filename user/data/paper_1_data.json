@@ -1,161 +1,46 @@
 {
+  "schema_version": "20251215",
+  "lastupdate": "2025-12-15 20:57:44",
   "meta_info": {
-    "doi": "10.1002/joom.1169",
+    "doi": "10.1287/mnsc.1080.0985",
     "doi_loc": {
-      "page_label": "",
-      "pdf_page_index": null,
-      "pdf_open_params": "",
+      "page_label": "1",
+      "pdf_page_index": 1,
+      "pdf_open_params": "#page=1",
       "quote": [
-        "quasi-natural experiment in the US, in which significant reductions in import tariff"
+        "doi 10.1287/mnsc.1080.0985"
       ]
     },
-    "wosid": "WOS:000744677800001",
-    "wosid_loc": {
-      "page_label": "",
-      "pdf_page_index": null,
-      "pdf_open_params": "",
-      "quote": []
-    },
-    "pdf_path": "user/papers/joom.1169_1.pdf",
-    "pdf_path_loc": {
-      "page_label": "",
-      "pdf_page_index": null,
-      "pdf_open_params": "",
-      "quote": []
-    },
-    "paper_id": "Oh_Zheng_Bardhan_2018",
-    "title": "the impact33333333333333333333",
+    "pdf_path": "user/papers/10.1287_mnsc.1080.0985.pdf",
+    "cite_id": "marx2009",
+    "title": "Mobility, Skills, and the Michigan Non-Compete Experiment",
     "title_loc": {
       "page_label": "1",
       "pdf_page_index": 1,
       "pdf_open_params": "#page=1",
       "quote": [
-        "The impact of foreign competition on domestic firms'\nproduct quality: Evidence from a quasi-natural experiment\nin the United State"
+        "Mobility, Skills, and the Michigan Non-Compete Experiment"
       ]
     },
-    "authors": "Jeong-ha (Cath) Oh; Zhiqiang (Eric) Zheng; Indranil R. Bardhan",
+    "authors": "Matt Marx; Deborah Strumsky; Lee Fleming",
     "authors_loc": {
-      "page_label": "8",
-      "pdf_page_index": 8,
-      "pdf_open_params": "#page=8",
+      "page_label": "1",
+      "pdf_page_index": 1,
+      "pdf_open_params": "#page=1",
       "quote": [
-        "the impact",
-        "nsideration of both strength\nand concern is particularly important in ou"
+        "Matt Marx; Deborah Strumsky; Lee Fleming"
       ]
     },
-    "eer ": "POMS, 2018",
-    "eer _loc": {
-      "page_label": "",
-      "pdf_page_index": null,
-      "pdf_open_params": "",
-      "quote": []
-    }
-  },
-  "did_design_setup": {
-    "model_type": "Staggered DID (多时点/交错DID)",
-    "model_type_loc": {
-      "page_label": "2043",
-      "pdf_page_index": 6,
-      "pdf_open_params": "#page=6",
-      "quote": [
-        "In order to estimate the impact of HIT on the deviation of LOS from GMLOS, we adopt a difference-in-difference (DID) estimation method and a propensity score matching approach."
-      ]
-    },
-    "regression_equation": "$y_{ijkt}=\\alpha_{1} \\text{ HealthIT App}_{ijk} + \\alpha_{2} \\text{ AfterHealthIT App}_{ijkt} + \\beta \\text{ HealthIT App}_{ijk} \\cdot \\text{ AfterHealthIT App}_{ijkt} + \\epsilon_{ijkt}$",
-    "regression_equation_loc": {
-      "page_label": "7",
-      "pdf_page_index": 7,
-      "pdf_open_params": "#page=7",
-      "quote": [
-        "We code the HIT application as a binary variable where one indicates that it has been implemented and operational, and zero indicates otherwise. Therefore, we can track the change in an application's status turning from inactive to fully operational. Observing such a marker for each application, we compare the before and after effects of HIT implementation using the regression model specified in Equation (1),"
-      ]
-    },
-    "variable_y": "LOS与GMLOS的偏差 (deviation of LOS from GMLOS)",
-    "variable_y_loc": {
-      "page_label": "2044",
-      "pdf_page_index": 7,
-      "pdf_open_params": "#page=7",
-      "quote": [
-        "where y is the outcome, denoting the deviation of LOS from GMLOS, i indexes individual discharge (of a patient's in-hospital visit), j represents the hospital, k denotes an individual HIT application, t is the time (in year),"
-      ]
-    },
-    "variable_treat": "HealthITAppijk (HIT应用k在医院j的实施状态)",
-    "variable_treat_loc": {
-      "page_label": "2044",
-      "pdf_page_index": 7,
-      "pdf_open_params": "#page=7",
-      "quote": [
-        "HealthITAppijk takes a value of one if patient i visits hospital j where HIT application k has been implemented, while the variable AfterHealthITAppijkt takes a value of one"
-      ]
-    },
-    "variable_post": "仍AfterHealthITAppijkt (患者访问时间是否处于HIT实施后的事后时期)",
-    "variable_post_loc": {
-      "page_label": "7",
-      "pdf_page_index": 7,
-      "pdf_open_params": "#page=7",
-      "quote": [
-        "while the variable AfterHealthITAppijkt takes a value of one if patient i's visit to hospital j during time period t occurs during the post-treatment (after implementation) period."
-      ]
-    }
-  },
-  "data_metrics": {
-    "time_window": "test for the impact of the my klkdr",
-    "time_window_loc": {
-      "page_label": "2041",
-      "pdf_page_index": 4,
-      "pdf_open_params": "#page=4",
-      "quote": "The impact of foreign competition on product quality"
-    },
-    "sample_size": "the reliability of the KLD遥遥遥遥 ",
-    "sample_size_loc": {
-      "page_label": "4",
-      "pdf_page_index": 4,
-      "pdf_open_params": "#page=4",
-      "quote": [
-        "Our data consist of 65,210 patient admissions"
-      ]
-    }
-  },
-  "key_findings": {
-    "primary_result": "Significant Reduction in LOS Deviation (Coeff: -2.655 for RFID)",
-    "primary_result_loc": {
-      "page_label": "2046",
-      "pdf_page_index": 9,
-      "pdf_open_params": "#page=9",
-      "quote": [
-        "Table 3... RFID-Patient Tracking... -2.655"
-      ]
-    },
-    "secondary_result": "Early discharge increases readmission risk (Odds Ratio: 1.07)",
-    "secondary_result_loc": {
-      "page_label": "2047",
-      "pdf_page_index": 10,
-      "pdf_open_params": "#page=10",
-      "quote": [
-        "Foreign competition has a negative\nimpact on US firms' product quality."
-      ]
-    }
-  },
-  "robustness_checks": {
-    "endogeneity_method": "PSM (Propensity Score Matching) + DID",
-    "endogeneity_method_loc": {
-      "page_label": "2045",
-      "pdf_page_index": 8,
-      "pdf_open_params": "#page=8",
-      "quote": [
-        "Table 4 presents the results from our PSM-DID analysis"
-      ]
-    },
-    "parallel_trend_check": "Implicit (Assumed via DID design)",
-    "parallel_trend_check_loc": {
-      "page_label": "2044",
-      "pdf_page_index": 7,
-      "pdf_open_params": "#page=7",
-      "quote": [
-        "assumed that the time effects are common across treated and untreated individuals"
-      ]
-    }
-  },
-  "schema_version": "1.0",
-  "lastupdate": "2025-12-15 13:48:40"
+    "year": "2009",
+    "journal": "Management Science",
+    "keywords": [
+      "labor",
+      "design of experiments",
+      "personnel",
+      "strategy",
+      "innovation",
+      "employee mobility",
+      "non-compete agreements"
+    ]
+  }
 }

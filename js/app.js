@@ -810,7 +810,8 @@ class PaperReviewerApp {
             
             const data = await response.json();
             const files = data.files || [];
-            await this.ensureMarkdownForFiles(files);
+            // 避免在加载列表时批量创建/检查 Markdown，以减少切换文件时的卡顿。
+            // Markdown 的存在校验改为按需在 loadFile 阶段处理。
             this.renderFileList(files, keepSelection ? currentSelected : null);
         } catch (error) {
             console.error('Error loading file list:', error);
@@ -2606,8 +2607,6 @@ class PaperReviewerApp {
                     console.warn('Suppress PDF.js prompts failed:', err);
                 }
             };
-            
-            this.showNotification('PDF 加载完成', 'success');
         } catch (error) {
             console.error('Error loading PDF:', error);
             this.showNotification(`PDF 加载失败: ${error.message}`, 'error');
