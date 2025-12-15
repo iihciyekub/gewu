@@ -1336,6 +1336,11 @@ class PaperReviewerApp {
         if (this.isReorderMode) {
             table.classList.add('reorder-mode');
         }
+        // 点击表格空白区域时，选中对应的类条目
+        table.addEventListener('click', (e) => {
+            if (e.target.closest('tr')) return;
+            this.setSelectedItem({ type: 'section', path: [], key: title });
+        });
         this.renderObject(data, table, path);
         content.appendChild(table);
         
@@ -1462,8 +1467,10 @@ class PaperReviewerApp {
             });
             // 单击行：编辑字段/值或选中，便于键盘上下移动
             row.addEventListener('click', (e) => {
-                if (e.target.closest('a')) return; // 跳过链接点击
                 const tablePath = table.dataset.path ? table.dataset.path.split('.').filter(Boolean) : [];
+                // 单击行内任意元素时都先选中并高亮该行
+                this.setSelectedItem({ type: 'row', path: tablePath, key });
+                if (e.target.closest('a')) return; // 跳过链接跳转但保留选中状态
                 const valueEl = e.target.closest('.editable-value');
                 if (valueEl) {
                     const pathArr = valueEl.dataset.path ? valueEl.dataset.path.split('.').filter(Boolean) : [];
@@ -1478,7 +1485,6 @@ class PaperReviewerApp {
                     this.openEditKeyModal(parentPath, oldKey);
                     return;
                 }
-                this.setSelectedItem({ type: 'row', path: tablePath, key });
             });
 
             // 第三列：Value值的显示
@@ -1874,6 +1880,20 @@ class PaperReviewerApp {
         this.highlightSelectedItem();
     }
 
+    /**
+     * 根据任意子元素找到所在的表格行并选中高亮
+     */
+    selectRowFromElement(element) {
+        if (!element) return;
+        const row = element.closest('tr[data-key]');
+        const table = row?.closest('table.json-table');
+        if (!row || !table) return;
+        const tablePath = table.dataset.path ? table.dataset.path.split('.').filter(Boolean) : [];
+        const key = row.dataset.key;
+        if (!key) return;
+        this.setSelectedItem({ type: 'row', path: tablePath, key });
+    }
+
     highlightSelectedItem() {
         document.querySelectorAll('.row-selected').forEach(el => el.classList.remove('row-selected'));
         document.querySelectorAll('.section-selected').forEach(el => el.classList.remove('section-selected'));
@@ -1889,6 +1909,10 @@ class PaperReviewerApp {
             const rowEl = document.querySelector(`table.json-table[data-path="${CSS.escape(tablePath)}"] tr[data-key="${CSS.escape(key)}"]`);
             if (rowEl) {
                 rowEl.classList.add('row-selected');
+                const sectionEl = rowEl.closest('.collapsible-section');
+                if (sectionEl) {
+                    sectionEl.classList.add('section-selected');
+                }
             }
         }
     }
@@ -4046,6 +4070,7 @@ class PaperReviewerApp {
                 const el = target.classList.contains('editable-key') ? target : target.closest('.editable-key');
                 const parentPath = el.dataset.path ? el.dataset.path.split('.').filter(p => p) : [];
                 const oldKey = el.dataset.key;
+                this.selectRowFromElement(el);
                 this.openEditKeyModal(parentPath, oldKey);
                 return;
             }
@@ -4065,6 +4090,7 @@ class PaperReviewerApp {
             if (e.target.closest('a')) return;
             const path = el.dataset.path ? el.dataset.path.split('.').filter(Boolean) : [];
             const value = el.dataset.rawValue !== undefined ? el.dataset.rawValue : el.textContent;
+            this.selectRowFromElement(el);
             this.openEditModal(path, value);
         };
         document.addEventListener('click', this._editableValueClickHandler);

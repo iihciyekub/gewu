@@ -1645,13 +1645,13 @@ ol.json-array {
     transition: box-shadow 0.18s ease, border-color 0.18s ease, background-color 0.18s ease;
 }
 
-.collapsible-section:hover {
+.collapsible-section.section-selected {
     border-color: var(--wos-blue);
     box-shadow: 0 0 0 1px var(--wos-active);
     background: var(--wos-hover);
 }
 
-.collapsible-section:hover .json-table {
+.collapsible-section.section-selected .json-table {
     background-color: var(--wos-hover);
     box-shadow: 0 0 0 2px var(--wos-active);
 }
