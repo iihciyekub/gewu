@@ -1333,7 +1333,7 @@ class PaperReviewerApp {
 
             const row = document.createElement('tr');
             row.dataset.key = key;
-            row.draggable = this.isReorderMode;
+            row.draggable = true;
             const toggleCell = document.createElement('td');
             const keyCell = document.createElement('td');
             const valueCell = document.createElement('td');
@@ -1344,20 +1344,9 @@ class PaperReviewerApp {
 
             // 第一列：保留占位但不放置可点击的展开按钮
             toggleCell.className = 'toggle-cell';
-            if (this.isReorderMode) {
-                toggleCell.innerHTML = `<i class="fas fa-up-down-left-right edit-cell-icon" title="拖动调整顺序"></i>`;
-            } else {
-                toggleCell.innerHTML = `<i class="fas fa-pen-to-square edit-cell-icon" title="点击编辑"></i>`;
-                toggleCell.addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    const currentPath = [...basePath, key];
-                    let valueForEdit = value;
-                    if (typeof value === 'object' && value !== null) {
-                        valueForEdit = Array.isArray(value) ? JSON.stringify(value) : JSON.stringify(value, null, 2);
-                    }
-                    this.openEditModal(currentPath, valueForEdit);
-                });
-            }
+            toggleCell.innerHTML = `
+                <i class="fa-solid fa-bars drag-handle edit-cell-icon" title="拖动调整顺序"></i>
+            `;
 
             // 第二列：Key可编辑
             const keyDisplay = `<span class="editable-key" data-path="${basePath.join('.')}" data-key="${key}">${this.formatKey(key)}</span>`;
@@ -1366,46 +1355,41 @@ class PaperReviewerApp {
             const currentPath = [...basePath, key];
 
             // 拖拽排序事件
-            if (this.isReorderMode) {
-                row.addEventListener('click', (e) => {
-                    e.preventDefault();
-                    this.setReorderSelection(basePath, key);
-                });
-                row.addEventListener('dragstart', (e) => {
-                    e.dataTransfer.setData('text/plain', key);
-                    e.dataTransfer.effectAllowed = 'move';
-                    row.classList.add('dragging');
-                });
-                row.addEventListener('dragend', () => {
-                    row.classList.remove('dragging');
-                });
-                row.addEventListener('dragover', (e) => {
-                    e.preventDefault();
-                    e.dataTransfer.dropEffect = 'move';
-                    row.classList.add('drag-over');
-                });
-                row.addEventListener('dragleave', () => {
-                    row.classList.remove('drag-over');
-                });
-                row.addEventListener('drop', (e) => {
-                    e.preventDefault();
-                    row.classList.remove('drag-over');
-                    const fromKey = e.dataTransfer.getData('text/plain');
-                    const toKey = key;
-                    const tablePath = table.dataset.path ? table.dataset.path.split('.').filter(Boolean) : [];
-                    this.reorderKeys(tablePath, fromKey, toKey);
-                });
-                // 点击左列，上移/下移
-                toggleCell.addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    const tablePath = table.dataset.path ? table.dataset.path.split('.').filter(Boolean) : [];
-                    if (e.shiftKey) {
-                        this.moveKey(tablePath, key, 1); // 下移
-                    } else {
-                        this.moveKey(tablePath, key, -1); // 上移
-                    }
-                });
-            }
+            // 拖拽排序事件（始终可用）
+            row.addEventListener('dragstart', (e) => {
+                e.dataTransfer.setData('text/plain', key);
+                e.dataTransfer.effectAllowed = 'move';
+                row.classList.add('dragging');
+            });
+            row.addEventListener('dragend', () => {
+                row.classList.remove('dragging');
+            });
+            row.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                e.dataTransfer.dropEffect = 'move';
+                row.classList.add('drag-over');
+            });
+            row.addEventListener('dragleave', () => {
+                row.classList.remove('drag-over');
+            });
+            row.addEventListener('drop', (e) => {
+                e.preventDefault();
+                row.classList.remove('drag-over');
+                const fromKey = e.dataTransfer.getData('text/plain');
+                const toKey = key;
+                const tablePath = table.dataset.path ? table.dataset.path.split('.').filter(Boolean) : [];
+                this.reorderKeys(tablePath, fromKey, toKey);
+            });
+            // 点击左列，上移/下移（Shift为下移）
+            toggleCell.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const tablePath = table.dataset.path ? table.dataset.path.split('.').filter(Boolean) : [];
+                if (e.shiftKey) {
+                    this.moveKey(tablePath, key, 1); // 下移
+                } else {
+                    this.moveKey(tablePath, key, -1); // 上移
+                }
+            });
 
             // 第三列：Value值的显示
             if (typeof value === 'object' && value !== null) {

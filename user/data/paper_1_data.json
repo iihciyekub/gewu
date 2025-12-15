@@ -2,7 +2,28 @@
   "schema_version": "1.0",
   "meta_info": {
     "doi": "10.1002/joom.1169",
+    "doi_loc": {
+      "page_label": "",
+      "pdf_page_index": null,
+      "pdf_open_params": "",
+      "quote": [
+        "quasi-natural experiment in the US, in which significant reductions in import tariff"
+      ]
+    },
+    "wosid": "WOS:000744677800001",
+    "wosid_loc": {
+      "page_label": "",
+      "pdf_page_index": null,
+      "pdf_open_params": "",
+      "quote": []
+    },
     "pdf_path": "user/papers/joom.1169_1.pdf",
+    "pdf_path_loc": {
+      "page_label": "",
+      "pdf_page_index": null,
+      "pdf_open_params": "",
+      "quote": []
+    },
     "paper_id": "Oh_Zheng_Bardhan_2018",
     "title": "the impact33333333333333333333",
     "title_loc": {
@@ -23,29 +44,8 @@
         "nsideration of both strength\nand concern is particularly important in ou"
       ]
     },
-    "pdf_path_loc": {
-      "page_label": "",
-      "pdf_page_index": null,
-      "pdf_open_params": "",
-      "quote": []
-    },
-    "doi_loc": {
-      "page_label": "",
-      "pdf_page_index": null,
-      "pdf_open_params": "",
-      "quote": [
-        "quasi-natural experiment in the US, in which significant reductions in import tariff"
-      ]
-    },
     "eer ": "POMS, 2018",
     "eer _loc": {
-      "page_label": "",
-      "pdf_page_index": null,
-      "pdf_open_params": "",
-      "quote": []
-    },
-    "wosid": "WOS:000744677800001",
-    "wosid_loc": {
       "page_label": "",
       "pdf_page_index": null,
       "pdf_open_params": "",
@@ -53,6 +53,13 @@
     }
   },
   "data_metrics": {
+    "time_window": "test for the impact of the my klkdr",
+    "time_window_loc": {
+      "page_label": "2041",
+      "pdf_page_index": 4,
+      "pdf_open_params": "#page=4",
+      "quote": "The impact of foreign competition on product quality"
+    },
     "sample_size": "the reliability of the KLD遥遥遥遥 ",
     "sample_size_loc": {
       "page_label": "4",
@@ -61,13 +68,6 @@
       "quote": [
         "Our data consist of 65,210 patient admissions"
       ]
-    },
-    "time_window": "test for the impact of the my klkdr",
-    "time_window_loc": {
-      "page_label": "2041",
-      "pdf_page_index": 4,
-      "pdf_open_params": "#page=4",
-      "quote": "The impact of foreign competition on product quality"
     }
   },
   "did_design_setup": {
@@ -157,5 +157,5 @@
       ]
     }
   },
-  "lastupdate": "2025-12-15 10:21:46"
+  "lastupdate": "2025-12-15 12:50:30"
 }

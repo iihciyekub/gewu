@@ -453,7 +453,7 @@ body {
 }
 
 .json-table tr {
-    transition: background-color 0.12s ease;
+    transition: background-color 0.12s ease, transform 0.12s ease, opacity 0.12s ease;
 }
 
 .json-table tr:hover {
@@ -480,7 +480,8 @@ body {
     text-align: center;
     background: var(--gray-50);
     border-right: 1px solid var(--gray-300);
-    cursor: pointer;
+    cursor: default;
+    position: relative;
 }
 
 .json-table .edit-cell-icon {
@@ -498,8 +499,30 @@ body {
     pointer-events: auto;
 }
 
+.json-table .drag-handle {
+    cursor: grab;
+    transition: transform 0.15s ease, color 0.15s ease, opacity 0.15s ease;
+    opacity: 0;
+    font-size: 13px;
+}
+
+.json-table td.toggle-cell:hover .drag-handle {
+    opacity: 1;
+    color: var(--wos-blue);
+}
+
+.json-table .drag-handle:active {
+    cursor: grabbing;
+    transform: scale(1.08);
+}
+
 .json-table tr.drag-over {
     outline: 1px dashed var(--wos-blue);
+}
+
+.json-table tr.dragging {
+    opacity: 0.75;
+    transform: translateX(2px);
 }
 
 .json-table.reorder-mode td.toggle-cell {
