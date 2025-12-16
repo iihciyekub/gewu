@@ -27,6 +27,7 @@ class PaperReviewerApp {
         this.isMarkdownEditing = false;
         this.saveMdEndpoint = '/save-md';
         this.blankDragImage = null;
+        this.keywordTooltipEl = null;
         this.selectedItem = null; // { type: 'row' | 'section', path: string[], key: string }
         this.isMiddleActive = false; // 鼠标是否在中间栏，用于键盘上下移动的激活判定
         this.fileFilter = '';
@@ -1662,6 +1663,66 @@ class PaperReviewerApp {
                 <i class="fas fa-external-link-alt"></i> ${this.escapeHtml(displayValue)}
             </a>`;
         }
+        // 特殊处理: keywords 字段，解析为数组并为每个关键词生成 WoS 链接（AK=）
+        if (keyLower === 'keywords' && value) {
+            let keywordsArr = [];
+            if (Array.isArray(value)) {
+                keywordsArr = value.filter(v => typeof v === 'string' && v.trim()).map(v => v.trim());
+            } else if (typeof value === 'string') {
+                try {
+                    const parsed = JSON.parse(value);
+                    if (Array.isArray(parsed)) {
+                        keywordsArr = parsed.filter(v => typeof v === 'string' && v.trim()).map(v => v.trim());
+                    }
+                } catch (_err) {
+                    // 非 JSON 字符串，尝试分隔
+                    keywordsArr = value.split(/[,;|]+/).map(v => v.trim()).filter(Boolean);
+                }
+            }
+            if (keywordsArr.length) {
+                const links = keywordsArr.map(kw => {
+                    const url = this.generateWosKeywordUrl(kw);
+                    const tip = this.escapeHtml(kw);
+                    return `<a href="${url}" target="_blank" class="doi-link keyword-tip" data-tip="${tip}">
+                        <i class="fas fa-external-link-alt"></i>
+                    </a>`;
+                }).join('<span class="keyword-sep"> </span>');
+                return `<span class="keyword-links">${links}</span>`;
+            }
+        }
+        // 特殊处理: authors 字段，解析为数组并为每个作者生成 WoS 链接（AU=）
+        if (keyLower === 'authors' && value) {
+            let authorsArr = [];
+            if (Array.isArray(value)) {
+                authorsArr = value.filter(v => typeof v === 'string' && v.trim()).map(v => v.trim());
+            } else if (typeof value === 'string') {
+                try {
+                    const parsed = JSON.parse(value);
+                    if (Array.isArray(parsed)) {
+                        authorsArr = parsed.filter(v => typeof v === 'string' && v.trim()).map(v => v.trim());
+                    }
+                } catch (_err) {
+                    authorsArr = value.split(/[,;|]+/).map(v => v.trim()).filter(Boolean);
+                }
+            }
+            if (authorsArr.length) {
+                const links = authorsArr.map(author => {
+                    const url = this.generateWosAuthorUrl(author);
+                    const tip = this.escapeHtml(author);
+                    return `<a href="${url}" target="_blank" class="doi-link keyword-tip" data-tip="${tip}">
+                        <i class="fas fa-external-link-alt"></i>
+                    </a>`;
+                }).join('<span class="keyword-sep"> </span>');
+                return `<span class="keyword-links">${links}</span>`;
+            }
+        }
+        // 特殊处理: Journal 字段，按 SO 查询 Web of Science
+        if (keyLower === 'journal' && typeof value === 'string' && value.trim()) {
+            const wosUrl = this.generateWosJournalUrl(value.trim());
+            return `<a href="${wosUrl}" target="_blank" class="doi-link" title="View journal on Web of Science">
+                <i class="fas fa-external-link-alt"></i> ${this.escapeHtml(displayValue)}
+            </a>`;
+        }
         // 特殊处理: WOSID 字段，跳转 Web of Science Full Record
         if (keyLower.includes('wos') && typeof value === 'string') {
             const trimmed = value.trim();
@@ -1731,6 +1792,64 @@ class PaperReviewerApp {
         }];
         const jsonStr = encodeURIComponent(JSON.stringify(query));
         return `https://www.webofscience.com/wos/woscc/general-summary?queryJson=${jsonStr}`;
+    }
+
+    generateWosJournalUrl(journal) {
+        if (!journal) return '';
+        const query = [{
+            rowText: `SO=${journal}`
+        }];
+        const jsonStr = encodeURIComponent(JSON.stringify(query));
+        return `https://www.webofscience.com/wos/woscc/general-summary?queryJson=${jsonStr}`;
+    }
+
+    generateWosKeywordUrl(keyword) {
+        if (!keyword) return '';
+        const query = [{
+            rowText: `AK=${keyword}`
+        }];
+        const jsonStr = encodeURIComponent(JSON.stringify(query));
+        return `https://www.webofscience.com/wos/woscc/general-summary?queryJson=${jsonStr}`;
+    }
+
+    generateWosAuthorUrl(author) {
+        if (!author) return '';
+        const query = [{
+            rowText: `AU=${author}`
+        }];
+        const jsonStr = encodeURIComponent(JSON.stringify(query));
+        return `https://www.webofscience.com/wos/woscc/general-summary?queryJson=${jsonStr}`;
+    }
+
+    getKeywordTooltipEl() {
+        if (!this.keywordTooltipEl) {
+            const el = document.createElement('div');
+            el.className = 'keyword-tooltip';
+            el.style.display = 'none';
+            document.body.appendChild(el);
+            this.keywordTooltipEl = el;
+        }
+        return this.keywordTooltipEl;
+    }
+
+    positionKeywordTooltip(e) {
+        const tooltip = this.getKeywordTooltipEl();
+        const offset = 12;
+        let x = e.clientX + offset;
+        let y = e.clientY + offset;
+        tooltip.style.left = `${x}px`;
+        tooltip.style.top = `${y}px`;
+        const rect = tooltip.getBoundingClientRect();
+        const vw = window.innerWidth;
+        const vh = window.innerHeight;
+        if (rect.right > vw - 8) {
+            x = vw - rect.width - 8;
+        }
+        if (rect.bottom > vh - 8) {
+            y = vh - rect.height - 8;
+        }
+        tooltip.style.left = `${x}px`;
+        tooltip.style.top = `${y}px`;
     }
 
     normalizeProjectPathString(pathStr) {
@@ -2672,6 +2791,7 @@ class PaperReviewerApp {
                 try {
                     const win = pdfViewer.contentWindow;
                     if (win) {
+                        const pdfDoc = win.document;
                         // 禁用 PDF.js 内部的 alert/confirm/prompt 弹窗
                         win.alert = () => {};
                         win.confirm = () => true;
@@ -2679,6 +2799,14 @@ class PaperReviewerApp {
                         // 部分 overlay 弹窗（如删除时的提示）直接关闭
                         if (win.PDFViewerApplication?.overlayManager?.closeAll) {
                             win.PDFViewerApplication.overlayManager.closeAll();
+                        }
+                        // 避免 PDF.js password 输入的控制台告警（不在 form 内）
+                        const pwdField = pdfDoc?.querySelector('input#password.toolbarField');
+                        if (pwdField) {
+                            pwdField.setAttribute('autocomplete', 'off');
+                            if (pwdField.getAttribute('type') === 'password') {
+                                pwdField.setAttribute('type', 'text');
+                            }
                         }
                     }
                 } catch (err) {
@@ -3665,6 +3793,8 @@ class PaperReviewerApp {
         }
         
         // Update主字段值
+        let shouldReloadPdf = false;
+        let nextPdfFile = null;
         try {
             if (newValue.trim().startsWith('{') || newValue.trim().startsWith('[')) {
                 current[lastKey] = JSON.parse(newValue);
@@ -3674,6 +3804,11 @@ class PaperReviewerApp {
             // 规范化 pdf_path 仅保留文件名
             if (lastKey.toLowerCase() === 'pdf_path') {
                 current[lastKey] = this.normalizePdfPathValue(current[lastKey]);
+                const parentIsMeta = this.editingPath.length >= 2 && this.editingPath[this.editingPath.length - 2].toLowerCase() === 'meta_info';
+                if (parentIsMeta) {
+                    shouldReloadPdf = true;
+                    nextPdfFile = current[lastKey];
+                }
             }
         } catch (e) {
             current[lastKey] = newValue;
@@ -3735,6 +3870,17 @@ class PaperReviewerApp {
         
         // 提示已暂存
         this.showNotification('✓ 修改已暂存（未保存到文件）', 'info');
+
+        // 如果更新了 meta_info.pdf_path，则立即按新路径加载 PDF
+        if (shouldReloadPdf && nextPdfFile) {
+            const projectPath = this.currentProject ? this.currentProject.path : 'user';
+            const pdfUrl = `${projectPath}/papers/${nextPdfFile}`;
+            try {
+                await this.loadPDF(pdfUrl);
+            } catch (err) {
+                console.warn('重新加载PDF失败:', err);
+            }
+        }
     }
 
     deleteCurrentField() {
@@ -4216,6 +4362,48 @@ class PaperReviewerApp {
         };
         
         document.addEventListener('click', this._locationLinkHandler);
+
+        // 关键词悬停提示
+        if (this._keywordTipEnterHandler) {
+            document.removeEventListener('mouseenter', this._keywordTipEnterHandler, true);
+        }
+        if (this._keywordTipMoveHandler) {
+            document.removeEventListener('mousemove', this._keywordTipMoveHandler, true);
+        }
+        if (this._keywordTipLeaveHandler) {
+            document.removeEventListener('mouseleave', this._keywordTipLeaveHandler, true);
+        }
+
+        this._keywordTipEnterHandler = (e) => {
+            const target = e.target;
+            if (!target || typeof target.closest !== 'function') return;
+            const link = target.closest('.keyword-tip');
+            if (!link) return;
+            const tip = link.dataset.tip || '';
+            if (!tip) return;
+            const tooltip = this.getKeywordTooltipEl();
+            tooltip.textContent = tip;
+            tooltip.style.display = 'block';
+            this.positionKeywordTooltip(e);
+        };
+
+        this._keywordTipMoveHandler = (e) => {
+            if (!this.keywordTooltipEl || this.keywordTooltipEl.style.display !== 'block') return;
+            this.positionKeywordTooltip(e);
+        };
+
+        this._keywordTipLeaveHandler = (e) => {
+            const target = e.target;
+            if (!target || typeof target.closest !== 'function') return;
+            if (target.closest('.keyword-tip')) {
+                const tooltip = this.getKeywordTooltipEl();
+                tooltip.style.display = 'none';
+            }
+        };
+
+        document.addEventListener('mouseenter', this._keywordTipEnterHandler, true);
+        document.addEventListener('mousemove', this._keywordTipMoveHandler, true);
+        document.addEventListener('mouseleave', this._keywordTipLeaveHandler, true);
 
         // 右键删除字段
         if (this._fieldContextHandler) {
