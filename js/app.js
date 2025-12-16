@@ -1746,6 +1746,9 @@ class PaperReviewerApp {
             valueContent = `<span class="math-placeholder" title="Click to view/edit formula"><i class="fas fa-square-root-variable"></i></span>`;
         }
 
+        // 渲染 goto{...} 为 PDF 跳转图标
+        valueContent = this.renderGotoLinks(displayValue, path.join('.')) || valueContent;
+
         let html = `<span class="editable-value${isLongMath ? ' math-collapsed' : ''}" data-path="${path.join('.')}" data-raw-value="${rawValueAttr}">${valueContent}</span>`;
         
         if (location) {
@@ -2289,6 +2292,163 @@ class PaperReviewerApp {
             if (window.markdownItGithubAlerts) {
                 md.use(window.markdownItGithubAlerts);
             }
+            // 支持 goto{...} 内联跳转图标
+            const gotoPlugin = (mdInstance) => {
+                const defaultText = mdInstance.renderer.rules.text || ((tokens, idx) => md.utils.escapeHtml(tokens[idx].content));
+                mdInstance.renderer.rules.text = (tokens, idx, options, env, self) => {
+                    const token = tokens[idx];
+                    const content = token.content || '';
+                    if (!content.includes('goto{')) return defaultText(tokens, idx, options, env, self);
+                    const segments = content.split(/(goto\{[^}]+\})/g).filter(Boolean);
+                    const rendered = segments.map(seg => {
+                        const match = seg.match(/^goto\{([^}]+)\}$/);
+                        if (match) {
+                            const q = match[1].trim();
+                            if (!q) return md.utils.escapeHtml(seg);
+                            const esc = md.utils.escapeHtml(q).replace(/`/g, '&#96;');
+                            return `<a href="#" class="location-link goto-link" data-page="" data-quote-text="${esc}" data-open-params="" data-quote-index="0" data-value-path="" title="跳转PDF搜索"><i class="fa-solid fa-quote-right"></i></a>`;
+                        }
+                        return md.utils.escapeHtml(seg);
+                    }).join('');
+                    return rendered;
+                };
+            };
+            md.use(gotoPlugin);
+            // 自定义 QA / goto 代码块渲染
+            const qaPlugin = (mdInstance) => {
+                const defaultFence = mdInstance.renderer.rules.fence || mdInstance.renderer.renderToken;
+                const escapeHtml = (str = '') => str
+                    .replace(/&/g, '&amp;')
+                    .replace(/</g, '&lt;')
+                    .replace(/>/g, '&gt;')
+                    .replace(/"/g, '&quot;')
+                    .replace(/'/g, '&#39;');
+                const escapeAttr = (str = '') => escapeHtml(str).replace(/`/g, '&#96;');
+
+                const parseQaContent = (content = '') => {
+                    const lines = content.split('\n');
+                    const items = [];
+                    let current = null;
+                    let mode = null; // 'q' | 'a' | 'cite'
+
+                    const parseCites = (rawLines = []) => {
+                        const rawText = rawLines.join('\n').trim();
+                        if (!rawText) return { cites: [], rawText: '' };
+                        let normalized = rawText
+                            .replace(/[\u201c\u201d]/g, '"')
+                            .replace(/[\u2018\u2019]/g, "'")
+                            .replace(/：/g, ':')
+                            .replace(/，/g, ',')
+                            .replace(/,\s*([}\]])/g, '$1');
+                        // 补全未带引号的键
+                        normalized = normalized.replace(/([A-Za-z0-9_]+)\s*:/g, '"$1":');
+                        const tryParse = (txt) => {
+                            try {
+                                return JSON.parse(txt);
+                            } catch (_err) {
+                                return null;
+                            }
+                        };
+                        let parsed = tryParse(normalized);
+                        if (!parsed) {
+                            // 如果缺少数组包裹，尝试包裹 []
+                            parsed = tryParse(`[${normalized}]`);
+                        }
+                        if (parsed && !Array.isArray(parsed)) parsed = [parsed];
+                        if (!parsed || !Array.isArray(parsed)) {
+                            console.warn('QA cite parse failed, raw:', rawText);
+                            return { cites: [], rawText };
+                        }
+                        return { cites: parsed, rawText };
+                    };
+
+                const flush = () => {
+                    if (current && current.q) {
+                            if (current.a) current.a = current.a.replace(/,+\s*$/, '').trim();
+                            const parsed = parseCites(current.citeRaw);
+                            current.cites = parsed.cites;
+                            current.citeRawText = parsed.rawText;
+                            delete current.citeRaw;
+                            items.push(current);
+                        }
+                        current = null;
+                        mode = null;
+                    };
+
+                    for (const raw of lines) {
+                        const line = raw.trim();
+                        if (!line || line === '{' || line === '}') continue;
+                        if (/^---+$/.test(line)) {
+                            flush();
+                            continue;
+                        }
+
+                        const qMatch = line.match(/^q\d*\s*:\s*(.*)$/i);
+                        const aMatch = line.match(/^a\d*\s*:\s*(.*)$/i);
+                        const citeMatch = line.match(/^cite\s*:\s*(.*)$/i);
+                        if (qMatch) {
+                            flush();
+                            current = { q: qMatch[1] || '', a: '', citeRaw: [] };
+                            mode = 'q';
+                            continue;
+                        }
+                        if (aMatch) {
+                            if (!current) current = { q: '', a: '', citeRaw: [] };
+                            current.a = aMatch[1] || '';
+                            mode = 'a';
+                            continue;
+                        }
+                        if (citeMatch) {
+                            if (!current) current = { q: '', a: '', citeRaw: [] };
+                            mode = 'cite';
+                            const rest = citeMatch[1] || '';
+                            if (rest) current.citeRaw.push(rest);
+                            continue;
+                        }
+
+                        if (current && mode === 'q') {
+                            current.q = `${current.q}\n${line}`;
+                        } else if (current && mode === 'a') {
+                            current.a = `${current.a}\n${line}`;
+                        } else if (current && mode === 'cite') {
+                            current.citeRaw.push(raw);
+                        }
+                    }
+                    flush();
+                    return items;
+                };
+
+                mdInstance.renderer.rules.fence = (tokens, idx, options, env, self) => {
+                    const token = tokens[idx];
+                    const info = (token.info || '').trim().toLowerCase();
+                    if (info === 'goto') {
+                        const q = token.content.trim();
+                        if (!q) return '';
+                        const esc = escapeAttr(q);
+                        return `<div class="goto-block"><a href="#" class="location-link goto-link" data-page="" data-quote-text="${esc}" data-open-params="" data-quote-index="0" data-value-path="" title="跳转PDF搜索"><i class="fa-solid fa-quote-right"></i>${escapeHtml(q)}</a></div>`;
+                    }
+                    // 避免嵌套渲染导致递归
+                    if (env && env.__qaRendering) {
+                        return defaultFence(tokens, idx, options, env, self);
+                    }
+                    if (info === 'qa') {
+                        const items = parseQaContent(token.content || '');
+                        if (!items.length) return '';
+                        const renderBlock = (text) => mdInstance.render(text, { ...(env || {}), __qaRendering: true });
+                        const inner = items.map(({ q, a }, i) => {
+                            return `
+                                <div class="qa-item">
+                                    <div class="qa-q"><span class="qa-label">Q${i + 1}</span><div class="qa-bubble">${renderBlock(q)}</div></div>
+                                    <div class="qa-a"><span class="qa-label">A${i + 1}</span><div class="qa-bubble">${renderBlock(a)}</div></div>
+                                </div>
+                            `;
+                        }).join('');
+                        return `<div class="qa-block">${inner}</div>`;
+                    }
+                    return defaultFence(tokens, idx, options, env, self);
+                };
+            };
+            md.use(qaPlugin);
             this.markdownParser = md;
         }
         return this.markdownParser;
@@ -2645,6 +2805,31 @@ class PaperReviewerApp {
         const div = document.createElement('div');
         div.textContent = text;
         return div.innerHTML;
+    }
+
+    escapeAttr(text) {
+        return this.escapeHtml(text || '').replace(/`/g, '&#96;');
+    }
+
+    renderGotoLinks(rawText, valuePath = '') {
+        if (!rawText) return '';
+        const re = /goto\{([^}]+)\}/g;
+        let lastIndex = 0;
+        let out = '';
+        let m;
+        while ((m = re.exec(rawText)) !== null) {
+            const pre = rawText.slice(lastIndex, m.index);
+            const query = (m[1] || '').trim();
+            out += this.escapeHtml(pre);
+            if (query) {
+                out += `<a href="#" class="location-link goto-link" data-page="" data-quote-text="${this.escapeAttr(query)}" data-open-params="" data-quote-index="0" data-value-path="${this.escapeAttr(valuePath)}" title="跳转PDF搜索"><i class="fa-solid fa-quote-right"></i></a>`;
+            } else {
+                out += this.escapeHtml(m[0]);
+            }
+            lastIndex = re.lastIndex;
+        }
+        out += this.escapeHtml(rawText.slice(lastIndex));
+        return out;
     }
 
     getValueByPath(pathArr) {
@@ -4348,16 +4533,22 @@ class PaperReviewerApp {
         
         this._locationLinkHandler = (e) => {
             const target = e.target;
+            if (!target || typeof target.closest !== 'function') return;
             const link = target.classList.contains('location-link') ? target : target.closest('.location-link');
             
             if (link) {
                 e.preventDefault();
-                const page = parseInt(link.dataset.page);
+                const pageRaw = link.dataset.page || '';
                 const valuePath = link.dataset.valuePath;
                 const quoteIndex = link.dataset.quoteIndex !== undefined ? parseInt(link.dataset.quoteIndex) : 0;
+                const quoteText = link.dataset.quoteText || '';
+                const openParams = link.dataset.openParams || '';
+                const pageFromParams = this.extractPageFromParams(openParams);
+                const pageNum = pageRaw ? parseInt(pageRaw, 10) : null;
+                const targetPage = pageFromParams ?? (isNaN(pageNum) ? null : pageNum);
                 
                 // 直接跳转，让executeSearchAndScroll处理循环逻辑
-                this.jumpToPageWithQuote(page, valuePath, quoteIndex);
+                this.jumpToPageWithQuote(targetPage, valuePath, isNaN(quoteIndex) ? null : quoteIndex, quoteText, openParams);
             }
         };
         
@@ -4500,8 +4691,9 @@ class PaperReviewerApp {
     }
 
     // 跳转到页面并高亮指定的quote
-    jumpToPageWithQuote(page, valuePath, quoteIndex = null) {
-        let searchText = '';
+    jumpToPageWithQuote(page, valuePath, quoteIndex = null, quoteText = '', openParams = '') {
+        let searchText = quoteText ? this.cleanQuoteForSearch(quoteText) : '';
+        let targetPage = this.extractPageFromParams(openParams) ?? page;
         
         if (valuePath) {
             const pathArray = valuePath.split('.');
@@ -4522,7 +4714,7 @@ class PaperReviewerApp {
                 const locKey = lastKey + '_loc';
                 
                 // 从 _loc.quote 获取搜索文本
-                if (current[locKey] && current[locKey].quote) {
+                if (!searchText && current[locKey] && current[locKey].quote) {
                     const quotes = current[locKey].quote;
                     
                     if (Array.isArray(quotes)) {
@@ -4542,6 +4734,10 @@ class PaperReviewerApp {
                     }
                 }
                 
+                if (!targetPage && current[locKey] && current[locKey].pdf_page_index) {
+                    targetPage = current[locKey].pdf_page_index;
+                }
+
                 // 如果没有 quote，使用字段值本身
                 if (!searchText) {
                     const fieldValue = current[lastKey];
@@ -4552,12 +4748,20 @@ class PaperReviewerApp {
                 }
             }
         }
-        
-        if (page && searchText) {
-            this.jumpToPage(page, searchText, valuePath);
-        } else if (page) {
-            this.jumpToPage(page, '', valuePath);
+
+        if (targetPage || searchText) {
+            this.jumpToPage(targetPage, searchText, valuePath);
         }
+    }
+
+    extractPageFromParams(openParams) {
+        if (!openParams || typeof openParams !== 'string') return null;
+        const m = openParams.match(/page=(\d+)/i);
+        if (m) {
+            const n = parseInt(m[1], 10);
+            return isNaN(n) ? null : n;
+        }
+        return null;
     }
 
     // 清理 quote 文本用于搜索
