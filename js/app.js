@@ -39,6 +39,8 @@ class PaperReviewerApp {
         this.qaTitleMap = {}; // { filename: {index: title} }
         this.pendingQaTitle = null; // { file, title }
         this.lastMarkdownPasteBackup = null;
+        this.lastLeftWidth = 0;
+        this.lastRightWidth = 0;
         this.dragPlaceholder = null;
         this.draggingSectionKey = null;
         this.placeholderState = { scope: null, target: null, after: false };
@@ -271,6 +273,16 @@ class PaperReviewerApp {
             if (e.ctrlKey && e.key === 's') {
                 e.preventDefault();
                 if (this.hasUnsavedChanges) this.saveToFile();
+            }
+            if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === 'f') {
+                e.preventDefault();
+                this.toggleRightPanelVisibility();
+                return;
+            }
+            if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === 's') {
+                e.preventDefault();
+                this.toggleLeftPanelVisibility();
+                return;
             }
             if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
                 if ((this.currentView || 'structured') !== 'structured') return;
@@ -525,26 +537,41 @@ class PaperReviewerApp {
         });
 
         // 只在点击图标时触发隐藏/显示，采用width收缩/展开方式
-        let lastLeftWidth = panelState.lastLeftWidth || leftPanel.getBoundingClientRect().width || 200;
-        let lastRightWidth = panelState.lastRightWidth || rightPanel.getBoundingClientRect().width || 320;
+        this.lastLeftWidth = panelState.lastLeftWidth || leftPanel.getBoundingClientRect().width || 200;
+        this.lastRightWidth = panelState.lastRightWidth || rightPanel.getBoundingClientRect().width || 320;
         const leftToggle = leftResizer.querySelector('.resizer-toggle');
+        const rightToggle = middleResizer.querySelector('.resizer-toggle');
+        const updateLeftToggleTitle = (collapsed) => {
+            if (!leftToggle) return;
+            leftToggle.title = collapsed
+                ? 'Show file list (Cmd+Shift+S / Ctrl+Shift+S)'
+                : 'Hide file list (Cmd+Shift+S / Ctrl+Shift+S)';
+        };
+        const updateRightToggleTitle = (collapsed) => {
+            if (!rightToggle) return;
+            rightToggle.title = collapsed
+                ? 'Show PDF preview (Cmd+Shift+F / Ctrl+Shift+F)'
+                : 'Hide PDF preview (Cmd+Shift+F / Ctrl+Shift+F)';
+        };
+        updateLeftToggleTitle(leftPanel.classList.contains('panel-collapsed'));
+        updateRightToggleTitle(rightPanel.classList.contains('panel-collapsed'));
         if (leftToggle) {
             leftToggle.addEventListener('click', (e) => {
                 e.stopPropagation();
                 const icon = leftToggle.querySelector('i');
                 if (leftPanel.classList.contains('panel-collapsed')) {
                     leftPanel.classList.remove('panel-collapsed');
-                    leftPanel.style.width = lastLeftWidth + 'px';
-                    leftToggle.title = '点击隐藏左侧面板';
+                    leftPanel.style.width = this.lastLeftWidth + 'px';
+                    updateLeftToggleTitle(false);
                     if (icon) icon.style.transform = 'rotate(0deg)';
-                    this.savePanelWidths(leftPanel, rightPanel, { collapsedLeft: false, lastLeftWidth, lastRightWidth });
+                    this.savePanelWidths(leftPanel, rightPanel, { collapsedLeft: false, lastLeftWidth: this.lastLeftWidth, lastRightWidth: this.lastRightWidth });
                 } else {
-                    lastLeftWidth = leftPanel.getBoundingClientRect().width;
+                    this.lastLeftWidth = leftPanel.getBoundingClientRect().width;
                     leftPanel.classList.add('panel-collapsed');
                     leftPanel.style.width = '';
-                    leftToggle.title = '点击显示左侧面板';
+                    updateLeftToggleTitle(true);
                     if (icon) icon.style.transform = 'rotate(180deg)';
-                    this.savePanelWidths(leftPanel, rightPanel, { collapsedLeft: true, lastLeftWidth, lastRightWidth });
+                    this.savePanelWidths(leftPanel, rightPanel, { collapsedLeft: true, lastLeftWidth: this.lastLeftWidth, lastRightWidth: this.lastRightWidth });
                 }
             });
         }
@@ -556,22 +583,23 @@ class PaperReviewerApp {
                 if (rightPanel.classList.contains('panel-collapsed')) {
                     rightPanel.classList.remove('panel-collapsed');
                     // 若之前宽度为0，默认恢复为容器宽度的33%
-                    if (!lastRightWidth || lastRightWidth <= 1) {
+                    if (!this.lastRightWidth || this.lastRightWidth <= 1) {
                         const containerWidth = container?.getBoundingClientRect().width || window.innerWidth;
-                        lastRightWidth = Math.max(200, Math.floor(containerWidth * 0.33));
+                        this.lastRightWidth = Math.max(200, Math.floor(containerWidth * 0.33));
                     }
-                    rightPanel.style.width = lastRightWidth + 'px';
-                    middleToggle.title = '点击隐藏右侧面板';
+                    rightPanel.style.width = this.lastRightWidth + 'px';
+                    middleToggle.title = 'Hide PDF preview (Cmd+Shift+F / Ctrl+Shift+F)';
                     if (icon) icon.style.transform = 'rotate(0deg)';
-                    this.savePanelWidths(leftPanel, rightPanel, { collapsedRight: false, lastLeftWidth, lastRightWidth });
+                    this.savePanelWidths(leftPanel, rightPanel, { collapsedRight: false, lastLeftWidth: this.lastLeftWidth, lastRightWidth: this.lastRightWidth });
                 } else {
-                    lastRightWidth = rightPanel.getBoundingClientRect().width;
+                    this.lastRightWidth = rightPanel.getBoundingClientRect().width;
                     rightPanel.classList.add('panel-collapsed');
                     rightPanel.style.width = '';
-                    middleToggle.title = '点击显示右侧面板';
+                    middleToggle.title = 'Show PDF preview (Cmd+Shift+F / Ctrl+Shift+F)';
                     if (icon) icon.style.transform = 'rotate(180deg)';
-                    this.savePanelWidths(leftPanel, rightPanel, { collapsedRight: true, lastLeftWidth, lastRightWidth });
+                    this.savePanelWidths(leftPanel, rightPanel, { collapsedRight: true, lastLeftWidth: this.lastLeftWidth, lastRightWidth: this.lastRightWidth });
                 }
+                updateRightToggleTitle(rightPanel.classList.contains('panel-collapsed'));
             });
         }
         
@@ -650,6 +678,8 @@ class PaperReviewerApp {
             const saved = localStorage.getItem('panelWidths');
             if (saved) {
                 const widths = JSON.parse(saved);
+                this.lastLeftWidth = widths.lastLeftWidth || widths.left || this.lastLeftWidth || 200;
+                this.lastRightWidth = widths.lastRightWidth || widths.right || this.lastRightWidth || 320;
                 if (widths.left) {
                     leftPanel.style.width = `${widths.left}px`;
                     leftPanel.style.flexShrink = '0';
@@ -673,6 +703,56 @@ class PaperReviewerApp {
             console.error('恢复面板宽度失败:', error);
         }
         return { collapsedLeft: false, collapsedRight: false };
+    }
+
+    toggleLeftPanelVisibility() {
+        const leftPanel = document.querySelector('.left-panel');
+        const rightPanel = document.querySelector('.right-panel');
+        const leftToggle = document.querySelector('#leftResizer .resizer-toggle');
+        if (!leftPanel) return;
+        const icon = leftToggle?.querySelector('i');
+        if (leftPanel.classList.contains('panel-collapsed')) {
+            leftPanel.classList.remove('panel-collapsed');
+            if (!this.lastLeftWidth || this.lastLeftWidth <= 1) {
+                this.lastLeftWidth = Math.max(180, leftPanel.getBoundingClientRect().width || 200);
+            }
+            leftPanel.style.width = this.lastLeftWidth + 'px';
+            if (icon) icon.style.transform = 'rotate(0deg)';
+            this.savePanelWidths(leftPanel, rightPanel, { collapsedLeft: false, lastLeftWidth: this.lastLeftWidth, lastRightWidth: this.lastRightWidth });
+        } else {
+            this.lastLeftWidth = leftPanel.getBoundingClientRect().width;
+            leftPanel.classList.add('panel-collapsed');
+            leftPanel.style.width = '';
+            if (icon) icon.style.transform = 'rotate(180deg)';
+            this.savePanelWidths(leftPanel, rightPanel, { collapsedLeft: true, lastLeftWidth: this.lastLeftWidth, lastRightWidth: this.lastRightWidth });
+        }
+    }
+
+    toggleRightPanelVisibility() {
+        const leftPanel = document.querySelector('.left-panel');
+        const rightPanel = document.querySelector('.right-panel');
+        const middleToggle = document.querySelector('#middleResizer .resizer-toggle');
+        const container = document.querySelector('.container');
+        if (!rightPanel) return;
+        const icon = middleToggle?.querySelector('i');
+        if (rightPanel.classList.contains('panel-collapsed')) {
+            rightPanel.classList.remove('panel-collapsed');
+            if (!this.lastRightWidth || this.lastRightWidth <= 1) {
+                const containerWidth = container?.getBoundingClientRect().width || window.innerWidth;
+                this.lastRightWidth = Math.max(200, Math.floor(containerWidth * 0.33));
+            }
+            rightPanel.style.width = this.lastRightWidth + 'px';
+            if (icon) icon.style.transform = 'rotate(0deg)';
+            if (middleToggle) middleToggle.title = 'Hide PDF preview (Cmd+Shift+F / Ctrl+Shift+F)';
+            this.savePanelWidths(leftPanel, rightPanel, { collapsedRight: false, lastLeftWidth: this.lastLeftWidth, lastRightWidth: this.lastRightWidth });
+        } else {
+            this.lastRightWidth = rightPanel.getBoundingClientRect().width;
+            rightPanel.classList.add('panel-collapsed');
+            rightPanel.style.width = '';
+            if (icon) icon.style.transform = 'rotate(180deg)';
+            if (middleToggle) middleToggle.title = 'Show PDF preview (Cmd+Shift+F / Ctrl+Shift+F)';
+            this.savePanelWidths(leftPanel, rightPanel, { collapsedRight: true, lastLeftWidth: this.lastLeftWidth, lastRightWidth: this.lastRightWidth });
+        }
     }
 
     // ========== 项目管理方法 ==========
@@ -2469,7 +2549,7 @@ class PaperReviewerApp {
                         return `
                             <div class="qa-block" data-collapsible="qa">
                                 <div class="qa-block-header">
-                                    <button class="qa-toggle" type="button" aria-expanded="true" title="折叠/展开">
+                                    <button class="qa-toggle" type="button" aria-expanded="true" title="Click to toggle. Hold Shift to toggle all QAs on page.">
                                         <i class="fas fa-chevron-up"></i>
                                     </button>
                                     <span class="qa-title" data-qa-index="${idx}" data-qa-title="${escapeAttr(qaTitle)}">${escapeHtml(qaTitle)}</span>
@@ -2745,15 +2825,31 @@ class PaperReviewerApp {
 
     bindQaCollapsibles(renderRoot) {
         if (!renderRoot) return;
+        const setBlockCollapsed = (block, collapsed) => {
+            const toggleBtn = block.querySelector('.qa-toggle');
+            block.classList.toggle('qa-collapsed', collapsed);
+            if (toggleBtn) {
+                toggleBtn.setAttribute('aria-expanded', String(!collapsed));
+                const icon = toggleBtn.querySelector('i');
+                if (icon) icon.className = collapsed ? 'fas fa-chevron-down' : 'fas fa-chevron-up';
+            }
+        };
+
         renderRoot.querySelectorAll('.qa-toggle').forEach(btn => {
-            btn.addEventListener('click', () => {
+            btn.addEventListener('click', (e) => {
                 const block = btn.closest('.qa-block');
                 if (!block) return;
-                const isCollapsed = block.classList.toggle('qa-collapsed');
-                btn.setAttribute('aria-expanded', String(!isCollapsed));
-                const icon = btn.querySelector('i');
-                if (icon) {
-                    icon.className = isCollapsed ? 'fas fa-chevron-down' : 'fas fa-chevron-up';
+                if (e.shiftKey) {
+                    // Shift+点击：对当前页面所有 QA 同步折叠/展开
+                    const targetCollapsed = !block.classList.contains('qa-collapsed');
+                    renderRoot.querySelectorAll('.qa-block').forEach(b => setBlockCollapsed(b, targetCollapsed));
+                } else {
+                    const isCollapsed = block.classList.toggle('qa-collapsed');
+                    btn.setAttribute('aria-expanded', String(!isCollapsed));
+                    const icon = btn.querySelector('i');
+                    if (icon) {
+                        icon.className = isCollapsed ? 'fas fa-chevron-down' : 'fas fa-chevron-up';
+                    }
                 }
             });
         });
