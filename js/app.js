@@ -44,6 +44,7 @@ class PaperReviewerApp {
         this.dragPlaceholder = null;
         this.draggingSectionKey = null;
         this.placeholderState = { scope: null, target: null, after: false };
+        this.gotoEditResolver = null;
 
         // 项目管理
         this.currentProject = null; // { name, path }
@@ -260,6 +261,16 @@ class PaperReviewerApp {
         if (undoMdPasteBtn) {
             undoMdPasteBtn.addEventListener('click', () => this.undoLastMarkdownPaste());
         }
+        const gotoCancelBtn = document.getElementById('gotoEditCancel');
+        const gotoSaveBtn = document.getElementById('gotoEditSave');
+        const gotoModal = document.getElementById('gotoEditModal');
+        if (gotoCancelBtn) gotoCancelBtn.addEventListener('click', () => this.closeGotoEditModal(false));
+        if (gotoSaveBtn) gotoSaveBtn.addEventListener('click', () => this.closeGotoEditModal(true));
+        if (gotoModal) {
+            gotoModal.addEventListener('click', (e) => {
+                if (e.target === gotoModal) this.closeGotoEditModal(false);
+            });
+        }
 
         // 中间栏激活检测（鼠标进入/离开）
         const middlePanel = document.querySelector('.middle-panel');
@@ -331,7 +342,9 @@ class PaperReviewerApp {
             }
             if (e.key === 'Escape') {
                 this.closeEditModal();
+                this.closeGotoEditModal(false);
                 this.closeProjectSelector();
+                this.clearPdfHighlights();
             }
         });
 
@@ -2468,12 +2481,7 @@ class PaperReviewerApp {
                                     t.content = text.slice(lastIndex, m.index);
                                     newChildren.push(t);
                                 }
-                                const ref = m[1] || '';
-                                const page = m[2] || '';
-                                const html = `<span class="content-ref" title="${md.utils.escapeHtml(ref)}"><i class="fa-solid fa-map-location-dot"></i><span class="content-ref-text">see page ${page}</span></span>`;
-                                const htmlToken = new state.Token('html_inline', '', 0);
-                                htmlToken.content = html;
-                                newChildren.push(htmlToken);
+                                // Skip rendering :contentReference[...] completely (output empty)
                                 lastIndex = re.lastIndex;
                             }
                             if (lastIndex < text.length) {
@@ -3543,6 +3551,16 @@ class PaperReviewerApp {
                                 pwdField.setAttribute('type', 'text');
                             }
                         }
+                        // 用户点击 PDF 时清除搜索高亮，减少干扰
+                        const bindClickClear = () => {
+                            const viewerContainer = pdfDoc?.querySelector('#viewerContainer');
+                            if (viewerContainer && !viewerContainer.dataset.clearHighlightBound) {
+                                viewerContainer.addEventListener('click', () => this.clearPdfHighlights());
+                                viewerContainer.dataset.clearHighlightBound = '1';
+                            }
+                        };
+                        bindClickClear();
+                        setTimeout(bindClickClear, 300);
                     }
                 } catch (err) {
                     console.warn('Suppress PDF.js prompts failed:', err);
@@ -4487,6 +4505,33 @@ class PaperReviewerApp {
         this.editingPath = null;
     }
 
+    openGotoEditModal(initialText = '') {
+        return new Promise((resolve) => {
+            const modal = document.getElementById('gotoEditModal');
+            const textarea = document.getElementById('gotoEditTextarea');
+            if (!modal || !textarea) {
+                const fallback = prompt('Edit reference text', initialText);
+                resolve(fallback === null ? null : fallback);
+                return;
+            }
+            this.gotoEditResolver = resolve;
+            textarea.value = initialText || '';
+            modal.classList.add('active');
+            setTimeout(() => textarea.focus(), 50);
+        });
+    }
+
+    closeGotoEditModal(commit = false) {
+        const modal = document.getElementById('gotoEditModal');
+        const textarea = document.getElementById('gotoEditTextarea');
+        if (modal) modal.classList.remove('active');
+        if (this.gotoEditResolver) {
+            const val = commit && textarea ? textarea.value : null;
+            this.gotoEditResolver(val);
+            this.gotoEditResolver = null;
+        }
+    }
+
     async saveEditedValue() {
         if (!this.editingPath) return;
 
@@ -5116,7 +5161,7 @@ class PaperReviewerApp {
             const samePathLinks = allGotoLinks.filter(l => (l.dataset.valuePath || '') === valuePath);
             const idxInPath = samePathLinks.indexOf(link);
             const idx = idxInPath >= 0 ? idxInPath : (link.dataset.quoteIndex !== undefined ? parseInt(link.dataset.quoteIndex, 10) : 0);
-            const next = prompt('Edit reference text', current);
+            const next = await this.openGotoEditModal(current);
             if (next === null) return;
             if (valuePath) {
                 await this.updateGotoText(valuePath, next, isNaN(idx) ? 0 : idx);
@@ -5469,6 +5514,27 @@ class PaperReviewerApp {
 
         } catch (error) {
             console.error('搜索高亮失败:', error);
+        }
+    }
+
+    clearPdfHighlights() {
+        try {
+            const iframe = document.getElementById('pdfViewer');
+            const pdfApp = iframe?.contentWindow?.PDFViewerApplication;
+            if (pdfApp?.eventBus) {
+                pdfApp.eventBus.dispatch('findbarclose');
+            }
+            const pdfDoc = iframe?.contentWindow?.document;
+            if (pdfDoc?.getSelection) {
+                pdfDoc.getSelection().removeAllRanges();
+            }
+            if (pdfDoc) {
+                pdfDoc.querySelectorAll('.highlight').forEach(el => {
+                    el.classList.remove('highlight', 'selected', 'begin', 'end', 'middle');
+                });
+            }
+        } catch (err) {
+            console.warn('清除 PDF 高亮失败:', err);
         }
     }
 

@@ -1783,6 +1783,17 @@ body.theme-vscode .qa-bubble {
     background: var(--gray-50);
 }
 
+#gotoEditModal .modal-content {
+    max-width: 720px;
+    width: 90%;
+}
+
+#gotoEditTextarea {
+    min-height: 200px;
+    font-size: 12px;
+    line-height: 1.5;
+}
+
 .modal-body input[type="number"],
 .modal-body input[type="text"],
 .modal-body select {
