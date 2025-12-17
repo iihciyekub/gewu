@@ -1022,7 +1022,7 @@ body {
     flex-direction: column;
     gap: 6px;
     padding: 8px 10px;
-    margin: 12px 0;
+    margin: 4px 0;
     background: #fff;
     border: 1px solid var(--gray-200);
     border-radius: 6px;
@@ -1042,12 +1042,9 @@ body {
 }
 
 .qa-label {
-    min-width: 28px;
-    height: 20px;
-    padding: 0 8px;
-    border-radius: 999px;
-    font-size: 10px;
-    font-weight: 700;
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -1055,6 +1052,7 @@ body {
     color: var(--wos-blue);
     border: 1px solid rgba(0, 62, 116, 0.35);
     box-shadow: 0 1px 2px rgba(0, 62, 116, 0.1);
+    flex-shrink: 0;
 }
 
 .qa-a .qa-label {
@@ -1063,9 +1061,82 @@ body {
     border-color: rgba(255, 106, 0, 0.4);
 }
 
+.qa-label i {
+    font-size: 13px;
+    line-height: 1;
+}
+
+.qa-block {
+    margin: 6px 0;
+    padding: 0;
+    border: none;
+    background: transparent;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.qa-block-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.qa-title {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--wos-text);
+    cursor: pointer;
+}
+
+.qa-toggle {
+    width: 22px;
+    height: 22px;
+    border-radius: 4px;
+    border: 1px solid var(--wos-border);
+    background: var(--gray-100);
+    color: var(--wos-blue);
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    transition: all 0.16s ease;
+}
+
+.qa-toggle:hover {
+    background: var(--wos-hover);
+    color: var(--wos-blue-dark);
+}
+
+body.theme-vscode .qa-toggle {
+    background: #252526;
+    border-color: var(--wos-border);
+    color: var(--wos-text);
+}
+
+body.theme-vscode .qa-toggle:hover {
+    background: #2d2d2d;
+    color: var(--wos-blue-light);
+}
+
+.qa-items {
+    display: flex;
+    flex-direction: column;
+    gap: 0px;
+}
+
+.qa-block.qa-collapsed .qa-items {
+    display: none;
+}
+
+.qa-block.qa-collapsed {
+    padding-bottom: 2px;
+}
+
 .qa-bubble {
     position: relative;
-    padding: 8px 10px;
+    padding: 6px 8px;
     border-radius: 6px;
     background: white;
     border: 1px solid var(--gray-200);
@@ -1075,10 +1146,27 @@ body {
     word-break: break-word;
     overflow-wrap: anywhere;
     line-height: 1.55;
+    transition: background-color 0.16s ease, box-shadow 0.16s ease;
+}
+
+.qa-bubble:hover {
+    background: rgba(245, 246, 242, 0.9);
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.06), inset 0 0 0 1px rgba(0, 0, 0, 0.02);
 }
 
 .qa-bubble p {
     margin: 6px 0;
+}
+
+body.theme-vscode .qa-bubble {
+    background: #1b1b1b;
+    border: 1px solid #2f2f2f;
+    transition: background-color 0.16s ease, box-shadow 0.16s ease;
+}
+
+body.theme-vscode .qa-bubble:hover {
+    background: rgba(255, 255, 255, 0.04);
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.25), inset 0 0 0 1px rgba(255, 255, 255, 0.02);
 }
 
 .markdown-body .note-block {

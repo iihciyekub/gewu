@@ -36,6 +36,9 @@ class PaperReviewerApp {
         } catch (_e) {
             this.currentView = 'structured';
         }
+        this.qaTitleMap = {}; // { filename: {index: title} }
+        this.pendingQaTitle = null; // { file, title }
+        this.lastMarkdownPasteBackup = null;
         this.dragPlaceholder = null;
         this.draggingSectionKey = null;
         this.placeholderState = { scope: null, target: null, after: false };
@@ -234,6 +237,10 @@ class PaperReviewerApp {
         if (saveMdBtn) {
             saveMdBtn.addEventListener('click', () => this.saveMarkdownFromEditor());
         }
+        const undoMdPasteBtn = document.getElementById('undoMarkdownPasteBtn');
+        if (undoMdPasteBtn) {
+            undoMdPasteBtn.addEventListener('click', () => this.undoLastMarkdownPaste());
+        }
 
         // 中间栏激活检测（鼠标进入/离开）
         const middlePanel = document.querySelector('.middle-panel');
@@ -266,6 +273,7 @@ class PaperReviewerApp {
                 if (this.hasUnsavedChanges) this.saveToFile();
             }
             if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+                if ((this.currentView || 'structured') !== 'structured') return;
                 e.preventDefault();
                 // 同键切换：重排模式 + 折叠/展开全局开关
                 this.isReorderMode = !this.isReorderMode;
@@ -1162,9 +1170,21 @@ class PaperReviewerApp {
     // 处理粘贴事件
     async handlePaste(e) {
         try {
+            // Markdown 编辑器特殊处理：粘贴 QA 代码块时插入并渲染
             // 如果在输入框中粘贴，不处理
-            if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') {
-                return;
+            if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+
+            // 在 Markdown 渲染区域粘贴 QA 代码块：尾部追加，提示标题，可撤销
+            if ((this.currentView || 'structured') === 'markdown' && !this.isMarkdownEditing) {
+                const inMarkdownRender = !!e.target.closest('#markdownRender');
+                if (inMarkdownRender) {
+                    const clipboardData = e.clipboardData || window.clipboardData;
+                    const pastedText = clipboardData.getData('text') || '';
+                    if (this.tryHandleMarkdownQaPasteRendered(pastedText)) {
+                        e.preventDefault();
+                        return;
+                    }
+                }
             }
             
             const clipboardData = e.clipboardData || window.clipboardData;
@@ -2420,8 +2440,9 @@ class PaperReviewerApp {
 
                 mdInstance.renderer.rules.fence = (tokens, idx, options, env, self) => {
                     const token = tokens[idx];
-                    const info = (token.info || '').trim().toLowerCase();
-                    if (info === 'goto') {
+                    const infoRaw = (token.info || '').trim();
+                    const infoLower = infoRaw.toLowerCase();
+                    if (infoLower === 'goto') {
                         const q = token.content.trim();
                         if (!q) return '';
                         const esc = escapeAttr(q);
@@ -2431,19 +2452,31 @@ class PaperReviewerApp {
                     if (env && env.__qaRendering) {
                         return defaultFence(tokens, idx, options, env, self);
                     }
-                    if (info === 'qa') {
+                    if (infoLower.startsWith('qa')) {
+                        const infoTitleMatch = infoRaw.match(/^qa@(.+)$/i);
+                        const qaTitle = (infoTitleMatch ? infoTitleMatch[1] : 'Q&A').trim() || 'Q&A';
                         const items = parseQaContent(token.content || '');
                         if (!items.length) return '';
                         const renderBlock = (text) => mdInstance.render(text, { ...(env || {}), __qaRendering: true });
                         const inner = items.map(({ q, a }, i) => {
                             return `
                                 <div class="qa-item">
-                                    <div class="qa-q"><span class="qa-label">Q${i + 1}</span><div class="qa-bubble">${renderBlock(q)}</div></div>
-                                    <div class="qa-a"><span class="qa-label">A${i + 1}</span><div class="qa-bubble">${renderBlock(a)}</div></div>
+                                    <div class="qa-q"><span class="qa-label qa-label-q" title="Question"><i class="fa-solid fa-circle-question"></i></span><div class="qa-bubble">${renderBlock(q)}</div></div>
+                                    <div class="qa-a"><span class="qa-label qa-label-a" title="Answer"><i class="fa-solid fa-circle-check"></i></span><div class="qa-bubble">${renderBlock(a)}</div></div>
                                 </div>
                             `;
                         }).join('');
-                        return `<div class="qa-block">${inner}</div>`;
+                        return `
+                            <div class="qa-block" data-collapsible="qa">
+                                <div class="qa-block-header">
+                                    <button class="qa-toggle" type="button" aria-expanded="true" title="折叠/展开">
+                                        <i class="fas fa-chevron-up"></i>
+                                    </button>
+                                    <span class="qa-title" data-qa-index="${idx}" data-qa-title="${escapeAttr(qaTitle)}">${escapeHtml(qaTitle)}</span>
+                                </div>
+                                <div class="qa-items">${inner}</div>
+                            </div>
+                        `;
                     }
                     return defaultFence(tokens, idx, options, env, self);
                 };
@@ -2452,6 +2485,55 @@ class PaperReviewerApp {
             this.markdownParser = md;
         }
         return this.markdownParser;
+    }
+
+    tryHandleMarkdownQaPasteRendered(pastedText) {
+        if (!pastedText || !this.currentMarkdownExists) return false;
+        const qaMatch = pastedText.match(/```qa[\s\S]*?```/i);
+        if (!qaMatch) return false;
+
+        const title = prompt('检测到 QA 代码块，输入标题（可留空）：', 'Q&A');
+        if (title === null) return true; // 用户取消
+
+        const qaContent = qaMatch[0]
+            .replace(/^```qa\s*/i, '')
+            .replace(/```$/i, '')
+            .trim();
+        const heading = (title || '').trim();
+        const snippet = `${this.currentMarkdownText?.trimEnd() || ''}\n\n${heading ? `### ${heading}\n` : ''}\`\`\`qa\n${qaContent}\n\`\`\`\n`;
+
+        // 备份以便撤销
+        this.lastMarkdownPasteBackup = {
+            file: this.currentFile,
+            content: this.currentMarkdownText || ''
+        };
+
+        this.currentMarkdownText = snippet;
+        this.pendingQaTitle = { file: this.currentFile, title: heading || 'Q&A' };
+        const textarea = document.getElementById('markdownTextarea');
+        if (textarea) {
+            textarea.value = this.currentMarkdownText;
+        }
+        this.renderMarkdownView(this.currentMarkdownText);
+        this.updateMarkdownToolbar();
+        this.showNotification('已追加 QA 片段，记得保存 Markdown', 'success');
+        return true;
+    }
+
+    undoLastMarkdownPaste() {
+        if (!this.lastMarkdownPasteBackup || this.lastMarkdownPasteBackup.file !== this.currentFile) {
+            this.showNotification('没有可撤销的 Markdown 粘贴', 'info');
+            return;
+        }
+        this.currentMarkdownText = this.lastMarkdownPasteBackup.content;
+        const textarea = document.getElementById('markdownTextarea');
+        if (textarea) {
+            textarea.value = this.currentMarkdownText;
+        }
+        this.renderMarkdownView(this.currentMarkdownText);
+        this.updateMarkdownToolbar();
+        this.lastMarkdownPasteBackup = null;
+        this.showNotification('已撤销上次 QA 粘贴', 'success');
     }
 
     getMarkdownFilename(jsonFilename) {
@@ -2552,6 +2634,7 @@ class PaperReviewerApp {
         const createBtn = document.getElementById('createMarkdownBtnHeader');
         const editBtn = document.getElementById('editMarkdownBtnHeader');
         const saveBtn = document.getElementById('saveMarkdownBtnHeader');
+        const undoMdBtn = document.getElementById('undoMarkdownPasteBtn');
         const statusEl = document.getElementById('markdownStatus');
         const editor = document.getElementById('markdownEditor');
         const render = document.getElementById('markdownRender');
@@ -2562,6 +2645,10 @@ class PaperReviewerApp {
         createBtn.style.display = inMarkdownView && !this.currentMarkdownExists ? 'inline-flex' : 'none';
         editBtn.style.display = inMarkdownView ? 'inline-flex' : 'none';
         saveBtn.style.display = inMarkdownView ? 'inline-flex' : 'none';
+        if (undoMdBtn) {
+            const canUndo = this.lastMarkdownPasteBackup && this.lastMarkdownPasteBackup.file === this.currentFile;
+            undoMdBtn.style.display = inMarkdownView && canUndo ? 'inline-flex' : 'none';
+        }
         editBtn.disabled = !this.currentMarkdownExists || !inMarkdownView || this.isMarkdownEditing;
         saveBtn.disabled = !this.currentMarkdownExists || !inMarkdownView;
         if (this.isMarkdownEditing) {
@@ -2640,8 +2727,120 @@ class PaperReviewerApp {
         }
         const html = md.render(text);
         render.innerHTML = `<article class="markdown-body">${html}</article>`;
+        this.bindQaCollapsibles(render);
+        this.bindQaTitles(render);
+        this.applyPendingQaTitle(render);
         this.renderMath();
         this.highlightCodeBlocks(render);
+        this.updateMarkdownUndoButtonState();
+    }
+
+    updateMarkdownUndoButtonState() {
+        const undoMdBtn = document.getElementById('undoMarkdownPasteBtn');
+        if (!undoMdBtn) return;
+        const inMarkdownView = (this.currentView || 'structured') === 'markdown';
+        const canUndo = this.lastMarkdownPasteBackup && this.lastMarkdownPasteBackup.file === this.currentFile;
+        undoMdBtn.style.display = inMarkdownView && canUndo ? 'inline-flex' : 'none';
+    }
+
+    bindQaCollapsibles(renderRoot) {
+        if (!renderRoot) return;
+        renderRoot.querySelectorAll('.qa-toggle').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const block = btn.closest('.qa-block');
+                if (!block) return;
+                const isCollapsed = block.classList.toggle('qa-collapsed');
+                btn.setAttribute('aria-expanded', String(!isCollapsed));
+                const icon = btn.querySelector('i');
+                if (icon) {
+                    icon.className = isCollapsed ? 'fas fa-chevron-down' : 'fas fa-chevron-up';
+                }
+            });
+        });
+    }
+
+    bindQaTitles(renderRoot) {
+        if (!renderRoot || !this.currentFile) return;
+        const blocks = renderRoot.querySelectorAll('.qa-block');
+        const titleMap = this.qaTitleMap[this.currentFile] || {};
+        blocks.forEach((block, idx) => {
+            block.dataset.qaIndex = idx;
+            const titleEl = block.querySelector('.qa-title');
+            if (!titleEl) return;
+            const initialTitle = titleMap.hasOwnProperty(idx)
+                ? titleMap[idx]
+                : (titleEl.dataset.qaTitle || titleEl.textContent || 'Q&A');
+            // 应用保存的标题
+            titleEl.textContent = initialTitle;
+            if (!this.qaTitleMap[this.currentFile]) this.qaTitleMap[this.currentFile] = {};
+            this.qaTitleMap[this.currentFile][idx] = initialTitle;
+            titleEl.title = '双击编辑标题';
+            titleEl.addEventListener('dblclick', () => {
+                const current = titleEl.textContent || '';
+                const next = prompt('编辑 QA 标题（可留空）:', current);
+                if (next === null) return;
+                const newTitle = next.trim();
+                const finalTitle = newTitle || 'Q&A';
+                titleEl.textContent = finalTitle;
+                this.setQaTitleForIndex(idx, finalTitle);
+            });
+        });
+    }
+
+    applyPendingQaTitle(renderRoot) {
+        if (!this.pendingQaTitle || !renderRoot || this.pendingQaTitle.file !== this.currentFile) return;
+        const blocks = renderRoot.querySelectorAll('.qa-block');
+        if (!blocks.length) return;
+        const targetIdx = blocks.length - 1;
+        const finalTitle = (this.pendingQaTitle.title || 'Q&A').trim() || 'Q&A';
+        this.setQaTitleForIndex(targetIdx, finalTitle, true);
+        this.pendingQaTitle = null;
+    }
+
+    setQaTitleForIndex(index, newTitle, skipRenderUpdate = false) {
+        if (index === undefined || index === null || index < 0) return;
+        const finalTitle = (newTitle || 'Q&A').trim() || 'Q&A';
+        if (!this.qaTitleMap[this.currentFile]) this.qaTitleMap[this.currentFile] = {};
+        this.qaTitleMap[this.currentFile][index] = finalTitle;
+
+        // 更新当前 Markdown 文本中的对应 qa fence 信息
+        if (this.currentMarkdownText) {
+            let replaced = false;
+            const lines = this.currentMarkdownText.split('\n');
+            let qaCount = 0;
+            for (let i = 0; i < lines.length; i++) {
+                const match = lines[i].match(/^```qa[^\n]*$/i);
+                if (match) {
+                    if (qaCount === index) {
+                        lines[i] = `\`\`\`qa${finalTitle ? `@${finalTitle}` : ''}`;
+                        replaced = true;
+                        break;
+                    }
+                    qaCount++;
+                }
+            }
+            if (replaced) {
+                this.currentMarkdownText = lines.join('\n');
+                const textarea = document.getElementById('markdownTextarea');
+                if (textarea) {
+                    textarea.value = this.currentMarkdownText;
+                }
+                if (!skipRenderUpdate) {
+                    this.renderMarkdownView(this.currentMarkdownText);
+                }
+            }
+        }
+
+        // 更新当前已渲染的标题文字
+        if (!skipRenderUpdate) {
+            const render = document.getElementById('markdownRender');
+            if (render) {
+                const blocks = render.querySelectorAll('.qa-block');
+                const block = blocks[index];
+                const titleEl = block?.querySelector('.qa-title');
+                if (titleEl) titleEl.textContent = finalTitle;
+            }
+        }
     }
 
     async createMarkdownFile() {
