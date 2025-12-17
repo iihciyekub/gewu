@@ -1659,7 +1659,9 @@ class PaperReviewerApp {
             `;
 
             // 第二列：Key可编辑
-            const keyDisplay = `<span class="editable-key" data-path="${basePath.join('.')}" data-key="${key}">${this.formatKey(key)}</span>`;
+            const isNestedIndex = table.classList.contains('nested-table') && /^\d+$/.test(key);
+            const displayKey = isNestedIndex ? `#${parseInt(key, 10) + 1}` : this.formatKey(key);
+            const keyDisplay = `<span class="editable-key" data-path="${basePath.join('.')}" data-key="${key}">${displayKey}</span>`;
 
             keyCell.innerHTML = keyDisplay;
             const currentPath = [...basePath, key];
@@ -1677,8 +1679,12 @@ class PaperReviewerApp {
                     this.setSelectedItem({ type: 'row', path: tablePath, key });
                 }
             });
-            // 单击行：直接打开该字段的完整编辑弹窗（包含引用/页码等）
+            // 单击行：仅选中；双击行：打开完整编辑弹窗
             row.addEventListener('click', (e) => {
+                const tablePath = table.dataset.path ? table.dataset.path.split('.').filter(Boolean) : [];
+                this.setSelectedItem({ type: 'row', path: tablePath, key });
+            });
+            row.addEventListener('dblclick', (e) => {
                 const tablePath = table.dataset.path ? table.dataset.path.split('.').filter(Boolean) : [];
                 const valuePath = [...tablePath, key];
                 this.setSelectedItem({ type: 'row', path: tablePath, key });
@@ -1702,61 +1708,18 @@ class PaperReviewerApp {
 
             // 第三列：Value值的显示
             if (typeof value === 'object' && value !== null) {
-                if (Array.isArray(value)) {
-                    // 数组：对象数组单独处理，其余按列表表格渲染
-                    valueCell.innerHTML = '';
-                    if (value.length && value.every(v => v && typeof v === 'object' && !Array.isArray(v))) {
-                        // 数组且元素为对象：渲染为可折叠的子表格列表
-                        const inner = document.createElement('div');
-                        inner.className = 'nested-table-list';
-                        value.forEach((obj, idx) => {
-                            const subWrapper = document.createElement('div');
-                            subWrapper.className = 'nested-table-wrapper';
-                            const subHeader = document.createElement('div');
-                            subHeader.className = 'nested-table-header';
-                            subHeader.innerHTML = `<span class="nested-table-title">#${idx + 1}</span>`;
-                            const subTable = document.createElement('table');
-                            subTable.className = 'json-table nested-table';
-                            subTable.dataset.path = [...currentPath, idx].join('.');
-                            this.renderObject(obj, subTable, [...currentPath, idx]);
-                            subWrapper.appendChild(subHeader);
-                            subWrapper.appendChild(subTable);
-                            inner.appendChild(subWrapper);
-                        });
-                        valueCell.appendChild(inner);
-                    } else {
-                        // 基本类型数组或混合：渲染为简单列表表格
-                        const subTable = document.createElement('table');
-                        subTable.className = 'json-table nested-table';
-                        subTable.dataset.path = currentPath.join('.');
-                        const tbody = document.createElement('tbody');
-                        value.forEach((val, idx) => {
-                            const row = document.createElement('tr');
-                            row.dataset.key = idx;
-                            const idxCell = document.createElement('td');
-                            idxCell.textContent = `#${idx + 1}`;
-                            idxCell.className = 'nested-index-cell';
-                            idxCell.style.width = '20px';
-                            idxCell.style.minWidth = '20px';
-                            const valCell = document.createElement('td');
-                            valCell.className = 'nested-value-cell';
-                            valCell.innerHTML = this.createEditableValue(val, [...currentPath, idx], null, key);
-                            row.appendChild(idxCell);
-                            row.appendChild(valCell);
-                            tbody.appendChild(row);
-                        });
-                        subTable.appendChild(tbody);
-                        valueCell.appendChild(subTable);
-                    }
-                } else {
-                    // 嵌套对象：渲染为子表格
-                    valueCell.innerHTML = '';
-                    const subTable = document.createElement('table');
-                    subTable.className = 'json-table nested-table';
-                    subTable.dataset.path = currentPath.join('.');
-                    this.renderObject(value, subTable, currentPath);
-                    valueCell.appendChild(subTable);
-                }
+                valueCell.innerHTML = '';
+                const subTable = document.createElement('table');
+                subTable.className = 'json-table nested-table';
+                subTable.dataset.path = currentPath.join('.');
+
+                // 将数组当作索引->值的对象来递归渲染，保持一致的表格风格
+                const objValue = Array.isArray(value)
+                    ? Object.fromEntries(value.map((v, i) => [i, v]))
+                    : value;
+
+                this.renderObject(objValue, subTable, currentPath);
+                valueCell.appendChild(subTable);
             } else {
                 // 简单值（字符串、数字等）
                 valueCell.innerHTML = this.createEditableValue(value, currentPath, locationInfo, key);
