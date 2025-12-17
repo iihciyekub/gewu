@@ -11,6 +11,51 @@ const url = require('url');
 
 const PORT = process.env.PORT ? Number(process.env.PORT) : 8000;
 const ROOT_DIR = path.resolve(__dirname);
+const PROMPT_ROOT = path.join(ROOT_DIR, 'src', 'prompts');
+const PROMPT_MANIFEST_PATH = path.join(ROOT_DIR, 'prompt-manifest.json');
+let promptManifestCache = null;
+
+function resolvePromptDir(group) {
+    if (!group) return null;
+    const candidates = [group, group.replace(/[_-]/g, '')].filter(Boolean);
+    for (const key of candidates) {
+        const dir = path.join(PROMPT_ROOT, key);
+        if (fs.existsSync(dir) && fs.statSync(dir).isDirectory()) {
+            return { dir, key };
+        }
+    }
+    return null;
+}
+
+function buildPromptManifest() {
+    const groups = {};
+    if (fs.existsSync(PROMPT_ROOT)) {
+        const items = fs.readdirSync(PROMPT_ROOT, { withFileTypes: true });
+        items.filter(entry => entry.isDirectory()).forEach((entry) => {
+            const dir = path.join(PROMPT_ROOT, entry.name);
+            const files = fs.readdirSync(dir)
+                .filter(name => name.toLowerCase().endsWith('.md'))
+                .sort();
+            groups[entry.name] = {
+                files,
+                basePath: `/src/prompts/${entry.name}/`
+            };
+        });
+    }
+    return groups;
+}
+
+function ensurePromptManifest() {
+    promptManifestCache = buildPromptManifest();
+    try {
+        fs.writeFileSync(PROMPT_MANIFEST_PATH, JSON.stringify({ success: true, groups: promptManifestCache }, null, 2), 'utf8');
+    } catch (err) {
+        console.error('✗ Failed to write prompt manifest:', err);
+    }
+}
+
+// Build manifest once at startup
+ensurePromptManifest();
 
 // 路径规范化，返回安全的 projectKey 以及完整路径
 function normalizeProjectPath(projectPath = 'user') {
@@ -418,6 +463,75 @@ const server = http.createServer((req, res) => {
             }));
         }
         
+        return;
+    }
+
+    // 处理 prompt 文件列表请求
+    if (req.method === 'GET' && pathname === '/prompt-files') {
+        try {
+            ensurePromptManifest();
+            const groups = promptManifestCache || {};
+
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ success: true, groups }));
+        } catch (error) {
+            console.error('✗ Error reading prompts:', error);
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({
+                success: false,
+                error: error.message
+            }));
+        }
+        return;
+    }
+
+    // 处理 prompt 单文件读取请求
+    if (req.method === 'GET' && pathname === '/prompt-file') {
+        try {
+            const query = parsedUrl.query || {};
+            const group = query.group;
+            const file = query.file;
+
+            if (!group) {
+                res.writeHead(400, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ success: false, error: 'Invalid group' }));
+                return;
+            }
+            if (!file) {
+                res.writeHead(400, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ success: false, error: 'Missing file' }));
+                return;
+            }
+
+            const resolved = resolvePromptDir(group);
+            if (!resolved) {
+                res.writeHead(404, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ success: false, error: 'Group not found' }));
+                return;
+            }
+            const dir = resolved.dir;
+            const safeName = path.basename(file);
+            const fullPath = path.join(dir, safeName);
+            const resolvedDir = path.resolve(dir);
+            const resolvedFile = path.resolve(fullPath);
+            if (!resolvedFile.startsWith(resolvedDir)) {
+                res.writeHead(400, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ success: false, error: 'Invalid path' }));
+                return;
+            }
+            if (!fs.existsSync(resolvedFile)) {
+                res.writeHead(404, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ success: false, error: 'File not found' }));
+                return;
+            }
+            const content = fs.readFileSync(resolvedFile, 'utf8');
+            res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8' });
+            res.end(content);
+        } catch (error) {
+            console.error('✗ Error reading prompt file:', error);
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ success: false, error: error.message }));
+        }
         return;
     }
 

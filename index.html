@@ -39,6 +39,16 @@
     <script src="js/core/highlight/highlight.min.js"></script>
 </head>
 <body>
+    <div class="prompt-quick-panel" id="promptQuickPanel">
+        <div class="prompt-quick-header">
+            <span><i class="fas fa-magnet"></i> Prompt 快捷 (Cmd+Shift+G)</span>
+            <button class="prompt-close-btn" id="promptPanelClose" title="隐藏 (Cmd+Shift+G)">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+        <div class="prompt-groups" id="promptGroupsContainer"></div>
+    </div>
+
     <!-- Project Selector Modal -->
     <div class="modal" id="projectSelectorModal">
         <div class="modal-content project-selector-content">

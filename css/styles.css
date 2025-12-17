@@ -2471,3 +2471,113 @@ ol.json-array {
     padding: 4px 10px;
     font-size: 10px;
 }
+
+/* Prompt quick panel */
+.prompt-quick-panel {
+    position: fixed;
+    top: 10px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--wos-bg);
+    border: 1px solid var(--wos-border);
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.15);
+    border-radius: 6px;
+    padding: 8px 10px;
+    z-index: 3000;
+    display: none;
+    gap: 8px;
+    max-width: calc(100% - 30px);
+    min-width: 280px;
+}
+
+.prompt-quick-panel.visible {
+    display: flex;
+    flex-direction: column;
+}
+
+.prompt-quick-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    font-weight: 600;
+    color: var(--wos-blue);
+    font-size: 12px;
+}
+
+.prompt-quick-header i {
+    margin-right: 6px;
+}
+
+.prompt-close-btn {
+    background: transparent;
+    border: none;
+    color: var(--gray-600);
+    cursor: pointer;
+    padding: 3px 6px;
+    border-radius: 4px;
+    transition: all 0.15s ease;
+    font-size: 12px;
+}
+
+.prompt-close-btn:hover {
+    background: var(--wos-hover);
+    color: var(--wos-blue-dark);
+}
+
+.prompt-group {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.prompt-groups {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    max-height: 240px;
+    overflow: auto;
+}
+
+.prompt-group-label {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--gray-700);
+    flex-shrink: 0;
+    min-width: 48px;
+}
+
+.prompt-button-row {
+    display: flex;
+    gap: 6px;
+    overflow-x: auto;
+    padding-bottom: 2px;
+}
+
+.prompt-chip {
+    background: var(--wos-hover);
+    color: var(--wos-text);
+    border: 1px solid var(--wos-border);
+    border-radius: 14px;
+    padding: 4px 10px;
+    font-size: 11px;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: all 0.15s ease;
+}
+
+.prompt-chip:hover {
+    background: var(--wos-active);
+    border-color: var(--wos-blue-light);
+    color: var(--wos-blue-dark);
+}
+
+.prompt-chip:active {
+    transform: translateY(1px);
+}
+
+.prompt-empty {
+    color: var(--gray-500);
+    font-size: 11px;
+    white-space: nowrap;
+}

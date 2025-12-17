@@ -45,6 +45,9 @@ class PaperReviewerApp {
         this.draggingSectionKey = null;
         this.placeholderState = { scope: null, target: null, after: false };
         this.gotoEditResolver = null;
+        this.promptPanelVisible = false;
+        this.promptDataLoaded = false;
+        this.promptGroups = {};
 
         // 项目管理
         this.currentProject = null; // { name, path }
@@ -162,6 +165,7 @@ class PaperReviewerApp {
         this.setupEventListeners();
         this.setupResizers();
         this.setupDraggableModal();
+        this.loadPromptShortcuts();
     }
 
     async initializeProject() {
@@ -302,6 +306,11 @@ class PaperReviewerApp {
                 e.preventDefault();
                 if (this.hasUnsavedChanges) this.saveToFile();
             }
+            if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === 'g') {
+                e.preventDefault();
+                this.togglePromptPanel();
+                return;
+            }
             if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === 'f') {
                 e.preventDefault();
                 this.toggleRightPanelVisibility();
@@ -345,6 +354,7 @@ class PaperReviewerApp {
                 this.closeGotoEditModal(false);
                 this.closeProjectSelector();
                 this.clearPdfHighlights();
+                this.togglePromptPanel(false);
             }
         });
 
@@ -366,6 +376,10 @@ class PaperReviewerApp {
         const copyWosAideBtn = document.getElementById('copyWosAideBtn');
         if (copyWosAideBtn) {
             copyWosAideBtn.addEventListener('click', () => this.copyWosAideSource());
+        }
+        const promptCloseBtn = document.getElementById('promptPanelClose');
+        if (promptCloseBtn) {
+            promptCloseBtn.addEventListener('click', () => this.togglePromptPanel(false));
         }
         const undoPasteBtn = document.getElementById('undoPasteBtn');
         if (undoPasteBtn) {
@@ -2412,6 +2426,168 @@ class PaperReviewerApp {
         }
     }
 
+    async loadPromptShortcuts() {
+        try {
+            const response = await fetch('/prompt-files');
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            const data = await response.json();
+            this.promptGroups = data.groups || {};
+            this.promptDataLoaded = true;
+
+            this.renderPromptShortcuts();
+        } catch (error) {
+            console.error('加载 prompt 文件失败:', error);
+            // fallback: 尝试从静态 manifest 读取
+            const ok = await this.loadPromptManifestFallback();
+            if (!ok) {
+                this.showNotification(`加载 prompt 列表失败: ${error.message}`, 'error');
+            }
+        }
+    }
+
+    async loadPromptManifestFallback() {
+        try {
+            const response = await fetch('/prompt-manifest.json');
+            if (!response.ok) return false;
+            const data = await response.json();
+            if (!data || typeof data !== 'object') return false;
+            this.promptGroups = data.groups || {};
+            this.promptDataLoaded = true;
+            this.renderPromptShortcuts();
+            this.showNotification('使用静态 prompt 清单加载成功', 'info');
+            return true;
+        } catch (err) {
+            console.error('加载静态 prompt 清单失败:', err);
+            return false;
+        }
+    }
+
+    renderPromptShortcuts() {
+        const container = document.getElementById('promptGroupsContainer');
+        if (!container) return;
+        container.innerHTML = '';
+
+        const keys = Object.keys(this.promptGroups || {}).sort();
+        if (!keys.length) {
+            const empty = document.createElement('div');
+            empty.className = 'prompt-empty';
+            empty.textContent = '未找到 prompt 目录';
+            container.appendChild(empty);
+            return;
+        }
+
+        keys.forEach((key) => {
+            const groupEl = document.createElement('div');
+            groupEl.className = 'prompt-group';
+
+            const label = document.createElement('div');
+            label.className = 'prompt-group-label';
+            label.textContent = key;
+            groupEl.appendChild(label);
+
+            const row = document.createElement('div');
+            row.className = 'prompt-button-row';
+            row.dataset.groupKey = key;
+            groupEl.appendChild(row);
+
+            container.appendChild(groupEl);
+            this.renderPromptRow(row, key);
+        });
+    }
+
+    renderPromptRow(container, groupKey) {
+        if (!container) return;
+        container.innerHTML = '';
+
+        const groupData = this.promptGroups[groupKey] || {};
+        const files = groupData?.files || [];
+        if (!files.length) {
+            const empty = document.createElement('span');
+            empty.className = 'prompt-empty';
+            empty.textContent = '无文件';
+            container.appendChild(empty);
+            return;
+        }
+
+        files.forEach((file) => {
+            const btn = document.createElement('button');
+            btn.className = 'prompt-chip';
+            btn.textContent = file.replace(/\.md$/i, '');
+            btn.title = file;
+            btn.addEventListener('click', () => this.copyPromptFile(groupKey, file));
+            container.appendChild(btn);
+        });
+    }
+
+    togglePromptPanel(forceVisible) {
+        const panel = document.getElementById('promptQuickPanel');
+        if (!panel) return;
+        if (!this.promptDataLoaded) {
+            this.loadPromptShortcuts();
+        }
+        const nextState = typeof forceVisible === 'boolean' ? forceVisible : !this.promptPanelVisible;
+        this.promptPanelVisible = nextState;
+        panel.classList.toggle('visible', nextState);
+    }
+
+    async copyPromptFile(groupKey, file) {
+        try {
+            const params = new URLSearchParams({ group: groupKey, file });
+            const response = await fetch(`/prompt-file?${params.toString()}`);
+            if (!response.ok) throw new Error(`读取失败 (${response.status})`);
+            const text = await response.text();
+            await this.writeTextToClipboard(text);
+            this.showNotification(`${file || '文件'} 已复制到剪贴板`, 'success');
+        } catch (error) {
+            console.warn('API 复制失败，尝试静态读取:', error);
+            const fallbackOk = await this.copyPromptFileStatic(groupKey, file);
+            if (!fallbackOk) {
+                console.error('复制 prompt 失败:', error);
+                this.showNotification(`复制失败: ${error.message}`, 'error');
+            }
+        }
+    }
+
+    async copyPromptFileStatic(groupKey, file) {
+        try {
+            const groupData = this.promptGroups[groupKey] || {};
+            const base = groupData.basePath || `/src/prompts/${groupKey}/`;
+            const url = `${base}${file}`;
+            const response = await fetch(url);
+            if (!response.ok) return false;
+            const text = await response.text();
+            await this.writeTextToClipboard(text);
+            this.showNotification(`${file || '文件'} 已复制到剪贴板 (静态)`, 'success');
+            return true;
+        } catch (err) {
+            console.error('静态复制失败:', err);
+            return false;
+        }
+    }
+
+    async writeTextToClipboard(text) {
+        // 优先用异步剪贴板，失败则回退到 execCommand
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            try {
+                await navigator.clipboard.writeText(text);
+                return;
+            } catch (err) {
+                console.warn('navigator.clipboard 写入失败，改用回退方案:', err);
+            }
+        }
+
+        const textarea = document.createElement('textarea');
+        textarea.value = text;
+        textarea.style.position = 'fixed';
+        textarea.style.opacity = '0';
+        document.body.appendChild(textarea);
+        textarea.focus();
+        textarea.select();
+        const ok = document.execCommand('copy');
+        textarea.remove();
+        if (!ok) throw new Error('回退复制失败');
+    }
+
     renderFlatView() {
         const container = document.getElementById('flatView');
         if (!container) return;
@@ -2735,15 +2911,35 @@ class PaperReviewerApp {
         const qaMatch = pastedText.match(/```qa[\s\S]*?```/i);
         if (!qaMatch) return false;
 
-        const title = prompt('检测到 QA 代码块，输入标题（可留空）：', 'Q&A');
-        if (title === null) return true; // 用户取消
+        // 如果 qa fence 已携带 @title，则直接使用，不弹窗
+        let heading = '';
+        let hasInlineTitle = false;
+        const fenceLine = qaMatch[0].match(/```qa([^\n]*)/i);
+        if (fenceLine && fenceLine[1]) {
+            const inline = fenceLine[1].trim();
+            const atMatch = inline.match(/^@(.+)$/);
+            heading = (atMatch ? atMatch[1] : inline).trim();
+            hasInlineTitle = !!heading;
+        }
 
-        const qaContent = qaMatch[0]
-            .replace(/^```qa\s*/i, '')
-            .replace(/```$/i, '')
-            .trim();
-        const heading = (title || '').trim();
-        const snippet = `${this.currentMarkdownText?.trimEnd() || ''}\n\n${heading ? `### ${heading}\n` : ''}\`\`\`qa\n${qaContent}\n\`\`\`\n`;
+        if (!heading) {
+            const title = prompt('检测到 QA 代码块，输入标题（可留空）：', 'Q&A');
+            if (title === null) return true; // 用户取消
+            heading = (title || '').trim();
+        }
+
+        let snippet = '';
+        if (hasInlineTitle) {
+            // 保留原有 fence（包含 @ 信息），不额外添加 heading
+            const rawBlock = qaMatch[0].trim();
+            snippet = `${this.currentMarkdownText?.trimEnd() || ''}\n\n${rawBlock}\n`;
+        } else {
+            const qaContent = qaMatch[0]
+                .replace(/^```qa[^\n]*\n?/i, '')
+                .replace(/```$/i, '')
+                .trim();
+            snippet = `${this.currentMarkdownText?.trimEnd() || ''}\n\n${heading ? `### ${heading}\n` : ''}\`\`\`qa\n${qaContent}\n\`\`\`\n`;
+        }
 
         // 备份以便撤销
         this.lastMarkdownPasteBackup = {
@@ -2752,7 +2948,7 @@ class PaperReviewerApp {
         };
 
         this.currentMarkdownText = snippet;
-        this.pendingQaTitle = { file: this.currentFile, title: heading || 'Q&A' };
+        this.pendingQaTitle = hasInlineTitle ? null : { file: this.currentFile, title: heading || 'Q&A' };
         const textarea = document.getElementById('markdownTextarea');
         if (textarea) {
             textarea.value = this.currentMarkdownText;
