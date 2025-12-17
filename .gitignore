@@ -2,7 +2,6 @@ js/pdfjs
 src/papers
 js/core
 user
-src
 test
 .DS_Store
 .vscode
