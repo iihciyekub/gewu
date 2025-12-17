@@ -48,6 +48,8 @@ class PaperReviewerApp {
         this.promptPanelVisible = false;
         this.promptDataLoaded = false;
         this.promptGroups = {};
+        this.currentLoadToken = 0;
+        this.fileOrders = {};
 
         // 项目管理
         this.currentProject = null; // { name, path }
@@ -377,6 +379,10 @@ class PaperReviewerApp {
         if (copyWosAideBtn) {
             copyWosAideBtn.addEventListener('click', () => this.copyWosAideSource());
         }
+        const syncPdfBtn = document.getElementById('syncPdfBtn');
+        if (syncPdfBtn) {
+            syncPdfBtn.addEventListener('click', () => this.createEmptyFilesFromPdfs());
+        }
         const promptCloseBtn = document.getElementById('promptPanelClose');
         if (promptCloseBtn) {
             promptCloseBtn.addEventListener('click', () => this.togglePromptPanel(false));
@@ -678,23 +684,54 @@ class PaperReviewerApp {
     saveFileOrderForProject(order = []) {
         const projectKey = this.currentProject ? this.normalizeProjectPathString(this.currentProject.path) : 'user';
         this.fileOrders[projectKey] = [...order];
-        this.saveProjectConfig();
+        this.persistFileOrder(order).catch(err => console.warn('save order failed:', err));
+    }
+
+    async fetchFileOrder() {
+        const projectPath = this.currentProject ? this.currentProject.path : 'user';
+        try {
+            const resp = await fetch('/file-order', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ projectPath, action: 'get' })
+            });
+            if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+            const data = await resp.json();
+            if (data && Array.isArray(data.order)) {
+                const key = this.normalizeProjectPathString(projectPath);
+                this.fileOrders[key] = data.order;
+            }
+        } catch (err) {
+            console.warn('fetch file order failed:', err);
+        }
+    }
+
+    async persistFileOrder(order = []) {
+        const projectPath = this.currentProject ? this.currentProject.path : 'user';
+        const resp = await fetch('/file-order', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ projectPath, action: 'set', order })
+        });
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
     }
 
     reorderFileItem(filename, offset = 0) {
         if (!offset) return;
-        const files = this.currentFileList && this.currentFileList.length ? [...this.currentFileList] : [];
-        if (!files.length) return;
-        const idx = files.indexOf(filename);
+        const listEl = document.getElementById('fileList');
+        const domFiles = listEl ? Array.from(listEl.querySelectorAll('.file-item')).map(it => it.dataset.filename).filter(Boolean) : [];
+        const baseList = (this.currentFileList && this.currentFileList.length) ? [...this.currentFileList] : domFiles;
+        if (!baseList.length) return;
+        const idx = baseList.indexOf(filename);
         if (idx < 0) return;
         let target = idx + offset;
-        if (target < 0 || target >= files.length) return;
-        const temp = files[idx];
-        files[idx] = files[target];
-        files[target] = temp;
-        this.currentFileList = files;
-        this.saveFileOrderForProject(files);
-        this.renderFileList(files, filename, true);
+        if (target < 0 || target >= baseList.length) return;
+        const temp = baseList[idx];
+        baseList[idx] = baseList[target];
+        baseList[target] = temp;
+        this.currentFileList = baseList;
+        this.saveFileOrderForProject(baseList);
+        this.renderFileList(baseList, filename, true);
     }
 
     // 保存面板宽度到本地存储
@@ -1005,6 +1042,8 @@ class PaperReviewerApp {
             
             const data = await response.json();
             const files = data.files || [];
+            // 读取服务器排序
+            await this.fetchFileOrder();
             // 应用自定义排序（若有），否则按字母排序
             const ordered = this.applyFileOrder(files);
             this.currentFileList = ordered;
@@ -1026,13 +1065,6 @@ class PaperReviewerApp {
             return;
         }
 
-        // 获取当前已存在的文件项
-        const existingItems = new Map();
-        Array.from(fileListEl.querySelectorAll('.file-item')).forEach(item => {
-            const filename = item.dataset.filename;
-            if (filename) existingItems.set(filename, item);
-        });
-        
         // 按文件名排序
         const sortedFiles = alreadyOrdered ? [...files] : [...files].sort();
         const filtered = this.fileFilter
@@ -1051,37 +1083,25 @@ class PaperReviewerApp {
         const activeTarget = selectedStillVisible || (!keepSelected && this.currentFile ? this.currentFile : null);
 
         filtered.forEach((file, index) => {
-            let fileItem;
             const displayName = file.replace(/\.[^.]+$/, '');
+            const number = index + 1;
             
-            // 复用现有的DOM元素
-            if (existingItems.has(file)) {
-                fileItem = existingItems.get(file);
-                existingItems.delete(file); // 标记为已使用
-                const span = fileItem.querySelector('span');
-                if (span) span.textContent = displayName;
-                fileItem.dataset.filename = file;
-            } else {
-                // 创建新元素
-                fileItem = document.createElement('div');
-                fileItem.className = 'file-item';
-                fileItem.dataset.filename = file;
-                fileItem.innerHTML = `
-                    <i class="fas fa-file-alt"></i>
-                    <span>${displayName}</span>
-                `;
-                
-                // 左键点击加载文件
-                fileItem.addEventListener('click', function() {
-                    window.paperReviewerApp.loadFile(file, this);
-                });
-                
-                // 右键菜单
-                fileItem.addEventListener('contextmenu', (e) => {
-                    e.preventDefault();
-                    window.paperReviewerApp.showFileContextMenu(e, file, fileItem);
-                });
-            }
+            // 始终创建新元素以避免事件引用旧文件
+            const fileItem = document.createElement('div');
+            fileItem.className = 'file-item';
+            fileItem.dataset.filename = file;
+            this.setFileItemContent(fileItem, displayName, number);
+            
+            // 左键点击加载文件
+            fileItem.addEventListener('click', function() {
+                window.paperReviewerApp.loadFile(file, this);
+            });
+            
+            // 右键菜单
+            fileItem.addEventListener('contextmenu', (e) => {
+                e.preventDefault();
+                window.paperReviewerApp.showFileContextMenu(e, file, fileItem);
+            });
             
             // 保持或恢复选中状态
             if (selectedStillVisible && file === selectedStillVisible) {
@@ -1103,6 +1123,16 @@ class PaperReviewerApp {
         // 一次性替换整个列表（最小化重排）
         fileListEl.innerHTML = '';
         fileListEl.appendChild(newFileListEl);
+    }
+
+    setFileItemContent(fileItem, displayName, number) {
+        const numText = `${number}`;
+        const iconHtml = '<i class="fas fa-file-alt"></i>';
+        fileItem.innerHTML = `
+            <span class="file-index">${numText}</span>
+            ${iconHtml}
+            <span class="file-name">${this.escapeHtml(displayName)}</span>
+        `;
     }
 
     // 显示文件右键菜单
@@ -1245,45 +1275,72 @@ class PaperReviewerApp {
 
     // 删除文件
     async deleteFile(filename, fileItem) {
-        if (!confirm(`确定要删除 "${filename}" 吗？此操作无法撤销！`)) return;
+        if (!confirm(`确定要删除 "${filename}" 及其同名 Markdown 吗？此操作无法撤销！`)) return;
         
+        const projectPath = this.currentProject ? this.currentProject.path : 'user';
+        const mdName = this.getMarkdownFilename(filename);
+        let deletedMd = false;
+
         try {
             const response = await fetch('/delete-json', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ 
-                    projectPath: this.currentProject ? this.currentProject.path : 'user',
+                    projectPath,
                     filename: filename 
                 })
             });
             
             if (!response.ok) throw new Error('删除失败');
-            
-            this.showNotification(`✓ 已删除 ${filename}`, 'success');
-            
-            // 优雅移除：淡出动画
-            fileItem.style.transition = 'opacity 0.3s ease';
-            fileItem.style.opacity = '0';
-            
-            setTimeout(() => {
-                fileItem.remove();
-                
-                // 如果删除的是当前文件，清空显示并加载第一个文件
-                if (this.currentFile === filename) {
-                    this.currentFile = null;
-                    this.currentData = null;
-                    this.hasUnsavedChanges = false;
-                    delete this.tempDataCache[filename];
-                    
-                    const firstFile = document.querySelector('.file-item');
-                    if (firstFile) {
-                        const firstFilename = firstFile.querySelector('span').textContent;
-                        this.loadFile(firstFilename, firstFile);
-                    } else {
-                        this.showLoading();
-                    }
+
+            const result = await response.json().catch(() => ({}));
+            deletedMd = !!result.mdDeleted;
+
+            // 如果服务端未删除 md，再尝试一次客户端删除（兼容旧返回）
+            if (!deletedMd) {
+                try {
+                    const mdResp = await fetch('/delete-json', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            projectPath,
+                            filename: mdName
+                        })
+                    });
+                    if (mdResp.ok) deletedMd = true;
+                } catch (mdErr) {
+                    console.warn('删除同名 markdown 失败:', mdErr);
                 }
-            }, 300);
+            }
+            
+            this.showNotification(`✓ 已删除 ${filename}${deletedMd ? `，笔记 ${mdName}` : ''}`, 'success');
+            
+            // 刷新列表，确保不加载已删除文件
+            await this.loadFileList(true);
+
+            // 如果删除的是当前文件，清空状态并加载第一个文件
+            if (this.currentFile === filename) {
+                this.currentFile = null;
+                this.currentData = null;
+                this.hasUnsavedChanges = false;
+                delete this.tempDataCache[filename];
+                delete this.tempDataCache[mdName];
+
+                const nextFile = (this.currentFileList || [])[0];
+                if (nextFile) {
+                    const nextEl = document.querySelector(`.file-item[data-filename="${nextFile}"]`);
+                    this.loadFile(nextFile, nextEl);
+                } else {
+                    this.showLoading();
+                }
+            }
+            
+            // 移除节点动画
+            if (fileItem && fileItem.remove) {
+                fileItem.style.transition = 'opacity 0.3s ease';
+                fileItem.style.opacity = '0';
+                setTimeout(() => fileItem.remove(), 300);
+            }
             
         } catch (error) {
             console.error('Error deleting file:', error);
@@ -1454,6 +1511,7 @@ class PaperReviewerApp {
     }
 
     async loadFile(filename, clickedElement = null) {
+        const loadId = ++this.currentLoadToken;
         try {
             // 如果当前文件有未保存的修改，提示用户
             if (this.hasUnsavedChanges && this.currentFile) {
@@ -1486,11 +1544,15 @@ class PaperReviewerApp {
             } else {
                 // Fetch JSON file，使用项目路径
                 const projectPath = this.currentProject ? this.currentProject.path : 'user';
-                const response = await fetch(this.getDataUrl(filename));
+                const response = await fetch(this.getDataUrl(filename), { cache: 'no-store' });
                 if (!response.ok) throw new Error('Failed to load file');
-                this.currentData = await response.json();
+                const data = await response.json();
+                // 若在加载过程中用户切换了文件，放弃应用结果
+                if (loadId !== this.currentLoadToken) return;
+                this.currentData = data;
                 this.hasUnsavedChanges = false;
             }
+            if (loadId !== this.currentLoadToken) return;
             this.ensureSchemaVersion();
             this.ensureLastUpdate();
             
@@ -1506,6 +1568,8 @@ class PaperReviewerApp {
             this.renderStructuredView();
             this.renderFlatView();
             await this.ensureMarkdownExistsForFile(filename);
+            // 再次确认未切换文件
+            if (loadId !== this.currentLoadToken) return;
             await this.loadMarkdownForCurrentFile();
 
             // Load PDF if available
@@ -1520,7 +1584,9 @@ class PaperReviewerApp {
                     this.updateSaveButtonState();
                 }
                 const projectPath = this.currentProject ? this.currentProject.path : 'user';
-                await this.loadPDF(`${projectPath}/papers/${pdfFile}`);
+                if (loadId === this.currentLoadToken) {
+                    await this.loadPDF(`${projectPath}/papers/${pdfFile}`);
+                }
             }
             this.applyCurrentView();
         } catch (error) {
@@ -2106,6 +2172,29 @@ class PaperReviewerApp {
         this.setupEditableListeners();
         this.updateUndoButtonState();
         this.showNotification('已撤销上次粘贴合并', 'success');
+    }
+
+    async createEmptyFilesFromPdfs() {
+        try {
+            const resp = await fetch('/sync-pdfs', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    projectPath: this.currentProject ? this.currentProject.path : 'user'
+                })
+            });
+            if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+            const data = await resp.json();
+            if (!data.success) throw new Error(data.error || '同步失败');
+            const jsonCount = data.createdJson?.length || 0;
+            const mdCount = data.createdMd?.length || 0;
+            const msg = data.message || '扫描完成';
+            this.showNotification(`${msg}：新建 JSON ${jsonCount} 个，MD ${mdCount} 个`, 'success');
+            await this.loadFileList();
+        } catch (error) {
+            console.error('同步 PDF 生成空文件失败:', error);
+            this.showNotification(`同步失败: ${error.message}`, 'error');
+        }
     }
 
     ensureSchemaVersion() {

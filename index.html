@@ -98,9 +98,14 @@
                     <i class="fas fa-folder-open"></i>
                     <span id="currentProjectName">未加载项目</span>
                 </div>
-                <button class="btn-switch-project" onclick="window.paperReviewerApp.showProjectSelector()" title="切换项目">
-                    <i class="fas fa-exchange-alt"></i>
-                </button>
+                <div class="panel-header-actions">
+                    <button class="btn-sync-pdf" id="syncPdfBtn" title="扫描 papers/ 并创建空 JSON+MD">
+                        <i class="fas fa-magic"></i>
+                    </button>
+                    <button class="btn-switch-project" onclick="window.paperReviewerApp.showProjectSelector()" title="切换项目">
+                        <i class="fas fa-exchange-alt"></i>
+                    </button>
+                </div>
             </div>
             <div class="file-filter">
                 <i class="fas fa-search"></i>

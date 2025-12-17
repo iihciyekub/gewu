@@ -13,6 +13,7 @@ const PORT = process.env.PORT ? Number(process.env.PORT) : 8000;
 const ROOT_DIR = path.resolve(__dirname);
 const PROMPT_ROOT = path.join(ROOT_DIR, 'src', 'prompts');
 const PROMPT_MANIFEST_PATH = path.join(ROOT_DIR, 'prompt-manifest.json');
+const FILE_ORDER_NAME = '.file_order.json';
 let promptManifestCache = null;
 
 function resolvePromptDir(group) {
@@ -52,6 +53,50 @@ function ensurePromptManifest() {
     } catch (err) {
         console.error('✗ Failed to write prompt manifest:', err);
     }
+}
+
+function collectPdfFiles(dir) {
+    const result = [];
+    if (!fs.existsSync(dir)) return result;
+    const entries = fs.readdirSync(dir, { withFileTypes: true });
+    entries.forEach((entry) => {
+        const full = path.join(dir, entry.name);
+        if (entry.isDirectory()) {
+            result.push(...collectPdfFiles(full));
+        } else if (entry.isFile() && /\.pdf$/i.test(entry.name)) {
+            result.push(full);
+        }
+    });
+    return result;
+}
+
+function formatDate() {
+    const d = new Date();
+    const pad = (n) => n.toString().padStart(2, '0');
+    return `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}`;
+}
+
+function formatDateTime() {
+    const d = new Date();
+    const pad = (n) => n.toString().padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+}
+
+function buildDefaultMarkdown(baseName) {
+    return `# ${baseName}\n\n> 自动创建的 Markdown 笔记文件。\n\n- 可添加章节、要点、引用等。\n- 与 JSON 同名，便于版本记录。\n`;
+}
+
+function resolveProjectDirs(projectPath) {
+    const { fullPath } = normalizeProjectPath(projectPath);
+    const baseName = path.basename(fullPath);
+    const projectRoot = (baseName === 'data' || baseName === 'papers')
+        ? path.dirname(fullPath)
+        : fullPath;
+    return {
+        projectRoot,
+        dataDir: path.join(projectRoot, 'data'),
+        papersDir: path.join(projectRoot, 'papers')
+    };
 }
 
 // Build manifest once at startup
@@ -361,14 +406,29 @@ const server = http.createServer((req, res) => {
                 
                 // 删除文件
                 fs.unlinkSync(filePath);
-                
-                console.log(`✓ Deleted: ${filename}`);
+
+                // 若是 .json，同步删除同名 .md（忽略不存在的情况）
+                let mdDeleted = false;
+                if (filename.toLowerCase().endsWith('.json')) {
+                    const mdPath = path.join(fullPath, 'data', filename.replace(/\.json$/i, '.md'));
+                    if (fs.existsSync(mdPath)) {
+                        try {
+                            fs.unlinkSync(mdPath);
+                            mdDeleted = true;
+                        } catch (err) {
+                            console.warn('Delete markdown failed:', mdPath, err);
+                        }
+                    }
+                }
+
+                console.log(`✓ Deleted: ${filename}${mdDeleted ? ' (+md)' : ''}`);
                 
                 res.writeHead(200, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify({
                     success: true,
                     message: `File deleted successfully`,
                     filename,
+                    mdDeleted,
                     projectKey
                 }));
                 
@@ -532,6 +592,112 @@ const server = http.createServer((req, res) => {
             res.writeHead(500, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify({ success: false, error: error.message }));
         }
+        return;
+    }
+
+    // 读取/保存文件排序
+    if (req.method === 'POST' && pathname === '/file-order') {
+        let body = '';
+        req.on('data', chunk => { body += chunk.toString(); });
+        req.on('end', () => {
+            try {
+                const data = body ? JSON.parse(body) : {};
+                const projectPath = data.projectPath || 'user';
+                const action = data.action || 'get';
+                const order = Array.isArray(data.order) ? data.order : [];
+                const { projectRoot } = resolveProjectDirs(projectPath);
+                const orderFile = path.join(projectRoot, FILE_ORDER_NAME);
+
+                if (action === 'set') {
+                    fs.writeFileSync(orderFile, JSON.stringify({ order }, null, 2), 'utf8');
+                    res.writeHead(200, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ success: true }));
+                    return;
+                }
+
+                // 默认 get
+                let stored = [];
+                if (fs.existsSync(orderFile)) {
+                    try {
+                        const content = fs.readFileSync(orderFile, 'utf8');
+                        const parsed = JSON.parse(content);
+                        if (Array.isArray(parsed.order)) stored = parsed.order;
+                    } catch (err) {
+                        console.warn('Read order file failed:', err);
+                    }
+                }
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ success: true, order: stored }));
+            } catch (err) {
+                console.error('✗ Error handling file-order:', err);
+                res.writeHead(500, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ success: false, error: err.message }));
+            }
+        });
+        return;
+    }
+
+    // 扫描 papers/ 并在 data/ 创建同名空 JSON/MD
+    if (req.method === 'POST' && pathname === '/sync-pdfs') {
+        let body = '';
+        req.on('data', chunk => { body += chunk.toString(); });
+        req.on('end', () => {
+            try {
+                const data = body ? JSON.parse(body) : {};
+                const projectPath = data.projectPath || 'user';
+                const { projectRoot, dataDir, papersDir } = resolveProjectDirs(projectPath);
+
+                // 确保基础目录存在
+                if (!fs.existsSync(dataDir)) {
+                    fs.mkdirSync(dataDir, { recursive: true });
+                }
+                if (!fs.existsSync(papersDir)) {
+                    fs.mkdirSync(papersDir, { recursive: true });
+                }
+
+                const pdfFiles = collectPdfFiles(papersDir);
+                const createdJson = [];
+                const createdMd = [];
+
+                pdfFiles.forEach((pdfPath) => {
+                    const baseName = path.basename(pdfPath, path.extname(pdfPath));
+                    const pdfFileName = path.basename(pdfPath);
+                    const jsonPath = path.join(dataDir, `${baseName}.json`);
+                    const mdPath = path.join(dataDir, `${baseName}.md`);
+
+                    if (!fs.existsSync(jsonPath)) {
+                        const tpl = {
+                            schema_version: formatDate(),
+                            lastupdate: formatDateTime(),
+                            meta_info: {
+                                paper_id: baseName,
+                                title: '',
+                                pdf_path: pdfFileName
+                            }
+                        };
+                        fs.writeFileSync(jsonPath, JSON.stringify(tpl, null, 2), 'utf8');
+                        createdJson.push(path.relative(projectRoot, jsonPath));
+                    }
+                    if (!fs.existsSync(mdPath)) {
+                        fs.writeFileSync(mdPath, buildDefaultMarkdown(baseName), 'utf8');
+                        createdMd.push(path.relative(projectRoot, mdPath));
+                    }
+                });
+
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({
+                    success: true,
+                    createdJson,
+                    createdMd,
+                    scanned: pdfFiles.length,
+                    message: pdfFiles.length ? '完成扫描' : '未找到 PDF，已确保目录存在'
+                }));
+            } catch (error) {
+                console.error('✗ Error syncing pdfs:', error);
+                res.writeHead(500, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ success: false, error: error.message }));
+            }
+        });
         return;
     }
 
