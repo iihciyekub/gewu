@@ -512,6 +512,37 @@ body {
     color: var(--gray-700);
 }
 
+.content-ref {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 4px;
+    border-radius: 4px;
+    background: var(--wos-hover);
+    color: var(--wos-blue);
+    font-size: 10px;
+    border: 1px solid var(--wos-border);
+}
+
+.content-ref i {
+    font-size: 11px;
+}
+
+.content-ref-text {
+    font-size: 11px;
+    color: var(--wos-text);
+}
+
+body.theme-vscode .content-ref {
+    background: #252526;
+    border-color: var(--wos-border);
+    color: var(--wos-text);
+}
+
+body.theme-vscode .content-ref-text {
+    color: var(--wos-text);
+}
+
 .nested-table-title {
     display: inline-block;
 }

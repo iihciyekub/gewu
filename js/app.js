@@ -3333,22 +3333,51 @@ class PaperReviewerApp {
         this.showNotification('引用文本已更新', 'success');
     }
 
-    async updateMarkdownGotoText(newText, targetIndex = 0) {
+    async updateMarkdownGotoText(oldText = '', newText, targetIndex = 0) {
         if (!this.currentMarkdownExists || typeof this.currentMarkdownText !== 'string') return;
-        let count = 0;
-        const updated = this.currentMarkdownText.replace(/goto\{[^}]*\}/g, (m) => {
-            if (count === targetIndex) {
-                count++;
-                return `goto{${newText}}`;
-            }
-            count++;
-            return m;
-        });
-        if (updated === this.currentMarkdownText) {
+        const reAll = /goto\{([^}]*?)\}/g;
+        const matches = [...this.currentMarkdownText.matchAll(reAll)];
+        if (!matches.length) {
             this.showNotification('未在 Markdown 中找到可更新的 goto 引用', 'info');
             return;
         }
-        this.currentMarkdownText = updated;
+        const escapeReg = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        let updatedText = this.currentMarkdownText;
+        let replaced = false;
+
+        if (oldText) {
+            const reg = new RegExp(`goto\\{${escapeReg(oldText.trim())}\\}`, 'g');
+            let count = 0;
+            updatedText = updatedText.replace(reg, (m) => {
+                if (!replaced && count === targetIndex) {
+                    replaced = true;
+                    count++;
+                    return `goto{${newText}}`;
+                }
+                count++;
+                return m;
+            });
+        }
+
+        if (!replaced) {
+            let count = 0;
+            updatedText = updatedText.replace(reAll, (m) => {
+                if (count === targetIndex && !replaced) {
+                    replaced = true;
+                    count++;
+                    return `goto{${newText}}`;
+                }
+                count++;
+                return m;
+            });
+        }
+
+        if (!replaced) {
+            this.showNotification('未在 Markdown 中找到可更新的 goto 引用', 'info');
+            return;
+        }
+
+        this.currentMarkdownText = updatedText;
         const textarea = document.getElementById('markdownTextarea');
         if (textarea) {
             textarea.value = this.currentMarkdownText;
@@ -5081,15 +5110,18 @@ class PaperReviewerApp {
             const link = target.classList.contains('location-link') ? target : target.closest('.location-link');
             if (!link) return;
             e.preventDefault();
-            const current = link.dataset.quoteText || '';
+            const current = link.dataset.quoteText || (link.textContent || '').trim() || '';
             const valuePath = link.dataset.valuePath || '';
-            const idx = link.dataset.quoteIndex !== undefined ? parseInt(link.dataset.quoteIndex, 10) : 0;
+            const allGotoLinks = Array.from(document.querySelectorAll('.goto-link'));
+            const samePathLinks = allGotoLinks.filter(l => (l.dataset.valuePath || '') === valuePath);
+            const idxInPath = samePathLinks.indexOf(link);
+            const idx = idxInPath >= 0 ? idxInPath : (link.dataset.quoteIndex !== undefined ? parseInt(link.dataset.quoteIndex, 10) : 0);
             const next = prompt('Edit reference text', current);
             if (next === null) return;
             if (valuePath) {
-                this.updateGotoText(valuePath, next, isNaN(idx) ? 0 : idx);
+                await this.updateGotoText(valuePath, next, isNaN(idx) ? 0 : idx);
             } else {
-                await this.updateMarkdownGotoText(next, isNaN(idx) ? 0 : idx);
+                await this.updateMarkdownGotoText(current, next, isNaN(idx) ? 0 : idx);
             }
         };
         
