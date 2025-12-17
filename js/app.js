@@ -1703,11 +1703,59 @@ class PaperReviewerApp {
             // 第三列：Value值的显示
             if (typeof value === 'object' && value !== null) {
                 if (Array.isArray(value)) {
-                    // 数组：显示为 JSON 字符串
-                    valueCell.innerHTML = this.createEditableValue(JSON.stringify(value), currentPath, locationInfo, key);
+                    // 数组：对象数组单独处理，其余按列表表格渲染
+                    valueCell.innerHTML = '';
+                    if (value.length && value.every(v => v && typeof v === 'object' && !Array.isArray(v))) {
+                        // 数组且元素为对象：渲染为可折叠的子表格列表
+                        const inner = document.createElement('div');
+                        inner.className = 'nested-table-list';
+                        value.forEach((obj, idx) => {
+                            const subWrapper = document.createElement('div');
+                            subWrapper.className = 'nested-table-wrapper';
+                            const subHeader = document.createElement('div');
+                            subHeader.className = 'nested-table-header';
+                            subHeader.innerHTML = `<span class="nested-table-title">#${idx + 1}</span>`;
+                            const subTable = document.createElement('table');
+                            subTable.className = 'json-table nested-table';
+                            subTable.dataset.path = [...currentPath, idx].join('.');
+                            this.renderObject(obj, subTable, [...currentPath, idx]);
+                            subWrapper.appendChild(subHeader);
+                            subWrapper.appendChild(subTable);
+                            inner.appendChild(subWrapper);
+                        });
+                        valueCell.appendChild(inner);
+                    } else {
+                        // 基本类型数组或混合：渲染为简单列表表格
+                        const subTable = document.createElement('table');
+                        subTable.className = 'json-table nested-table';
+                        subTable.dataset.path = currentPath.join('.');
+                        const tbody = document.createElement('tbody');
+                        value.forEach((val, idx) => {
+                            const row = document.createElement('tr');
+                            row.dataset.key = idx;
+                            const idxCell = document.createElement('td');
+                            idxCell.textContent = `#${idx + 1}`;
+                            idxCell.className = 'nested-index-cell';
+                            idxCell.style.width = '20px';
+                            idxCell.style.minWidth = '20px';
+                            const valCell = document.createElement('td');
+                            valCell.className = 'nested-value-cell';
+                            valCell.innerHTML = this.createEditableValue(val, [...currentPath, idx], null, key);
+                            row.appendChild(idxCell);
+                            row.appendChild(valCell);
+                            tbody.appendChild(row);
+                        });
+                        subTable.appendChild(tbody);
+                        valueCell.appendChild(subTable);
+                    }
                 } else {
-                    // 嵌套对象：显示为格式化的 JSON
-                    valueCell.innerHTML = this.createEditableValue(JSON.stringify(value, null, 2), currentPath, locationInfo, key);
+                    // 嵌套对象：渲染为子表格
+                    valueCell.innerHTML = '';
+                    const subTable = document.createElement('table');
+                    subTable.className = 'json-table nested-table';
+                    subTable.dataset.path = currentPath.join('.');
+                    this.renderObject(value, subTable, currentPath);
+                    valueCell.appendChild(subTable);
                 }
             } else {
                 // 简单值（字符串、数字等）
@@ -2538,11 +2586,50 @@ class PaperReviewerApp {
                         const items = parseQaContent(token.content || '');
                         if (!items.length) return '';
                         const renderBlock = (text) => mdInstance.render(text, { ...(env || {}), __qaRendering: true });
+                        const renderSectioned = (raw = '') => {
+                            const lines = (raw || '').split('\n');
+                            const sections = [];
+                            let cur = { title: null, body: [] };
+                            const pushCur = () => {
+                                if (cur.title !== null || cur.body.length) sections.push(cur);
+                                cur = { title: null, body: [] };
+                            };
+                            lines.forEach((line) => {
+                                const m = line.match(/^\s*\[(.+?)\]\s*$/);
+                                if (m) {
+                                    pushCur();
+                                    cur.title = m[1].trim();
+                                } else {
+                                    cur.body.push(line);
+                                }
+                            });
+                            pushCur();
+                            const hasSectionTitle = sections.some(s => s.title);
+                            if (!hasSectionTitle || (sections.length === 1 && !sections[0].title)) {
+                                return renderBlock(raw);
+                            }
+                            return sections.map((section, idxSection) => {
+                                const title = section.title || `Section ${idxSection + 1}`;
+                                const bodyText = (section.body || []).join('\n').trim();
+                                const bodyHtml = bodyText ? renderBlock(bodyText) : '';
+                                return `
+                                    <div class="qa-section">
+                                        <div class="qa-section-header">
+                                            <button class="qa-section-toggle" type="button" aria-expanded="true" title="Click to toggle section">
+                                                <i class="fas fa-chevron-up"></i>
+                                            </button>
+                                            <span class="qa-section-title">${escapeHtml(title)}</span>
+                                        </div>
+                                        <div class="qa-section-body">${bodyHtml}</div>
+                                    </div>
+                                `;
+                            }).join('');
+                        };
                         const inner = items.map(({ q, a }, i) => {
                             return `
                                 <div class="qa-item">
-                                    <div class="qa-q"><span class="qa-label qa-label-q" title="Question"><i class="fa-solid fa-circle-question"></i></span><div class="qa-bubble">${renderBlock(q)}</div></div>
-                                    <div class="qa-a"><span class="qa-label qa-label-a" title="Answer"><i class="fa-solid fa-circle-check"></i></span><div class="qa-bubble">${renderBlock(a)}</div></div>
+                                    <div class="qa-q"><span class="qa-label qa-label-q" title="Question"><i class="fa-solid fa-circle-question"></i></span><div class="qa-bubble">${renderSectioned(q)}</div></div>
+                                    <div class="qa-a"><span class="qa-label qa-label-a" title="Answer"><i class="fa-solid fa-circle-check"></i></span><div class="qa-bubble">${renderSectioned(a)}</div></div>
                                 </div>
                             `;
                         }).join('');
@@ -2850,6 +2937,32 @@ class PaperReviewerApp {
                     if (icon) {
                         icon.className = isCollapsed ? 'fas fa-chevron-down' : 'fas fa-chevron-up';
                     }
+                }
+            });
+        });
+
+        const setSectionCollapsed = (section, collapsed) => {
+            section.classList.toggle('qa-section-collapsed', collapsed);
+            const toggleBtn = section.querySelector('.qa-section-toggle');
+            if (toggleBtn) {
+                toggleBtn.setAttribute('aria-expanded', String(!collapsed));
+                const icon = toggleBtn.querySelector('i');
+                if (icon) icon.className = collapsed ? 'fas fa-chevron-down' : 'fas fa-chevron-up';
+            }
+        };
+
+        renderRoot.querySelectorAll('.qa-section-toggle').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const section = btn.closest('.qa-section');
+                if (!section) return;
+                if (e.shiftKey) {
+                    const targetCollapsed = !section.classList.contains('qa-section-collapsed');
+                    renderRoot.querySelectorAll('.qa-section').forEach(sec => setSectionCollapsed(sec, targetCollapsed));
+                } else {
+                    const collapsed = section.classList.toggle('qa-section-collapsed');
+                    btn.setAttribute('aria-expanded', String(!collapsed));
+                    const icon = btn.querySelector('i');
+                    if (icon) icon.className = collapsed ? 'fas fa-chevron-down' : 'fas fa-chevron-up';
                 }
             });
         });

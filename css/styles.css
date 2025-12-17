@@ -483,6 +483,78 @@ body {
     transition: box-shadow 0.18s ease, background-color 0.18s ease;
 }
 
+.json-table.nested-table {
+    margin-top: 4px;
+    border: 1px solid var(--gray-200);
+    border-radius: 4px;
+    background: var(--gray-50);
+    text-align: left;
+}
+
+.nested-table-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.nested-table-wrapper {
+    border: 1px solid var(--gray-200);
+    border-radius: 4px;
+    background: var(--gray-50);
+}
+
+.nested-table-header {
+    padding: 4px 8px;
+    background: var(--gray-100);
+    border-bottom: 1px solid var(--gray-200);
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--gray-700);
+}
+
+.nested-table-title {
+    display: inline-block;
+}
+
+body.theme-vscode .json-table.nested-table,
+body.theme-vscode .nested-table-wrapper {
+    background: #1e1e1e;
+    border-color: #2f2f2f;
+}
+
+body.theme-vscode .nested-table-header {
+    background: #252526;
+    border-color: #2f2f2f;
+    color: var(--wos-text);
+}
+
+.json-table.nested-table td {
+    text-align: left;
+}
+
+.nested-index-cell {
+    font-weight: 600;
+    width: 20px;
+    min-width: 20px;
+    color: var(--gray-700);
+    background: var(--gray-100);
+    border-right: 1px solid var(--gray-200);
+    text-align: right;
+    padding-right: 8px;
+}
+
+body.theme-vscode .nested-index-cell {
+    color: var(--wos-text);
+    background: #252526;
+    border-right: 1px solid #2f2f2f;
+    text-align: right;
+}
+
+.nested-value-cell {
+    text-align: left;
+    width: 100%;
+}
+
 .json-table:hover {
     background-color: transparent;
     box-shadow: none;
@@ -1124,6 +1196,7 @@ body.theme-vscode .qa-toggle:hover {
     display: flex;
     flex-direction: column;
     gap: 0px;
+    position: relative;
 }
 
 .qa-block.qa-collapsed .qa-items {
@@ -1136,11 +1209,11 @@ body.theme-vscode .qa-toggle:hover {
 
 .qa-bubble {
     position: relative;
-    padding: 6px 8px;
-    border-radius: 6px;
-    background: white;
-    border: 1px solid var(--gray-200);
-    box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.02);
+    padding: 0;
+    border-radius: 0;
+    background: transparent;
+    border: none;
+    box-shadow: none;
     flex: 1;
     max-width: 100%;
     word-break: break-word;
@@ -1150,23 +1223,80 @@ body.theme-vscode .qa-toggle:hover {
 }
 
 .qa-bubble:hover {
-    background: rgba(245, 246, 242, 0.9);
-    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.06), inset 0 0 0 1px rgba(0, 0, 0, 0.02);
+    background: transparent;
+    box-shadow: none;
 }
 
 .qa-bubble p {
     margin: 6px 0;
 }
 
-body.theme-vscode .qa-bubble {
-    background: #1b1b1b;
-    border: 1px solid #2f2f2f;
-    transition: background-color 0.16s ease, box-shadow 0.16s ease;
+.qa-section {
+    margin: 6px 0;
+    padding-left: 0;
 }
 
-body.theme-vscode .qa-bubble:hover {
-    background: rgba(255, 255, 255, 0.04);
-    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.25), inset 0 0 0 1px rgba(255, 255, 255, 0.02);
+.qa-section-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+}
+
+.qa-section-title {
+    font-weight: 600;
+    color: var(--gray-800);
+    font-size: 12px;
+}
+
+.qa-section-toggle {
+    width: 20px;
+    height: 20px;
+    border: 1px solid var(--wos-border);
+    border-radius: 4px;
+    background: var(--gray-100);
+    color: var(--wos-blue);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    cursor: pointer;
+    transition: all 0.16s ease;
+}
+
+.qa-section-toggle:hover {
+    background: var(--wos-hover);
+    color: var(--wos-blue-dark);
+}
+
+body.theme-vscode .qa-section-toggle {
+    background: #252526;
+    border-color: var(--wos-border);
+    color: var(--wos-text);
+}
+
+body.theme-vscode .qa-section-toggle:hover {
+    background: #2d2d2d;
+    color: var(--wos-blue-light);
+}
+
+.qa-section-body {
+    margin-left: 20px;
+    margin-top: 4px;
+}
+
+.qa-section.qa-section-collapsed .qa-section-body {
+    display: none;
+}
+
+body.theme-vscode .qa-section-title {
+    color: var(--wos-text);
+}
+
+body.theme-vscode .qa-bubble {
+    background: transparent;
+    border: none;
+    box-shadow: none;
 }
 
 .markdown-body .note-block {
