@@ -1113,6 +1113,17 @@ body.theme-vscode .nested-index-cell {
     background: var(--gray-50);
 }
 
+.markdown-body mjx-container[jax="CHTML"] {
+    font-size: 1em;
+    line-height: 1.5;
+}
+
+.markdown-body mjx-container[jax="CHTML"][display="true"] {
+    display: block;
+    margin: 12px 0;
+    text-align: center;
+}
+
 .qa-block {
     margin: 0;
     padding: 0;
@@ -1142,6 +1153,10 @@ body.theme-vscode .nested-index-cell {
 .qa-a {
     border-top: 1px solid var(--gray-100);
     padding-top: 6px;
+}
+
+.qa-item.qa-answer-collapsed .qa-a {
+    display: none;
 }
 
 .qa-label {

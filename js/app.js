@@ -1557,7 +1557,7 @@ class PaperReviewerApp {
         }
 
         // 渲染完成后触发MathJax
-        this.renderMath();
+        this.renderMath(container);
     }
 
     createCollapsibleSection(title, data, path) {
@@ -2462,11 +2462,33 @@ class PaperReviewerApp {
             // 支持 goto{...} 内联跳转图标
             const gotoPlugin = (mdInstance) => {
                 const defaultText = mdInstance.renderer.rules.text || ((tokens, idx) => md.utils.escapeHtml(tokens[idx].content));
+                const renderMathText = (txt = '') => {
+                    const re = /\\\[[\s\S]+?\\\]|\$\$[\s\S]+?\$\$|\\\([\s\S]+?\\\)|\$(?!\s)[^$]+?\$(?!\d)/g;
+                    let out = '';
+                    let last = 0;
+                    let m;
+                    while ((m = re.exec(txt)) !== null) {
+                        if (m.index > last) {
+                            out += md.utils.escapeHtml(txt.slice(last, m.index));
+                        }
+                        const raw = m[0];
+                        const isDisplay = raw.startsWith('\\[') || raw.startsWith('$$');
+                        out += `<span class="math-${isDisplay ? 'display' : 'inline'}">${raw}</span>`;
+                        last = re.lastIndex;
+                    }
+                    if (last < txt.length) {
+                        out += md.utils.escapeHtml(txt.slice(last));
+                    }
+                    return out;
+                };
+                const hasMath = (s = '') => /\\\(|\\\[|\$\$|\$(?!\s)/.test(s);
                 mdInstance.renderer.rules.text = (tokens, idx, options, env, self) => {
                     const token = tokens[idx];
                     const content = token.content || '';
-                    if (!content.includes('goto{')) return defaultText(tokens, idx, options, env, self);
-                    const segments = content.split(/(goto\{[^}]+\})/g).filter(Boolean);
+                    const containsGoto = content.includes('goto{');
+                    const containsMath = hasMath(content);
+                    if (!containsGoto && !containsMath) return defaultText(tokens, idx, options, env, self);
+                    const segments = containsGoto ? content.split(/(goto\{[^}]+\})/g).filter(Boolean) : [content];
                     const rendered = segments.map(seg => {
                         const match = seg.match(/^goto\{([^}]+)\}$/);
                         if (match) {
@@ -2475,7 +2497,7 @@ class PaperReviewerApp {
                             const esc = md.utils.escapeHtml(q).replace(/`/g, '&#96;');
                             return `<a href="#" class="location-link goto-link" data-page="" data-quote-text="${esc}" data-open-params="" data-quote-index="0" data-value-path="" title="跳转PDF搜索"><i class="fa-solid fa-quote-right"></i></a>`;
                         }
-                        return md.utils.escapeHtml(seg);
+                        return renderMathText(seg);
                     }).join('');
                     return rendered;
                 };
@@ -2946,12 +2968,19 @@ class PaperReviewerApp {
             render.innerHTML = '<div class="empty-state"><i class="fas fa-file-alt"></i><h3>Markdown 引擎不可用</h3></div>';
             return;
         }
-        const html = md.render(text);
+        const normalizeMath = (src = '') => {
+            // 将 \( \) 与 \[ \] 转换为 $...$ 与 $$...$$，便于 MathJax 识别
+            let out = src;
+            out = out.replace(/\\\[\s*([\s\S]*?)\s*\\\]/g, (m, inner) => `$$${inner}$$`);
+            out = out.replace(/\\\(\s*([\s\S]*?)\s*\\\)/g, (m, inner) => `$${inner}$`);
+            return out;
+        };
+        const html = md.render(normalizeMath(text));
         render.innerHTML = `<article class="markdown-body">${html}</article>`;
         this.bindQaCollapsibles(render);
         this.bindQaTitles(render);
         this.applyPendingQaTitle(render);
-        this.renderMath();
+        this.renderMath(render);
         this.highlightCodeBlocks(render);
         this.updateMarkdownUndoButtonState();
     }
@@ -3017,6 +3046,24 @@ class PaperReviewerApp {
                     btn.setAttribute('aria-expanded', String(!collapsed));
                     const icon = btn.querySelector('i');
                     if (icon) icon.className = collapsed ? 'fas fa-chevron-down' : 'fas fa-chevron-up';
+                }
+            });
+        });
+
+        // 点击问号标签折叠/展开对应回答；Shift+点击全局折叠/展开回答
+        renderRoot.querySelectorAll('.qa-label-qa, .qa-label-q').forEach(label => {
+            label.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                const qaItem = label.closest('.qa-item');
+                if (!qaItem) return;
+                if (e.shiftKey) {
+                    const anyCollapsed = Array.from(renderRoot.querySelectorAll('.qa-item')).some(item => item.classList.contains('qa-answer-collapsed'));
+                    renderRoot.querySelectorAll('.qa-item').forEach(item => {
+                        item.classList.toggle('qa-answer-collapsed', !anyCollapsed);
+                    });
+                } else {
+                    qaItem.classList.toggle('qa-answer-collapsed');
                 }
             });
         });
@@ -3199,11 +3246,16 @@ class PaperReviewerApp {
 
 
     // 触发MathJax渲染数学公式
-    renderMath() {
-        if (window.MathJax) {
-            MathJax.typesetPromise().catch((err) => {
-                console.error('MathJax rendering error:', err);
-            });
+    renderMath(rootEl = null) {
+        try {
+            if (window.MathJax && window.MathJax.typesetPromise) {
+                const targets = rootEl ? [rootEl] : undefined;
+                MathJax.typesetPromise(targets).catch((err) => {
+                    console.error('MathJax rendering error:', err);
+                });
+            }
+        } catch (err) {
+            console.error('MathJax render failed:', err);
         }
     }
 
