@@ -129,6 +129,23 @@ class PaperReviewerApp {
         }
     }
 
+    formatRawJson() {
+        const textarea = document.getElementById('jsonEditorTextarea');
+        const errEl = document.getElementById('jsonEditorError');
+        const statusEl = document.getElementById('jsonEditorStatus');
+        if (!textarea) return;
+        if (errEl) errEl.textContent = '';
+        try {
+            const parsed = JSON.parse(textarea.value);
+            textarea.value = JSON.stringify(parsed, null, 2);
+            if (statusEl) statusEl.textContent = '已格式化 JSON';
+            this.showNotification('JSON 已格式化', 'success');
+        } catch (err) {
+            if (errEl) errEl.textContent = `格式化失败: ${err.message}`;
+            this.showNotification(`JSON 格式化失败: ${err.message}`, 'error');
+        }
+    }
+
     async init() {
         // 先加载项目配置
         this.loadProjectConfig();
@@ -2368,6 +2385,7 @@ class PaperReviewerApp {
             <div class="flat-editor">
                 <div class="flat-editor-toolbar">
                     <button class="btn btn-primary" id="applyJsonBtn"><i class="fas fa-check"></i> 应用修改</button>
+                    <button class="btn btn-primary" id="formatJsonBtn"><i class="fas fa-align-left"></i> 格式化</button>
                     <span class="json-editor-status" id="jsonEditorStatus"></span>
                 </div>
                 <textarea id="jsonEditorTextarea" spellcheck="false"></textarea>
@@ -2385,6 +2403,10 @@ class PaperReviewerApp {
         const applyBtn = document.getElementById('applyJsonBtn');
         if (applyBtn) {
             applyBtn.addEventListener('click', () => this.applyRawJsonChanges());
+        }
+        const formatBtn = document.getElementById('formatJsonBtn');
+        if (formatBtn) {
+            formatBtn.addEventListener('click', () => this.formatRawJson());
         }
     }
     
@@ -2425,6 +2447,46 @@ class PaperReviewerApp {
                 };
             };
             md.use(gotoPlugin);
+            // contentReference inline渲染
+            const contentRefPlugin = (mdInstance) => {
+                mdInstance.core.ruler.after('inline', 'content-ref', (state) => {
+                    const re = /:contentReference\[(.+?)\]\{index=(\d+)\}/g;
+                    state.tokens.forEach((blk) => {
+                        if (blk.type !== 'inline' || !blk.children) return;
+                        const newChildren = [];
+                        blk.children.forEach((child) => {
+                            if (child.type !== 'text') {
+                                newChildren.push(child);
+                                return;
+                            }
+                            const text = child.content;
+                            let lastIndex = 0;
+                            let m;
+                            while ((m = re.exec(text)) !== null) {
+                                if (m.index > lastIndex) {
+                                    const t = new state.Token('text', '', 0);
+                                    t.content = text.slice(lastIndex, m.index);
+                                    newChildren.push(t);
+                                }
+                                const ref = m[1] || '';
+                                const page = m[2] || '';
+                                const html = `<span class="content-ref" title="${md.utils.escapeHtml(ref)}"><i class="fa-solid fa-map-location-dot"></i><span class="content-ref-text">see page ${page}</span></span>`;
+                                const htmlToken = new state.Token('html_inline', '', 0);
+                                htmlToken.content = html;
+                                newChildren.push(htmlToken);
+                                lastIndex = re.lastIndex;
+                            }
+                            if (lastIndex < text.length) {
+                                const t = new state.Token('text', '', 0);
+                                t.content = text.slice(lastIndex);
+                                newChildren.push(t);
+                            }
+                        });
+                        blk.children = newChildren;
+                    });
+                });
+            };
+            md.use(contentRefPlugin);
             // 自定义 QA / goto 代码块渲染
             const qaPlugin = (mdInstance) => {
                 const defaultFence = mdInstance.renderer.rules.fence || mdInstance.renderer.renderToken;
@@ -3213,6 +3275,94 @@ class PaperReviewerApp {
             }
         }
         return cur;
+    }
+
+    setValueByPath(pathArr, value) {
+        if (!pathArr || !pathArr.length) return;
+        let cur = this.currentData;
+        for (let i = 0; i < pathArr.length - 1; i++) {
+            const seg = pathArr[i];
+            if (!cur || typeof cur !== 'object') return;
+            const isIndex = /^\d+$/.test(seg);
+            if (!Object.prototype.hasOwnProperty.call(cur, seg)) {
+                cur[seg] = isIndex ? [] : {};
+            }
+            if (isIndex && Array.isArray(cur)) {
+                const idx = parseInt(seg, 10);
+                if (!Array.isArray(cur[idx]) && typeof cur[idx] !== 'object') {
+                    cur[idx] = {};
+                }
+            }
+            cur = cur[seg];
+        }
+        const last = pathArr[pathArr.length - 1];
+        cur[last] = value;
+    }
+
+    updateGotoText(pathStr, newText, targetIndex = 0) {
+        if (!pathStr || !this.currentData) return;
+        const pathArr = pathStr.split('.').filter(Boolean);
+        const oldVal = this.getValueByPath(pathArr);
+        if (typeof oldVal !== 'string') {
+            this.showNotification('目标字段不是文本，无法更新引用', 'error');
+            return;
+        }
+        let count = 0;
+        const updated = oldVal.replace(/goto\{[^}]*\}/g, (m) => {
+            if (count === targetIndex) {
+                count++;
+                return `goto{${newText}}`;
+            }
+            count++;
+            return m;
+        });
+        if (updated === oldVal) {
+            this.showNotification('未找到可更新的 goto 引用', 'info');
+            return;
+        }
+        this.setValueByPath(pathArr, updated);
+        this.hasUnsavedChanges = true;
+        if (this.currentFile) this.tempDataCache[this.currentFile] = this.currentData;
+        this.updateSaveButtonState();
+        this.renderStructuredView();
+        this.renderFlatView();
+        if (this.currentMarkdownExists && typeof this.currentMarkdownText === 'string') {
+            this.renderMarkdownView(this.currentMarkdownText);
+        }
+        this.setupEditableListeners();
+        this.showNotification('引用文本已更新', 'success');
+    }
+
+    async updateMarkdownGotoText(newText, targetIndex = 0) {
+        if (!this.currentMarkdownExists || typeof this.currentMarkdownText !== 'string') return;
+        let count = 0;
+        const updated = this.currentMarkdownText.replace(/goto\{[^}]*\}/g, (m) => {
+            if (count === targetIndex) {
+                count++;
+                return `goto{${newText}}`;
+            }
+            count++;
+            return m;
+        });
+        if (updated === this.currentMarkdownText) {
+            this.showNotification('未在 Markdown 中找到可更新的 goto 引用', 'info');
+            return;
+        }
+        this.currentMarkdownText = updated;
+        const textarea = document.getElementById('markdownTextarea');
+        if (textarea) {
+            textarea.value = this.currentMarkdownText;
+        }
+        this.isMarkdownEditing = false;
+        try {
+            const mdFilename = this.getMarkdownFilename(this.currentFile);
+            await this.persistMarkdown(mdFilename, this.currentMarkdownText);
+            this.showNotification('Markdown 引用已更新并保存', 'success');
+        } catch (err) {
+            this.showNotification(`Markdown 保存失败: ${err.message}`, 'error');
+        }
+        this.renderMarkdownView(this.currentMarkdownText);
+        this.updateMarkdownToolbar();
     }
 
     showSectionPreviewInline() {
@@ -4901,6 +5051,9 @@ class PaperReviewerApp {
         if (this._locationLinkHandler) {
             document.removeEventListener('click', this._locationLinkHandler);
         }
+        if (this._locationLinkDblHandler) {
+            document.removeEventListener('dblclick', this._locationLinkDblHandler);
+        }
         
         this._locationLinkHandler = (e) => {
             const target = e.target;
@@ -4922,8 +5075,26 @@ class PaperReviewerApp {
                 this.jumpToPageWithQuote(targetPage, valuePath, isNaN(quoteIndex) ? null : quoteIndex, quoteText, openParams);
             }
         };
+        this._locationLinkDblHandler = async (e) => {
+            const target = e.target;
+            if (!target || typeof target.closest !== 'function') return;
+            const link = target.classList.contains('location-link') ? target : target.closest('.location-link');
+            if (!link) return;
+            e.preventDefault();
+            const current = link.dataset.quoteText || '';
+            const valuePath = link.dataset.valuePath || '';
+            const idx = link.dataset.quoteIndex !== undefined ? parseInt(link.dataset.quoteIndex, 10) : 0;
+            const next = prompt('Edit reference text', current);
+            if (next === null) return;
+            if (valuePath) {
+                this.updateGotoText(valuePath, next, isNaN(idx) ? 0 : idx);
+            } else {
+                await this.updateMarkdownGotoText(next, isNaN(idx) ? 0 : idx);
+            }
+        };
         
         document.addEventListener('click', this._locationLinkHandler);
+        document.addEventListener('dblclick', this._locationLinkDblHandler);
 
         // 关键词悬停提示
         if (this._keywordTipEnterHandler) {
