@@ -1738,18 +1738,39 @@ class PaperReviewerApp {
 
             // 第三列：Value值的显示
             if (typeof value === 'object' && value !== null) {
-                valueCell.innerHTML = '';
-                const subTable = document.createElement('table');
-                subTable.className = 'json-table nested-table';
-                subTable.dataset.path = currentPath.join('.');
-
-                // 将数组当作索引->值的对象来递归渲染，保持一致的表格风格
-                const objValue = Array.isArray(value)
-                    ? Object.fromEntries(value.map((v, i) => [i, v]))
-                    : value;
-
-                this.renderObject(objValue, subTable, currentPath);
-                valueCell.appendChild(subTable);
+                // 对数组长度为1的情况进行特殊处理：直接展开其元素，而不是显示 #1 索引
+                if (Array.isArray(value)) {
+                    if (value.length === 1) {
+                        const sole = value[0];
+                        if (sole && typeof sole === 'object') {
+                            valueCell.innerHTML = '';
+                            const subTable = document.createElement('table');
+                            subTable.className = 'json-table nested-table';
+                            const solePath = [...currentPath, '0'];
+                            subTable.dataset.path = solePath.join('.');
+                            this.renderObject(sole, subTable, solePath);
+                            valueCell.appendChild(subTable);
+                        } else {
+                            // 单元素原始值，直接以索引0为路径进行编辑
+                            valueCell.innerHTML = this.createEditableValue(sole, [...currentPath, '0'], locationInfo, key);
+                        }
+                    } else {
+                        valueCell.innerHTML = '';
+                        const subTable = document.createElement('table');
+                        subTable.className = 'json-table nested-table';
+                        subTable.dataset.path = currentPath.join('.');
+                        const objValue = Object.fromEntries(value.map((v, i) => [i, v]));
+                        this.renderObject(objValue, subTable, currentPath);
+                        valueCell.appendChild(subTable);
+                    }
+                } else {
+                    valueCell.innerHTML = '';
+                    const subTable = document.createElement('table');
+                    subTable.className = 'json-table nested-table';
+                    subTable.dataset.path = currentPath.join('.');
+                    this.renderObject(value, subTable, currentPath);
+                    valueCell.appendChild(subTable);
+                }
             } else {
                 // 简单值（字符串、数字等）
                 valueCell.innerHTML = this.createEditableValue(value, currentPath, locationInfo, key);
@@ -3009,13 +3030,15 @@ class PaperReviewerApp {
             block.dataset.qaIndex = idx;
             const titleEl = block.querySelector('.qa-title');
             if (!titleEl) return;
-            const initialTitle = titleMap.hasOwnProperty(idx)
-                ? titleMap[idx]
-                : (titleEl.dataset.qaTitle || titleEl.textContent || 'Q&A');
-            // 应用保存的标题
-            titleEl.textContent = initialTitle;
+            const dataTitle = titleEl.dataset.qaTitle || titleEl.textContent || 'Q&A';
+            const storedTitle = titleMap.hasOwnProperty(idx) ? titleMap[idx] : null;
+            // 如果 Markdown 中的 title 已变更，则以最新 dataTitle 为准并回写 map
+            const finalTitle = storedTitle && storedTitle.trim() !== dataTitle.trim()
+                ? dataTitle
+                : (storedTitle || dataTitle);
+            titleEl.textContent = finalTitle;
             if (!this.qaTitleMap[this.currentFile]) this.qaTitleMap[this.currentFile] = {};
-            this.qaTitleMap[this.currentFile][idx] = initialTitle;
+            this.qaTitleMap[this.currentFile][idx] = finalTitle;
             titleEl.title = '双击编辑标题';
             titleEl.addEventListener('dblclick', () => {
                 const current = titleEl.textContent || '';
