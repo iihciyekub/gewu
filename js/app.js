@@ -49,7 +49,7 @@ class PaperReviewerApp {
         this.promptDataLoaded = false;
         this.promptGroups = {};
         this.currentLoadToken = 0;
-        this.fileOrders = {};
+        this.sectionExpandedStateByProject = this.loadSectionExpandedState();
 
         // 项目管理
         this.currentProject = null; // { name, path }
@@ -58,6 +58,49 @@ class PaperReviewerApp {
         this.currentFileList = [];
 
         this.init();
+    }
+
+    loadSectionExpandedState() {
+        try {
+            const raw = localStorage.getItem('sectionExpandedStateByProject');
+            if (!raw) return {};
+            const parsed = JSON.parse(raw);
+            return parsed && typeof parsed === 'object' ? parsed : {};
+        } catch (_e) {
+            return {};
+        }
+    }
+
+    persistSectionExpandedState() {
+        try {
+            localStorage.setItem('sectionExpandedStateByProject', JSON.stringify(this.sectionExpandedStateByProject || {}));
+        } catch (_e) {
+            // ignore
+        }
+    }
+
+    getProjectKey() {
+        return this.currentProject ? this.normalizeProjectPathString(this.currentProject.path) : 'user';
+    }
+
+    getSectionExpandedStateMap() {
+        const key = this.getProjectKey();
+        if (!this.sectionExpandedStateByProject[key]) this.sectionExpandedStateByProject[key] = {};
+        return this.sectionExpandedStateByProject[key];
+    }
+
+    getSectionExpanded(sectionKey) {
+        const map = this.getSectionExpandedStateMap();
+        if (map && Object.prototype.hasOwnProperty.call(map, sectionKey)) {
+            return !!map[sectionKey];
+        }
+        return !this.isCollapseAll;
+    }
+
+    setSectionExpanded(sectionKey, expanded) {
+        const map = this.getSectionExpandedStateMap();
+        map[sectionKey] = !!expanded;
+        this.persistSectionExpandedState();
     }
 
     getDragPlaceholder() {
@@ -1377,63 +1420,65 @@ class PaperReviewerApp {
             
             // 尝试提取并解析JSON
             const jsonData = this.extractJSON(pastedText);
+            if (!jsonData) {
+                this.showNotification('未检测到有效 JSON，可能格式有误', 'error');
+                return;
+            }
             
-            if (jsonData) {
-                const inLeftPanel = !!e.target.closest('.left-panel');
-                const inCenterPanel = !!e.target.closest('.middle-panel');
+            const inLeftPanel = !!e.target.closest('.left-panel');
+            const inCenterPanel = !!e.target.closest('.middle-panel');
 
-                // 中间表格：合并/更新当前JSON
-                if (inCenterPanel && this.currentData) {
-                    e.preventDefault();
-                    if (typeof jsonData !== 'object' || Array.isArray(jsonData)) {
-                        this.showNotification('粘贴内容不是对象，无法合并', 'error');
-                        return;
-                    }
-                    const updated = this.mergeIntoCurrentData(jsonData, true);
-                    if (updated) {
-                        this.hasUnsavedChanges = true;
-                        this.tempDataCache[this.currentFile] = this.currentData;
-                        this.updateSaveButtonState();
-                        this.renderStructuredView();
-                        this.renderFlatView();
-                        this.setupEditableListeners();
-                        this.updateUndoButtonState();
-                        this.showNotification('已合并粘贴内容到当前文件', 'success');
-                    } else {
-                        this.showNotification('未检测到可合并的字段', 'info');
-                    }
-                    return;
-                }
-
-                // 左侧文件区域：校验结构并新建文件
-                if (inLeftPanel) {
-                    e.preventDefault();
-                    const required = ['schema_version', 'meta_info'];
-                    const missing = required.filter(k => !jsonData.hasOwnProperty(k));
-                    if (missing.length) {
-                        this.showNotification(`JSON 缺少关键字段: ${missing.join(', ')}`, 'error');
-                        return;
-                    }
-                    const defaultName = jsonData.meta_info?.paper_id
-                        ? `${jsonData.meta_info.paper_id}.json`
-                        : 'pasted_data.json';
-                    
-                    const filename = prompt('检测到有效的JSON数据！\n请输入文件名:', defaultName);
-                    if (!filename) return;
-                    const finalFilename = filename.endsWith('.json') ? filename : filename + '.json';
-                    await this.saveNewJSONFile(finalFilename, jsonData);
-                    this.lastPasteBackup = null;
-                    this.updateUndoButtonState();
-                    return;
-                }
-
-                // 其它区域保持默认创建逻辑
+            // 中间表格：合并/更新当前JSON
+            if (inCenterPanel && this.currentData) {
                 e.preventDefault();
-                const filename = prompt('检测到有效的JSON数据！\n请输入文件名:', 'pasted_data.json');
+                if (typeof jsonData !== 'object' || Array.isArray(jsonData)) {
+                    this.showNotification('粘贴内容不是对象，无法合并', 'error');
+                    return;
+                }
+                const updated = this.mergeIntoCurrentData(jsonData, true);
+                if (updated) {
+                    this.hasUnsavedChanges = true;
+                    this.tempDataCache[this.currentFile] = this.currentData;
+                    this.updateSaveButtonState();
+                    this.renderStructuredView();
+                    this.renderFlatView();
+                    this.setupEditableListeners();
+                    this.updateUndoButtonState();
+                    this.showNotification('已合并粘贴内容到当前文件', 'success');
+                } else {
+                    this.showNotification('未检测到可合并的字段', 'info');
+                }
+                return;
+            }
+
+            // 左侧文件区域：校验结构并新建文件
+            if (inLeftPanel) {
+                e.preventDefault();
+                const required = ['schema_version', 'meta_info'];
+                const missing = required.filter(k => !jsonData.hasOwnProperty(k));
+                if (missing.length) {
+                    this.showNotification(`JSON 缺少关键字段: ${missing.join(', ')}`, 'error');
+                    return;
+                }
+                const defaultName = jsonData.meta_info?.paper_id
+                    ? `${jsonData.meta_info.paper_id}.json`
+                    : 'pasted_data.json';
+                
+                const filename = prompt('检测到有效的JSON数据！\n请输入文件名:', defaultName);
                 if (!filename) return;
                 const finalFilename = filename.endsWith('.json') ? filename : filename + '.json';
                 await this.saveNewJSONFile(finalFilename, jsonData);
+                this.lastPasteBackup = null;
+                this.updateUndoButtonState();
+                return;
             }
+
+            // 其它区域保持默认创建逻辑
+            e.preventDefault();
+            const filename = prompt('检测到有效的JSON数据！\n请输入文件名:', 'pasted_data.json');
+            if (!filename) return;
+            const finalFilename = filename.endsWith('.json') ? filename : filename + '.json';
+            await this.saveNewJSONFile(finalFilename, jsonData);
         } catch (error) {
             console.error('Error handling paste:', error);
         }
@@ -1441,32 +1486,93 @@ class PaperReviewerApp {
 
     // 提取JSON数据
     extractJSON(text) {
+        // 0) 尝试 jsonrepair 库（如已加载）
+        if (typeof jsonrepair === 'function') {
+            try {
+                const repaired = jsonrepair(text);
+                const parsed = this.tryParseJson(repaired);
+                if (parsed) return parsed;
+            } catch (e) {
+                console.warn('jsonrepair failed:', e);
+            }
+        }
+
+        // 1) 直接解析
+        const direct = this.tryParseJson(text);
+        if (direct) return direct;
+
+        // 2) 代码块内
+        const codeBlockMatch = text.match(/```(?:json)?\s*([\s\S]*?)```/);
+        if (codeBlockMatch) {
+            const parsed = this.tryParseJson(codeBlockMatch[1].trim());
+            if (parsed) return parsed;
+        }
+
+        // 3) 提取 {} 或 [] 包裹的内容
+        const jsonMatch = text.match(/(\{[\s\S]*\}|\[[\s\S]*\])/);
+        if (jsonMatch) {
+            const parsed = this.tryParseJson(jsonMatch[1]);
+            if (parsed) return parsed;
+        }
+
+        // 4) 试着修复常见格式错误并重新解析
+        const repaired = this.repairJsonText(text);
+        if (repaired) {
+            const parsed = this.tryParseJson(repaired);
+            if (parsed) return parsed;
+        }
+
+        // 5) 逐个提取对象，跳过坏项（数组场景常见）
+        const salvaged = this.salvageJsonObjects(text);
+        if (salvaged && salvaged.length) return salvaged;
+
+        return null;
+    }
+
+    tryParseJson(text) {
         try {
-            // 尝试直接解析
             return JSON.parse(text);
-        } catch (e) {
-            // 尝试提取代码块中的JSON
-            const codeBlockMatch = text.match(/```(?:json)?\s*([\s\S]*?)```/);
-            if (codeBlockMatch) {
+        } catch (_err) {
+            if (typeof jsonrepair === 'function') {
                 try {
-                    return JSON.parse(codeBlockMatch[1].trim());
-                } catch (e2) {
-                    console.warn('代码块中的JSON解析失败');
+                    const repaired = jsonrepair(text);
+                    return JSON.parse(repaired);
+                } catch (_err2) {
+                    return null;
                 }
             }
-            
-            // 尝试提取{}或[]包裹的内容
-            const jsonMatch = text.match(/(\{[\s\S]*\}|\[[\s\S]*\])/);
-            if (jsonMatch) {
-                try {
-                    return JSON.parse(jsonMatch[1]);
-                } catch (e3) {
-                    console.warn('提取的JSON解析失败');
-                }
-            }
-            
             return null;
         }
+    }
+
+    repairJsonText(text) {
+        if (!text) return '';
+        let s = text.replace(/^\uFEFF/, '');
+        // 去掉注释
+        s = s.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n\r]*/g, '');
+        // 去掉控制字符（保留换行制表）
+        s = s.replace(/[\u0000-\u001F]+/g, (m) => {
+            return m.replace(/\r|\n|\t/g, '');
+        });
+        // 去掉尾逗号
+        s = s.replace(/,\s*([}\]])/g, '$1');
+        // 尝试给未加引号的键补引号
+        s = s.replace(/([{,\s])(['"])?([A-Za-z0-9_]+)\2\s*:/g, '$1"$3":');
+        return s;
+    }
+
+    salvageJsonObjects(text) {
+        if (!text) return [];
+        const out = [];
+        const matches = text.match(/\{[\s\S]*?\}/g) || [];
+        matches.forEach((m) => {
+            const cleaned = this.repairJsonText(m);
+            const parsed = this.tryParseJson(cleaned);
+            if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+                out.push(parsed);
+            }
+        });
+        return out;
     }
 
     // 保存新的JSON文件
@@ -1626,9 +1732,6 @@ class PaperReviewerApp {
             container.appendChild(section);
         }
 
-        // 统一应用折叠/展开状态
-        this.updateAllSectionsCollapseState(this.isCollapseAll);
-
         // 恢复已选中元素的高亮
         this.highlightSelectedItem();
 
@@ -1649,7 +1752,7 @@ class PaperReviewerApp {
         // Header with toggle
         const header = document.createElement('div');
         header.className = 'collapsible-header';
-        if (!this.isCollapseAll) {
+        if (this.getSectionExpanded(title)) {
             header.classList.add('active');
         }
         header.innerHTML = `
@@ -1663,7 +1766,7 @@ class PaperReviewerApp {
         // Content
         const content = document.createElement('div');
         content.className = 'collapsible-content';
-        if (!this.isCollapseAll) {
+        if (this.getSectionExpanded(title)) {
             content.classList.add('active');
         }
         
@@ -1713,6 +1816,7 @@ class PaperReviewerApp {
                 e.stopPropagation();
                 const isActive = header.classList.toggle('active');
                 content.classList.toggle('active');
+                this.setSectionExpanded(title, isActive);
             });
         }
         // 点击标题区域：选中该类，便于键盘上下移动
@@ -2368,10 +2472,18 @@ class PaperReviewerApp {
     }
 
     updateAllSectionsCollapseState(collapsed) {
-        const headers = document.querySelectorAll('.collapsible-header');
-        const contents = document.querySelectorAll('.collapsible-content');
+        const headers = document.querySelectorAll('.collapsible-section .collapsible-header');
+        const contents = document.querySelectorAll('.collapsible-section .collapsible-content');
         headers.forEach(h => h.classList.toggle('active', !collapsed));
         contents.forEach(c => c.classList.toggle('active', !collapsed));
+
+        // 持久化“已出现的类字段”的折叠状态，便于跨文件复用
+        const sections = document.querySelectorAll('.collapsible-section');
+        sections.forEach((sec) => {
+            const key = sec.dataset.sectionKey;
+            if (!key) return;
+            this.setSectionExpanded(key, !collapsed);
+        });
     }
 
     setReorderSelection(pathArray, key) {
