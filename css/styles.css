@@ -429,31 +429,69 @@ body {
 }
 
 .tab-btn {
-    padding: 4px 8px;
-    background: white;
-    border: 1px solid var(--wos-border);
-    border-radius: 2px;
+    width: 30px;
+    height: 28px;
+    padding: 0;
+    background: transparent;
+    border: none;
+    border-radius: 999px;
     cursor: pointer;
     font-size: 11px;
     transition: all 0.12s ease;
     line-height: 1.2;
-    min-width: 28px;
+    min-width: 30px;
     text-align: center;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--gray-700);
 }
 
 .tab-btn i {
-    font-size: 10px;
+    font-size: 12px;
 }
 
 .tab-btn.active {
     background: var(--wos-blue);
     color: white;
-    border-color: var(--wos-blue);
 }
 
 .tab-btn:hover:not(.active) {
     background: var(--wos-hover);
-    border-color: var(--wos-blue-light);
+}
+
+.middle-header .header-actions .btn,
+.middle-header .header-actions .btn-save {
+    width: 30px;
+    height: 28px;
+    padding: 0;
+    border-radius: 999px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0;
+}
+
+.middle-header .header-actions .btn i,
+.middle-header .header-actions .btn-save i {
+    font-size: 12px;
+}
+
+.middle-header .header-actions .btn-save {
+    box-shadow: none;
+}
+
+.middle-header .header-actions .btn-save:hover,
+.middle-header .header-actions .btn:hover {
+    box-shadow: none;
+}
+
+body.theme-vscode .tab-btn {
+    color: var(--wos-text);
+}
+
+body.theme-vscode .tab-btn:hover:not(.active) {
+    background: #2d2d2d;
 }
 
 .editor-container {
@@ -2616,6 +2654,18 @@ ol.json-array {
     color: var(--wos-blue-dark);
 }
 
+.prompt-chip.active {
+    background: var(--wos-blue);
+    border-color: var(--wos-blue-dark);
+    color: #fff;
+}
+
+body.theme-vscode .prompt-chip.active {
+    background: var(--wos-blue-dark);
+    border-color: var(--wos-blue-light);
+    color: #fff;
+}
+
 .prompt-chip:active {
     transform: translateY(1px);
 }
@@ -2624,4 +2674,64 @@ ol.json-array {
     color: var(--gray-500);
     font-size: 11px;
     white-space: nowrap;
+}
+
+/* Header dropdown (copy aide scripts) */
+.header-dropdown {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+}
+
+.header-dropdown-menu {
+    position: absolute;
+    top: calc(100% + 6px);
+    right: 0;
+    min-width: 180px;
+    display: none;
+    flex-direction: column;
+    gap: 4px;
+    padding: 6px;
+    background: var(--wos-bg);
+    border: 1px solid var(--wos-border);
+    border-radius: 10px;
+    box-shadow: 0 10px 24px rgba(0, 0, 0, 0.14);
+    z-index: 4000;
+}
+
+.header-dropdown-menu.visible {
+    display: flex;
+}
+
+.header-dropdown-item {
+    border: 1px solid transparent;
+    background: transparent;
+    color: var(--wos-text);
+    border-radius: 8px;
+    padding: 8px 10px;
+    cursor: pointer;
+    font-size: 12px;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    text-align: left;
+}
+
+.header-dropdown-item:hover {
+    background: var(--wos-hover);
+    border-color: var(--wos-border);
+}
+
+.header-dropdown-item i {
+    font-size: 12px;
+    color: var(--wos-blue);
+}
+
+body.theme-vscode .header-dropdown-menu {
+    background: #252526;
+    border-color: var(--wos-border);
+}
+
+body.theme-vscode .header-dropdown-item:hover {
+    background: #2d2d2d;
 }

@@ -22,15 +22,18 @@ class PaperReviewerApp {
         this.previewHoverTimer = null; // 类预览悬停防抖
         this.currentMarkdownText = '';
         this.currentMarkdownFile = '';
+        this.currentMarkdownBaselineText = '';
         this.markdownParser = null;
         this.currentMarkdownExists = false;
         this.isMarkdownEditing = false;
+        this.hasUnsavedMarkdownChanges = false;
         this.saveMdEndpoint = '/save-md';
         this.blankDragImage = null;
         this.keywordTooltipEl = null;
         this.selectedItem = null; // { type: 'row' | 'section', path: string[], key: string }
         this.isMiddleActive = false; // 鼠标是否在中间栏，用于键盘上下移动的激活判定
         this.fileFilter = '';
+        this.debugEnabled = this.loadDebugEnabled();
         try {
             this.currentView = localStorage.getItem('lastViewMode') || 'structured';
         } catch (_e) {
@@ -39,6 +42,7 @@ class PaperReviewerApp {
         this.qaTitleMap = {}; // { filename: {index: title} }
         this.pendingQaTitle = null; // { file, title }
         this.lastMarkdownPasteBackup = null;
+        this.qaCollapsedStateByProject = this.loadQaCollapsedState();
         this.lastLeftWidth = 0;
         this.lastRightWidth = 0;
         this.dragPlaceholder = null;
@@ -48,8 +52,11 @@ class PaperReviewerApp {
         this.promptPanelVisible = false;
         this.promptDataLoaded = false;
         this.promptGroups = {};
+        this.promptSelectedByGroup = this.loadPromptSelectedByGroup();
+        this.aideCopyMenuVisible = false;
         this.currentLoadToken = 0;
         this.sectionExpandedStateByProject = this.loadSectionExpandedState();
+        this.lastSelectedFileByProject = this.loadLastSelectedFileByProject();
 
         // 项目管理
         this.currentProject = null; // { name, path }
@@ -58,6 +65,112 @@ class PaperReviewerApp {
         this.currentFileList = [];
 
         this.init();
+    }
+
+    loadDebugEnabled() {
+        try {
+            const qs = new URLSearchParams(window.location.search || '');
+            if (qs.get('debug') === '1') return true;
+            return localStorage.getItem('paperReviewerDebug') === '1';
+        } catch (_e) {
+            return false;
+        }
+    }
+
+    debugLog(...args) {
+        if (!this.debugEnabled) return;
+        console.log(...args);
+    }
+
+    loadPromptSelectedByGroup() {
+        try {
+            const raw = localStorage.getItem('promptSelectedByGroup');
+            if (!raw) return {};
+            const parsed = JSON.parse(raw);
+            return parsed && typeof parsed === 'object' ? parsed : {};
+        } catch (_e) {
+            return {};
+        }
+    }
+
+    persistPromptSelectedByGroup() {
+        try {
+            localStorage.setItem('promptSelectedByGroup', JSON.stringify(this.promptSelectedByGroup || {}));
+        } catch (_e) {
+            // ignore
+        }
+    }
+
+    setPromptActive(groupKey, file) {
+        if (!groupKey) return;
+        const normalized = (file || '').trim();
+        if (!normalized) return;
+        this.promptSelectedByGroup[groupKey] = normalized;
+        this.persistPromptSelectedByGroup();
+
+        const esc = (window.CSS && typeof window.CSS.escape === 'function')
+            ? window.CSS.escape(groupKey)
+            : String(groupKey).replace(/"/g, '\\"');
+        const row = document.querySelector(`.prompt-button-row[data-group-key="${esc}"]`);
+        if (!row) return;
+        row.querySelectorAll('.prompt-chip').forEach(btn => {
+            const isActive = (btn.dataset.file || '') === normalized;
+            btn.classList.toggle('active', isActive);
+            btn.setAttribute('aria-pressed', String(isActive));
+        });
+    }
+
+    loadQaCollapsedState() {
+        try {
+            const raw = localStorage.getItem('qaCollapsedStateByProject');
+            if (!raw) return {};
+            const parsed = JSON.parse(raw);
+            return parsed && typeof parsed === 'object' ? parsed : {};
+        } catch (_e) {
+            return {};
+        }
+    }
+
+    persistQaCollapsedState() {
+        try {
+            localStorage.setItem('qaCollapsedStateByProject', JSON.stringify(this.qaCollapsedStateByProject || {}));
+        } catch (_e) {
+            // ignore
+        }
+    }
+
+    getQaCollapsedStateMap() {
+        const key = this.getProjectKey();
+        if (!this.qaCollapsedStateByProject[key]) this.qaCollapsedStateByProject[key] = {};
+        return this.qaCollapsedStateByProject[key];
+    }
+
+    normalizeQaTitleKey(title) {
+        return (title || '').trim();
+    }
+
+    getQaTitleFromBlock(block) {
+        if (!block) return '';
+        const titleEl = block.querySelector('.qa-title');
+        // 以渲染后的 textContent 为准（bindQaTitles / setQaTitleForIndex 会更新它）
+        const title = titleEl?.textContent || titleEl?.dataset?.qaTitle || '';
+        return (title || '').trim();
+    }
+
+    getQaCollapsedForTitle(title) {
+        const t = this.normalizeQaTitleKey(title);
+        if (!t) return null;
+        const map = this.getQaCollapsedStateMap();
+        if (map && Object.prototype.hasOwnProperty.call(map, t)) return !!map[t];
+        return null;
+    }
+
+    setQaCollapsedForTitle(title, collapsed) {
+        const t = this.normalizeQaTitleKey(title);
+        if (!t) return;
+        const map = this.getQaCollapsedStateMap();
+        map[t] = !!collapsed;
+        this.persistQaCollapsedState();
     }
 
     loadSectionExpandedState() {
@@ -69,6 +182,43 @@ class PaperReviewerApp {
         } catch (_e) {
             return {};
         }
+    }
+
+    loadLastSelectedFileByProject() {
+        try {
+            const raw = localStorage.getItem('lastSelectedFileByProject');
+            if (!raw) return {};
+            const parsed = JSON.parse(raw);
+            return parsed && typeof parsed === 'object' ? parsed : {};
+        } catch (_e) {
+            return {};
+        }
+    }
+
+    persistLastSelectedFileByProject() {
+        try {
+            localStorage.setItem('lastSelectedFileByProject', JSON.stringify(this.lastSelectedFileByProject || {}));
+        } catch (_e) {
+            // ignore
+        }
+    }
+
+    getLastSelectedFile() {
+        try {
+            const key = this.getProjectKey();
+            const map = this.lastSelectedFileByProject || {};
+            return map && Object.prototype.hasOwnProperty.call(map, key) ? map[key] : null;
+        } catch (_e) {
+            return null;
+        }
+    }
+
+    setLastSelectedFile(filename) {
+        if (!filename) return;
+        const key = this.getProjectKey();
+        if (!this.lastSelectedFileByProject) this.lastSelectedFileByProject = {};
+        this.lastSelectedFileByProject[key] = filename;
+        this.persistLastSelectedFileByProject();
     }
 
     persistSectionExpandedState() {
@@ -306,6 +456,10 @@ class PaperReviewerApp {
         if (saveMdBtn) {
             saveMdBtn.addEventListener('click', () => this.saveMarkdownFromEditor());
         }
+        const mdTextarea = document.getElementById('markdownTextarea');
+        if (mdTextarea) {
+            mdTextarea.addEventListener('input', () => this.onMarkdownEditorInput());
+        }
         const undoMdPasteBtn = document.getElementById('undoMarkdownPasteBtn');
         if (undoMdPasteBtn) {
             undoMdPasteBtn.addEventListener('click', () => this.undoLastMarkdownPaste());
@@ -400,6 +554,7 @@ class PaperReviewerApp {
                 this.closeProjectSelector();
                 this.clearPdfHighlights();
                 this.togglePromptPanel(false);
+                this.toggleAideCopyMenu(false);
             }
         });
 
@@ -417,10 +572,40 @@ class PaperReviewerApp {
             this.loadSelectedProject();
         });
 
-        // 复制 wosAide.js 源码
-        const copyWosAideBtn = document.getElementById('copyWosAideBtn');
-        if (copyWosAideBtn) {
-            copyWosAideBtn.addEventListener('click', () => this.copyWosAideSource());
+        // 复制辅助脚本（wosAide.js / chatgptAide.js）
+        const aideCopyToggleBtn = document.getElementById('aideCopyToggleBtn');
+        const aideCopyMenu = document.getElementById('aideCopyMenu');
+        const copyWosAideSourceBtn = document.getElementById('copyWosAideSourceBtn');
+        const copyChatgptAideSourceBtn = document.getElementById('copyChatgptAideSourceBtn');
+        const aideCopyDropdown = document.getElementById('aideCopyDropdown');
+        if (aideCopyToggleBtn && aideCopyMenu) {
+            aideCopyToggleBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                this.toggleAideCopyMenu();
+            });
+            aideCopyMenu.addEventListener('click', (e) => {
+                e.stopPropagation();
+            });
+            document.addEventListener('click', (e) => {
+                if (!this.aideCopyMenuVisible) return;
+                if (aideCopyDropdown && aideCopyDropdown.contains(e.target)) return;
+                this.toggleAideCopyMenu(false);
+            });
+        }
+        if (copyWosAideSourceBtn) {
+            copyWosAideSourceBtn.addEventListener('click', async (e) => {
+                e.preventDefault();
+                await this.copyWosAideSource();
+                this.toggleAideCopyMenu(false);
+            });
+        }
+        if (copyChatgptAideSourceBtn) {
+            copyChatgptAideSourceBtn.addEventListener('click', async (e) => {
+                e.preventDefault();
+                await this.copyChatgptAideSource();
+                this.toggleAideCopyMenu(false);
+            });
         }
         const syncPdfBtn = document.getElementById('syncPdfBtn');
         if (syncPdfBtn) {
@@ -790,7 +975,6 @@ class PaperReviewerApp {
                 lastRightWidth: extras.lastRightWidth ?? rightPanel.getBoundingClientRect().width
             };
             localStorage.setItem('panelWidths', JSON.stringify(widths));
-            console.log('💾 面板宽度已保存:', widths);
         } catch (error) {
             console.error('保存面板宽度失败:', error);
         }
@@ -820,7 +1004,7 @@ class PaperReviewerApp {
                 if (widths.collapsedRight) {
                     rightPanel.classList.add('panel-collapsed');
                 }
-                console.log('✅ 面板宽度已恢复:', widths);
+                this.debugLog('✅ 面板宽度已恢复:', widths);
                 return widths;
             }
         } catch (error) {
@@ -1123,7 +1307,11 @@ class PaperReviewerApp {
         const newFileListEl = document.createElement('div');
         
         const selectedStillVisible = keepSelected && filtered.includes(keepSelected) ? keepSelected : null;
-        const activeTarget = selectedStillVisible || (!keepSelected && this.currentFile ? this.currentFile : null);
+        const lastSelected = !keepSelected ? this.getLastSelectedFile() : null;
+        const lastSelectedVisible = lastSelected && filtered.includes(lastSelected) ? lastSelected : null;
+        const activeTarget = selectedStillVisible ||
+            (!keepSelected && this.currentFile && filtered.includes(this.currentFile) ? this.currentFile : null) ||
+            lastSelectedVisible;
 
         filtered.forEach((file, index) => {
             const displayName = file.replace(/\.[^.]+$/, '');
@@ -1151,7 +1339,7 @@ class PaperReviewerApp {
                 fileItem.classList.add('active');
             } else if (!selectedStillVisible) {
                 const noValidCurrent = !this.currentFile || !filtered.includes(this.currentFile);
-                const shouldAutoSelect = (noValidCurrent && index === 0) || (activeTarget && file === activeTarget);
+                const shouldAutoSelect = (activeTarget && file === activeTarget) || (noValidCurrent && !activeTarget && index === 0);
                 if (shouldAutoSelect) {
                     fileItem.classList.add('active');
                     setTimeout(() => {
@@ -1196,6 +1384,9 @@ class PaperReviewerApp {
             <div class="context-menu-item" data-action="delete">
                 <i class="fas fa-trash"></i> 删除
             </div>
+            <div class="context-menu-item" data-action="copyPdfName">
+                <i class="fas fa-copy"></i> 复制 PDF 文件名
+            </div>
         `;
         
         document.body.appendChild(menu);
@@ -1210,6 +1401,8 @@ class PaperReviewerApp {
                     this.renameFile(filename, fileItem);
                 } else if (action === 'delete') {
                     this.deleteFile(filename, fileItem);
+                } else if (action === 'copyPdfName') {
+                    this.copyPdfNameToClipboard(filename);
                 }
             });
         });
@@ -1221,6 +1414,18 @@ class PaperReviewerApp {
                 document.removeEventListener('click', closeMenu);
             });
         }, 0);
+    }
+
+    async copyPdfNameToClipboard(jsonFilename) {
+        try {
+            const base = (jsonFilename || '').replace(/\.[^.]+$/, '');
+            const pdfName = `${base}.pdf`;
+            await this.writeTextToClipboard(pdfName);
+            this.showNotification(`已复制: ${pdfName}`, 'success');
+        } catch (err) {
+            console.error('复制 PDF 文件名失败:', err);
+            this.showNotification(`复制失败: ${err.message}`, 'error');
+        }
     }
 
     // 重命名文件
@@ -1416,7 +1621,7 @@ class PaperReviewerApp {
             
             if (!pastedText) return;
             
-            console.log('📋 检测到粘贴内容，尝试解析JSON...');
+            this.debugLog('📋 检测到粘贴内容，尝试解析JSON...');
             
             // 尝试提取并解析JSON
             const jsonData = this.extractJSON(pastedText);
@@ -1619,6 +1824,17 @@ class PaperReviewerApp {
     async loadFile(filename, clickedElement = null) {
         const loadId = ++this.currentLoadToken;
         try {
+            // 如果当前 Markdown 有未保存修改，提示用户
+            if (this.hasUnsavedMarkdownChanges && this.currentFile && this.currentMarkdownExists) {
+                const mdFilename = this.getMarkdownFilename(this.currentFile);
+                const shouldSave = confirm(`Markdown "${mdFilename}" 有未保存的修改，是否保存？`);
+                if (shouldSave) {
+                    await this.saveCurrentMarkdownSilently();
+                } else {
+                    this.discardCurrentMarkdownChanges();
+                }
+            }
+
             // 如果当前文件有未保存的修改，提示用户
             if (this.hasUnsavedChanges && this.currentFile) {
                 const shouldSave = confirm(`文件 "${this.currentFile}" 有未保存的修改，是否保存？`);
@@ -1663,6 +1879,7 @@ class PaperReviewerApp {
             this.ensureLastUpdate();
             
             this.currentFile = filename;
+            this.setLastSelectedFile(filename);
             this.updateFileMeta();
 
             // 更新UI状态
@@ -2627,6 +2844,27 @@ class PaperReviewerApp {
         }
     }
 
+    async copyChatgptAideSource() {
+        try {
+            const response = await fetch('/chatgptAide.js');
+            if (!response.ok) throw new Error(`读取失败: ${response.statusText}`);
+            const text = await response.text();
+            await this.writeTextToClipboard(text);
+            this.showNotification('已复制 chatgptAide.js 源码到剪贴板', 'success');
+        } catch (error) {
+            console.error('复制 chatgptAide.js 失败:', error);
+            this.showNotification(`复制失败: ${error.message}`, 'error');
+        }
+    }
+
+    toggleAideCopyMenu(forceVisible) {
+        const menu = document.getElementById('aideCopyMenu');
+        if (!menu) return;
+        const next = typeof forceVisible === 'boolean' ? forceVisible : !this.aideCopyMenuVisible;
+        this.aideCopyMenuVisible = next;
+        menu.classList.toggle('visible', next);
+    }
+
     async loadPromptShortcuts() {
         try {
             const response = await fetch('/prompt-files');
@@ -2702,6 +2940,7 @@ class PaperReviewerApp {
 
         const groupData = this.promptGroups[groupKey] || {};
         const files = groupData?.files || [];
+        const activeFile = (this.promptSelectedByGroup && this.promptSelectedByGroup[groupKey]) ? this.promptSelectedByGroup[groupKey] : '';
         if (!files.length) {
             const empty = document.createElement('span');
             empty.className = 'prompt-empty';
@@ -2715,7 +2954,14 @@ class PaperReviewerApp {
             btn.className = 'prompt-chip';
             btn.textContent = file.replace(/\.md$/i, '');
             btn.title = file;
-            btn.addEventListener('click', () => this.copyPromptFile(groupKey, file));
+            btn.dataset.file = file;
+            const isActive = activeFile && activeFile === file;
+            if (isActive) btn.classList.add('active');
+            btn.setAttribute('aria-pressed', String(!!isActive));
+            btn.addEventListener('click', () => {
+                this.setPromptActive(groupKey, file);
+                this.copyPromptFile(groupKey, file);
+            });
             container.appendChild(btn);
         });
     }
@@ -3149,6 +3395,7 @@ class PaperReviewerApp {
         };
 
         this.currentMarkdownText = snippet;
+        this.hasUnsavedMarkdownChanges = this.currentMarkdownText !== (this.currentMarkdownBaselineText || '');
         this.pendingQaTitle = hasInlineTitle ? null : { file: this.currentFile, title: heading || 'Q&A' };
         const textarea = document.getElementById('markdownTextarea');
         if (textarea) {
@@ -3156,6 +3403,7 @@ class PaperReviewerApp {
         }
         this.renderMarkdownView(this.currentMarkdownText);
         this.updateMarkdownToolbar();
+        this.updateMarkdownDirtyUI();
         this.showNotification('已追加 QA 片段，记得保存 Markdown', 'success');
         return true;
     }
@@ -3166,12 +3414,14 @@ class PaperReviewerApp {
             return;
         }
         this.currentMarkdownText = this.lastMarkdownPasteBackup.content;
+        this.hasUnsavedMarkdownChanges = this.currentMarkdownText !== (this.currentMarkdownBaselineText || '');
         const textarea = document.getElementById('markdownTextarea');
         if (textarea) {
             textarea.value = this.currentMarkdownText;
         }
         this.renderMarkdownView(this.currentMarkdownText);
         this.updateMarkdownToolbar();
+        this.updateMarkdownDirtyUI();
         this.lastMarkdownPasteBackup = null;
         this.showNotification('已撤销上次 QA 粘贴', 'success');
     }
@@ -3290,9 +3540,9 @@ class PaperReviewerApp {
             undoMdBtn.style.display = inMarkdownView && canUndo ? 'inline-flex' : 'none';
         }
         editBtn.disabled = !this.currentMarkdownExists || !inMarkdownView || this.isMarkdownEditing;
-        saveBtn.disabled = !this.currentMarkdownExists || !inMarkdownView;
+        saveBtn.disabled = !this.currentMarkdownExists || !inMarkdownView || !this.hasUnsavedMarkdownChanges;
         if (this.isMarkdownEditing) {
-            if (editor) editor.style.display = 'block';
+            if (editor) editor.style.display = 'flex';
             if (render) render.style.display = 'none';
             editBtn.disabled = true;
         } else {
@@ -3306,8 +3556,10 @@ class PaperReviewerApp {
             this.currentMarkdownExists = false;
             this.currentMarkdownText = '';
             this.currentMarkdownFile = '';
+            this.currentMarkdownBaselineText = '';
             this.renderMarkdownView('');
             this.updateMarkdownToolbar();
+            this.updateMarkdownDirtyUI();
             return;
         }
         const mdFilename = this.getMarkdownFilename(this.currentFile);
@@ -3339,7 +3591,9 @@ class PaperReviewerApp {
             }
             this.currentMarkdownFile = mdFilename;
             this.currentMarkdownText = text;
+            this.currentMarkdownBaselineText = text;
             this.isMarkdownEditing = false;
+            this.hasUnsavedMarkdownChanges = false;
             this.renderMarkdownView(text);
         } catch (err) {
             console.warn('Markdown load error:', err);
@@ -3348,6 +3602,7 @@ class PaperReviewerApp {
             }
         } finally {
             this.updateMarkdownToolbar();
+            this.updateMarkdownDirtyUI();
         }
     }
 
@@ -3374,12 +3629,33 @@ class PaperReviewerApp {
         };
         const html = md.render(normalizeMath(text));
         render.innerHTML = `<article class="markdown-body">${html}</article>`;
-        this.bindQaCollapsibles(render);
         this.bindQaTitles(render);
         this.applyPendingQaTitle(render);
+        this.applyQaCollapsedState(render);
+        this.bindQaCollapsibles(render);
         this.renderMath(render);
         this.highlightCodeBlocks(render);
         this.updateMarkdownUndoButtonState();
+    }
+
+    applyQaCollapsedState(renderRoot) {
+        if (!renderRoot) return;
+        const setBlockCollapsed = (block, collapsed) => {
+            const toggleBtn = block.querySelector('.qa-toggle');
+            block.classList.toggle('qa-collapsed', collapsed);
+            if (toggleBtn) {
+                toggleBtn.setAttribute('aria-expanded', String(!collapsed));
+                const icon = toggleBtn.querySelector('i');
+                if (icon) icon.className = collapsed ? 'fas fa-chevron-down' : 'fas fa-chevron-up';
+            }
+        };
+
+        renderRoot.querySelectorAll('.qa-block').forEach(block => {
+            const title = this.getQaTitleFromBlock(block);
+            const stored = this.getQaCollapsedForTitle(title);
+            if (stored === null) return;
+            setBlockCollapsed(block, stored);
+        });
     }
 
     updateMarkdownUndoButtonState() {
@@ -3402,6 +3678,29 @@ class PaperReviewerApp {
             }
         };
 
+        const setCollapsedByTitle = (title, collapsed) => {
+            const key = this.normalizeQaTitleKey(title);
+            if (!key) return;
+            renderRoot.querySelectorAll('.qa-block').forEach(b => {
+                const t = this.normalizeQaTitleKey(this.getQaTitleFromBlock(b));
+                if (t === key) setBlockCollapsed(b, collapsed);
+            });
+            this.setQaCollapsedForTitle(key, collapsed);
+        };
+
+        const toggleBlock = (block, targetCollapsed) => {
+            if (!block) return;
+            const nextCollapsed = typeof targetCollapsed === 'boolean'
+                ? targetCollapsed
+                : !block.classList.contains('qa-collapsed');
+            const title = this.getQaTitleFromBlock(block);
+            if (title) {
+                setCollapsedByTitle(title, nextCollapsed);
+                return;
+            }
+            setBlockCollapsed(block, nextCollapsed);
+        };
+
         renderRoot.querySelectorAll('.qa-toggle').forEach(btn => {
             btn.addEventListener('click', (e) => {
                 const block = btn.closest('.qa-block');
@@ -3409,15 +3708,39 @@ class PaperReviewerApp {
                 if (e.shiftKey) {
                     // Shift+点击：对当前页面所有 QA 同步折叠/展开
                     const targetCollapsed = !block.classList.contains('qa-collapsed');
-                    renderRoot.querySelectorAll('.qa-block').forEach(b => setBlockCollapsed(b, targetCollapsed));
+                    renderRoot.querySelectorAll('.qa-block').forEach(b => toggleBlock(b, targetCollapsed));
                 } else {
-                    const isCollapsed = block.classList.toggle('qa-collapsed');
-                    btn.setAttribute('aria-expanded', String(!isCollapsed));
-                    const icon = btn.querySelector('i');
-                    if (icon) {
-                        icon.className = isCollapsed ? 'fas fa-chevron-down' : 'fas fa-chevron-up';
-                    }
+                    toggleBlock(block);
                 }
+            });
+        });
+
+        // 点击标题也可折叠/展开（双击仍可编辑标题）
+        const titleClickTimers = new WeakMap();
+        renderRoot.querySelectorAll('.qa-title').forEach(titleEl => {
+            titleEl.addEventListener('click', (e) => {
+                if (e.shiftKey) e.preventDefault();
+                const block = titleEl.closest('.qa-block');
+                if (!block) return;
+                // 延迟触发，若用户双击则取消，避免双击编辑时误触发折叠
+                if (titleClickTimers.has(titleEl)) {
+                    clearTimeout(titleClickTimers.get(titleEl));
+                }
+                const t = setTimeout(() => {
+                    titleClickTimers.delete(titleEl);
+                    if (e.shiftKey) {
+                        const targetCollapsed = !block.classList.contains('qa-collapsed');
+                        renderRoot.querySelectorAll('.qa-block').forEach(b => toggleBlock(b, targetCollapsed));
+                    } else {
+                        toggleBlock(block);
+                    }
+                }, 220);
+                titleClickTimers.set(titleEl, t);
+            });
+            titleEl.addEventListener('dblclick', () => {
+                if (!titleClickTimers.has(titleEl)) return;
+                clearTimeout(titleClickTimers.get(titleEl));
+                titleClickTimers.delete(titleEl);
             });
         });
 
@@ -3481,6 +3804,7 @@ class PaperReviewerApp {
                 ? dataTitle
                 : (storedTitle || dataTitle);
             titleEl.textContent = finalTitle;
+            titleEl.dataset.qaTitle = finalTitle;
             if (!this.qaTitleMap[this.currentFile]) this.qaTitleMap[this.currentFile] = {};
             this.qaTitleMap[this.currentFile][idx] = finalTitle;
             titleEl.title = '双击编辑标题';
@@ -3491,6 +3815,7 @@ class PaperReviewerApp {
                 const newTitle = next.trim();
                 const finalTitle = newTitle || 'Q&A';
                 titleEl.textContent = finalTitle;
+                titleEl.dataset.qaTitle = finalTitle;
                 this.setQaTitleForIndex(idx, finalTitle);
             });
         });
@@ -3537,19 +3862,84 @@ class PaperReviewerApp {
                 if (!skipRenderUpdate) {
                     this.renderMarkdownView(this.currentMarkdownText);
                 }
+                this.hasUnsavedMarkdownChanges = this.currentMarkdownText !== (this.currentMarkdownBaselineText || '');
+                this.updateMarkdownToolbar();
+                this.updateMarkdownDirtyUI();
             }
         }
 
-        // 更新当前已渲染的标题文字
-        if (!skipRenderUpdate) {
-            const render = document.getElementById('markdownRender');
-            if (render) {
-                const blocks = render.querySelectorAll('.qa-block');
-                const block = blocks[index];
-                const titleEl = block?.querySelector('.qa-title');
-                if (titleEl) titleEl.textContent = finalTitle;
+        // 更新当前已渲染的标题文字（不强制触发重新渲染）
+        const render = document.getElementById('markdownRender');
+        if (render) {
+            const blocks = render.querySelectorAll('.qa-block');
+            const block = blocks[index];
+            const titleEl = block?.querySelector('.qa-title');
+            if (titleEl) {
+                titleEl.textContent = finalTitle;
+                titleEl.dataset.qaTitle = finalTitle;
+            }
+            if (block) {
+                // 标题变更时，将当前折叠状态写入新标题键，确保同标题一致恢复
+                const collapsed = block.classList.contains('qa-collapsed');
+                const existing = this.getQaCollapsedForTitle(finalTitle);
+                if (existing === null) {
+                    this.setQaCollapsedForTitle(finalTitle, collapsed);
+                }
             }
         }
+    }
+
+    updateMarkdownDirtyUI() {
+        const statusEl = document.getElementById('markdownStatus');
+        if (!statusEl) return;
+        if (this.hasUnsavedMarkdownChanges && this.currentMarkdownExists) {
+            statusEl.style.display = 'inline';
+            const mdFilename = this.currentFile ? this.getMarkdownFilename(this.currentFile) : (this.currentMarkdownFile || 'Markdown');
+            statusEl.innerHTML = ` | ${mdFilename} <i class="fas fa-exclamation-triangle unsaved-icon" title="Markdown 未保存"></i>`;
+        } else {
+            statusEl.style.display = 'none';
+            statusEl.textContent = '';
+        }
+
+        // header 按钮启用状态依赖 dirty 状态
+        this.updateHeaderControls();
+    }
+
+    onMarkdownEditorInput() {
+        if (!this.currentMarkdownExists) return;
+        const textarea = document.getElementById('markdownTextarea');
+        if (!textarea) return;
+        const nextDirty = textarea.value !== (this.currentMarkdownBaselineText || '');
+        if (nextDirty === this.hasUnsavedMarkdownChanges) return;
+        this.hasUnsavedMarkdownChanges = nextDirty;
+        this.updateMarkdownToolbar();
+        this.updateMarkdownDirtyUI();
+    }
+
+    async saveCurrentMarkdownSilently() {
+        if (!this.currentFile || !this.currentMarkdownExists) return;
+        const textarea = document.getElementById('markdownTextarea');
+        const content = (this.isMarkdownEditing && textarea) ? textarea.value : (this.currentMarkdownText || '');
+        const mdFilename = this.getMarkdownFilename(this.currentFile);
+        await this.persistMarkdown(mdFilename, content);
+        this.currentMarkdownText = content;
+        this.currentMarkdownBaselineText = content;
+        this.isMarkdownEditing = false;
+        this.hasUnsavedMarkdownChanges = false;
+        this.updateMarkdownToolbar();
+        this.updateMarkdownDirtyUI();
+    }
+
+    discardCurrentMarkdownChanges() {
+        const baseline = this.currentMarkdownBaselineText || '';
+        this.currentMarkdownText = baseline;
+        this.isMarkdownEditing = false;
+        this.hasUnsavedMarkdownChanges = false;
+        const textarea = document.getElementById('markdownTextarea');
+        if (textarea) textarea.value = baseline;
+        this.renderMarkdownView(baseline);
+        this.updateMarkdownToolbar();
+        this.updateMarkdownDirtyUI();
     }
 
     async createMarkdownFile() {
@@ -3562,25 +3952,38 @@ class PaperReviewerApp {
             this.currentMarkdownExists = true;
             this.currentMarkdownFile = mdFilename;
             this.currentMarkdownText = content;
+            this.currentMarkdownBaselineText = content;
             this.isMarkdownEditing = true;
+            this.hasUnsavedMarkdownChanges = false;
             this.renderMarkdownView(content);
             this.updateMarkdownToolbar();
-            const statusEl = document.getElementById('markdownStatus');
-            if (statusEl) statusEl.textContent = `已创建: ${mdFilename}`;
+            this.updateMarkdownDirtyUI();
         } catch (err) {
             console.error('创建 Markdown 失败:', err);
             this.showNotification(`创建 Markdown 失败: ${err.message}`, 'error');
         }
     }
 
-    toggleMarkdownEdit(editing) {
+    toggleMarkdownEdit(editing, opts = {}) {
         if (!this.currentMarkdownExists) return;
+        const skipConfirm = !!opts.skipConfirm;
+        // 退出编辑时，如有未保存修改，给出提示
+        if (!skipConfirm && !editing && this.isMarkdownEditing && this.hasUnsavedMarkdownChanges) {
+            const mdFilename = this.currentFile ? this.getMarkdownFilename(this.currentFile) : (this.currentMarkdownFile || 'Markdown');
+            const shouldSave = confirm(`Markdown "${mdFilename}" 有未保存的修改，是否保存？`);
+            if (shouldSave) {
+                this.saveMarkdownFromEditor();
+                return;
+            }
+        }
         this.isMarkdownEditing = editing;
         const textarea = document.getElementById('markdownTextarea');
         if (textarea && editing) {
             textarea.value = this.currentMarkdownText || this.buildDefaultMarkdown();
+            this.onMarkdownEditorInput();
         }
         this.updateMarkdownToolbar();
+        this.updateMarkdownDirtyUI();
     }
 
     async saveMarkdownFromEditor() {
@@ -3592,13 +3995,13 @@ class PaperReviewerApp {
         try {
             await this.persistMarkdown(mdFilename, content);
             this.currentMarkdownText = content;
-            this.isMarkdownEditing = false;
+            this.currentMarkdownBaselineText = content;
             this.currentMarkdownExists = true;
+            this.hasUnsavedMarkdownChanges = false;
+            // 先退出编辑态，再渲染，确保用户立刻回到渲染视图
+            this.toggleMarkdownEdit(false, { skipConfirm: true });
             this.renderMarkdownView(content);
-            this.updateMarkdownToolbar();
             this.showNotification(`✓ Markdown 已保存: ${mdFilename}`, 'success');
-            const statusEl = document.getElementById('markdownStatus');
-            if (statusEl) statusEl.textContent = `已保存: ${mdFilename}`;
         } catch (err) {
             console.error('保存 Markdown 失败:', err);
             this.showNotification(`保存 Markdown 失败: ${err.message}`, 'error');
@@ -3656,13 +4059,50 @@ class PaperReviewerApp {
         }
     }
 
-    switchView(btn) {
+    async switchView(btn) {
+        const nextView = btn?.dataset?.view;
+        const prevView = this.currentView || 'structured';
+        // 离开 Markdown 视图时：若有未保存修改，提示保存；并退出编辑态，避免 UI/按钮残留
+        if (prevView === 'markdown' && nextView !== 'markdown') {
+            if (this.hasUnsavedMarkdownChanges && this.currentFile && this.currentMarkdownExists) {
+                const mdFilename = this.getMarkdownFilename(this.currentFile);
+                const shouldSave = confirm(`Markdown "${mdFilename}" 有未保存的修改，是否保存？`);
+                try {
+                    if (shouldSave) {
+                        await this.saveCurrentMarkdownSilently();
+                    } else {
+                        this.discardCurrentMarkdownChanges();
+                    }
+                } catch (err) {
+                    console.error('切换视图时保存 Markdown 失败:', err);
+                    this.showNotification(`保存 Markdown 失败: ${err.message}`, 'error');
+                }
+            } else if (this.isMarkdownEditing) {
+                this.isMarkdownEditing = false;
+                this.updateMarkdownToolbar();
+            }
+        }
+
+        // 在 Markdown 视图内再次点击 Markdown tab：强制从编辑态切回渲染态并渲染最新内容
+        if (prevView === 'markdown' && nextView === 'markdown') {
+            if (this.currentMarkdownExists) {
+                const textarea = document.getElementById('markdownTextarea');
+                const content = (this.isMarkdownEditing && textarea) ? textarea.value : (this.currentMarkdownText || '');
+                this.currentMarkdownText = content;
+                this.hasUnsavedMarkdownChanges = content !== (this.currentMarkdownBaselineText || '');
+                if (this.isMarkdownEditing) {
+                    this.toggleMarkdownEdit(false, { skipConfirm: true });
+                }
+                this.renderMarkdownView(content);
+            }
+        }
+
         // Update tab buttons
         document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
 
         // Switch views
-        const view = btn.dataset.view;
+        const view = nextView;
         this.currentView = view;
         try {
             localStorage.setItem('lastViewMode', view);
@@ -3683,6 +4123,22 @@ class PaperReviewerApp {
         }
 
         this.updateHeaderControls();
+        this.updateMarkdownToolbar();
+        this.updateMarkdownDirtyUI();
+
+        // 切换到 Markdown 视图时，确保渲染区域为最新内容（尤其是从编辑态进入）
+        if (view === 'markdown' && this.currentMarkdownExists) {
+            const textarea = document.getElementById('markdownTextarea');
+            const content = (this.isMarkdownEditing && textarea) ? textarea.value : (this.currentMarkdownText || '');
+            if (this.isMarkdownEditing) {
+                this.currentMarkdownText = content;
+                this.hasUnsavedMarkdownChanges = content !== (this.currentMarkdownBaselineText || '');
+                this.toggleMarkdownEdit(false, { skipConfirm: true });
+            }
+            this.renderMarkdownView(content);
+            this.updateMarkdownToolbar();
+            this.updateMarkdownDirtyUI();
+        }
     }
 
     applyCurrentView() {
@@ -4240,7 +4696,7 @@ class PaperReviewerApp {
     // 丝滑滚动到指定页码
     smoothScrollToPage(pdfApp, targetPage) {
         try {
-            console.log(`🎯 开始丝滑滚动到第 ${targetPage} 页`);
+            this.debugLog(`🎯 开始丝滑滚动到第 ${targetPage} 页`);
             
             // 获取PDF iframe
             const pdfIframe = document.querySelector('#pdfViewer');
@@ -4262,19 +4718,18 @@ class PaperReviewerApp {
                 return;
             }
             
-            console.log('✅ 找到viewerContainer');
+            this.debugLog('✅ 找到viewerContainer');
             
             // 确保设置了平滑滚动（以防未设置）
             if (viewerContainer.style.scrollBehavior !== 'smooth') {
                 viewerContainer.style.scrollBehavior = 'smooth';
-                console.log('🔧 已设置viewerContainer平滑滚动');
+                this.debugLog('🔧 已设置viewerContainer平滑滚动');
             }
             
             // 获取目标页面元素
             const pageElement = pdfDoc.querySelector(`[data-page-number="${targetPage}"]`);
             
             if (pageElement) {
-                console.log(`📍 找到目标页面元素，准备滚动...`);
                 
                 // 获取页面位置
                 const pageRect = pageElement.getBoundingClientRect();
@@ -4283,7 +4738,7 @@ class PaperReviewerApp {
                 // 计算目标滚动位置（页面顶部对齐到视口顶部，留点边距）
                 const targetScrollTop = viewerContainer.scrollTop + pageRect.top - containerRect.top - 20;
                 
-                console.log(`📊 滚动信息:`, {
+                this.debugLog(`📊 滚动信息:`, {
                     当前滚动位置: viewerContainer.scrollTop,
                     页面相对位置: pageRect.top - containerRect.top,
                     目标滚动位置: targetScrollTop,
@@ -4299,23 +4754,18 @@ class PaperReviewerApp {
                 // 同时更新PDF.js的当前页码（延迟避免冲突）
                 setTimeout(() => {
                     pdfApp.page = targetPage;
-                    console.log(`✅ PDF.js页码已更新为 ${targetPage}`);
                 }, 500);
                 
                 this.showNotification(`📄 第 ${targetPage} 页`, 'info');
-                console.log('✅ 已触发丝滑页面跳转动画');
             } else {
                 console.warn(`⚠️ 找不到页面${targetPage}的DOM元素，可能还未渲染`);
-                console.log('📋 尝试查找所有页面元素...');
                 const allPages = pdfDoc.querySelectorAll('[data-page-number]');
-                console.log(`📋 共找到 ${allPages.length} 个页面元素`);
                 
                 // 使用PDF.js API跳转
                 pdfApp.page = targetPage;
                 this.showNotification(`📄 第 ${targetPage} 页`, 'info');
             }
         } catch (error) {
-            console.error('❌ 丝滑滚动失败，使用默认跳转:', error);
             pdfApp.page = targetPage;
             this.showNotification(`📄 第 ${targetPage} 页`, 'info');
         }
@@ -4427,8 +4877,6 @@ class PaperReviewerApp {
     // 滚动到当前匹配结果的中央（丝滑动画）
     scrollToCurrentMatch(pdfApp) {
         try {
-            console.log('🎯 开始查找并滚动到第一个匹配结果...');
-            
             const pdfViewer = pdfApp.pdfViewer;
             if (!pdfViewer) {
                 console.warn('⚠️ pdfViewer不可用');
@@ -4451,12 +4899,11 @@ class PaperReviewerApp {
                 return;
             }
             
-            console.log('✅ 找到viewerContainer，查找高亮元素...');
+            this.debugLog('✅ 找到viewerContainer，查找高亮元素...');
             
             // 确保设置了平滑滚动（以防未设置）
             if (viewerContainer.style.scrollBehavior !== 'smooth') {
                 viewerContainer.style.scrollBehavior = 'smooth';
-                console.log('🔧 已设置viewerContainer平滑滚动');
             }
             
             // 查找第一个高亮元素（PDF.js的高亮class）
@@ -4465,7 +4912,6 @@ class PaperReviewerApp {
                                viewerContainer.querySelector('.highlight');
             
             if (highlighted) {
-                console.log('📍 找到第一个匹配，准备丝滑滚动到中央...');
                 
                 // 获取元素在容器中的位置
                 const elementRect = highlighted.getBoundingClientRect();
@@ -4480,7 +4926,7 @@ class PaperReviewerApp {
                 // 目标滚动位置：让元素中心对齐视口中心
                 const targetScrollTop = elementCenterY - viewportCenterY;
                 
-                console.log(`📊 滚动信息:`, {
+                this.debugLog(`📊 滚动信息:`, {
                     当前滚动位置: viewerContainer.scrollTop,
                     元素位置: elementRect.top - containerRect.top,
                     元素高度: elementRect.height,
@@ -4494,12 +4940,9 @@ class PaperReviewerApp {
                     behavior: 'smooth'
                 });
                 
-                console.log('✅ 已触发丝滑滚动动画（元素居中）');
             } else {
-                console.warn('⚠️ 未找到高亮元素，可能还在渲染中');
                 // 如果第一次没找到，再重试一次
                 setTimeout(() => {
-                    console.log('🔄 重试查找高亮元素...');
                     this.scrollToFirstMatch(pdfApp);
                 }, 300);
             }
@@ -4520,7 +4963,7 @@ class PaperReviewerApp {
             const cleanText = searchText.trim();
             if (!cleanText) return;
 
-            console.log(`🔍 在第 ${pageNumber} 页搜索:`, cleanText);
+            this.debugLog(`🔍 在第 ${pageNumber} 页搜索:`, cleanText);
 
             // 尝试多次，确保PDF.js已初始化
             let attempts = 0;
@@ -4534,7 +4977,7 @@ class PaperReviewerApp {
                     
                     if (!pdfApp || !pdfApp.pdfViewer) {
                         if (attempts < maxAttempts) {
-                            console.log(`⏳ 等待PDF.js初始化... (${attempts}/${maxAttempts})`);
+                            this.debugLog(`⏳ 等待PDF.js初始化... (${attempts}/${maxAttempts})`);
                             setTimeout(trySearch, 400);
                         } else {
                             console.error('❌ PDF.js初始化超时');
@@ -4542,30 +4985,30 @@ class PaperReviewerApp {
                         return;
                     }
                     
-                    console.log('✅ PDF.js已就绪');
-                    console.log('当前页:', pdfApp.page || pdfApp.pdfViewer.currentPageNumber);
-                    console.log('FindController:', !!pdfApp.findController);
-                    console.log('EventBus:', !!pdfApp.eventBus);
+                    this.debugLog('✅ PDF.js已就绪');
+                    this.debugLog('当前页:', pdfApp.page || pdfApp.pdfViewer.currentPageNumber);
+                    this.debugLog('FindController:', !!pdfApp.findController);
+                    this.debugLog('EventBus:', !!pdfApp.eventBus);
                     
                     // 方法1: 使用EventBus（更可靠）
                     if (pdfApp.eventBus) {
-                        console.log('🎯 使用EventBus API搜索');
+                        this.debugLog('🎯 使用EventBus API搜索');
                         
                         // 设置搜索结果监听器
                         let resultListener = null;
                         let matchListener = null;
                         
                         resultListener = (evt) => {
-                            console.log('📊 搜索状态更新:', evt);
+                            this.debugLog('📊 搜索状态更新:', evt);
                             if (evt.state === 1) { // FOUND
-                                console.log('✅ 找到匹配');
+                                this.debugLog('✅ 找到匹配');
                             } else if (evt.state === 3) { // NOT_FOUND
-                                console.log('⚠️ 未找到匹配');
+                                this.debugLog('⚠️ 未找到匹配');
                             }
                         };
                         
                         matchListener = (evt) => {
-                            console.log('📈 匹配数量:', evt.matchesCount);
+                            this.debugLog('📈 匹配数量:', evt.matchesCount);
                         };
                         
                         // 监听搜索结果
@@ -4576,12 +5019,12 @@ class PaperReviewerApp {
                         try {
                             pdfApp.eventBus.dispatch('findbarclose');
                         } catch (e) {
-                            console.log('清除旧搜索');
+                            this.debugLog('清除旧搜索');
                         }
                         
                         // 延迟执行新搜索
                         setTimeout(() => {
-                            console.log('🔍 执行搜索命令...');
+                            this.debugLog('🔍 执行搜索命令...');
                             pdfApp.eventBus.dispatch('find', {
                                 source: window,
                                 type: 'find',
@@ -4593,7 +5036,7 @@ class PaperReviewerApp {
                                 findPrevious: false        // 向前搜索
                             });
                             
-                            console.log('✅ 搜索命令已发送');
+                            this.debugLog('✅ 搜索命令已发送');
                             
                             // 5秒后移除监听器
                             setTimeout(() => {
@@ -4609,7 +5052,7 @@ class PaperReviewerApp {
                     
                     // 方法2: 使用FindController（备用）
                     if (pdfApp.findController) {
-                        console.log('🎯 使用FindController搜索');
+                        this.debugLog('🎯 使用FindController搜索');
                         
                         try {
                             pdfApp.findController.executeCommand('find', {
@@ -4621,15 +5064,15 @@ class PaperReviewerApp {
                                 findPrevious: false
                             });
                             
-                            console.log('✅ FindController搜索已执行');
+                            this.debugLog('✅ FindController搜索已执行');
                             
                             // 检查搜索状态
                             setTimeout(() => {
                                 if (pdfApp.findController.state) {
-                                    console.log('搜索状态:', pdfApp.findController.state);
+                                    this.debugLog('搜索状态:', pdfApp.findController.state);
                                 }
                                 if (pdfApp.findController.matchesCount) {
-                                    console.log('匹配数量:', pdfApp.findController.matchesCount);
+                                    this.debugLog('匹配数量:', pdfApp.findController.matchesCount);
                                 }
                             }, 1000);
                             
@@ -4742,7 +5185,7 @@ class PaperReviewerApp {
             this.tempDataCache[this.currentFile] = this.currentData;
             this.updateSaveButtonState();
             
-            console.log(`✓ 已自动创建 ${locKey} 字段`);
+            this.debugLog(`✓ 已自动创建 ${locKey} 字段`);
         }
         
         if (current && current[locKey]) {
@@ -5160,6 +5603,7 @@ class PaperReviewerApp {
         const createBtn = document.getElementById('createMarkdownBtnHeader');
         const editBtn = document.getElementById('editMarkdownBtnHeader');
         const saveMdBtn = document.getElementById('saveMarkdownBtnHeader');
+        const undoMdBtn = document.getElementById('undoMarkdownPasteBtn');
         const flatTab = document.querySelector('.tab-btn[data-view="flat"]');
 
         const showJsonControls = view === 'structured' || view === 'flat';
@@ -5172,9 +5616,13 @@ class PaperReviewerApp {
         if (createBtn) createBtn.style.display = showMdControls && !this.currentMarkdownExists ? 'inline-flex' : 'none';
         if (editBtn) editBtn.style.display = showMdControls ? 'inline-flex' : 'none';
         if (saveMdBtn) saveMdBtn.style.display = showMdControls ? 'inline-flex' : 'none';
+        if (undoMdBtn) {
+            const canUndo = this.lastMarkdownPasteBackup && this.lastMarkdownPasteBackup.file === this.currentFile;
+            undoMdBtn.style.display = showMdControls && canUndo ? 'inline-flex' : 'none';
+        }
 
         if (editBtn) editBtn.disabled = !(showMdControls && this.currentMarkdownExists && !this.isMarkdownEditing);
-        if (saveMdBtn) saveMdBtn.disabled = !(showMdControls && this.currentMarkdownExists);
+        if (saveMdBtn) saveMdBtn.disabled = !(showMdControls && this.currentMarkdownExists && this.hasUnsavedMarkdownChanges);
     }
 
     updateSaveButtonState() {
@@ -5185,7 +5633,7 @@ class PaperReviewerApp {
         if (saveBtn) {
             if (this.hasUnsavedChanges) {
                 saveBtn.style.display = 'inline-block';
-                saveBtn.innerHTML = '<i class="fas fa-save"></i> 保存修改';
+                saveBtn.innerHTML = '<i class="fas fa-save"></i>';
             } else {
                 saveBtn.style.display = 'none';
             }
@@ -5812,16 +6260,16 @@ class PaperReviewerApp {
                         // 如果是数组，获取指定索引的quote
                         if (quoteIndex !== null && quoteIndex >= 0 && quoteIndex < quotes.length) {
                             searchText = this.cleanQuoteForSearch(quotes[quoteIndex]);
-                            console.log(`🔍 从 quote[${quoteIndex}] 获取搜索文本:`, searchText);
+                            this.debugLog(`🔍 从 quote[${quoteIndex}] 获取搜索文本:`, searchText);
                         } else if (quotes.length > 0) {
                             // 默认使用第一个
                             searchText = this.cleanQuoteForSearch(quotes[0]);
-                            console.log('🔍 从 quote[0] 获取搜索文本:', searchText);
+                            this.debugLog('🔍 从 quote[0] 获取搜索文本:', searchText);
                         }
                     } else if (typeof quotes === 'string') {
                         // 兼容旧的字符串格式
                         searchText = this.cleanQuoteForSearch(quotes);
-                        console.log('🔍 从 quote 字符串获取搜索文本:', searchText);
+                        this.debugLog('🔍 从 quote 字符串获取搜索文本:', searchText);
                     }
                 }
                 
@@ -5834,7 +6282,7 @@ class PaperReviewerApp {
                     const fieldValue = current[lastKey];
                     if (fieldValue !== null && fieldValue !== undefined) {
                         searchText = typeof fieldValue === 'string' ? fieldValue : JSON.stringify(fieldValue);
-                        console.log('🔍 从字段值获取搜索文本:', searchText);
+                        this.debugLog('🔍 从字段值获取搜索文本:', searchText);
                     }
                 }
             }
@@ -5875,14 +6323,13 @@ class PaperReviewerApp {
             .replace(/[""]/g, '"')
             .replace(/['']/g, "'");
         
-        console.log('📝 文本清理: 原文长度', quote.length, '→ 清理后长度', cleanText.length);
         
         // 如果文本太长，截取前200个字符（保持完整单词）
         if (cleanText.length > 200) {
             const truncated = cleanText.substring(0, 200);
             const lastSpace = truncated.lastIndexOf(' ');
             cleanText = lastSpace > 0 ? truncated.substring(0, lastSpace) : truncated;
-            console.log('✂️ 文本过长，截取前', cleanText.length, '个字符');
+            this.debugLog('✂️ 文本过长，截取前', cleanText.length, '个字符');
         }
         
         return cleanText;
@@ -5911,11 +6358,11 @@ class PaperReviewerApp {
             const lastKey = pathArray[pathArray.length - 1];
             const locKey = lastKey + '_loc';
             
-            console.log('Searching for location:', { pathString, locKey, hasLoc: !!current[locKey] });
+            this.debugLog('Searching for location:', { pathString, locKey, hasLoc: !!current[locKey] });
             
             if (current[locKey] && current[locKey].quote) {
                 const searchText = this.cleanQuoteForSearch(current[locKey].quote);
-                console.log('Found quote:', searchText);
+                this.debugLog('Found quote:', searchText);
                 return searchText;
             }
             
@@ -5941,7 +6388,7 @@ class PaperReviewerApp {
                 return;
             }
 
-            console.log('尝试在PDF中搜索文本:', cleanText);
+            this.debugLog('尝试在PDF中搜索文本:', cleanText);
 
             // 方法1: 使用window.find() API (适用于大多数浏览器)
             try {
@@ -5954,13 +6401,13 @@ class PaperReviewerApp {
                 const found = pdfWindow.find(cleanText, false, false, true, false, true, false);
                 
                 if (found) {
-                    console.log('✅ 文本搜索成功');
+                    this.debugLog('✅ 文本搜索成功');
                 } else {
                     console.warn('⚠️ 未找到匹配文本');
                     // 尝试搜索部分文本（取前20个字符）
                     if (cleanText.length > 20) {
                         const partialText = cleanText.substring(0, 20);
-                        console.log('尝试搜索部分文本:', partialText);
+                        this.debugLog('尝试搜索部分文本:', partialText);
                         pdfWindow.find(partialText, false, false, true, false, true, false);
                     }
                 }
@@ -5972,7 +6419,7 @@ class PaperReviewerApp {
             try {
                 const pdfViewerApp = pdfWindow.PDFViewerApplication;
                 if (pdfViewerApp && pdfViewerApp.findController) {
-                    console.log('使用PDF.js搜索功能');
+                    this.debugLog('使用PDF.js搜索功能');
                     pdfViewerApp.findController.executeCommand('find', {
                         query: cleanText,
                         caseSensitive: false,
@@ -6011,7 +6458,7 @@ class PaperReviewerApp {
     }
 
     showNotification(message, type = 'info') {
-        console.log(`${type.toUpperCase()}: ${message}`);
+        this.debugLog(`${type.toUpperCase()}: ${message}`);
         
         // 创建美化的通知元素
         const notification = document.createElement('div');
@@ -6077,7 +6524,7 @@ class PaperReviewerApp {
 
             // 成功通知
             this.showNotification(`✓ ${this.currentFile} 已保存`, 'success');
-            console.log('File saved:', result);
+            this.debugLog('File saved:', result);
         } catch (error) {
             console.error('Error saving file:', error);
             this.showNotification(`✗ 保存失败: ${error.message}`, 'error');
@@ -6118,7 +6565,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 return;
             }
             
-            console.log(`🎯 在第 ${page} 页搜索: "${text}"`);
+            app.debugLog(`🎯 在第 ${page} 页搜索: "${text}"`);
             
             // 先跳转到指定页
             pdfApp.page = page;
@@ -6132,12 +6579,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 
                 // 监听器
                 const resultListener = (evt) => {
-                    console.log('📊 搜索状态:', evt);
-                    if (evt.state === 1) console.log('✅ 找到匹配');
-                    else if (evt.state === 3) console.log('⚠️ 未找到匹配');
+                    app.debugLog('📊 搜索状态:', evt);
+                    if (evt.state === 1) app.debugLog('✅ 找到匹配');
+                    else if (evt.state === 3) app.debugLog('⚠️ 未找到匹配');
                 };
                 const matchListener = (evt) => {
-                    console.log('📈 匹配数量:', evt.matchesCount);
+                    app.debugLog('📈 匹配数量:', evt.matchesCount);
                 };
                 
                 pdfApp.eventBus.on('updatefindcontrolstate', resultListener);
@@ -6182,14 +6629,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 return;
             }
             
-            console.log('🔍 直接调用EventBus搜索:', text);
+            app.debugLog('🔍 直接调用EventBus搜索:', text);
             
             // 监听器
             const resultListener = (evt) => {
-                console.log('📊 搜索状态:', evt);
+                app.debugLog('📊 搜索状态:', evt);
             };
             const matchListener = (evt) => {
-                console.log('📈 匹配数量:', evt.matchesCount);
+                app.debugLog('📈 匹配数量:', evt.matchesCount);
             };
             
             pdfApp.eventBus.on('updatefindcontrolstate', resultListener);
@@ -6225,13 +6672,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
     
-    console.log('🔧 调试工具已加载，使用方法:');
-    console.log('  debugPDFSearch.search("文本")              - 在当前页搜索');
-    console.log('  debugPDFSearch.searchAtPage(3, "文本")    - 在第3页搜索（会先跳转）');
-    console.log('  debugPDFSearch.jumpAndSearch(3, "文本")   - 跳转到第3页并搜索');
-    console.log('  debugPDFSearch.eventBusSearch("文本")     - 直接调用EventBus（当前页）');
-    console.log('  debugPDFSearch.getCurrentPage()           - 获取当前页码');
-    console.log('  debugPDFSearch.getPDFApp()                - 获取PDF.js对象');
     
     // Setup editable listeners after initial render
     setTimeout(() => {
@@ -6240,9 +6680,9 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // 页面关闭/刷新前提示保存
     window.addEventListener('beforeunload', (e) => {
-        if (app.hasUnsavedChanges) {
+        if (app.hasUnsavedChanges || app.hasUnsavedMarkdownChanges) {
             e.preventDefault();
-            e.returnValue = '您有未保存的修改，确定要离开吗？';
+            e.returnValue = '您有未保存的修改（JSON/Markdown），确定要离开吗？';
             return e.returnValue;
         }
     });
