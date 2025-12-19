@@ -12,9 +12,46 @@ const url = require('url');
 const PORT = process.env.PORT ? Number(process.env.PORT) : 8000;
 const ROOT_DIR = path.resolve(__dirname);
 const PROMPT_ROOT = path.join(ROOT_DIR, 'src', 'prompts');
-const PROMPT_MANIFEST_PATH = path.join(ROOT_DIR, 'prompt-manifest.json');
+const TOOLS_ROOTS = [
+    path.join(ROOT_DIR, 'src', 'tools'),
+    path.join(ROOT_DIR, 'tools')
+];
+const CUSTOM_MANIFEST_PATH = path.join(ROOT_DIR, 'manifest.json');
 const FILE_ORDER_NAME = '.file_order.json';
 let promptManifestCache = null;
+
+function normalizeBasePath(basePath = '') {
+    const clean = String(basePath || '').trim() || '/';
+    if (clean.startsWith('/')) return clean.endsWith('/') ? clean : `${clean}/`;
+    return `/${clean.replace(/^[/\\]+/, '')}${clean.endsWith('/') ? '' : '/'}`;
+}
+
+function groupsFromManifestJson(data) {
+    // 支持新结构：{ src: { prompts: {...}, tools: {...}, ... } }
+    const groups = {};
+    if (!data || typeof data !== 'object') return groups;
+    const src = data.src || data.groups || {};
+    // 如果已经是旧的扁平 groups 结构，直接返回
+    if (!data.src && data.groups) {
+        return data.groups;
+    }
+    const categories = Object.keys(src || {});
+    categories.forEach((category) => {
+        const catGroups = src[category] || {};
+        Object.entries(catGroups).forEach(([name, info]) => {
+            if (!info || !Array.isArray(info.files)) return;
+            const key = `${category}:${name}`;
+            groups[key] = {
+                files: info.files,
+                basePath: normalizeBasePath(info.basePath || `/src/${category}/${name}/`),
+                category,
+                name,
+                label: `${category} / ${name}`
+            };
+        });
+    });
+    return groups;
+}
 
 function resolvePromptDir(group) {
     if (!group) return null;
@@ -30,6 +67,7 @@ function resolvePromptDir(group) {
 
 function buildPromptManifest() {
     const groups = {};
+    // prompt groups
     if (fs.existsSync(PROMPT_ROOT)) {
         const items = fs.readdirSync(PROMPT_ROOT, { withFileTypes: true });
         items.filter(entry => entry.isDirectory()).forEach((entry) => {
@@ -37,19 +75,63 @@ function buildPromptManifest() {
             const files = fs.readdirSync(dir)
                 .filter(name => name.toLowerCase().endsWith('.md'))
                 .sort();
-            groups[entry.name] = {
+            const key = `prompts:${entry.name}`;
+            groups[key] = {
                 files,
-                basePath: `/src/prompts/${entry.name}/`
+                basePath: `/src/prompts/${entry.name}/`,
+                category: 'prompts',
+                name: entry.name,
+                label: `prompts / ${entry.name}`
             };
         });
+    }
+    // tools group (js files)
+    for (const root of TOOLS_ROOTS) {
+        if (fs.existsSync(root) && fs.statSync(root).isDirectory()) {
+            const files = fs.readdirSync(root, { withFileTypes: true })
+                .filter(entry => entry.isFile() && entry.name.toLowerCase().endsWith('.js'))
+                .map(entry => entry.name)
+                .sort();
+            if (files.length) {
+                const rel = path.relative(ROOT_DIR, root).split(path.sep).join('/');
+                const key = 'tools:aide';
+                groups[key] = {
+                    files,
+                    basePath: `/${rel}/`,
+                    category: 'tools',
+                    name: 'aide',
+                    label: 'tools / aide'
+                };
+            }
+            break; // prefer first existing root
+        }
     }
     return groups;
 }
 
 function ensurePromptManifest() {
+    // 优先使用自定义 manifest.json（新结构）
+    if (fs.existsSync(CUSTOM_MANIFEST_PATH)) {
+        try {
+            const raw = fs.readFileSync(CUSTOM_MANIFEST_PATH, 'utf8');
+            const parsed = JSON.parse(raw);
+            const groups = groupsFromManifestJson(parsed);
+            if (Object.keys(groups).length) {
+                promptManifestCache = groups;
+                return;
+            }
+        } catch (err) {
+            console.error('✗ Failed to read custom manifest.json:', err);
+        }
+    }
+
+    // fallback 自动扫描
     promptManifestCache = buildPromptManifest();
+
+    // 写出自动生成的 manifest 供前端静态兜底使用
     try {
-        fs.writeFileSync(PROMPT_MANIFEST_PATH, JSON.stringify({ success: true, groups: promptManifestCache }, null, 2), 'utf8');
+        const payload = JSON.stringify({ success: true, groups: promptManifestCache }, null, 2);
+        fs.writeFileSync(CUSTOM_MANIFEST_PATH, payload, 'utf8');
     } catch (err) {
         console.error('✗ Failed to write prompt manifest:', err);
     }
@@ -526,7 +608,7 @@ const server = http.createServer((req, res) => {
         return;
     }
 
-    // 处理 prompt 文件列表请求
+    // 处理 prompt / tools 文件列表请求（从 manifest 或自动扫描）
     if (req.method === 'GET' && pathname === '/prompt-files') {
         try {
             ensurePromptManifest();
@@ -545,9 +627,10 @@ const server = http.createServer((req, res) => {
         return;
     }
 
-    // 处理 prompt 单文件读取请求
+    // 处理 prompt / tools 单文件读取请求
     if (req.method === 'GET' && pathname === '/prompt-file') {
         try {
+            ensurePromptManifest();
             const query = parsedUrl.query || {};
             const group = query.group;
             const file = query.file;
@@ -563,13 +646,16 @@ const server = http.createServer((req, res) => {
                 return;
             }
 
-            const resolved = resolvePromptDir(group);
-            if (!resolved) {
+            const groupInfo = (promptManifestCache && promptManifestCache[group]) ? promptManifestCache[group] : null;
+            if (!groupInfo) {
                 res.writeHead(404, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify({ success: false, error: 'Group not found' }));
                 return;
             }
-            const dir = resolved.dir;
+
+            const basePath = groupInfo.basePath || `/src/prompts/${group}/`;
+            const safeDir = path.normalize(basePath).replace(/^[/\\]+/, '');
+            const dir = path.resolve(ROOT_DIR, safeDir);
             const safeName = path.basename(file);
             const fullPath = path.join(dir, safeName);
             const resolvedDir = path.resolve(dir);
@@ -698,6 +784,38 @@ const server = http.createServer((req, res) => {
                 res.end(JSON.stringify({ success: false, error: error.message }));
             }
         });
+        return;
+    }
+
+    // 列出 tools 目录下的脚本（仅 .js）
+    if (req.method === 'GET' && pathname === '/tools-list') {
+        try {
+            let toolsDir = '';
+            let files = [];
+            for (const root of TOOLS_ROOTS) {
+                if (fs.existsSync(root) && fs.statSync(root).isDirectory()) {
+                    toolsDir = root;
+                    files = fs.readdirSync(root, { withFileTypes: true })
+                        .filter(entry => entry.isFile() && entry.name.toLowerCase().endsWith('.js'))
+                        .sort((a, b) => a.name.localeCompare(b.name))
+                        .map(entry => {
+                            const rel = path.relative(ROOT_DIR, path.join(root, entry.name)).split(path.sep).join('/');
+                            return {
+                                name: entry.name,
+                                path: `/${rel}`
+                            };
+                        });
+                    break;
+                }
+            }
+            const exists = !!toolsDir;
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ success: true, exists, files }));
+        } catch (error) {
+            console.error('✗ Error listing tools scripts:', error);
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ success: false, error: error.message }));
+        }
         return;
     }
 

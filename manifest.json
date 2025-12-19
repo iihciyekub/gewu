@@ -1,0 +1,37 @@
+{
+  "src": {
+    "prompts": {
+      "qjson": {
+        "files": [
+          "step1.md",
+          "step2.md",
+          "step3.md",
+          "step4.md",
+          "step5.md",
+          "step6.md"
+        ],
+        "basePath": "/src/prompts/qjson/"
+      },
+      "qmd": {
+        "files": [
+          "p1.md",
+          "p2.md",
+          "p3.md",
+          "p4.md",
+          "p5.md",
+          "p6.md"
+        ],
+        "basePath": "/src/prompts/qmd/"
+      }
+    },
+    "tools": {
+      "aide": {
+        "files": [
+          "chatgptAide.js",
+          "wosAide.js"
+        ],
+        "basePath": "/src/tools/"
+      }
+    }
+  }
+}

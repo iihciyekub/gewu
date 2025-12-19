@@ -52,8 +52,8 @@ class PaperReviewerApp {
         this.promptPanelVisible = false;
         this.promptDataLoaded = false;
         this.promptGroups = {};
+        this.promptPanelPos = this.loadPromptPanelPos();
         this.promptSelectedByGroup = this.loadPromptSelectedByGroup();
-        this.aideCopyMenuVisible = false;
         this.jsonMenuVisible = false;
         this.mdMenuVisible = false;
         this.rawJsonParseOk = true;
@@ -95,6 +95,29 @@ class PaperReviewerApp {
             return parsed && typeof parsed === 'object' ? parsed : {};
         } catch (_e) {
             return {};
+        }
+    }
+
+    loadPromptPanelPos() {
+        try {
+            const raw = localStorage.getItem('promptQuickPanelPos');
+            if (!raw) return null;
+            const pos = JSON.parse(raw);
+            if (pos && typeof pos.left === 'number' && typeof pos.top === 'number') {
+                return pos;
+            }
+        } catch (_e) {
+            return null;
+        }
+        return null;
+    }
+
+    savePromptPanelPos(pos) {
+        if (!pos || typeof pos.left !== 'number' || typeof pos.top !== 'number') return;
+        try {
+            localStorage.setItem('promptQuickPanelPos', JSON.stringify(pos));
+        } catch (_e) {
+            // ignore
         }
     }
 
@@ -650,7 +673,6 @@ class PaperReviewerApp {
                 this.closeProjectSelector();
                 this.clearPdfHighlights();
                 this.togglePromptPanel(false);
-                this.toggleAideCopyMenu(false);
             }
         });
 
@@ -668,39 +690,13 @@ class PaperReviewerApp {
             this.loadSelectedProject();
         });
 
-        // 复制辅助脚本（wosAide.js / chatgptAide.js）
+        // 工具面板按钮（打开 Cmd+Shift+G 面板）
         const aideCopyToggleBtn = document.getElementById('aideCopyToggleBtn');
-        const aideCopyMenu = document.getElementById('aideCopyMenu');
-        const copyWosAideSourceBtn = document.getElementById('copyWosAideSourceBtn');
-        const copyChatgptAideSourceBtn = document.getElementById('copyChatgptAideSourceBtn');
-        const aideCopyDropdown = document.getElementById('aideCopyDropdown');
-        if (aideCopyToggleBtn && aideCopyMenu) {
+        if (aideCopyToggleBtn) {
             aideCopyToggleBtn.addEventListener('click', (e) => {
                 e.preventDefault();
                 e.stopPropagation();
-                this.toggleAideCopyMenu();
-            });
-            aideCopyMenu.addEventListener('click', (e) => {
-                e.stopPropagation();
-            });
-            document.addEventListener('click', (e) => {
-                if (!this.aideCopyMenuVisible) return;
-                if (aideCopyDropdown && aideCopyDropdown.contains(e.target)) return;
-                this.toggleAideCopyMenu(false);
-            });
-        }
-        if (copyWosAideSourceBtn) {
-            copyWosAideSourceBtn.addEventListener('click', async (e) => {
-                e.preventDefault();
-                await this.copyWosAideSource();
-                this.toggleAideCopyMenu(false);
-            });
-        }
-        if (copyChatgptAideSourceBtn) {
-            copyChatgptAideSourceBtn.addEventListener('click', async (e) => {
-                e.preventDefault();
-                await this.copyChatgptAideSource();
-                this.toggleAideCopyMenu(false);
+                this.togglePromptPanel();
             });
         }
         const syncPdfBtn = document.getElementById('syncPdfBtn');
@@ -711,6 +707,7 @@ class PaperReviewerApp {
         if (promptCloseBtn) {
             promptCloseBtn.addEventListener('click', () => this.togglePromptPanel(false));
         }
+        this.bindPromptPanelDrag();
 
         // 左侧文件列表：鼠标激活后可用上下键快速切换
         const fileListEl = document.getElementById('fileList');
@@ -2127,6 +2124,12 @@ class PaperReviewerApp {
         if (toggleBtn) {
             toggleBtn.addEventListener('click', (e) => {
                 e.stopPropagation();
+                if (e.shiftKey) {
+                    // Shift+点击：折叠全部 section
+                    this.isCollapseAll = true;
+                    this.updateAllSectionsCollapseState(true);
+                    return;
+                }
                 const isActive = header.classList.toggle('active');
                 content.classList.toggle('active');
                 this.setSectionExpanded(title, isActive);
@@ -2950,15 +2953,6 @@ class PaperReviewerApp {
         }
     }
 
-    toggleAideCopyMenu(forceVisible) {
-        const menu = document.getElementById('aideCopyMenu');
-        if (!menu) return;
-        const next = typeof forceVisible === 'boolean' ? forceVisible : !this.aideCopyMenuVisible;
-        if (next) this.closeHeaderMenus('aide');
-        this.aideCopyMenuVisible = next;
-        menu.classList.toggle('visible', next);
-    }
-
     toggleMdMenu(forceVisible) {
         const menu = document.getElementById('mdMenu');
         if (!menu) return;
@@ -3019,7 +3013,7 @@ class PaperReviewerApp {
         const keep = String(except || '').toLowerCase();
         if (keep !== 'json' && this.jsonMenuVisible) this.toggleJsonMenu(false);
         if (keep !== 'md' && this.mdMenuVisible) this.toggleMdMenu(false);
-        if (keep !== 'aide' && this.aideCopyMenuVisible) this.toggleAideCopyMenu(false);
+        if (keep !== 'prompt' && this.promptPanelVisible) this.togglePromptPanel(false, { skipClose: true });
     }
 
     applyRawJsonFromTextarea(opts = {}) {
@@ -3093,7 +3087,7 @@ class PaperReviewerApp {
             const response = await fetch('/prompt-files');
             if (!response.ok) throw new Error(`HTTP ${response.status}`);
             const data = await response.json();
-            this.promptGroups = data.groups || {};
+            this.promptGroups = this.normalizePromptGroups(data);
             this.promptDataLoaded = true;
 
             this.renderPromptShortcuts();
@@ -3109,14 +3103,18 @@ class PaperReviewerApp {
 
     async loadPromptManifestFallback() {
         try {
-            const response = await fetch('/prompt-manifest.json');
-            if (!response.ok) return false;
-            const data = await response.json();
+            const tryFetch = async (url) => {
+                const resp = await fetch(url);
+                if (!resp.ok) return null;
+                const data = await resp.json();
+                return data;
+            };
+            let data = await tryFetch('/manifest.json');
             if (!data || typeof data !== 'object') return false;
-            this.promptGroups = data.groups || {};
+            this.promptGroups = this.normalizePromptGroups(data);
             this.promptDataLoaded = true;
             this.renderPromptShortcuts();
-            this.showNotification('使用静态 prompt 清单加载成功', 'info');
+            this.showNotification('使用静态 manifest 加载成功', 'info');
             return true;
         } catch (err) {
             console.error('加载静态 prompt 清单失败:', err);
@@ -3141,10 +3139,10 @@ class PaperReviewerApp {
         keys.forEach((key) => {
             const groupEl = document.createElement('div');
             groupEl.className = 'prompt-group';
-
+            const info = this.promptGroups[key] || {};
             const label = document.createElement('div');
             label.className = 'prompt-group-label';
-            label.textContent = key;
+            label.textContent = info.label || key;
             groupEl.appendChild(label);
 
             const row = document.createElement('div');
@@ -3175,7 +3173,7 @@ class PaperReviewerApp {
         files.forEach((file) => {
             const btn = document.createElement('button');
             btn.className = 'prompt-chip';
-            btn.textContent = file.replace(/\.md$/i, '');
+            btn.textContent = file.replace(/\.[^/.]+$/, '');
             btn.title = file;
             btn.dataset.file = file;
             const isActive = activeFile && activeFile === file;
@@ -3189,15 +3187,105 @@ class PaperReviewerApp {
         });
     }
 
-    togglePromptPanel(forceVisible) {
+    togglePromptPanel(forceVisible, opts = {}) {
         const panel = document.getElementById('promptQuickPanel');
         if (!panel) return;
         if (!this.promptDataLoaded) {
             this.loadPromptShortcuts();
         }
         const nextState = typeof forceVisible === 'boolean' ? forceVisible : !this.promptPanelVisible;
+        if (nextState && !opts.skipClose) {
+            this.closeHeaderMenus('prompt');
+        }
         this.promptPanelVisible = nextState;
+        if (nextState) {
+            this.applyPromptPanelPos();
+        }
         panel.classList.toggle('visible', nextState);
+    }
+
+    normalizePromptGroups(raw) {
+        if (!raw) return {};
+        if (raw.groups && typeof raw.groups === 'object') return raw.groups;
+        const src = raw.src || {};
+        const groups = {};
+        Object.keys(src).forEach((category) => {
+            const catGroups = src[category] || {};
+            Object.entries(catGroups).forEach(([name, info]) => {
+                if (!info || !Array.isArray(info.files)) return;
+                const key = `${category}:${name}`;
+                const base = info.basePath || `/src/${category}/${name}/`;
+                const basePath = base.endsWith('/') ? base : `${base}/`;
+                groups[key] = {
+                    files: info.files,
+                    basePath,
+                    category,
+                    name,
+                    label: info.label || `${category} / ${name}`
+                };
+            });
+        });
+        return groups;
+    }
+
+    applyPromptPanelPos() {
+        const panel = document.getElementById('promptQuickPanel');
+        if (!panel) return;
+        const pos = this.promptPanelPos;
+        if (pos && typeof pos.left === 'number' && typeof pos.top === 'number') {
+            panel.style.left = `${pos.left}px`;
+            panel.style.top = `${pos.top}px`;
+            panel.style.transform = 'translate(0, 0)';
+        } else {
+            panel.style.left = '50%';
+            panel.style.top = '10px';
+            panel.style.transform = 'translateX(-50%)';
+        }
+    }
+
+    bindPromptPanelDrag() {
+        const panel = document.getElementById('promptQuickPanel');
+        const header = document.querySelector('#promptQuickPanel .prompt-quick-header');
+        if (!panel || !header) return;
+        let dragging = false;
+        let startX = 0;
+        let startY = 0;
+        let startLeft = 0;
+        let startTop = 0;
+
+        const onMouseMove = (e) => {
+            if (!dragging) return;
+            const dx = e.clientX - startX;
+            const dy = e.clientY - startY;
+            const left = startLeft + dx;
+            const top = startTop + dy;
+            panel.style.left = `${left}px`;
+            panel.style.top = `${top}px`;
+            panel.style.transform = 'translate(0, 0)';
+        };
+
+        const onMouseUp = () => {
+            if (!dragging) return;
+            dragging = false;
+            document.removeEventListener('mousemove', onMouseMove);
+            document.removeEventListener('mouseup', onMouseUp);
+            const rect = panel.getBoundingClientRect();
+            this.promptPanelPos = { left: rect.left, top: rect.top };
+            this.savePromptPanelPos(this.promptPanelPos);
+        };
+
+        header.addEventListener('mousedown', (e) => {
+            if (e.button !== 0) return;
+            dragging = true;
+            const rect = panel.getBoundingClientRect();
+            startX = e.clientX;
+            startY = e.clientY;
+            startLeft = rect.left;
+            startTop = rect.top;
+            panel.style.transform = 'translate(0, 0)';
+            document.addEventListener('mousemove', onMouseMove);
+            document.addEventListener('mouseup', onMouseUp);
+        });
     }
 
     async copyPromptFile(groupKey, file) {
@@ -3221,7 +3309,7 @@ class PaperReviewerApp {
     async copyPromptFileStatic(groupKey, file) {
         try {
             const groupData = this.promptGroups[groupKey] || {};
-            const base = groupData.basePath || `/src/prompts/${groupKey}/`;
+            const base = groupData.basePath || `/src/prompts/${groupData.name || groupKey}/`;
             const url = `${base}${file}`;
             const response = await fetch(url);
             if (!response.ok) return false;
@@ -4682,7 +4770,7 @@ class PaperReviewerApp {
             
             // 使用PDF.js的web viewer
             // viewer.html在 js/pdfjs/web/ 目录，需要3个../才能回到根目录
-            const viewerUrl = `js/pdfjs/web/viewer.html?file=${encodeURIComponent('../../../' + url)}`;
+            const viewerUrl = `js/pdfjs/web/viewer.html?file=${encodeURIComponent('../../../' + url)}#zoom=80`;
             pdfViewer.src = viewerUrl;
             
             // 监听iframe加载完成（如需自定义滚动行为，可在此扩展）
@@ -4691,6 +4779,23 @@ class PaperReviewerApp {
                     const win = pdfViewer.contentWindow;
                     if (win) {
                         const pdfDoc = win.document;
+                        // 缩小 PDF.js 整体 UI / 预览尺寸
+                        const styleId = 'paperReviewerPdfScaleStyle';
+                        if (!pdfDoc.getElementById(styleId)) {
+                            const styleEl = pdfDoc.createElement('style');
+                            styleEl.id = styleId;
+                            // 统一将 PDF.js 的主容器缩放到 80%，无需依赖浏览器的 zoom 兼容性
+                            styleEl.textContent = `
+                                :root { --pr-pdf-scale: 0.8; }
+                                #outerContainer {
+                                    transform: scale(var(--pr-pdf-scale));
+                                    transform-origin: top left;
+                                    width: calc(100% / var(--pr-pdf-scale));
+                                    height: calc(100% / var(--pr-pdf-scale));
+                                }
+                            `;
+                            pdfDoc.head.appendChild(styleEl);
+                        }
                         // 禁用 PDF.js 内部的 alert/confirm/prompt 弹窗
                         win.alert = () => {};
                         win.confirm = () => true;

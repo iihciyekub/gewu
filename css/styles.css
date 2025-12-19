@@ -152,7 +152,6 @@ body {
     width: 200px;
     min-width: 0;
     background: var(--wos-sidebar);
-    border-right: 1px solid var(--wos-border);
     display: flex;
     flex-direction: column;
     overflow: hidden;
@@ -163,12 +162,11 @@ body {
 .panel-header {
     padding: 6px 8px;
     background: var(--wos-blue);
-    border-bottom: 1px solid var(--wos-blue-dark);
+    border-bottom: 1px solid var(--gray-300);
     font-weight: 600;
     font-size: 11px;
     color: white;
-    height: 32px;
-    line-height: 32px;
+    height: 26px;
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -357,7 +355,6 @@ body {
     display: flex;
     flex-direction: column;
     overflow: hidden;
-    border-right: 1px solid #ddd;
 }
 
 .middle-header {
@@ -368,7 +365,7 @@ body {
     justify-content: space-between;
     align-items: center;
     gap: 12px;
-    height: 32px;
+    height: 26px;
     line-height: 32px;
     flex-shrink: 0;
 }
@@ -537,6 +534,8 @@ body {
 .header-actions .btn.header-icon-only {
     background: transparent;
     color: var(--gray-700);
+    outline: none;
+    box-shadow: none;
 }
 
 .header-actions .btn.header-icon-only:hover {
@@ -546,6 +545,12 @@ body {
 
 .header-actions .btn.header-icon-only:active {
     transform: none;
+}
+
+.header-actions .btn.header-icon-only:focus,
+.header-actions .btn.header-icon-only:focus-visible {
+    outline: none;
+    box-shadow: none;
 }
 
 body.theme-vscode .tab-btn {
@@ -629,7 +634,7 @@ body.theme-vscode .tab-btn:hover:not(.active) {
 
 .json-table.nested-table {
     margin-top: 0;
-    border: 1px solid var(--gray-200);
+    border-left: 1px solid var(--gray-200);
     border-radius: 4px;
     background: var(--gray-50);
     text-align: left;
@@ -757,8 +762,8 @@ body.theme-vscode .nested-index-cell {
 
 /* 第一列：折叠按钮列 */
 .json-table td.toggle-cell {
-    width: 30px;
-    min-width: 30px;
+    width: 20px;
+    min-width: 20px;
     padding: 3px 4px;
     text-align: center;
     background: var(--gray-50);
@@ -769,7 +774,7 @@ body.theme-vscode .nested-index-cell {
 
 .json-table .row-select-indicator {
     color: var(--wos-blue);
-    font-size: 12px;
+    font-size: 10px;
     transition: color 0.2s, transform 0.2s, opacity 0.15s;
     opacity: 0;
     visibility: hidden;
@@ -2614,6 +2619,7 @@ ol.json-array {
     font-weight: 600;
     color: var(--wos-blue);
     font-size: 12px;
+    cursor: move;
 }
 
 .prompt-quick-header i {
@@ -2730,6 +2736,12 @@ body.theme-vscode .prompt-chip.active {
 
 .header-dropdown-menu.visible {
     display: flex;
+}
+
+.aide-script-list {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
 }
 
 .header-dropdown-separator {
