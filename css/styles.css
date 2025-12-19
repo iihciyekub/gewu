@@ -48,6 +48,45 @@ body {
     letter-spacing: 0.01em;
 }
 
+/* Scrollbars: hidden by default, shown on hover/focus/active */
+* {
+    scrollbar-width: thin;
+    scrollbar-color: transparent transparent;
+}
+
+*:hover {
+    scrollbar-color: rgba(0, 0, 0, 0.28) rgba(0, 0, 0, 0.08);
+}
+
+*:focus,
+*:active {
+    scrollbar-color: rgba(0, 0, 0, 0.38) rgba(0, 0, 0, 0.12);
+}
+
+*::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+    background: transparent;
+}
+
+*::-webkit-scrollbar-thumb {
+    background: transparent;
+    border-radius: 6px;
+}
+
+*:hover::-webkit-scrollbar-thumb {
+    background: rgba(0, 0, 0, 0.28);
+}
+
+*:focus::-webkit-scrollbar-thumb,
+*:active::-webkit-scrollbar-thumb {
+    background: rgba(0, 0, 0, 0.38);
+}
+
+*::-webkit-scrollbar-track {
+    background: transparent;
+}
+
 /* Main Container */
 .container {
     display: flex;
@@ -209,13 +248,22 @@ body {
     font-size: 10px;
 }
 
+.btn-switch-project.active {
+    background: rgba(255, 255, 255, 0.2);
+    border: 1px solid rgba(255, 255, 255, 0.35);
+}
+
 .file-filter {
-    display: flex;
+    display: none;
     align-items: center;
     gap: 6px;
     padding: 6px 8px;
     border-bottom: 1px solid var(--wos-border);
     background: white;
+}
+
+.file-filter.visible {
+    display: flex;
 }
 
 .file-filter i {
@@ -1115,7 +1163,7 @@ body.theme-vscode .nested-index-cell {
 }
 
 #jsonViewer {
-    font-family: 'Courier New', monospace;
+    font-family: 'Source Code Pro', 'Menlo', 'Monaco', 'Consolas', 'DejaVu Sans Mono', 'Courier New', monospace;
     font-size: 11px;
 }
 
@@ -1131,8 +1179,9 @@ body.theme-vscode .nested-index-cell {
     width: 100%;
     min-height: 0;
     padding: 10px;
-    font-family: 'Courier New', monospace;
+    font-family: 'Source Code Pro', 'Menlo', 'Monaco', 'Consolas', 'DejaVu Sans Mono', 'Courier New', monospace;
     font-size: 12px;
+    line-height: 1.8;
     border: 1px solid var(--wos-border);
     border-radius: 4px;
     resize: vertical;
@@ -1492,8 +1541,9 @@ body.theme-vscode .qa-bubble {
     min-height: 0;
     height: 100%;
     padding: 10px;
-    font-family: 'Courier New', monospace;
+    font-family: 'Source Code Pro', 'Menlo', 'Monaco', 'Consolas', 'DejaVu Sans Mono', 'Courier New', monospace;
     font-size: 12px;
+    line-height: 1.8;
     border: 1px solid var(--wos-border);
     outline: none;
     resize: vertical;
@@ -1968,11 +2018,11 @@ body.theme-vscode .qa-bubble {
 }
 
 .resizer:hover {
-    background: #4caf50;
+    background: #316984;
 }
 
 .resizer:active {
-    background: #2e7d32;
+    background: #316984;
 }
 
 /* 扩大可点击区域 */

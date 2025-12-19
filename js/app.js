@@ -33,6 +33,7 @@ class PaperReviewerApp {
         this.selectedItem = null; // { type: 'row' | 'section', path: string[], key: string }
         this.isMiddleActive = false; // 鼠标是否在中间栏，用于键盘上下移动的激活判定
         this.fileFilter = '';
+        this.fileFilterVisible = false;
         this.debugEnabled = this.loadDebugEnabled();
         try {
             this.currentView = localStorage.getItem('lastViewMode') || 'structured';
@@ -753,6 +754,13 @@ class PaperReviewerApp {
             fileFilterInput.addEventListener('input', (e) => {
                 this.fileFilter = (e.target.value || '').trim();
                 this.renderFileList(this.currentFileList || [], this.currentFile, true);
+            });
+        }
+        const fileFilterToggleBtn = document.getElementById('fileFilterToggleBtn');
+        if (fileFilterToggleBtn) {
+            fileFilterToggleBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                this.toggleFileFilter();
             });
         }
 
@@ -2964,6 +2972,19 @@ class PaperReviewerApp {
         if (next) this.closeHeaderMenus('json');
         this.jsonMenuVisible = next;
         menu.classList.toggle('visible', next);
+    }
+
+    toggleFileFilter(forceVisible) {
+        const box = document.getElementById('fileFilterContainer');
+        const btn = document.getElementById('fileFilterToggleBtn');
+        const input = document.getElementById('fileFilterInput');
+        const next = typeof forceVisible === 'boolean' ? forceVisible : !this.fileFilterVisible;
+        this.fileFilterVisible = next;
+        if (box) box.classList.toggle('visible', next);
+        if (btn) btn.classList.toggle('active', next);
+        if (next && input) {
+            setTimeout(() => input.focus({ preventScroll: true }), 0);
+        }
     }
 
     closeHeaderMenus(except = '') {

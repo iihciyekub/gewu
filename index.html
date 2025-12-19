@@ -100,6 +100,9 @@
                     <span id="currentProjectName">未加载项目</span>
                 </div>
                 <div class="panel-header-actions">
+                    <button class="btn-switch-project" id="fileFilterToggleBtn" title="搜索/过滤文件">
+                        <i class="fas fa-search"></i>
+                    </button>
                     <button class="btn-sync-pdf" id="syncPdfBtn" title="扫描 papers/ 并创建空 JSON+MD">
                         <i class="fas fa-magic"></i>
                     </button>
@@ -108,7 +111,7 @@
                     </button>
                 </div>
             </div>
-            <div class="file-filter">
+            <div class="file-filter" id="fileFilterContainer">
                 <i class="fas fa-search"></i>
                 <input type="text" id="fileFilterInput" placeholder="过滤文件..." autocomplete="off">
             </div>
