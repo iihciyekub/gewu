@@ -136,39 +136,44 @@
                         </div>
                     </div>
                     <div class="header-actions">
-                        <div class="view-tabs">
-                            <button class="tab-btn active" data-view="structured" title="JSON table view">
-                                <i class="fas fa-table"></i>
+                        <div class="header-dropdown" id="jsonMenuDropdown">
+                            <button id="jsonMenuToggleBtn" class="btn header-icon-only" type="button" title="JSON 菜单" aria-label="JSON 菜单">
+                                <i class="fas fa-database"></i>
                             </button>
-                            <button class="tab-btn" data-view="flat" title="Raw JSON">
-                                <i class="fas fa-code"></i>
-                            </button>
-                            <div class="header-divider"></div>
-                            <button class="tab-btn" data-view="markdown" title="Markdown view">
-                                <i class="fas fa-file-alt"></i>
-                            </button>
+                            <div class="header-dropdown-menu" id="jsonMenu" role="menu" aria-label="JSON 菜单">
+                                <button class="header-dropdown-item" id="jsonViewStructuredItem" type="button" role="menuitem" title="表格视图">
+                                    <i class="fas fa-table"></i><span>表格视图</span>
+                                </button>
+                                <button class="header-dropdown-item" id="jsonViewFlatItem" type="button" role="menuitem" title="JSON 代码">
+                                    <i class="fas fa-code"></i><span>JSON 代码</span>
+                                </button>
+                                <button class="header-dropdown-item" id="jsonFormatItem" type="button" role="menuitem" title="格式化 JSON">
+                                    <i class="fas fa-align-left"></i><span>格式化</span>
+                                </button>
+                                <button class="header-dropdown-item" id="jsonSaveItem" type="button" role="menuitem" title="保存 JSON (Ctrl+S)">
+                                    <i class="fas fa-save"></i><span>保存 JSON</span>
+                                </button>
+                            </div>
                         </div>
-                        <button id="saveBtn" class="btn-save" style="display: none;" title="保存 JSON (Ctrl+S)" aria-label="保存 JSON" onclick="window.paperReviewerApp.saveToFile()">
-                            <i class="fas fa-save"></i>
-                        </button>
-                        <button id="undoPasteBtn" class="btn-save" style="display: none;" title="撤销上次粘贴合并" onclick="window.paperReviewerApp.undoLastPaste()">
-                            <i class="fas fa-undo"></i>
-                        </button>
-                        <button class="btn btn-primary" id="createMarkdownBtnHeader" style="display:none;" title="Create Markdown">
-                            <i class="fas fa-file-medical"></i>
-                        </button>
-                        <button class="btn btn-success" id="editMarkdownBtnHeader" disabled title="Edit Markdown">
-                            <i class="fas fa-pen"></i>
-                        </button>
-                        <button class="btn btn-primary" id="saveMarkdownBtnHeader" disabled title="Save Markdown">
-                            <i class="fas fa-save"></i>
-                        </button>
-                        <button class="btn btn-save" id="undoMarkdownPasteBtn" style="display: none;" title="撤销上次 QA 粘贴">
-                            <i class="fas fa-undo"></i>
-                        </button>
+                        <div class="header-dropdown" id="mdMenuDropdown">
+                            <button id="mdMenuToggleBtn" class="btn header-icon-only" type="button" title="Markdown 菜单" aria-label="Markdown 菜单">
+                                <i class="fa-brands fa-markdown"></i>
+                            </button>
+                            <div class="header-dropdown-menu" id="mdMenu" role="menu" aria-label="Markdown 菜单">
+                                <button class="header-dropdown-item" id="mdRenderItem" type="button" role="menuitem" title="Markdown 渲染后视图">
+                                    <i class="fas fa-eye"></i><span>MD 渲染</span>
+                                </button>
+                                <button class="header-dropdown-item" id="mdSourceItem" type="button" role="menuitem" title="Markdown 源码">
+                                    <i class="fas fa-pen"></i><span>MD 源码</span>
+                                </button>
+                                <button class="header-dropdown-item" id="mdSaveItem" type="button" role="menuitem" title="保存 Markdown">
+                                    <i class="fas fa-save"></i><span>MD 保存</span>
+                                </button>
+                            </div>
+                        </div>
                         <div class="header-divider"></div>
                         <div class="header-dropdown" id="aideCopyDropdown">
-                            <button id="aideCopyToggleBtn" class="btn btn-success" type="button" title="复制辅助脚本" aria-label="复制辅助脚本">
+                            <button id="aideCopyToggleBtn" class="btn header-icon-only" type="button" title="复制辅助脚本" aria-label="复制辅助脚本">
                                 <i class="fas fa-code-branch"></i>
                             </button>
                             <div class="header-dropdown-menu" id="aideCopyMenu" role="menu" aria-label="复制辅助脚本菜单">

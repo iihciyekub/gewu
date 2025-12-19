@@ -46,7 +46,6 @@ class PaperReviewerApp {
         this.lastLeftWidth = 0;
         this.lastRightWidth = 0;
         this.dragPlaceholder = null;
-        this.draggingSectionKey = null;
         this.placeholderState = { scope: null, target: null, after: false };
         this.gotoEditResolver = null;
         this.promptPanelVisible = false;
@@ -54,6 +53,11 @@ class PaperReviewerApp {
         this.promptGroups = {};
         this.promptSelectedByGroup = this.loadPromptSelectedByGroup();
         this.aideCopyMenuVisible = false;
+        this.jsonMenuVisible = false;
+        this.mdMenuVisible = false;
+        this.rawJsonParseOk = true;
+        this.rawJsonParseError = '';
+        this.rawJsonParseTimer = null;
         this.currentLoadToken = 0;
         this.sectionExpandedStateByProject = this.loadSectionExpandedState();
         this.lastSelectedFileByProject = this.loadLastSelectedFileByProject();
@@ -304,10 +308,7 @@ class PaperReviewerApp {
 
     applyRawJsonChanges() {
         const textarea = document.getElementById('jsonEditorTextarea');
-        const errEl = document.getElementById('jsonEditorError');
-        const statusEl = document.getElementById('jsonEditorStatus');
         if (!textarea) return;
-        if (errEl) errEl.textContent = '';
         const text = textarea.value;
         try {
             const parsed = JSON.parse(text);
@@ -320,27 +321,20 @@ class PaperReviewerApp {
             this.renderMath();
             this.updateSaveButtonState();
             this.updateUndoButtonState();
-            if (statusEl) statusEl.textContent = '已应用到内存，记得保存到文件';
             this.showNotification('JSON 已应用到内存，记得保存到文件', 'success');
         } catch (err) {
-            if (errEl) errEl.textContent = `解析错误: ${err.message}`;
             this.showNotification(`JSON 解析失败: ${err.message}`, 'error');
         }
     }
 
     formatRawJson() {
         const textarea = document.getElementById('jsonEditorTextarea');
-        const errEl = document.getElementById('jsonEditorError');
-        const statusEl = document.getElementById('jsonEditorStatus');
         if (!textarea) return;
-        if (errEl) errEl.textContent = '';
         try {
             const parsed = JSON.parse(textarea.value);
             textarea.value = JSON.stringify(parsed, null, 2);
-            if (statusEl) statusEl.textContent = '已格式化 JSON';
             this.showNotification('JSON 已格式化', 'success');
         } catch (err) {
-            if (errEl) errEl.textContent = `格式化失败: ${err.message}`;
             this.showNotification(`JSON 格式化失败: ${err.message}`, 'error');
         }
     }
@@ -358,6 +352,9 @@ class PaperReviewerApp {
         }
         
         this.setupEventListeners();
+        this.updateJsonMenuState();
+        this.updateMarkdownToolbar();
+        this.updateMarkdownMenuState();
         this.setupResizers();
         this.setupDraggableModal();
         this.loadPromptShortcuts();
@@ -430,8 +427,7 @@ class PaperReviewerApp {
             if (mod && e.key === '/') {
                 e.preventDefault();
                 if (this.currentView !== 'markdown') {
-                    const mdBtn = document.querySelector('.tab-btn[data-view="markdown"]');
-                    if (mdBtn) this.switchView(mdBtn);
+                    this.switchToView('markdown');
                 }
                 if (!this.currentMarkdownExists) {
                     this.showNotification('No markdown file. Create it first.', 'info');
@@ -444,25 +440,121 @@ class PaperReviewerApp {
                 }
             }
         });
-        const createMdBtn = document.getElementById('createMarkdownBtnHeader');
-        if (createMdBtn) {
-            createMdBtn.addEventListener('click', () => this.createMarkdownFile());
+        // JSON 菜单：表格视图 / JSON 代码 / JSON 保存
+        const jsonMenuToggleBtn = document.getElementById('jsonMenuToggleBtn');
+        const jsonMenu = document.getElementById('jsonMenu');
+        const jsonViewStructuredItem = document.getElementById('jsonViewStructuredItem');
+        const jsonViewFlatItem = document.getElementById('jsonViewFlatItem');
+        const jsonFormatItem = document.getElementById('jsonFormatItem');
+        const jsonSaveItem = document.getElementById('jsonSaveItem');
+        const jsonMenuDropdown = document.getElementById('jsonMenuDropdown');
+        if (jsonMenuToggleBtn && jsonMenu) {
+            jsonMenuToggleBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                this.toggleJsonMenu();
+            });
+            jsonMenu.addEventListener('click', (e) => {
+                e.stopPropagation();
+            });
+            document.addEventListener('click', (e) => {
+                if (!this.jsonMenuVisible) return;
+                if (jsonMenuDropdown && jsonMenuDropdown.contains(e.target)) return;
+                this.toggleJsonMenu(false);
+            });
         }
-        const editMdBtn = document.getElementById('editMarkdownBtnHeader');
-        if (editMdBtn) {
-            editMdBtn.addEventListener('click', () => this.toggleMarkdownEdit(true));
+        if (jsonViewStructuredItem) {
+            jsonViewStructuredItem.addEventListener('click', async (e) => {
+                e.preventDefault();
+                await this.switchToView('structured');
+                this.toggleJsonMenu(false);
+            });
         }
-        const saveMdBtn = document.getElementById('saveMarkdownBtnHeader');
-        if (saveMdBtn) {
-            saveMdBtn.addEventListener('click', () => this.saveMarkdownFromEditor());
+        if (jsonViewFlatItem) {
+            jsonViewFlatItem.addEventListener('click', async (e) => {
+                e.preventDefault();
+                await this.switchToView('flat');
+                this.toggleJsonMenu(false);
+            });
+        }
+        if (jsonFormatItem) {
+            jsonFormatItem.addEventListener('click', (e) => {
+                e.preventDefault();
+                // 仅在 JSON 代码视图可用；在其它视图下不做任何事
+                if ((this.currentView || 'structured') !== 'flat') return;
+                this.formatRawJson();
+                // 格式化后同步解析状态与保存状态
+                this.applyRawJsonFromTextarea({ notifyOnError: false, updateStatus: true });
+                this.toggleJsonMenu(false);
+            });
+        }
+        if (jsonSaveItem) {
+            jsonSaveItem.addEventListener('click', async (e) => {
+                e.preventDefault();
+                // 在 JSON 代码视图内：先尝试解析并应用 textarea 内容，再保存
+                if ((this.currentView || 'structured') === 'flat') {
+                    const ok = this.applyRawJsonFromTextarea({ notifyOnError: true, updateStatus: true });
+                    if (!ok) return;
+                }
+                if (!this.hasUnsavedChanges) return;
+                await this.saveToFile();
+                this.toggleJsonMenu(false);
+            });
+        }
+
+        // Markdown 菜单：MD 渲染 / MD 源码 / MD 保存
+        const mdMenuToggleBtn = document.getElementById('mdMenuToggleBtn');
+        const mdMenu = document.getElementById('mdMenu');
+        const mdRenderItem = document.getElementById('mdRenderItem');
+        const mdSourceItem = document.getElementById('mdSourceItem');
+        const mdSaveItem = document.getElementById('mdSaveItem');
+        const mdMenuDropdown = document.getElementById('mdMenuDropdown');
+        if (mdMenuToggleBtn && mdMenu) {
+            mdMenuToggleBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                this.toggleMdMenu();
+            });
+            mdMenu.addEventListener('click', (e) => {
+                e.stopPropagation();
+            });
+            document.addEventListener('click', (e) => {
+                if (!this.mdMenuVisible) return;
+                if (mdMenuDropdown && mdMenuDropdown.contains(e.target)) return;
+                this.toggleMdMenu(false);
+            });
+        }
+        if (mdRenderItem) {
+            mdRenderItem.addEventListener('click', async (e) => {
+                e.preventDefault();
+                await this.switchToView('markdown');
+                if (this.isMarkdownEditing) this.toggleMarkdownEdit(false, { skipConfirm: true });
+                // 确保渲染刷新
+                this.renderMarkdownView(this.currentMarkdownText || '');
+                this.toggleMdMenu(false);
+            });
+        }
+        if (mdSourceItem) {
+            mdSourceItem.addEventListener('click', async (e) => {
+                e.preventDefault();
+                await this.switchToView('markdown');
+                if (this.currentMarkdownExists) {
+                    this.toggleMarkdownEdit(true);
+                    document.getElementById('markdownTextarea')?.focus();
+                }
+                this.toggleMdMenu(false);
+            });
+        }
+        if (mdSaveItem) {
+            mdSaveItem.addEventListener('click', async (e) => {
+                e.preventDefault();
+                await this.saveMarkdownFromEditor();
+                this.toggleMdMenu(false);
+            });
         }
         const mdTextarea = document.getElementById('markdownTextarea');
         if (mdTextarea) {
             mdTextarea.addEventListener('input', () => this.onMarkdownEditorInput());
-        }
-        const undoMdPasteBtn = document.getElementById('undoMarkdownPasteBtn');
-        if (undoMdPasteBtn) {
-            undoMdPasteBtn.addEventListener('click', () => this.undoLastMarkdownPaste());
         }
         const gotoCancelBtn = document.getElementById('gotoEditCancel');
         const gotoSaveBtn = document.getElementById('gotoEditSave');
@@ -614,10 +706,6 @@ class PaperReviewerApp {
         const promptCloseBtn = document.getElementById('promptPanelClose');
         if (promptCloseBtn) {
             promptCloseBtn.addEventListener('click', () => this.togglePromptPanel(false));
-        }
-        const undoPasteBtn = document.getElementById('undoPasteBtn');
-        if (undoPasteBtn) {
-            undoPasteBtn.addEventListener('click', () => this.undoLastPaste());
         }
 
         // 左侧文件列表：鼠标激活后可用上下键快速切换
@@ -1875,9 +1963,7 @@ class PaperReviewerApp {
                 this.hasUnsavedChanges = false;
             }
             if (loadId !== this.currentLoadToken) return;
-            this.ensureSchemaVersion();
-            this.ensureLastUpdate();
-            
+
             this.currentFile = filename;
             this.setLastSelectedFile(filename);
             this.updateFileMeta();
@@ -1973,7 +2059,6 @@ class PaperReviewerApp {
             header.classList.add('active');
         }
         header.innerHTML = `
-            <i class="fa-solid fa-bars section-drag-handle" title="拖动调整类顺序"></i>
             <i class="fas fa-chevron-right collapsible-toggle" title="展开/折叠"></i>
             <span class="collapsible-title">${this.formatKey(title)}</span>
             <i class="fas fa-plus header-add" title="在此类下添加子条目"></i>
@@ -2038,7 +2123,7 @@ class PaperReviewerApp {
         }
         // 点击标题区域：选中该类，便于键盘上下移动
         header.addEventListener('click', (e) => {
-            if (e.target.closest('.header-delete') || e.target.closest('.header-add') || e.target.closest('.collapsible-toggle') || e.target.closest('.section-drag-handle')) {
+            if (e.target.closest('.header-delete') || e.target.closest('.header-add') || e.target.closest('.collapsible-toggle')) {
                 return;
             }
             this.setSelectedItem({ type: 'section', path: [], key: title });
@@ -2563,10 +2648,7 @@ class PaperReviewerApp {
     }
 
     updateUndoButtonState() {
-        const undoBtn = document.getElementById('undoPasteBtn');
-        if (!undoBtn) return;
-        const canUndo = this.lastPasteBackup && this.lastPasteBackup.file === this.currentFile;
-        undoBtn.style.display = canUndo ? 'inline-block' : 'none';
+        this.updateJsonMenuState();
     }
 
     reorderKeys(pathArray, fromKey, toKey) {
@@ -2861,8 +2943,100 @@ class PaperReviewerApp {
         const menu = document.getElementById('aideCopyMenu');
         if (!menu) return;
         const next = typeof forceVisible === 'boolean' ? forceVisible : !this.aideCopyMenuVisible;
+        if (next) this.closeHeaderMenus('aide');
         this.aideCopyMenuVisible = next;
         menu.classList.toggle('visible', next);
+    }
+
+    toggleMdMenu(forceVisible) {
+        const menu = document.getElementById('mdMenu');
+        if (!menu) return;
+        const next = typeof forceVisible === 'boolean' ? forceVisible : !this.mdMenuVisible;
+        if (next) this.closeHeaderMenus('md');
+        this.mdMenuVisible = next;
+        menu.classList.toggle('visible', next);
+    }
+
+    toggleJsonMenu(forceVisible) {
+        const menu = document.getElementById('jsonMenu');
+        if (!menu) return;
+        const next = typeof forceVisible === 'boolean' ? forceVisible : !this.jsonMenuVisible;
+        if (next) this.closeHeaderMenus('json');
+        this.jsonMenuVisible = next;
+        menu.classList.toggle('visible', next);
+    }
+
+    closeHeaderMenus(except = '') {
+        const keep = String(except || '').toLowerCase();
+        if (keep !== 'json' && this.jsonMenuVisible) this.toggleJsonMenu(false);
+        if (keep !== 'md' && this.mdMenuVisible) this.toggleMdMenu(false);
+        if (keep !== 'aide' && this.aideCopyMenuVisible) this.toggleAideCopyMenu(false);
+    }
+
+    applyRawJsonFromTextarea(opts = {}) {
+        const notifyOnError = !!opts.notifyOnError;
+        const textarea = document.getElementById('jsonEditorTextarea');
+        if (!textarea) return false;
+        const text = textarea.value;
+        try {
+            const parsed = JSON.parse(text);
+            this.rawJsonParseOk = true;
+            this.rawJsonParseError = '';
+            const currentText = this.currentData ? JSON.stringify(this.currentData, null, 2) : '';
+            const isSameAsCurrent = (String(text || '').trim() === String(currentText || '').trim());
+            if (!isSameAsCurrent) {
+                this.currentData = parsed;
+                this.hasUnsavedChanges = true;
+                if (this.currentFile) {
+                    this.tempDataCache[this.currentFile] = this.currentData;
+                }
+            }
+            this.updateSaveButtonState();
+            return true;
+        } catch (err) {
+            this.rawJsonParseOk = false;
+            this.rawJsonParseError = err?.message ? String(err.message) : '解析失败';
+            this.updateSaveButtonState();
+            if (notifyOnError) this.showNotification(`JSON 解析失败: ${this.rawJsonParseError}`, 'error');
+            return false;
+        }
+    }
+
+    updateJsonMenuState() {
+        const dropdown = document.getElementById('jsonMenuDropdown');
+        const structuredItem = document.getElementById('jsonViewStructuredItem');
+        const flatItem = document.getElementById('jsonViewFlatItem');
+        const formatItem = document.getElementById('jsonFormatItem');
+        const saveItem = document.getElementById('jsonSaveItem');
+        if (!dropdown || !structuredItem || !flatItem || !formatItem || !saveItem) return;
+
+        const hasFile = !!this.currentFile;
+        dropdown.style.display = 'inline-flex';
+        const view = this.currentView || 'structured';
+        structuredItem.disabled = view === 'structured';
+        flatItem.disabled = view === 'flat';
+        formatItem.disabled = !(hasFile && view === 'flat');
+        const inFlat = view === 'flat';
+        const canSave = hasFile && this.hasUnsavedChanges && (!inFlat || this.rawJsonParseOk);
+        saveItem.disabled = !canSave;
+        if (!hasFile && this.jsonMenuVisible) this.toggleJsonMenu(false);
+    }
+
+    updateMarkdownMenuState() {
+        const dropdown = document.getElementById('mdMenuDropdown');
+        const renderItem = document.getElementById('mdRenderItem');
+        const sourceItem = document.getElementById('mdSourceItem');
+        const saveItem = document.getElementById('mdSaveItem');
+        if (!dropdown || !renderItem || !sourceItem || !saveItem) return;
+
+        const hasFile = !!this.currentFile;
+        dropdown.style.display = 'inline-flex';
+        if (!hasFile && this.mdMenuVisible) this.toggleMdMenu(false);
+
+        const inMarkdownView = (this.currentView || 'structured') === 'markdown';
+        renderItem.disabled = !hasFile || (inMarkdownView && !this.isMarkdownEditing);
+        sourceItem.disabled = !hasFile || (inMarkdownView && this.isMarkdownEditing) || !this.currentMarkdownExists;
+        saveItem.disabled = !hasFile || !inMarkdownView || !this.currentMarkdownExists || !this.hasUnsavedMarkdownChanges;
     }
 
     async loadPromptShortcuts() {
@@ -3040,30 +3214,24 @@ class PaperReviewerApp {
         if (!container) return;
         container.innerHTML = `
             <div class="flat-editor">
-                <div class="flat-editor-toolbar">
-                    <button class="btn btn-primary" id="applyJsonBtn"><i class="fas fa-check"></i> 应用修改</button>
-                    <button class="btn btn-primary" id="formatJsonBtn"><i class="fas fa-align-left"></i> 格式化</button>
-                    <span class="json-editor-status" id="jsonEditorStatus"></span>
-                </div>
                 <textarea id="jsonEditorTextarea" spellcheck="false"></textarea>
-                <div class="json-editor-error" id="jsonEditorError"></div>
             </div>
         `;
 
         const textarea = document.getElementById('jsonEditorTextarea');
-        const statusEl = document.getElementById('jsonEditorStatus');
         if (textarea) {
             textarea.value = JSON.stringify(this.currentData, null, 2);
-            if (statusEl) statusEl.textContent = '已加载当前 JSON，可直接编辑后应用';
-        }
-
-        const applyBtn = document.getElementById('applyJsonBtn');
-        if (applyBtn) {
-            applyBtn.addEventListener('click', () => this.applyRawJsonChanges());
-        }
-        const formatBtn = document.getElementById('formatJsonBtn');
-        if (formatBtn) {
-            formatBtn.addEventListener('click', () => this.formatRawJson());
+            textarea.addEventListener('input', () => {
+                if (this.rawJsonParseTimer) {
+                    clearTimeout(this.rawJsonParseTimer);
+                    this.rawJsonParseTimer = null;
+                }
+                this.rawJsonParseTimer = setTimeout(() => {
+                    this.applyRawJsonFromTextarea({ notifyOnError: false });
+                }, 350);
+            });
+            // 初次渲染时同步一次解析状态
+            this.applyRawJsonFromTextarea({ notifyOnError: false });
         }
     }
     
@@ -3521,34 +3689,31 @@ class PaperReviewerApp {
     }
 
     updateMarkdownToolbar() {
-        const createBtn = document.getElementById('createMarkdownBtnHeader');
-        const editBtn = document.getElementById('editMarkdownBtnHeader');
-        const saveBtn = document.getElementById('saveMarkdownBtnHeader');
-        const undoMdBtn = document.getElementById('undoMarkdownPasteBtn');
         const statusEl = document.getElementById('markdownStatus');
         const editor = document.getElementById('markdownEditor');
         const render = document.getElementById('markdownRender');
-        if (!createBtn || !editBtn || !saveBtn) return;
-
         const inMarkdownView = (this.currentView || 'structured') === 'markdown';
 
-        createBtn.style.display = inMarkdownView && !this.currentMarkdownExists ? 'inline-flex' : 'none';
-        editBtn.style.display = inMarkdownView ? 'inline-flex' : 'none';
-        saveBtn.style.display = inMarkdownView ? 'inline-flex' : 'none';
-        if (undoMdBtn) {
-            const canUndo = this.lastMarkdownPasteBackup && this.lastMarkdownPasteBackup.file === this.currentFile;
-            undoMdBtn.style.display = inMarkdownView && canUndo ? 'inline-flex' : 'none';
+        if (statusEl) {
+            statusEl.textContent = this.hasUnsavedMarkdownChanges ? '• unsaved' : '';
         }
-        editBtn.disabled = !this.currentMarkdownExists || !inMarkdownView || this.isMarkdownEditing;
-        saveBtn.disabled = !this.currentMarkdownExists || !inMarkdownView || !this.hasUnsavedMarkdownChanges;
+
+        // 编辑器显示控制仍然沿用旧逻辑：Markdown 视图内根据 isMarkdownEditing 切换 editor/render
+        if (!inMarkdownView) {
+            if (editor) editor.style.display = 'none';
+            if (render) render.style.display = 'block';
+            return;
+        }
+
         if (this.isMarkdownEditing) {
             if (editor) editor.style.display = 'flex';
             if (render) render.style.display = 'none';
-            editBtn.disabled = true;
         } else {
             if (editor) editor.style.display = 'none';
             if (render) render.style.display = 'block';
         }
+
+        this.updateMarkdownMenuState();
     }
 
     async loadMarkdownForCurrentFile() {
@@ -3659,11 +3824,12 @@ class PaperReviewerApp {
     }
 
     updateMarkdownUndoButtonState() {
-        const undoMdBtn = document.getElementById('undoMarkdownPasteBtn');
-        if (!undoMdBtn) return;
+        const undoItem = document.getElementById('markdownUndoPasteItem');
+        if (!undoItem) return;
         const inMarkdownView = (this.currentView || 'structured') === 'markdown';
         const canUndo = this.lastMarkdownPasteBackup && this.lastMarkdownPasteBackup.file === this.currentFile;
-        undoMdBtn.style.display = inMarkdownView && canUndo ? 'inline-flex' : 'none';
+        undoItem.style.display = inMarkdownView && canUndo ? 'inline-flex' : 'none';
+        undoItem.disabled = !inMarkdownView || !canUndo;
     }
 
     bindQaCollapsibles(renderRoot) {
@@ -4061,9 +4227,23 @@ class PaperReviewerApp {
 
     async switchView(btn) {
         const nextView = btn?.dataset?.view;
+        return this.setView(nextView, btn);
+    }
+
+    async switchToView(view) {
+        const target = String(view || '').trim();
+        if (!target) return;
+        const btn = document.querySelector(`.tab-btn[data-view="${target}"]`);
+        if (btn) return this.switchView(btn);
+        return this.setView(target, null);
+    }
+
+    async setView(nextView, btn = null) {
+        const viewName = String(nextView || '').trim();
+        if (!viewName) return;
         const prevView = this.currentView || 'structured';
         // 离开 Markdown 视图时：若有未保存修改，提示保存；并退出编辑态，避免 UI/按钮残留
-        if (prevView === 'markdown' && nextView !== 'markdown') {
+        if (prevView === 'markdown' && viewName !== 'markdown') {
             if (this.hasUnsavedMarkdownChanges && this.currentFile && this.currentMarkdownExists) {
                 const mdFilename = this.getMarkdownFilename(this.currentFile);
                 const shouldSave = confirm(`Markdown "${mdFilename}" 有未保存的修改，是否保存？`);
@@ -4084,7 +4264,7 @@ class PaperReviewerApp {
         }
 
         // 在 Markdown 视图内再次点击 Markdown tab：强制从编辑态切回渲染态并渲染最新内容
-        if (prevView === 'markdown' && nextView === 'markdown') {
+        if (prevView === 'markdown' && viewName === 'markdown') {
             if (this.currentMarkdownExists) {
                 const textarea = document.getElementById('markdownTextarea');
                 const content = (this.isMarkdownEditing && textarea) ? textarea.value : (this.currentMarkdownText || '');
@@ -4099,10 +4279,15 @@ class PaperReviewerApp {
 
         // Update tab buttons
         document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-        btn.classList.add('active');
+        if (btn) {
+            btn.classList.add('active');
+        } else {
+            const match = document.querySelector(`.tab-btn[data-view="${viewName}"]`);
+            if (match) match.classList.add('active');
+        }
 
         // Switch views
-        const view = nextView;
+        const view = viewName;
         this.currentView = view;
         try {
             localStorage.setItem('lastViewMode', view);
@@ -4125,6 +4310,8 @@ class PaperReviewerApp {
         this.updateHeaderControls();
         this.updateMarkdownToolbar();
         this.updateMarkdownDirtyUI();
+        this.updateJsonMenuState();
+        this.updateMarkdownMenuState();
 
         // 切换到 Markdown 视图时，确保渲染区域为最新内容（尤其是从编辑态进入）
         if (view === 'markdown' && this.currentMarkdownExists) {
@@ -4143,11 +4330,7 @@ class PaperReviewerApp {
 
     applyCurrentView() {
         const view = this.currentView || 'structured';
-        const targetBtn = document.querySelector(`.tab-btn[data-view="${view}"]`) ||
-            document.querySelector('.tab-btn[data-view="structured"]');
-        if (targetBtn) {
-            this.switchView(targetBtn);
-        }
+        this.switchToView(view);
     }
 
     toggleTableMarkdownView() {
@@ -4158,10 +4341,7 @@ class PaperReviewerApp {
         } else {
             targetView = 'structured';
         }
-        const targetBtn = document.querySelector(`.tab-btn[data-view="${targetView}"]`);
-        if (targetBtn) {
-            this.switchView(targetBtn);
-        }
+        this.switchToView(targetView);
     }
 
     formatKey(key) {
@@ -4342,7 +4522,6 @@ class PaperReviewerApp {
         preview.id = 'previewSectionGhost';
         preview.innerHTML = `
             <div class="collapsible-header active">
-                <i class="fa-solid fa-bars section-drag-handle"></i>
                 <i class="fas fa-chevron-right collapsible-toggle"></i>
                 <span class="collapsible-title">New Section (preview)</span>
                 <i class="fas fa-plus header-add"></i>
@@ -5597,47 +5776,14 @@ class PaperReviewerApp {
     }
 
     updateHeaderControls() {
-        const view = this.currentView || 'structured';
-        const saveBtn = document.getElementById('saveBtn');
-        const undoBtn = document.getElementById('undoPasteBtn');
-        const createBtn = document.getElementById('createMarkdownBtnHeader');
-        const editBtn = document.getElementById('editMarkdownBtnHeader');
-        const saveMdBtn = document.getElementById('saveMarkdownBtnHeader');
-        const undoMdBtn = document.getElementById('undoMarkdownPasteBtn');
-        const flatTab = document.querySelector('.tab-btn[data-view="flat"]');
-
-        const showJsonControls = view === 'structured' || view === 'flat';
-        const showMdControls = view === 'markdown';
-
-        if (saveBtn) saveBtn.style.display = showJsonControls && this.hasUnsavedChanges ? 'inline-block' : 'none';
-        if (undoBtn) undoBtn.style.display = showJsonControls && this.lastPasteBackup && this.lastPasteBackup.file === this.currentFile ? 'inline-block' : 'none';
-
-        if (flatTab) flatTab.style.display = showMdControls ? 'none' : 'inline-flex';
-        if (createBtn) createBtn.style.display = showMdControls && !this.currentMarkdownExists ? 'inline-flex' : 'none';
-        if (editBtn) editBtn.style.display = showMdControls ? 'inline-flex' : 'none';
-        if (saveMdBtn) saveMdBtn.style.display = showMdControls ? 'inline-flex' : 'none';
-        if (undoMdBtn) {
-            const canUndo = this.lastMarkdownPasteBackup && this.lastMarkdownPasteBackup.file === this.currentFile;
-            undoMdBtn.style.display = showMdControls && canUndo ? 'inline-flex' : 'none';
-        }
-
-        if (editBtn) editBtn.disabled = !(showMdControls && this.currentMarkdownExists && !this.isMarkdownEditing);
-        if (saveMdBtn) saveMdBtn.disabled = !(showMdControls && this.currentMarkdownExists && this.hasUnsavedMarkdownChanges);
+        this.updateJsonMenuState();
+        this.updateMarkdownMenuState();
     }
 
     updateSaveButtonState() {
         this.updateFileMeta();
-        const saveBtn = document.getElementById('saveBtn');
         const lastUpdateEl = document.getElementById('lastUpdateDisplay');
-        
-        if (saveBtn) {
-            if (this.hasUnsavedChanges) {
-                saveBtn.style.display = 'inline-block';
-                saveBtn.innerHTML = '<i class="fas fa-save"></i>';
-            } else {
-                saveBtn.style.display = 'none';
-            }
-        }
+        this.updateJsonMenuState();
         
         const addSectionBtn = document.getElementById('addSectionBtn');
         if (addSectionBtn) {
@@ -6491,6 +6637,10 @@ class PaperReviewerApp {
         }
 
         try {
+            // 确保 schema_version 存在（仅在保存时补全，避免加载即标记为脏）
+            if (!this.currentData.schema_version) {
+                this.currentData.schema_version = this.generateSchemaVersion();
+            }
             // 更新最后保存时间戳
             this.currentData.lastupdate = this.generateLastUpdate();
             const jsonString = JSON.stringify(this.currentData, null, 2);

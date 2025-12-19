@@ -486,6 +486,20 @@ body {
     box-shadow: none;
 }
 
+.header-actions .btn.header-icon-only {
+    background: transparent;
+    color: var(--gray-700);
+}
+
+.header-actions .btn.header-icon-only:hover {
+    background: transparent;
+    color: var(--wos-blue);
+}
+
+.header-actions .btn.header-icon-only:active {
+    transform: none;
+}
+
 body.theme-vscode .tab-btn {
     color: var(--wos-text);
 }
@@ -729,8 +743,8 @@ body.theme-vscode .nested-index-cell {
 }
 
 .json-table tr.row-selected {
-    background: #e8f1ff;
-    box-shadow: inset 2px 0 0 var(--wos-blue);
+    background: transparent;
+    box-shadow: none;
 }
 
 .drag-placeholder {
@@ -769,22 +783,22 @@ body.theme-vscode .nested-index-cell {
 }
 
 .collapsible-section.section-selected > .collapsible-header {
-    background: #e8f1ff;
-    box-shadow: inset 2px 0 0 var(--wos-blue);
+    background: var(--gray-100);
+    box-shadow: none;
 }
 
 .reorder-selected {
-    background: #e8f0ff !important;
-    border-left: 4px solid #000 !important;
-    padding-left: 6px;
+    background: transparent !important;
+    border-left: none !important;
+    padding-left: 0;
 }
 
 .reorder-selected td {
-    background: #e8f0ff !important;
+    background: transparent !important;
 }
 
 .reorder-selected td:first-child {
-    box-shadow: inset 4px 0 0 #000;
+    box-shadow: none;
 }
 
 /* 第二列：Key字段列 */
@@ -796,7 +810,7 @@ body.theme-vscode .nested-index-cell {
     background: var(--gray-100);
     text-align: right;
     padding-right: 12px;
-    border-right: 2px solid var(--gray-300);
+    border-right: 1px solid var(--gray-300);
 }
 
 /* 第三列：Value值列 */
@@ -1112,12 +1126,6 @@ body.theme-vscode .nested-index-cell {
     height: 100%;
 }
 
-.flat-editor-toolbar {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-}
-
 .flat-editor textarea {
     flex: 1;
     width: 100%;
@@ -1129,17 +1137,6 @@ body.theme-vscode .nested-index-cell {
     border-radius: 4px;
     resize: vertical;
     box-sizing: border-box;
-}
-
-.json-editor-error {
-    color: #c62828;
-    font-size: 11px;
-    min-height: 14px;
-}
-
-.json-editor-status {
-    font-size: 11px;
-    color: var(--gray-700);
 }
 
 .markdown-body {
@@ -2147,13 +2144,13 @@ ol.json-array {
 
 .collapsible-section.section-selected {
     border-color: var(--wos-blue);
-    box-shadow: 0 0 0 1px var(--wos-active);
-    background: var(--wos-hover);
+    box-shadow: 0 0 0 2px var(--wos-active);
+    background: transparent;
 }
 
 .collapsible-section.section-selected .json-table {
-    background-color: var(--wos-hover);
-    box-shadow: 0 0 0 2px var(--wos-active);
+    background-color: transparent;
+    box-shadow: none;
 }
 
 .collapsible-header {
@@ -2161,11 +2158,11 @@ ol.json-array {
     padding: 2px 10px 2px 6px;
     cursor: pointer;
     display: flex;
-    justify-content: space-between;
+    justify-content: flex-start;
     align-items: center;
     user-select: none;
     transition: background 0.12s ease;
-    gap: 10px;
+    gap: 6px;
     position: relative;
 }
 
@@ -2183,14 +2180,14 @@ ol.json-array {
     color: var(--gray-800);
     font-size: 11px;
     flex: 1;
-    padding-left: 8px; /* 让双击区域远离折叠图标，防止误触 */
+    padding-left: 2px;
 }
 
 .collapsible-toggle {
     color: #666;
     transition: transform 0.2s;
     cursor: pointer;
-    margin-right: 8px; /* 给折叠图标留出左边距 */
+    margin-right: 2px;
 }
 
 .collapsible-header.active .collapsible-toggle {
@@ -2204,6 +2201,15 @@ ol.json-array {
     transition: color 0.2s;
 }
 
+.header-add {
+    margin-left: auto;
+}
+
+.header-add,
+.header-delete {
+    flex-shrink: 0;
+}
+
 .header-delete:hover {
     color: var(--wos-blue);
 }
@@ -2211,33 +2217,6 @@ ol.json-array {
 .collapsible-toggle {
     color: #666;
     transition: transform 0.2s;
-}
-
-.section-drag-handle {
-    cursor: grab;
-    opacity: 1;
-    visibility: visible;
-    transition: transform 0.15s ease, color 0.15s ease;
-    color: var(--gray-500);
-    font-size: 12px;
-    display: inline-flex;
-    width: 16px;
-    justify-content: center;
-    flex-shrink: 0;
-}
-
-.collapsible-header:hover .section-drag-handle {
-    color: var(--wos-blue);
-}
-
-.collapsible-section.dragging .section-drag-handle {
-    opacity: 1;
-    visibility: visible;
-}
-
-.section-drag-handle:active {
-    cursor: grabbing;
-    transform: scale(1.05);
 }
 
 .collapsible-header.active .collapsible-toggle {
@@ -2703,6 +2682,13 @@ body.theme-vscode .prompt-chip.active {
     display: flex;
 }
 
+.header-dropdown-separator {
+    height: 1px;
+    background: var(--wos-border);
+    opacity: 0.8;
+    margin: 4px 6px;
+}
+
 .header-dropdown-item {
     border: 1px solid transparent;
     background: transparent;
@@ -2720,6 +2706,16 @@ body.theme-vscode .prompt-chip.active {
 .header-dropdown-item:hover {
     background: var(--wos-hover);
     border-color: var(--wos-border);
+}
+
+.header-dropdown-item:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+}
+
+.header-dropdown-item:disabled:hover {
+    background: transparent;
+    border-color: transparent;
 }
 
 .header-dropdown-item i {
