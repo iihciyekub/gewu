@@ -594,9 +594,12 @@ class PaperReviewerApp {
 
         // Keyboard shortcuts
         document.addEventListener('keydown', (e) => {
-            if (e.ctrlKey && e.key === 's') {
+            const mod = e.metaKey || e.ctrlKey;
+            const key = (e.key || '').toLowerCase();
+            if (mod && !e.shiftKey && key === 's') {
                 e.preventDefault();
-                if (this.hasUnsavedChanges) this.saveToFile();
+                this.handleSaveShortcut();
+                return;
             }
             if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === 'g') {
                 e.preventDefault();
@@ -2972,6 +2975,31 @@ class PaperReviewerApp {
         if (next) this.closeHeaderMenus('json');
         this.jsonMenuVisible = next;
         menu.classList.toggle('visible', next);
+    }
+
+    async handleSaveShortcut() {
+        const view = this.currentView || 'structured';
+        if (view === 'markdown') {
+            if (!this.currentMarkdownExists) return;
+            if (this.isMarkdownEditing) {
+                await this.saveMarkdownFromEditor();
+            } else if (this.hasUnsavedMarkdownChanges) {
+                await this.saveCurrentMarkdownSilently();
+                this.renderMarkdownView(this.currentMarkdownText || '');
+            }
+            return;
+        }
+
+        // JSON 视图
+        if (view === 'flat') {
+            const ok = this.applyRawJsonFromTextarea({ notifyOnError: true });
+            if (!ok) return;
+        }
+        if (this.hasUnsavedChanges) {
+            await this.saveToFile();
+            this.renderStructuredView();
+            this.renderFlatView();
+        }
     }
 
     toggleFileFilter(forceVisible) {
