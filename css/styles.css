@@ -553,6 +553,47 @@ body {
     box-shadow: none;
 }
 
+/* APA 引用获取按钮 */
+.apa-actions {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin-left: 6px;
+}
+
+.apa-fetch-btn {
+    border: 1px solid var(--wos-border);
+    background: transparent;
+    color: var(--wos-blue);
+    border-radius: 4px;
+    padding: 2px 6px;
+    font-size: 11px;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.apa-fetch-btn:hover {
+    background: var(--wos-hover);
+}
+
+.apa-fetch-btn[disabled],
+.apa-fetch-btn[data-disabled="1"],
+.apa-fetch-btn.loading {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.apa-doi-hint {
+    font-size: 10px;
+    color: var(--gray-500);
+}
+
+.apa-doi-hint.muted {
+    color: var(--gray-400);
+}
+
 body.theme-vscode .tab-btn {
     color: var(--wos-text);
 }
@@ -2609,6 +2650,66 @@ ol.json-array {
 .prompt-quick-panel.visible {
     display: flex;
     flex-direction: column;
+}
+
+.info-panel {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    max-width: 760px;
+    width: 90%;
+    background: var(--wos-bg);
+    border: 1px solid var(--wos-border);
+    border-radius: 8px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
+    z-index: 3200;
+    display: none;
+    flex-direction: column;
+}
+
+.info-panel.visible {
+    display: flex;
+}
+
+.info-body {
+    padding: 10px 12px;
+    max-height: 420px;
+    overflow: auto;
+    font-size: 12px;
+    line-height: 1.5;
+}
+
+.info-body ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.info-body li {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
+    border: 1px solid var(--wos-border);
+    border-radius: 10px;
+    background: linear-gradient(135deg, #f8fbff, #f5f7fa);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+}
+
+.info-body li::before {
+    content: "\f05a";
+    font-family: "Font Awesome 6 Free";
+    font-weight: 900;
+    color: var(--wos-blue);
+    margin-top: 2px;
+}
+
+.info-body p {
+    margin: 6px 0;
 }
 
 .prompt-quick-header {

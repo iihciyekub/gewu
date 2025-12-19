@@ -54,6 +54,10 @@ class PaperReviewerApp {
         this.promptGroups = {};
         this.promptPanelPos = this.loadPromptPanelPos();
         this.promptSelectedByGroup = this.loadPromptSelectedByGroup();
+        this.projectInfoVisible = false;
+        this.projectInfoLoaded = false;
+        this.shortcutsVisible = false;
+        this.shortcutsLoaded = false;
         this.jsonMenuVisible = false;
         this.mdMenuVisible = false;
         this.rawJsonParseOk = true;
@@ -673,6 +677,8 @@ class PaperReviewerApp {
                 this.closeProjectSelector();
                 this.clearPdfHighlights();
                 this.togglePromptPanel(false);
+                this.toggleProjectInfoPanel(false, { skipClose: true });
+                this.toggleShortcutsPanel(false, { skipClose: true });
             }
         });
 
@@ -697,6 +703,22 @@ class PaperReviewerApp {
                 e.preventDefault();
                 e.stopPropagation();
                 this.togglePromptPanel();
+            });
+        }
+        const projectInfoBtn = document.getElementById('projectInfoBtn');
+        if (projectInfoBtn) {
+            projectInfoBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                this.toggleProjectInfoPanel();
+            });
+        }
+        const shortcutsInfoBtn = document.getElementById('shortcutsInfoBtn');
+        if (shortcutsInfoBtn) {
+            shortcutsInfoBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                this.toggleShortcutsPanel();
             });
         }
         const syncPdfBtn = document.getElementById('syncPdfBtn');
@@ -2412,6 +2434,15 @@ class PaperReviewerApp {
         valueContent = this.renderGotoLinks(displayValue, path.join('.')) || valueContent;
 
         let html = `<span class="editable-value${isLongMath ? ' math-collapsed' : ''}" data-path="${path.join('.')}" data-raw-value="${rawValueAttr}">${valueContent}</span>`;
+        if (keyLower === 'apa') {
+            const doi = this.findFirstDoiInCurrentData();
+            const doiAttr = this.escapeHtml(doi || '');
+            const disabled = doi ? '' : ' data-disabled="1"';
+            const btnTitle = doi ? `根据 DOI: ${doi} 生成 APA 并复制` : '未找到 DOI，无法生成 APA';
+            const btn = `<button class="apa-fetch-btn" data-doi="${doiAttr}" title="${btnTitle}"${disabled}><i class="fas fa-quote-left"></i><span>APA</span></button>`;
+            const hint = doi ? `<span class="apa-doi-hint" title="使用的 DOI">${doiAttr}</span>` : `<span class="apa-doi-hint muted">无 DOI</span>`;
+            html += `<span class="apa-actions">${btn}${hint}</span>`;
+        }
         
         if (location) {
             const page = location.pdf_page_index || 1;
@@ -2484,6 +2515,28 @@ class PaperReviewerApp {
         }];
         const jsonStr = encodeURIComponent(JSON.stringify(query));
         return `https://www.webofscience.com/wos/woscc/general-summary?queryJson=${jsonStr}`;
+    }
+
+    findFirstDoiInCurrentData() {
+        const regex = /10\.\d{4,9}\/\S+/i;
+        const seen = new Set();
+        const stack = [this.currentData];
+        while (stack.length) {
+            const cur = stack.pop();
+            if (!cur || typeof cur !== 'object') continue;
+            if (seen.has(cur)) continue;
+            seen.add(cur);
+            const values = Array.isArray(cur) ? cur : Object.values(cur);
+            for (const val of values) {
+                if (typeof val === 'string') {
+                    const m = val.match(regex);
+                    if (m) return m[0];
+                } else if (val && typeof val === 'object') {
+                    stack.push(val);
+                }
+            }
+        }
+        return '';
     }
 
     getKeywordTooltipEl() {
@@ -3014,6 +3067,8 @@ class PaperReviewerApp {
         if (keep !== 'json' && this.jsonMenuVisible) this.toggleJsonMenu(false);
         if (keep !== 'md' && this.mdMenuVisible) this.toggleMdMenu(false);
         if (keep !== 'prompt' && this.promptPanelVisible) this.togglePromptPanel(false, { skipClose: true });
+        if (keep !== 'info' && this.projectInfoVisible) this.toggleProjectInfoPanel(false, { skipClose: true });
+        if (keep !== 'shortcuts' && this.shortcutsVisible) this.toggleShortcutsPanel(false, { skipClose: true });
     }
 
     applyRawJsonFromTextarea(opts = {}) {
@@ -3202,6 +3257,54 @@ class PaperReviewerApp {
             this.applyPromptPanelPos();
         }
         panel.classList.toggle('visible', nextState);
+    }
+
+    async toggleProjectInfoPanel(forceVisible, opts = {}) {
+        const panel = document.getElementById('projectInfoPanel');
+        const body = document.getElementById('projectInfoBody');
+        if (!panel || !body) return;
+        const next = typeof forceVisible === 'boolean' ? forceVisible : !this.projectInfoVisible;
+        if (next && !opts.skipClose) this.closeHeaderMenus('info');
+        this.projectInfoVisible = next;
+        panel.classList.toggle('visible', next);
+        if (next && !this.projectInfoLoaded) {
+            body.textContent = '加载中...';
+            try {
+                const res = await fetch('/project-info.md');
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                const text = await res.text();
+                const parser = this.getMarkdownParser();
+                body.innerHTML = parser ? parser.render(text) : text;
+                this.projectInfoLoaded = true;
+            } catch (err) {
+                console.error('加载项目说明失败', err);
+                body.textContent = `加载失败: ${err.message}`;
+            }
+        }
+    }
+
+    async toggleShortcutsPanel(forceVisible, opts = {}) {
+        const panel = document.getElementById('shortcutsInfoPanel');
+        const body = document.getElementById('shortcutsInfoBody');
+        if (!panel || !body) return;
+        const next = typeof forceVisible === 'boolean' ? forceVisible : !this.shortcutsVisible;
+        if (next && !opts.skipClose) this.closeHeaderMenus('shortcuts');
+        this.shortcutsVisible = next;
+        panel.classList.toggle('visible', next);
+        if (next && !this.shortcutsLoaded) {
+            body.textContent = '加载中...';
+            try {
+                const res = await fetch('/shortcuts.md');
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                const text = await res.text();
+                const parser = this.getMarkdownParser();
+                body.innerHTML = parser ? parser.render(text) : text;
+                this.shortcutsLoaded = true;
+            } catch (err) {
+                console.error('加载快捷键说明失败', err);
+                body.textContent = `加载失败: ${err.message}`;
+            }
+        }
     }
 
     normalizePromptGroups(raw) {
@@ -6348,6 +6451,9 @@ class PaperReviewerApp {
         if (this._locationLinkDblHandler) {
             document.removeEventListener('dblclick', this._locationLinkDblHandler);
         }
+        if (this._apaBtnHandler) {
+            document.removeEventListener('click', this._apaBtnHandler);
+        }
         
         this._locationLinkHandler = (e) => {
             const target = e.target;
@@ -6389,9 +6495,66 @@ class PaperReviewerApp {
                 await this.updateMarkdownGotoText(current, next, isNaN(idx) ? 0 : idx);
             }
         };
+        this._apaBtnHandler = async (e) => {
+            const btn = e.target.closest('.apa-fetch-btn');
+            if (!btn) return;
+            e.preventDefault();
+            if (btn.dataset.disabled === '1') {
+                this.showNotification('未找到 DOI，无法生成 APA', 'error');
+                return;
+            }
+            const doi = btn.dataset.doi || this.findFirstDoiInCurrentData();
+            if (!doi) {
+                this.showNotification('未找到 DOI，无法生成 APA', 'error');
+                return;
+            }
+            btn.disabled = true;
+            btn.classList.add('loading');
+            try {
+                const citeFn = window.citeDoiToApa;
+                const text = citeFn ? await citeFn(doi) : null;
+                if (!text) throw new Error('未得到 APA 文本');
+                await this.writeTextToClipboard(text);
+                this.showNotification('APA 引用已复制到剪贴板', 'success');
+            } catch (err) {
+                console.error('APA 生成失败:', err);
+                this.showNotification(`APA 生成失败: ${err.message}`, 'error');
+            } finally {
+                btn.disabled = false;
+                btn.classList.remove('loading');
+            }
+        };
         
         document.addEventListener('click', this._locationLinkHandler);
         document.addEventListener('dblclick', this._locationLinkDblHandler);
+        document.addEventListener('click', this._apaBtnHandler);
+        document.addEventListener('click', (e) => {
+            if (this.projectInfoVisible) {
+                const panel = document.getElementById('projectInfoPanel');
+                const btn = document.getElementById('projectInfoBtn');
+                if (panel && !panel.contains(e.target) && !(btn && btn.contains(e.target))) {
+                    this.toggleProjectInfoPanel(false, { skipClose: true });
+                }
+            }
+            if (this.shortcutsVisible) {
+                const panel = document.getElementById('shortcutsInfoPanel');
+                const btn = document.getElementById('shortcutsInfoBtn');
+                if (panel && !panel.contains(e.target) && !(btn && btn.contains(e.target))) {
+                    this.toggleShortcutsPanel(false, { skipClose: true });
+                }
+            }
+        });
+        document.addEventListener('click', (e) => {
+            if (!this.projectInfoVisible) return;
+            const panel = document.getElementById('projectInfoPanel');
+            const btn = document.getElementById('projectInfoBtn');
+            if (!panel) return;
+            const insidePanel = panel.contains(e.target);
+            const fromBtn = btn && btn.contains(e.target);
+            if (!insidePanel && !fromBtn) {
+                this.toggleProjectInfoPanel(false, { skipClose: true });
+            }
+        });
 
         // 关键词悬停提示
         if (this._keywordTipEnterHandler) {
@@ -6842,7 +7005,78 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // Make app globally accessible for debugging
     window.paperReviewerApp = app;
-    
+
+    // 全局 DOI -> APA 测试方法：在控制台调用 citeDoiToApa('10.xxxx/yyy')
+    const loadCiteLib = async () => {
+        const pickCite = () => {
+            let Cite = window.Cite || globalThis.Cite || null;
+            const req = (typeof window.require === 'function') ? window.require : null;
+            if (!Cite && req) {
+                try {
+                    const mod = req('citation-js');
+                    Cite = mod?.Cite || mod?.default || mod || Cite;
+                } catch (err) {
+                    console.warn('[citeDoiToApa] require("citation-js") 失败', err);
+                }
+            }
+            if (!Cite && req) {
+                try {
+                    const core = req('@citation-js/core');
+                    Cite = core?.Cite || core?.default || core || Cite;
+                } catch (err) {
+                    console.warn('[citeDoiToApa] require("@citation-js/core") 失败', err);
+                }
+            }
+            return Cite;
+        };
+
+        let cite = pickCite();
+        if (cite) return cite;
+
+        const loadScript = () => new Promise((resolve, reject) => {
+            const existing = document.querySelector('script[src*="js/core/citation.js"]');
+            const script = existing || document.createElement('script');
+            script.src = 'js/core/citation.js';
+            script.defer = true;
+            script.onload = () => resolve();
+            script.onerror = () => reject(new Error('citation.js 加载失败'));
+            if (!existing) document.head.appendChild(script);
+        });
+        await loadScript();
+        cite = pickCite();
+        if (!cite) {
+            console.error('[citeDoiToApa] 未能从 js/core/citation.js 取得 Cite，请确认文件暴露 window.Cite');
+        }
+        return cite;
+    };
+
+    window.citeDoiToApa = async (doi) => {
+        if (!doi) {
+            console.warn('请传入 DOI，例如 citeDoiToApa(\"10.xxxx/yyy\")');
+            return null;
+        }
+        try {
+            const Cite = await loadCiteLib();
+            if (!Cite || typeof Cite.async !== 'function') {
+                console.error('Cite 未就绪或不支持 async');
+                return null;
+            }
+            console.debug('[citeDoiToApa] start', doi);
+            const data = await Cite.async(doi);
+            const result = data.format('bibliography', {
+                template: 'apa',
+                format: 'text',
+                lang: 'en-US'
+            });
+            const text = Array.isArray(result) ? result.filter(Boolean).join('\n') : String(result || '');
+            console.log('[citeDoiToApa] APA result:', text);
+            return text;
+        } catch (err) {
+            console.error('[citeDoiToApa] 失败', err);
+            return null;
+        }
+    };
+
     // 暴露调试方法到全局
     window.debugPDFSearch = {
         // 直接搜索文本（在当前页）
