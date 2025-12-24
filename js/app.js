@@ -54,6 +54,7 @@ class PaperReviewerApp {
         this.promptGroups = {};
         this.promptPanelPos = this.loadPromptPanelPos();
         this.promptSelectedByGroup = this.loadPromptSelectedByGroup();
+        this.isEditLocked = this.loadEditLockState();
         this.projectInfoVisible = false;
         this.projectInfoLoaded = false;
         this.shortcutsVisible = false;
@@ -114,6 +115,22 @@ class PaperReviewerApp {
             return null;
         }
         return null;
+    }
+
+    loadEditLockState() {
+        try {
+            return localStorage.getItem('reviewerEditLocked') === '1';
+        } catch (_e) {
+            return false;
+        }
+    }
+
+    persistEditLockState() {
+        try {
+            localStorage.setItem('reviewerEditLocked', this.isEditLocked ? '1' : '0');
+        } catch (_e) {
+            // ignore
+        }
     }
 
     savePromptPanelPos(pos) {
@@ -383,6 +400,7 @@ class PaperReviewerApp {
         this.updateJsonMenuState();
         this.updateMarkdownToolbar();
         this.updateMarkdownMenuState();
+        this.applyEditLockState();
         this.setupResizers();
         this.setupDraggableModal();
         this.loadPromptShortcuts();
@@ -501,7 +519,7 @@ class PaperReviewerApp {
         if (jsonViewFlatItem) {
             jsonViewFlatItem.addEventListener('click', async (e) => {
                 e.preventDefault();
-                await this.switchToView('flat');
+                await this.goToJsonSource();
                 this.toggleJsonMenu(false);
             });
         }
@@ -565,11 +583,7 @@ class PaperReviewerApp {
         if (mdSourceItem) {
             mdSourceItem.addEventListener('click', async (e) => {
                 e.preventDefault();
-                await this.switchToView('markdown');
-                if (this.currentMarkdownExists) {
-                    this.toggleMarkdownEdit(true);
-                    document.getElementById('markdownTextarea')?.focus();
-                }
+                await this.goToMarkdownSource();
                 this.toggleMdMenu(false);
             });
         }
@@ -583,6 +597,14 @@ class PaperReviewerApp {
         const mdTextarea = document.getElementById('markdownTextarea');
         if (mdTextarea) {
             mdTextarea.addEventListener('input', () => this.onMarkdownEditorInput());
+        }
+        const editLockToggleBtn = document.getElementById('editLockToggleBtn');
+        if (editLockToggleBtn) {
+            editLockToggleBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                this.toggleEditLock();
+            });
         }
         const gotoCancelBtn = document.getElementById('gotoEditCancel');
         const gotoSaveBtn = document.getElementById('gotoEditSave');
@@ -626,6 +648,22 @@ class PaperReviewerApp {
             if (mod && !e.shiftKey && key === 's') {
                 e.preventDefault();
                 this.handleSaveShortcut();
+                return;
+            }
+            if (mod && e.shiftKey && key === 'e') {
+                e.preventDefault();
+                this.toggleJsonMdSource();
+                return;
+            }
+            if (this.isEditLocked && (key === 'k' || e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
+                // 锁定时禁止排序模式切换和上下移动
+                if (mod && !e.shiftKey && key === 'k') {
+                    e.preventDefault();
+                    this.showLockedNotification('调整顺序');
+                } else if (this.isReorderMode || this.selectedItem) {
+                    e.preventDefault();
+                    this.showLockedNotification('调整顺序');
+                }
                 return;
             }
             if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === 'g') {
@@ -2770,6 +2808,10 @@ class PaperReviewerApp {
     }
 
     moveKey(pathArray, key, offset) {
+        if (this.isEditLocked) {
+            this.showLockedNotification('调整顺序');
+            return;
+        }
         if (!key || offset === 0) return;
         let parent = this.currentData;
         for (const segment of pathArray) {
@@ -2901,6 +2943,10 @@ class PaperReviewerApp {
     }
 
     moveSelectedItem(offset) {
+        if (this.isEditLocked) {
+            this.showLockedNotification('调整顺序');
+            return;
+        }
         if (!this.selectedItem || !offset) return;
         if (this.selectedItem.type === 'row') {
             const pathArr = [...(this.selectedItem.path || [])];
@@ -2936,6 +2982,10 @@ class PaperReviewerApp {
     }
 
     moveSection(key, offset) {
+        if (this.isEditLocked) {
+            this.showLockedNotification('调整顺序');
+            return;
+        }
         if (!key || !this.currentData) return;
         const keys = Object.keys(this.currentData).filter(k => !k.endsWith('_loc') && k !== 'schema_version' && k !== 'lastupdate');
         const idx = keys.indexOf(key);
@@ -3006,6 +3056,47 @@ class PaperReviewerApp {
         }
     }
 
+    async goToJsonSource() {
+        await this.switchToView('flat');
+    }
+
+    async goToMarkdownSource() {
+        await this.switchToView('markdown');
+        if (!this.currentFile) {
+            this.showNotification('请选择文件后查看 Markdown 源码', 'info');
+            return;
+        }
+        if (!this.currentMarkdownExists) {
+            try {
+                await this.createMarkdownFile();
+            } catch (_err) {}
+        }
+        if (!this.currentMarkdownExists) {
+            this.showNotification('未找到同名 Markdown', 'info');
+            return;
+        }
+        this.toggleMarkdownEdit(true);
+        const mdTextarea = document.getElementById('markdownTextarea');
+        if (mdTextarea) mdTextarea.focus();
+    }
+
+    async toggleJsonMdSource() {
+        const view = this.currentView || 'structured';
+        if (view === 'flat') {
+            await this.goToMarkdownSource();
+            return;
+        }
+        if (view === 'markdown') {
+            if (this.isMarkdownEditing) {
+                await this.goToJsonSource();
+            } else {
+                await this.goToMarkdownSource();
+            }
+            return;
+        }
+        await this.goToJsonSource();
+    }
+
     toggleMdMenu(forceVisible) {
         const menu = document.getElementById('mdMenu');
         if (!menu) return;
@@ -3024,7 +3115,50 @@ class PaperReviewerApp {
         menu.classList.toggle('visible', next);
     }
 
+    toggleEditLock(forceLocked) {
+        const next = typeof forceLocked === 'boolean' ? forceLocked : !this.isEditLocked;
+        this.isEditLocked = next;
+        this.persistEditLockState();
+        this.applyEditLockState();
+        this.showNotification(next ? '编辑已锁定' : '编辑已解锁', next ? 'info' : 'success');
+    }
+
+    applyEditLockState() {
+        const lockBtn = document.getElementById('editLockToggleBtn');
+        if (lockBtn) {
+            lockBtn.classList.toggle('active', this.isEditLocked);
+            const icon = lockBtn.querySelector('i');
+            if (icon) icon.className = this.isEditLocked ? 'fas fa-lock' : 'fas fa-lock-open';
+            lockBtn.title = this.isEditLocked ? '编辑已锁定' : '编辑未锁定';
+            lockBtn.setAttribute('aria-pressed', String(this.isEditLocked));
+        }
+        const jsonTextarea = document.getElementById('jsonEditorTextarea');
+        if (jsonTextarea) {
+            jsonTextarea.readOnly = this.isEditLocked;
+            jsonTextarea.classList.toggle('locked', this.isEditLocked);
+        }
+        const mdTextarea = document.getElementById('markdownTextarea');
+        if (mdTextarea) {
+            mdTextarea.readOnly = this.isEditLocked;
+            mdTextarea.classList.toggle('locked', this.isEditLocked);
+        }
+        const addSectionBtn = document.getElementById('addSectionBtn');
+        if (addSectionBtn) {
+            addSectionBtn.disabled = this.isEditLocked;
+        }
+        this.updateJsonMenuState();
+        this.updateMarkdownMenuState();
+    }
+
+    showLockedNotification(action = '操作') {
+        this.showNotification(`已锁定，无法${action}`, 'info');
+    }
+
     async handleSaveShortcut() {
+        if (this.isEditLocked) {
+            this.showLockedNotification('保存');
+            return;
+        }
         const view = this.currentView || 'structured';
         if (view === 'markdown') {
             if (!this.currentMarkdownExists) return;
@@ -3270,11 +3404,12 @@ class PaperReviewerApp {
         if (next && !this.projectInfoLoaded) {
             body.textContent = '加载中...';
             try {
-                const res = await fetch('/project-info.md');
+                const res = await fetch('/js-info.md');
                 if (!res.ok) throw new Error(`HTTP ${res.status}`);
                 const text = await res.text();
                 const parser = this.getMarkdownParser();
                 body.innerHTML = parser ? parser.render(text) : text;
+                this.applyProjectInfoIcons(body);
                 this.projectInfoLoaded = true;
             } catch (err) {
                 console.error('加载项目说明失败', err);
@@ -3462,6 +3597,11 @@ class PaperReviewerApp {
         if (textarea) {
             textarea.value = JSON.stringify(this.currentData, null, 2);
             textarea.addEventListener('input', () => {
+                if (this.isEditLocked) {
+                    this.showLockedNotification('编辑 JSON');
+                    textarea.value = JSON.stringify(this.currentData, null, 2);
+                    return;
+                }
                 if (this.rawJsonParseTimer) {
                     clearTimeout(this.rawJsonParseTimer);
                     this.rawJsonParseTimer = null;
@@ -3472,6 +3612,7 @@ class PaperReviewerApp {
             });
             // 初次渲染时同步一次解析状态
             this.applyRawJsonFromTextarea({ notifyOnError: false });
+            this.applyEditLockState();
         }
     }
     
@@ -3761,6 +3902,20 @@ class PaperReviewerApp {
         return this.markdownParser;
     }
 
+    applyProjectInfoIcons(rootEl) {
+        if (!rootEl || !rootEl.querySelectorAll) return;
+        rootEl.querySelectorAll('li').forEach((li) => {
+            if (li.dataset.iconized === '1') return;
+            const icon = document.createElement('i');
+            icon.className = 'fa-brands fa-node-js';
+            icon.style.marginRight = '6px';
+            icon.style.fontSize = '16px';
+            icon.setAttribute('aria-hidden', 'true');
+            li.insertBefore(icon, li.firstChild);
+            li.dataset.iconized = '1';
+        });
+    }
+
     tryHandleMarkdownQaPasteRendered(pastedText) {
         if (!pastedText || !this.currentMarkdownExists) return false;
         const qaMatch = pastedText.match(/```qa[\s\S]*?```/i);
@@ -4018,11 +4173,13 @@ class PaperReviewerApp {
         if (!render) return;
         if (!text) {
             render.innerHTML = '<div class="empty-state"><i class="fas fa-file-alt"></i><h3>No Markdown</h3><p>未找到同名 Markdown，点击上方按钮创建</p></div>';
+            this.applyEditLockState();
             return;
         }
         const md = this.getMarkdownParser();
         if (!md) {
             render.innerHTML = '<div class="empty-state"><i class="fas fa-file-alt"></i><h3>Markdown 引擎不可用</h3></div>';
+            this.applyEditLockState();
             return;
         }
         const normalizeMath = (src = '') => {
@@ -4041,6 +4198,7 @@ class PaperReviewerApp {
         this.renderMath(render);
         this.highlightCodeBlocks(render);
         this.updateMarkdownUndoButtonState();
+        this.applyEditLockState();
     }
 
     applyQaCollapsedState(renderRoot) {
@@ -4315,6 +4473,11 @@ class PaperReviewerApp {
         if (!this.currentMarkdownExists) return;
         const textarea = document.getElementById('markdownTextarea');
         if (!textarea) return;
+        if (this.isEditLocked) {
+            textarea.value = this.currentMarkdownText || this.buildDefaultMarkdown();
+            this.showLockedNotification('编辑 Markdown');
+            return;
+        }
         const nextDirty = textarea.value !== (this.currentMarkdownBaselineText || '');
         if (nextDirty === this.hasUnsavedMarkdownChanges) return;
         this.hasUnsavedMarkdownChanges = nextDirty;
@@ -4372,6 +4535,9 @@ class PaperReviewerApp {
 
     toggleMarkdownEdit(editing, opts = {}) {
         if (!this.currentMarkdownExists) return;
+        if (editing && this.isEditLocked) {
+            this.showLockedNotification('编辑 Markdown');
+        }
         const skipConfirm = !!opts.skipConfirm;
         // 退出编辑时，如有未保存修改，给出提示
         if (!skipConfirm && !editing && this.isMarkdownEditing && this.hasUnsavedMarkdownChanges) {
@@ -4566,6 +4732,7 @@ class PaperReviewerApp {
             this.updateMarkdownToolbar();
             this.updateMarkdownDirtyUI();
         }
+        this.applyEditLockState();
     }
 
     applyCurrentView() {
@@ -5537,6 +5704,10 @@ class PaperReviewerApp {
     // Edit Functions
     // 编辑字段名（双击key时调用）
     openEditKeyModal(parentPath, oldKey) {
+        if (this.isEditLocked) {
+            this.showLockedNotification('编辑字段名');
+            return;
+        }
         const newKey = prompt(`编辑字段名称:`, oldKey);
         if (!newKey || newKey === oldKey || !newKey.trim()) return;
 
@@ -5585,6 +5756,10 @@ class PaperReviewerApp {
     }
 
     openEditModal(path, currentValue) {
+        if (this.isEditLocked) {
+            this.showLockedNotification('编辑字段');
+            return;
+        }
         this.editingPath = path;
         const lastKey = path[path.length - 1];
         document.getElementById('modalTitle').textContent = `编辑: ${this.formatKey(lastKey)}`;
@@ -5884,6 +6059,10 @@ class PaperReviewerApp {
     }
 
     async saveEditedValue() {
+        if (this.isEditLocked) {
+            this.showLockedNotification('保存字段');
+            return;
+        }
         if (!this.editingPath) return;
 
         const newValue = document.getElementById('editTextarea').value;
@@ -6015,6 +6194,10 @@ class PaperReviewerApp {
     }
 
     deleteCurrentField() {
+        if (this.isEditLocked) {
+            this.showLockedNotification('删除字段');
+            return;
+        }
         if (!this.editingPath) return;
         const lastKey = this.editingPath[this.editingPath.length - 1];
         const parentPath = this.editingPath.slice(0, -1);

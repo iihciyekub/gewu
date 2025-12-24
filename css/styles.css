@@ -2701,11 +2701,7 @@ ol.json-array {
 }
 
 .info-body li::before {
-    content: "\f05a";
-    font-family: "Font Awesome 6 Free";
-    font-weight: 900;
-    color: var(--wos-blue);
-    margin-top: 2px;
+    content: none;
 }
 
 .info-body p {

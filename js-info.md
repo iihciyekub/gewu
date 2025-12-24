@@ -1,0 +1,10 @@
+@JS Info：
+- @jQuery
+- @PDF.js Web Viewer 
+- @markdown-it + footnote/deflist/sub/sup/github-alerts/mermaid 
+- @MathJax 3.2.2
+- @Font Awesome 6.7.2 
+- @highlight.js
+- @citation.js
+- @JSONRepair 
+- @json-viewer  
