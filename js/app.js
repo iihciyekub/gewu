@@ -2079,6 +2079,7 @@ class PaperReviewerApp {
 
     async loadFile(filename, clickedElement = null) {
         const loadId = ++this.currentLoadToken;
+        const hadTempCacheBefore = !!this.tempDataCache[filename];
         try {
             // 如果当前 Markdown 有未保存修改，提示用户
             if (this.hasUnsavedMarkdownChanges && this.currentFile && this.currentMarkdownExists) {
@@ -2133,6 +2134,7 @@ class PaperReviewerApp {
             if (loadId !== this.currentLoadToken) return;
 
             this.currentFile = filename;
+            const metaChanged = this.ensureMetaInfoDefaultsOnLoad(filename);
             this.setLastSelectedFile(filename);
             this.updateFileMeta();
 
@@ -2148,6 +2150,10 @@ class PaperReviewerApp {
             // 再次确认未切换文件
             if (loadId !== this.currentLoadToken) return;
             await this.loadMarkdownForCurrentFile();
+            // 自动保存因默认 meta 补全产生的更改，避免频繁提示
+            if (metaChanged && !hadTempCacheBefore) {
+                await this.autoSaveMetaDefaults();
+            }
 
             // Load PDF if available
             if (this.currentData.meta_info && this.currentData.meta_info.pdf_path) {
@@ -2562,6 +2568,7 @@ class PaperReviewerApp {
         const isMath = this.containsMathSyntax(displayValue);
         const isLongMath = isMath && displayValue.length > 120;
         let valueContent = this.escapeHtml(displayValue);
+        const apaTextAttr = this.escapeHtml(displayValue || '');
 
         // 对超长公式使用图标占位，避免表格横向撑开
         if (isLongMath) {
@@ -2577,7 +2584,7 @@ class PaperReviewerApp {
             const doiAttr = this.escapeHtml(doi || '');
             const disabled = doi ? '' : ' data-disabled="1"';
             const btnTitle = doi ? `根据 DOI: ${doi} 生成 APA 并复制` : '未找到 DOI，无法生成 APA';
-            const btn = `<button class="apa-fetch-btn" data-doi="${doiAttr}" title="${btnTitle}"${disabled}><i class="fas fa-quote-left"></i><span>APA</span></button>`;
+            const btn = `<button class="apa-fetch-btn" data-doi="${doiAttr}" data-apa-text="${apaTextAttr}" title="${btnTitle}"${disabled}><i class="fas fa-quote-left"></i><span>APA</span></button>`;
             const hint = doi ? `<span class="apa-doi-hint" title="使用的 DOI">${doiAttr}</span>` : `<span class="apa-doi-hint muted">无 DOI</span>`;
             html += `<span class="apa-actions">${btn}${hint}</span>`;
         }
@@ -2717,6 +2724,99 @@ class PaperReviewerApp {
         if (!pathStr) return '';
         const parts = pathStr.split(/[/\\]+/).filter(Boolean);
         return parts.length ? parts[parts.length - 1] : pathStr;
+    }
+
+    getApaTooltipEl() {
+        if (!this._apaTooltipEl) {
+            const el = document.createElement('div');
+            el.className = 'apa-tooltip';
+            el.style.position = 'fixed';
+            el.style.zIndex = '9999';
+            el.style.maxWidth = '360px';
+            el.style.padding = '10px';
+            el.style.background = 'rgba(0,0,0,0.85)';
+            el.style.color = '#fff';
+            el.style.borderRadius = '6px';
+            el.style.boxShadow = '0 4px 12px rgba(0,0,0,0.25)';
+            el.style.fontSize = '12px';
+            el.style.lineHeight = '1.4';
+            el.style.display = 'none';
+            el.style.whiteSpace = 'pre-wrap';
+            el.style.pointerEvents = 'none';
+            document.body.appendChild(el);
+            this._apaTooltipEl = el;
+        }
+        return this._apaTooltipEl;
+    }
+
+    showApaTooltip(btn, text) {
+        const el = this.getApaTooltipEl();
+        el.textContent = text;
+        const rect = btn.getBoundingClientRect();
+        const padding = 8;
+        let left = rect.left;
+        let top = rect.bottom + padding;
+        const vw = window.innerWidth;
+        const vh = window.innerHeight;
+        el.style.display = 'block';
+        el.style.visibility = 'hidden';
+        const tRect = el.getBoundingClientRect();
+        if (left + tRect.width > vw - padding) {
+            left = Math.max(padding, vw - tRect.width - padding);
+        }
+        if (top + tRect.height > vh - padding) {
+            top = rect.top - tRect.height - padding;
+        }
+        el.style.left = `${left}px`;
+        el.style.top = `${top}px`;
+        el.style.visibility = 'visible';
+    }
+
+    hideApaTooltip() {
+        if (this._apaTooltipEl) {
+            this._apaTooltipEl.style.display = 'none';
+        }
+    }
+
+    ensureMetaInfoDefaultsOnLoad(filename = '') {
+        if (!this.currentData) return false;
+        if (!this.currentData.meta_info || typeof this.currentData.meta_info !== 'object') {
+            this.currentData.meta_info = {};
+        }
+        const meta = this.currentData.meta_info;
+        let changed = false;
+        if (!Object.prototype.hasOwnProperty.call(meta, 'pdf_path')) {
+            const base = filename ? filename.replace(/\.[^.]+$/, '') : (meta.paper_id || 'unknown');
+            meta.pdf_path = `${this.normalizePdfPathValue(base)}.pdf`.replace(/\.pdf\.pdf$/i, '.pdf');
+            changed = true;
+        }
+        if (!Object.prototype.hasOwnProperty.call(meta, 'apa')) {
+            meta.apa = '';
+            changed = true;
+        }
+        if (changed) {
+            this.hasUnsavedChanges = true;
+            if (this.currentFile || filename) {
+                const key = this.currentFile || filename;
+                this.tempDataCache[key] = this.currentData;
+            }
+            this.updateSaveButtonState();
+        }
+        return changed;
+    }
+
+    async autoSaveMetaDefaults() {
+        if (!this.currentFile || !this.currentData) return;
+        if (!this.hasUnsavedChanges) return;
+        if (this.isAutoSavingMeta) return;
+        this.isAutoSavingMeta = true;
+        try {
+            await this.saveToFile({ silent: true });
+        } catch (err) {
+            console.warn('自动保存 meta 默认值失败:', err);
+        } finally {
+            this.isAutoSavingMeta = false;
+        }
     }
 
     mergeIntoCurrentData(sourceObj, backup = false) {
@@ -5192,6 +5292,16 @@ class PaperReviewerApp {
                         };
                         bindClickClear();
                         setTimeout(bindClickClear, 300);
+
+                        // 默认收起侧边栏，但保留按钮可用
+                        const tryCloseSidebar = () => {
+                            const pdfApp = win.PDFViewerApplication;
+                            if (pdfApp?.pdfSidebar?.isOpen) {
+                                pdfApp.pdfSidebar?.close();
+                            }
+                        };
+                        tryCloseSidebar();
+                        setTimeout(tryCloseSidebar, 200);
                     }
                 } catch (err) {
                     console.warn('Suppress PDF.js prompts failed:', err);
@@ -6737,6 +6847,12 @@ class PaperReviewerApp {
         if (this._apaBtnHandler) {
             document.removeEventListener('click', this._apaBtnHandler);
         }
+        if (this._apaBtnHoverHandler) {
+            document.removeEventListener('mouseover', this._apaBtnHoverHandler);
+        }
+        if (this._apaBtnLeaveHandler) {
+            document.removeEventListener('mouseout', this._apaBtnLeaveHandler);
+        }
         
         this._locationLinkHandler = (e) => {
             const target = e.target;
@@ -6799,6 +6915,23 @@ class PaperReviewerApp {
                 if (!text) throw new Error('未得到 APA 文本');
                 await this.writeTextToClipboard(text);
                 this.showNotification('APA 引用已复制到剪贴板', 'success');
+                // 写回 meta_info.apa，便于展示与保存
+                if (!this.currentData.meta_info || typeof this.currentData.meta_info !== 'object') {
+                    this.currentData.meta_info = {};
+                }
+                this.currentData.meta_info.apa = text;
+                this.hasUnsavedChanges = true;
+                if (this.currentFile) {
+                    this.tempDataCache[this.currentFile] = this.currentData;
+                }
+                // 立刻刷新按钮的悬浮内容
+                btn.setAttribute('data-apa-text', text);
+                // 重渲染视图以展示 APA 文本
+                this.updateSaveButtonState();
+                this.renderStructuredView();
+                this.renderFlatView();
+                this.setupEditableListeners();
+                this.updateUndoButtonState();
             } catch (err) {
                 console.error('APA 生成失败:', err);
                 this.showNotification(`APA 生成失败: ${err.message}`, 'error');
@@ -6807,10 +6940,24 @@ class PaperReviewerApp {
                 btn.classList.remove('loading');
             }
         };
+        this._apaBtnHoverHandler = (e) => {
+            const btn = e.target.closest('.apa-fetch-btn');
+            if (!btn) return;
+            const text = (btn.dataset.apaText || this.currentData?.meta_info?.apa || '').trim();
+            if (!text.trim()) return;
+            this.showApaTooltip(btn, text);
+        };
+        this._apaBtnLeaveHandler = (e) => {
+            const btn = e.target.closest('.apa-fetch-btn');
+            if (!btn) return;
+            this.hideApaTooltip();
+        };
         
         document.addEventListener('click', this._locationLinkHandler);
         document.addEventListener('dblclick', this._locationLinkDblHandler);
         document.addEventListener('click', this._apaBtnHandler);
+        document.addEventListener('mouseover', this._apaBtnHoverHandler);
+        document.addEventListener('mouseout', this._apaBtnLeaveHandler);
         document.addEventListener('click', (e) => {
             if (this.projectInfoVisible) {
                 const panel = document.getElementById('projectInfoPanel');
@@ -7228,11 +7375,14 @@ class PaperReviewerApp {
         }, 3000);
     }
 
-    async saveToFile() {
+    async saveToFile(options = {}) {
+        const { silent = false } = options;
         if (!this.currentFile || !this.currentData) return;
         // Only save when there are pending changes; avoid touching lastupdate otherwise
         if (!this.hasUnsavedChanges) {
-            this.showNotification('No changes to save', 'info');
+            if (!silent) {
+                this.showNotification('No changes to save', 'info');
+            }
             return;
         }
 
@@ -7273,7 +7423,9 @@ class PaperReviewerApp {
             this.updateFileMeta();
 
             // 成功通知
-            this.showNotification(`✓ ${this.currentFile} 已保存`, 'success');
+            if (!silent) {
+                this.showNotification(`✓ ${this.currentFile} 已保存`, 'success');
+            }
             this.debugLog('File saved:', result);
         } catch (error) {
             console.error('Error saving file:', error);
