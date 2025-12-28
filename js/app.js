@@ -558,6 +558,7 @@ class PaperReviewerApp {
         const mdSourceItem = document.getElementById('mdSourceItem');
         const mdSaveItem = document.getElementById('mdSaveItem');
         const mdCiteRenderItem = document.getElementById('mdCiteRenderItem');
+        const mdClearCiteCacheCurrentItem = document.getElementById('mdClearCiteCacheCurrentItem');
         const mdClearCiteCacheItem = document.getElementById('mdClearCiteCacheItem');
         const mdMenuDropdown = document.getElementById('mdMenuDropdown');
         if (mdMenuToggleBtn && mdMenu) {
@@ -603,6 +604,13 @@ class PaperReviewerApp {
             mdClearCiteCacheItem.addEventListener('click', (e) => {
                 e.preventDefault();
                 this.clearCitationCache();
+                this.toggleMdMenu(false);
+            });
+        }
+        if (mdClearCiteCacheCurrentItem) {
+            mdClearCiteCacheCurrentItem.addEventListener('click', (e) => {
+                e.preventDefault();
+                this.clearCurrentMarkdownCitationCache();
                 this.toggleMdMenu(false);
             });
         }
@@ -4734,6 +4742,45 @@ class PaperReviewerApp {
         if (showToast) {
             this.showNotification('已清除引文缓存与本地元数据', 'success');
         }
+    }
+
+    clearCurrentMarkdownCitationCache() {
+        const source = this.isMarkdownEditing
+            ? (document.getElementById('markdownTextarea')?.value || '')
+            : (this.currentMarkdownText || '');
+        if (!source) {
+            this.showNotification('当前无 Markdown 内容可清除', 'info');
+            return;
+        }
+        const dois = this.extractDoisFromMarkdown(source);
+        if (!dois.length) {
+            this.showNotification('当前 Markdown 未找到 DOI', 'info');
+            return;
+        }
+        const set = new Set(dois.map(d => this.normalizeDoiString(d)));
+        // 清 citationCache
+        Object.keys(this.citationCache || {}).forEach((k) => {
+            const parts = k.split(':')[1] || '';
+            const list = (parts.split(',') || []).map(x => x.trim());
+            if (list.some(d => set.has(d))) {
+                delete this.citationCache[k];
+            }
+        });
+        // 清内存 meta cache
+        Object.keys(this.citationMetaCache || {}).forEach((doi) => {
+            if (set.has(doi)) delete this.citationMetaCache[doi];
+        });
+        // 清 localStorage meta
+        const stored = this.loadCitationMetaFromStorage();
+        let touched = false;
+        Object.keys(stored).forEach((doi) => {
+            if (set.has(doi)) {
+                delete stored[doi];
+                touched = true;
+            }
+        });
+        if (touched) this.saveCitationMetaToStorage(stored);
+        this.showNotification(`已清除当前文档 ${dois.length} 条 DOI 缓存`, 'success');
     }
 
     adjustReferenceFont(renderRoot) {
