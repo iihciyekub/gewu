@@ -55,6 +55,9 @@ class PaperReviewerApp {
         this.promptPanelPos = this.loadPromptPanelPos();
         this.promptSelectedByGroup = this.loadPromptSelectedByGroup();
         this.isEditLocked = this.loadEditLockState();
+        this.citationCache = {}; // 缓存 cite/citep 渲染结果 {text, fallback}
+        this.citationMetaCache = {}; // 缓存 DOI -> CSL
+        this.citationMetaStoreKey = 'paperReviewerCitationMeta';
         this.projectInfoVisible = false;
         this.projectInfoLoaded = false;
         this.shortcutsVisible = false;
@@ -554,6 +557,8 @@ class PaperReviewerApp {
         const mdRenderItem = document.getElementById('mdRenderItem');
         const mdSourceItem = document.getElementById('mdSourceItem');
         const mdSaveItem = document.getElementById('mdSaveItem');
+        const mdCiteRenderItem = document.getElementById('mdCiteRenderItem');
+        const mdClearCiteCacheItem = document.getElementById('mdClearCiteCacheItem');
         const mdMenuDropdown = document.getElementById('mdMenuDropdown');
         if (mdMenuToggleBtn && mdMenu) {
             mdMenuToggleBtn.addEventListener('click', (e) => {
@@ -584,6 +589,20 @@ class PaperReviewerApp {
             mdSourceItem.addEventListener('click', async (e) => {
                 e.preventDefault();
                 await this.goToMarkdownSource();
+                this.toggleMdMenu(false);
+            });
+        }
+        if (mdCiteRenderItem) {
+            mdCiteRenderItem.addEventListener('click', async (e) => {
+                e.preventDefault();
+                await this.generateReferencesFromMarkdown();
+                this.toggleMdMenu(false);
+            });
+        }
+        if (mdClearCiteCacheItem) {
+            mdClearCiteCacheItem.addEventListener('click', (e) => {
+                e.preventDefault();
+                this.clearCitationCache();
                 this.toggleMdMenu(false);
             });
         }
@@ -3831,7 +3850,7 @@ class PaperReviewerApp {
             if (window.markdownItGithubAlerts) {
                 md.use(window.markdownItGithubAlerts);
             }
-            // 支持 goto{...} 内联跳转图标
+            // 支持 goto{...} 内联跳转图标 & cite/citep 渲染占位
             const gotoPlugin = (mdInstance) => {
                 const defaultText = mdInstance.renderer.rules.text || ((tokens, idx) => md.utils.escapeHtml(tokens[idx].content));
                 const renderMathText = (txt = '') => {
@@ -3854,12 +3873,35 @@ class PaperReviewerApp {
                     return out;
                 };
                 const hasMath = (s = '') => /\\\(|\\\[|\$\$|\$(?!\s)/.test(s);
+                const citeRe = /(citep?\{[^}]+\})/g;
+                const renderCitations = (txt = '') => {
+                    let out = '';
+                    let last = 0;
+                    let m;
+                    while ((m = citeRe.exec(txt)) !== null) {
+                        if (m.index > last) {
+                            out += renderMathText(txt.slice(last, m.index));
+                        }
+                        const raw = m[0];
+                        const isP = raw.startsWith('citep');
+                        const inside = raw.slice(raw.indexOf('{') + 1, -1);
+                        const dois = inside.split(/[,，;]+/).map(d => d.trim()).filter(Boolean);
+                        const app = window.paperReviewerApp;
+                        out += app?.renderCitationPlaceholder(dois, isP ? 'citep' : 'cite') || md.utils.escapeHtml(raw);
+                        last = citeRe.lastIndex;
+                    }
+                    if (last < txt.length) {
+                        out += renderMathText(txt.slice(last));
+                    }
+                    return out;
+                };
                 mdInstance.renderer.rules.text = (tokens, idx, options, env, self) => {
                     const token = tokens[idx];
                     const content = token.content || '';
                     const containsGoto = content.includes('goto{');
+                    const containsCitation = /citep?\{/.test(content);
                     const containsMath = hasMath(content);
-                    if (!containsGoto && !containsMath) return defaultText(tokens, idx, options, env, self);
+                    if (!containsGoto && !containsMath && !containsCitation) return defaultText(tokens, idx, options, env, self);
                     const segments = containsGoto ? content.split(/(goto\{[^}]+\})/g).filter(Boolean) : [content];
                     const rendered = segments.map(seg => {
                         const match = seg.match(/^goto\{([^}]+)\}$/);
@@ -3869,7 +3911,7 @@ class PaperReviewerApp {
                             const esc = md.utils.escapeHtml(q).replace(/`/g, '&#96;');
                             return `<a href="#" class="location-link goto-link" data-page="" data-quote-text="${esc}" data-open-params="" data-quote-index="0" data-value-path="" title="跳转PDF搜索"><i class="fa-solid fa-quote-right"></i></a>`;
                         }
-                        return renderMathText(seg);
+                        return renderCitations(seg);
                     }).join('');
                     return rendered;
                 };
@@ -4369,9 +4411,10 @@ class PaperReviewerApp {
     renderMarkdownView(text) {
         const render = document.getElementById('markdownRender');
         const textarea = document.getElementById('markdownTextarea');
-        if (textarea) textarea.value = text || this.buildDefaultMarkdown();
+        const sourceText = this.isMarkdownEditing && textarea ? (textarea.value || text) : text;
+        if (textarea) textarea.value = sourceText || this.buildDefaultMarkdown();
         if (!render) return;
-        if (!text) {
+        if (!sourceText) {
             render.innerHTML = '<div class="empty-state"><i class="fas fa-file-alt"></i><h3>No Markdown</h3><p>未找到同名 Markdown，点击上方按钮创建</p></div>';
             this.applyEditLockState();
             return;
@@ -4389,7 +4432,7 @@ class PaperReviewerApp {
             out = out.replace(/\\\(\s*([\s\S]*?)\s*\\\)/g, (m, inner) => `$${inner}$`);
             return out;
         };
-        const html = md.render(normalizeMath(text));
+        const html = md.render(normalizeMath(sourceText));
         render.innerHTML = `<article class="markdown-body">${html}</article>`;
         this.bindQaTitles(render);
         this.applyPendingQaTitle(render);
@@ -4397,8 +4440,373 @@ class PaperReviewerApp {
         this.bindQaCollapsibles(render);
         this.renderMath(render);
         this.highlightCodeBlocks(render);
+        this.applyCitationRendering(render);
+        this.adjustReferenceFont(render);
         this.updateMarkdownUndoButtonState();
         this.applyEditLockState();
+    }
+
+    renderCitationPlaceholder(dois = [], type = 'citep') {
+        const list = (dois || []).map(d => this.normalizeDoiString(d)).filter(Boolean);
+        const label = list.length ? list.join('; ') : 'citation';
+        const cls = type === 'cite' ? 'citation-narrative' : 'citation-parenthetical';
+        const escLabel = this.escapeHtml(label);
+        const escDois = this.escapeHtml(list.join(','));
+        return `<span class="citation-inline ${cls}" data-citation-type="${type}" data-citation-dois="${escDois}">[${escLabel}]</span>`;
+    }
+
+    async applyCitationRendering(renderRoot) {
+        if (!renderRoot) return;
+        const spans = Array.from(renderRoot.querySelectorAll('.citation-inline'));
+        if (!spans.length) return;
+        await Promise.allSettled(spans.map(async (span) => {
+            const type = span.dataset.citationType === 'cite' ? 'cite' : 'citep';
+            const dois = (span.dataset.citationDois || '').split(',').map(d => d.trim()).filter(Boolean);
+            if (!dois.length) return;
+            try {
+                const text = await this.formatCitation(dois, type);
+                const links = this.buildCitationLinks(text, dois);
+                span.innerHTML = links;
+                span.title = text;
+            } catch (err) {
+                console.warn('渲染引文失败:', err);
+                span.textContent = `[${dois.join('; ')}]`;
+                span.title = `渲染失败: ${err.message}`;
+            }
+        }));
+    }
+
+    normalizeDoiString(raw = '') {
+        return (raw || '')
+            .trim()
+            .replace(/^[({\[]+/, '')
+            .replace(/[)}\].,;]+$/, '')
+            .replace(/^doi:/i, '')
+            .replace(/^https?:\/\/(dx\.)?doi\.org\//i, '')
+            .replace(/_/g, '/');
+    }
+
+    buildCitationLinks(text, dois = []) {
+        const labels = (text || '').split(/;\s*/).filter(Boolean);
+        const safeLabel = this.escapeHtml(text || '');
+        const parts = [];
+        dois.forEach((doi, idx) => {
+            const label = this.escapeHtml(labels[idx] || safeLabel || this.normalizeDoiString(doi));
+            const href = `https://doi.org/${encodeURIComponent(this.normalizeDoiString(doi))}`;
+            parts.push(`<a class="citation-link" href="${href}" target="_blank" rel="noopener">${label}</a>`);
+        });
+        return parts.join('; ');
+    }
+
+    async formatCitation(dois = [], mode = 'citep') {
+        const clean = (dois || []).map(d => this.normalizeDoiString(d)).filter(Boolean);
+        const key = `${mode}:${clean.slice().sort().join(',')}`;
+        const storedMeta = this.loadCitationMetaFromStorage();
+        const hasMeta = clean.every(d => this.hasUsefulMeta(this.citationMetaCache[d] || storedMeta[d]));
+        if (this.citationCache[key]) {
+            const entry = this.citationCache[key];
+            if (!entry.fallback || hasMeta) {
+                return entry.text;
+            }
+        }
+
+        const fallback = this.formatCitationFallback(clean, mode);
+        try {
+            const { Cite, items } = await this.resolveCslItems(clean);
+            if (!Cite) throw new Error('citation-js 未加载');
+            const cite = new Cite(items);
+            let text = cite.format('citation', { template: 'apa', lang: 'en-US' });
+            if (Array.isArray(text)) text = text.join('; ');
+            if (!text || /n\.d\./i.test(text)) {
+                this.citationCache[key] = { text: fallback, fallback: true };
+                return fallback;
+            }
+            if (mode === 'cite') {
+                text = text.replace(/^\(\s*/, '').replace(/\s*\)$/, '');
+            }
+            this.citationCache[key] = { text, fallback: false };
+            return text;
+        } catch (err) {
+            console.warn('Citation render fallback:', err);
+            this.citationCache[key] = { text: fallback, fallback: true };
+            return fallback;
+        }
+    }
+
+    async ensureCiteLib() {
+        if (this.citeLib) return this.citeLib;
+        let Cite = window.Cite || globalThis.Cite || null;
+        const req = (typeof window.require === 'function') ? window.require : null;
+        if (!Cite && req) {
+            try {
+                const mod = req('citation-js');
+                Cite = mod?.Cite || mod?.default || mod || Cite;
+            } catch (_err) {
+                // ignore
+            }
+        }
+        if (!Cite && req) {
+            try {
+                const core = req('@citation-js/core');
+                Cite = core?.Cite || core?.default || core || Cite;
+            } catch (_err) {
+                // ignore
+            }
+        }
+        if (!Cite) {
+            await this.loadCitationScript();
+            Cite = window.Cite || globalThis.Cite || null;
+        }
+        if (Cite) this.citeLib = Cite;
+        return Cite;
+    }
+
+    loadCitationScript() {
+        return new Promise((resolve, reject) => {
+            const existing = document.querySelector('script[src*="js/core/citation.js"]');
+            if (existing) {
+                if (existing.dataset.loaded === '1' || existing.readyState === 'complete' || existing.readyState === 'loaded') {
+                    return resolve();
+                }
+                existing.addEventListener('load', () => resolve(), { once: true });
+                existing.addEventListener('error', (e) => reject(e), { once: true });
+                return;
+            }
+            const script = document.createElement('script');
+            script.src = 'js/core/citation.js';
+            script.defer = true;
+            script.dataset.loaded = '1';
+            script.onload = () => resolve();
+            script.onerror = (e) => reject(e);
+            document.head.appendChild(script);
+        });
+    }
+
+    extractDoisFromMarkdown(text = '') {
+        const dois = new Set();
+        const citeRe = /citep?\{([^}]+)\}/g;
+        let m;
+        while ((m = citeRe.exec(text)) !== null) {
+            const inside = m[1] || '';
+            inside.split(/[,，;]+/).map(d => d.trim()).filter(Boolean).forEach(d => dois.add(this.normalizeDoiString(d)));
+        }
+        const doiRe = /10\.\d{4,9}[^\s"'\)>\]},;]+/gi;
+        while ((m = doiRe.exec(text)) !== null) {
+            dois.add(this.normalizeDoiString(m[0]));
+        }
+        return Array.from(dois).filter(Boolean);
+    }
+
+    async buildReferenceList(dois = []) {
+        if (!dois.length) throw new Error('未找到 DOI');
+        try {
+            const { Cite, items } = await this.resolveCslItems(dois);
+            if (!Cite) throw new Error('citation-js 未加载');
+            const cite = new Cite(items);
+            let bib = cite.format('bibliography', {
+                template: 'apa',
+                lang: 'en-US',
+                format: 'text'
+            });
+            if (Array.isArray(bib)) {
+                bib = bib.join('\n');
+            }
+            if (bib) {
+                const lines = String(bib || '').split(/\n+/).map(l => l.trim()).filter(Boolean);
+                const mdLines = lines.map(line => `- ${line}`);
+                return `## References\n\n${mdLines.join('\n')}`;
+            }
+        } catch (err) {
+            console.warn('Reference render fallback:', err);
+        }
+        // fallback: simple DOI list
+        const mdLines = dois.map(d => `- DOI: https://doi.org/${d}`);
+        return `## References\n\n${mdLines.join('\n')}`;
+    }
+
+    async resolveCslItems(dois = []) {
+        const clean = (dois || []).map(d => this.normalizeDoiString(d)).filter(Boolean);
+        const Cite = await this.ensureCiteLib();
+        const items = [];
+        const stored = this.loadCitationMetaFromStorage();
+        for (const doi of clean) {
+            if (this.hasUsefulMeta(this.citationMetaCache[doi])) {
+                items.push(this.citationMetaCache[doi]);
+                continue;
+            }
+            if (this.hasUsefulMeta(stored[doi])) {
+                this.citationMetaCache[doi] = stored[doi];
+                items.push(stored[doi]);
+                continue;
+            }
+            let item = { DOI: doi };
+            try {
+                if (Cite && typeof Cite.async === 'function') {
+                    const res = await Cite.async(doi);
+                    const csl = Array.isArray(res) ? res[0] : res;
+                    if (csl && typeof csl === 'object') {
+                        csl.DOI = csl.DOI || doi;
+                        item = csl;
+                    }
+                }
+                // 兜底：若 async 拉取失败，尝试手动 fetch
+                if (!this.hasUsefulMeta(item)) {
+                    const resp = await fetch(`https://doi.org/${encodeURIComponent(doi)}`, {
+                        headers: { Accept: 'application/citeproc+json' }
+                    });
+                    if (resp.ok) {
+                        const json = await resp.json();
+                        if (json && typeof json === 'object') {
+                            json.DOI = json.DOI || doi;
+                            item = json;
+                        }
+                    }
+                }
+                // 再兜底：尝试 Crossref transform
+                if (!this.hasUsefulMeta(item)) {
+                    const cr = await this.fetchCslFromCrossref(doi);
+                    if (cr) {
+                        cr.DOI = cr.DOI || doi;
+                        item = cr;
+                    }
+                }
+                if (this.hasUsefulMeta(item)) {
+                    this.citationMetaCache[doi] = item;
+                    stored[doi] = item;
+                    this.saveCitationMetaToStorage(stored);
+                }
+            } catch (err) {
+                console.warn('Fetch DOI metadata failed:', doi, err);
+            }
+            items.push(item);
+        }
+        return { Cite, items };
+    }
+
+    loadCitationMetaFromStorage() {
+        try {
+            const raw = localStorage.getItem(this.citationMetaStoreKey);
+            if (!raw) return {};
+            const parsed = JSON.parse(raw);
+            const obj = parsed && typeof parsed === 'object' ? parsed : {};
+            // 过滤无效元数据，避免污染
+            const cleaned = {};
+            Object.entries(obj).forEach(([doi, meta]) => {
+                if (this.hasUsefulMeta(meta)) {
+                    cleaned[doi] = meta;
+                }
+            });
+            if (Object.keys(cleaned).length !== Object.keys(obj).length) {
+                this.saveCitationMetaToStorage(cleaned);
+            }
+            return cleaned;
+        } catch (_e) {
+            return {};
+        }
+    }
+
+    saveCitationMetaToStorage(data = {}) {
+        try {
+            localStorage.setItem(this.citationMetaStoreKey, JSON.stringify(data));
+        } catch (_e) {
+            // ignore storage errors
+        }
+    }
+
+    hasUsefulMeta(meta) {
+        if (!meta || typeof meta !== 'object') return false;
+        const keys = Object.keys(meta || {});
+        if (keys.length <= 1) return false; // only DOI is not useful
+        const hasAuthor = Array.isArray(meta.author) && meta.author.length > 0;
+        const hasTitle = !!meta.title;
+        const hasDate = !!(meta.issued || meta.issued_raw || meta.published || meta['container-title']);
+        return hasAuthor || hasTitle || hasDate;
+    }
+
+    clearCitationCache(showToast = true) {
+        this.citationCache = {};
+        this.citationMetaCache = {};
+        try {
+            localStorage.removeItem(this.citationMetaStoreKey);
+        } catch (_e) {
+            // ignore
+        }
+        if (showToast) {
+            this.showNotification('已清除引文缓存与本地元数据', 'success');
+        }
+    }
+
+    adjustReferenceFont(renderRoot) {
+        if (!renderRoot) return;
+        const headings = renderRoot.querySelectorAll('h1, h2, h3, h4');
+        headings.forEach(h => {
+            if ((h.textContent || '').trim().toLowerCase() === 'references') {
+                let sib = h.nextElementSibling;
+                while (sib && sib.tagName && sib.tagName.toLowerCase() === 'p' && !(sib.textContent || '').trim()) {
+                    sib = sib.nextElementSibling;
+                }
+                if (sib && sib.style) {
+                    sib.style.fontSize = '0.85em';
+                }
+            }
+        });
+    }
+
+    async fetchCslFromCrossref(doi) {
+        try {
+            const url = `https://api.crossref.org/v1/works/${encodeURIComponent(doi)}/transform/application/citeproc+json`;
+            const resp = await fetch(url, { method: 'GET' });
+            if (!resp.ok) return null;
+            const json = await resp.json();
+            return (json && typeof json === 'object') ? json : null;
+        } catch (err) {
+            console.warn('Crossref CSL fetch failed:', doi, err);
+            return null;
+        }
+    }
+
+    formatCitationFallback(dois = [], mode = 'citep') {
+        const list = (dois || []).map(d => this.normalizeDoiString(d)).filter(Boolean);
+        if (!list.length) return mode === 'cite' ? '' : '()';
+        const joined = list.join('; ');
+        return mode === 'cite' ? joined : `(${joined})`;
+    }
+
+    appendAutoReferenceSection(text = '', refMd = '') {
+        const cleaned = text.replace(/\n?## References[\s\S]*$/i, '').trimEnd();
+        const parts = [cleaned];
+        if (refMd.trim()) {
+            parts.push(refMd.trim());
+        }
+        return parts.filter(Boolean).join('\n\n') + '\n';
+    }
+
+    async generateReferencesFromMarkdown() {
+        const source = this.isMarkdownEditing ? (document.getElementById('markdownTextarea')?.value || '') : (this.currentMarkdownText || '');
+        if (!source) {
+            this.showNotification('当前无 Markdown 内容', 'info');
+            return;
+        }
+        const dois = this.extractDoisFromMarkdown(source);
+        if (!dois.length) {
+            this.showNotification('未在 Markdown 中找到 DOI', 'info');
+            return;
+        }
+        try {
+            const refSection = await this.buildReferenceList(dois);
+            const updated = this.appendAutoReferenceSection(source, refSection);
+            this.currentMarkdownText = updated;
+            this.hasUnsavedMarkdownChanges = true;
+            const textarea = document.getElementById('markdownTextarea');
+            if (textarea) textarea.value = updated;
+            this.renderMarkdownView(updated);
+            this.updateMarkdownToolbar();
+            this.updateMarkdownDirtyUI();
+            this.showNotification(`已生成参考文献 (${dois.length} 篇)`, 'success');
+        } catch (err) {
+            console.error('生成参考文献失败:', err);
+            this.showNotification(`生成参考文献失败: ${err.message}`, 'error');
+        }
     }
 
     applyQaCollapsedState(renderRoot) {
@@ -4750,9 +5158,14 @@ class PaperReviewerApp {
         }
         this.isMarkdownEditing = editing;
         const textarea = document.getElementById('markdownTextarea');
-        if (textarea && editing) {
-            textarea.value = this.currentMarkdownText || this.buildDefaultMarkdown();
-            this.onMarkdownEditorInput();
+        if (textarea) {
+            if (editing) {
+                textarea.value = this.currentMarkdownText || this.buildDefaultMarkdown();
+                this.onMarkdownEditorInput();
+            } else {
+                // 退出编辑时同步当前文本到内存，便于渲染新内容
+                this.currentMarkdownText = textarea.value;
+            }
         }
         this.updateMarkdownToolbar();
         this.updateMarkdownDirtyUI();
@@ -7440,6 +7853,11 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // Make app globally accessible for debugging
     window.paperReviewerApp = app;
+    window.testCite = async (dois, mode = 'citep') => {
+        const list = Array.isArray(dois) ? dois : [dois];
+        return app.formatCitation(list, mode === 'cite' ? 'cite' : 'citep');
+    };
+    window.clearCitationCache = () => app.clearCitationCache();
 
     // 全局 DOI -> APA 测试方法：在控制台调用 citeDoiToApa('10.xxxx/yyy')
     const loadCiteLib = async () => {

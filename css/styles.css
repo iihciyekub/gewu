@@ -2436,6 +2436,14 @@ ol.json-array {
     background: #ffebee;
 }
 
+/* Citation links */
+.citation-link {
+    text-decoration: none;
+}
+.citation-link:hover {
+    text-decoration: underline;
+}
+
 /* 项目选择器模态框 */
 .project-selector-content {
     max-width: 500px;
