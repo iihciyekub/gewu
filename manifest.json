@@ -3,9 +3,8 @@
     "prompts": {
       "checkDID": {
         "files": [
-          "checked.md",
-          "hight_recall_checked.md",
-          "ultral_checked.md"
+          "[0]checked.md",
+          "[1]exact_DID.md"
         ],
         "basePath": "/src/prompts/checkDID/"
       },

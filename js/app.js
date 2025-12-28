@@ -1543,6 +1543,9 @@ class PaperReviewerApp {
             <div class="context-menu-item" data-action="copyPdfName">
                 <i class="fas fa-copy"></i> 复制 PDF 文件名
             </div>
+            <div class="context-menu-item" data-action="copyPdfFile">
+                <i class="fas fa-copy"></i> 复制 PDF 文件
+            </div>
         `;
         
         document.body.appendChild(menu);
@@ -1559,6 +1562,8 @@ class PaperReviewerApp {
                     this.deleteFile(filename, fileItem);
                 } else if (action === 'copyPdfName') {
                     this.copyPdfNameToClipboard(filename);
+                } else if (action === 'copyPdfFile') {
+                    this.copyPdfFileToClipboard(filename);
                 }
             });
         });
@@ -1582,6 +1587,101 @@ class PaperReviewerApp {
             console.error('复制 PDF 文件名失败:', err);
             this.showNotification(`复制失败: ${err.message}`, 'error');
         }
+    }
+
+    async copyPdfFileToClipboard(jsonFilename) {
+        try {
+            const pdfFile = await this.getPdfFilenameForJson(jsonFilename);
+            if (!pdfFile) {
+                throw new Error('未找到对应的 PDF 文件名');
+            }
+            try {
+                await this.copyPdfFileWithBrowserClipboard(pdfFile);
+                this.showNotification(`已复制 PDF: ${pdfFile}`, 'success');
+                return;
+            } catch (browserErr) {
+                console.warn('Browser clipboard write failed, try server:', browserErr);
+            }
+            await this.copyPdfFileViaServer(pdfFile);
+            this.showNotification(`已通过系统剪贴板复制 PDF: ${pdfFile}`, 'success');
+        } catch (err) {
+            console.error('复制 PDF 文件失败:', err);
+            this.showNotification(`复制失败: ${err.message}`, 'error');
+        }
+    }
+
+    async copyPdfFileWithBrowserClipboard(pdfFile) {
+        await this.ensureClipboardFileWriteSupported();
+        const pdfPath = this.getPdfUrl(pdfFile);
+        const resp = await fetch(pdfPath, { cache: 'no-store' });
+        if (!resp.ok) throw new Error(`读取 PDF 失败 (${resp.status})`);
+        const blob = await resp.blob();
+        const typedBlob = blob.type ? blob : new Blob([await blob.arrayBuffer()], { type: 'application/pdf' });
+        const type = typedBlob.type || 'application/pdf';
+        const item = new ClipboardItem({ [type]: typedBlob });
+        await navigator.clipboard.write([item]);
+    }
+
+    async ensureClipboardFileWriteSupported() {
+        if (!window.isSecureContext) {
+            throw new Error('当前页面非安全上下文（需 https 或 localhost）');
+        }
+        if (!navigator.clipboard || typeof navigator.clipboard.write !== 'function' || typeof window.ClipboardItem === 'undefined') {
+            throw new Error('当前环境不支持文件写入剪贴板（需要安全上下文和新版本浏览器）');
+        }
+        try {
+            const perm = navigator.permissions && navigator.permissions.query
+                ? await navigator.permissions.query({ name: 'clipboard-write' })
+                : null;
+            if (perm && perm.state === 'denied') {
+                throw new Error('浏览器已拒绝剪贴板写入权限，请在设置中允许');
+            }
+        } catch (_e) {
+            // 忽略权限查询失败，后续写入会再提示
+        }
+    }
+
+    async copyPdfFileViaServer(pdfFile) {
+        const projectPath = this.currentProject ? this.currentProject.path : 'user';
+        const resp = await fetch('/copy-pdf-to-clipboard', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ projectPath, pdfFile })
+        });
+        if (!resp.ok) {
+            const text = await resp.text().catch(() => '');
+            throw new Error(text || `服务器复制失败 (${resp.status})`);
+        }
+        const result = await resp.json().catch(() => ({}));
+        if (!result.success) {
+            throw new Error(result.error || '服务器复制失败');
+        }
+    }
+
+    async getPdfFilenameForJson(jsonFilename) {
+        const fallback = `${(jsonFilename || '').replace(/\.[^.]+$/, '')}.pdf`;
+        // 如果当前文件已加载且是目标文件，直接取内存中的 meta_info
+        if (this.currentFile === jsonFilename && this.currentData?.meta_info) {
+            const val = this.normalizePdfPathValue(this.currentData.meta_info.pdf_path);
+            if (val) return val;
+        }
+        // 否则从文件读取 meta_info
+        try {
+            const response = await fetch(this.getDataUrl(jsonFilename), { cache: 'no-store' });
+            if (!response.ok) throw new Error(`读取失败 (${response.status})`);
+            const data = await response.json();
+            const val = data?.meta_info ? this.normalizePdfPathValue(data.meta_info.pdf_path) : '';
+            return val || fallback;
+        } catch (err) {
+            console.warn('读取 meta_info.pdf_path 失败，使用默认文件名:', err);
+            return fallback;
+        }
+    }
+
+    getPdfUrl(pdfFile) {
+        const projectPath = this.currentProject ? this.currentProject.path : 'user';
+        const segments = `${projectPath}/papers/${pdfFile}`.split('/').filter(Boolean).map(encodeURIComponent);
+        return `/${segments.join('/')}`;
     }
 
     // 重命名文件

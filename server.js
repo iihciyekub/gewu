@@ -8,6 +8,7 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const url = require('url');
+const { execFileSync } = require('child_process');
 
 const PORT = process.env.PORT ? Number(process.env.PORT) : 8000;
 const ROOT_DIR = path.resolve(__dirname);
@@ -162,6 +163,20 @@ function formatDateTime() {
     const d = new Date();
     const pad = (n) => n.toString().padStart(2, '0');
     return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+}
+
+function copyFileToSystemClipboard(absPath) {
+    try {
+        if (process.platform === 'darwin') {
+            const script = `set the clipboard to (POSIX file "${absPath.replace(/"/g, '\\"')}")`;
+            execFileSync('osascript', ['-e', script], { stdio: 'ignore' });
+            return true;
+        }
+        return false;
+    } catch (err) {
+        console.error('copyFileToSystemClipboard failed:', err);
+        return false;
+    }
 }
 
 function buildDefaultMarkdown(baseName) {
@@ -744,6 +759,7 @@ const server = http.createServer((req, res) => {
                 const pdfFiles = collectPdfFiles(papersDir);
                 const createdJson = [];
                 const createdMd = [];
+                const updatedJson = [];
 
                 pdfFiles.forEach((pdfPath) => {
                     const baseName = path.basename(pdfPath, path.extname(pdfPath));
@@ -763,6 +779,21 @@ const server = http.createServer((req, res) => {
                         };
                         fs.writeFileSync(jsonPath, JSON.stringify(tpl, null, 2), 'utf8');
                         createdJson.push(path.relative(projectRoot, jsonPath));
+                    } else {
+                        try {
+                            const raw = fs.readFileSync(jsonPath, 'utf8');
+                            const parsed = JSON.parse(raw);
+                            if (!parsed.meta_info || typeof parsed.meta_info !== 'object') {
+                                parsed.meta_info = {};
+                            }
+                            if (parsed.meta_info.pdf_path !== pdfFileName) {
+                                parsed.meta_info.pdf_path = pdfFileName;
+                                fs.writeFileSync(jsonPath, JSON.stringify(parsed, null, 2), 'utf8');
+                                updatedJson.push(path.relative(projectRoot, jsonPath));
+                            }
+                        } catch (err) {
+                            console.warn('Skip updating meta_info.pdf_path for', jsonPath, err);
+                        }
                     }
                     if (!fs.existsSync(mdPath)) {
                         fs.writeFileSync(mdPath, buildDefaultMarkdown(baseName), 'utf8');
@@ -775,11 +806,60 @@ const server = http.createServer((req, res) => {
                     success: true,
                     createdJson,
                     createdMd,
+                    updatedJson,
                     scanned: pdfFiles.length,
-                    message: pdfFiles.length ? '完成扫描' : '未找到 PDF，已确保目录存在'
+                    message: pdfFiles.length
+                        ? `完成扫描（更新 pdf_path ${updatedJson.length} 个）`
+                        : '未找到 PDF，已确保目录存在'
                 }));
             } catch (error) {
                 console.error('✗ Error syncing pdfs:', error);
+                res.writeHead(500, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ success: false, error: error.message }));
+            }
+        });
+        return;
+    }
+
+    // 将指定 PDF 复制到系统剪贴板（仅支持本机、macOS）
+    if (req.method === 'POST' && pathname === '/copy-pdf-to-clipboard') {
+        let body = '';
+        req.on('data', chunk => { body += chunk.toString(); });
+        req.on('end', () => {
+            try {
+                const data = body ? JSON.parse(body) : {};
+                const projectPath = data.projectPath || 'user';
+                const pdfFile = data.pdfFile || '';
+                const { papersDir } = resolveProjectDirs(projectPath);
+                const safeName = path.basename(pdfFile);
+                const pdfPath = path.join(papersDir, safeName);
+                const resolvedPapersDir = path.resolve(papersDir);
+                const resolvedPdf = path.resolve(pdfPath);
+                if (!resolvedPdf.startsWith(resolvedPapersDir)) {
+                    res.writeHead(400, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ success: false, error: 'Invalid path' }));
+                    return;
+                }
+                if (!safeName.toLowerCase().endsWith('.pdf')) {
+                    res.writeHead(400, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ success: false, error: '仅支持 PDF 文件' }));
+                    return;
+                }
+                if (!fs.existsSync(resolvedPdf)) {
+                    res.writeHead(404, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ success: false, error: 'PDF 不存在' }));
+                    return;
+                }
+                const ok = copyFileToSystemClipboard(resolvedPdf);
+                if (!ok) {
+                    res.writeHead(400, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ success: false, error: '当前系统不支持复制文件到剪贴板（需要 macOS）' }));
+                    return;
+                }
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ success: true }));
+            } catch (error) {
+                console.error('✗ Error copying pdf to clipboard:', error);
                 res.writeHead(500, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify({ success: false, error: error.message }));
             }
