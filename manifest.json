@@ -1,6 +1,14 @@
 {
   "src": {
     "prompts": {
+      "checkDID": {
+        "files": [
+          "checked.md",
+          "hight_recall_checked.md",
+          "ultral_checked.md"
+        ],
+        "basePath": "/src/prompts/checkDID/"
+      },
       "qjson": {
         "files": [
           "step1.md",

@@ -1,6 +1,10 @@
 js/pdfjs
 js/core
+user/data
+user/outputs
+user/temp
 user
+user/papers
 test
 .DS_Store
 .vscode
@@ -11,4 +15,5 @@ build
 coverage
 logs
 *.log
-npm-debug.log*
+user/
+
