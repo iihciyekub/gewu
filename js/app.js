@@ -786,6 +786,16 @@ class PaperReviewerApp {
                 this.toggleShortcutsPanel();
             });
         }
+        const importJsonBtn = document.getElementById('importJsonBtn');
+        const importJsonFolderInput = document.getElementById('importJsonFolderInput');
+        if (importJsonBtn && importJsonFolderInput) {
+            importJsonBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                importJsonFolderInput.value = '';
+                importJsonFolderInput.click();
+            });
+            importJsonFolderInput.addEventListener('change', (e) => this.handleJsonFolderImport(e));
+        }
         const syncPdfBtn = document.getElementById('syncPdfBtn');
         if (syncPdfBtn) {
             syncPdfBtn.addEventListener('click', () => this.createEmptyFilesFromPdfs());
@@ -2910,6 +2920,92 @@ class PaperReviewerApp {
         this.setupEditableListeners();
         this.updateUndoButtonState();
         this.showNotification('已撤销上次粘贴合并', 'success');
+    }
+
+    // 从用户选择的目录批量合并同名 JSON，新增字段合并，冲突字段用导入值覆盖
+    async handleJsonFolderImport(event) {
+        const input = event?.target;
+        const files = Array.from(input?.files || []);
+        if (input) input.value = '';
+        if (!files.length) return;
+        if (!this.currentProject) {
+            this.showNotification('请先加载项目后再导入 JSON', 'error');
+            return;
+        }
+        if (this.hasUnsavedChanges || this.hasUnsavedMarkdownChanges) {
+            const proceed = confirm('当前文件存在未保存的修改，导入外部 JSON 可能覆盖，是否继续？');
+            if (!proceed) return;
+        }
+
+        const jsonFiles = files.filter(file => (file.name || '').toLowerCase().endsWith('.json'));
+        if (!jsonFiles.length) {
+            this.showNotification('所选目录未找到 JSON 文件', 'info');
+            return;
+        }
+
+        if (!this.currentFileList || !this.currentFileList.length) {
+            await this.loadFileList(true);
+        }
+        const existingNames = new Set((this.currentFileList || []).map(name => name.toLowerCase()));
+        const summary = { merged: [], skipped: [], failed: [] };
+
+        for (const file of jsonFiles) {
+            if (!existingNames.has(file.name.toLowerCase())) {
+                summary.skipped.push(file.name);
+                continue;
+            }
+            try {
+                const incomingText = await file.text();
+                const incomingData = JSON.parse(incomingText);
+                const resp = await fetch(this.getDataUrl(file.name), { cache: 'no-store' });
+                if (!resp.ok) throw new Error('读取项目内同名文件失败');
+                const currentData = await resp.json();
+                const merged = JSON.parse(JSON.stringify(currentData || {}));
+                this.deepMerge(merged, incomingData || {});
+                if (!merged.schema_version) {
+                    merged.schema_version = this.generateSchemaVersion();
+                }
+                merged.lastupdate = this.generateLastUpdate();
+                const saveResp = await fetch('/save-json', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        projectPath: this.currentProject ? this.currentProject.path : 'user',
+                        filename: file.name,
+                        content: JSON.stringify(merged, null, 2)
+                    })
+                });
+                if (!saveResp.ok) {
+                    const text = await saveResp.text();
+                    throw new Error(text || '保存失败');
+                }
+                summary.merged.push(file.name);
+
+                if (this.currentFile === file.name) {
+                    this.currentData = merged;
+                    this.hasUnsavedChanges = false;
+                    delete this.tempDataCache[file.name];
+                    this.updateSaveButtonState();
+                    this.updateSchemaBadge();
+                    this.renderStructuredView();
+                    this.renderFlatView();
+                    this.setupEditableListeners();
+                    this.applyCurrentView();
+                }
+            } catch (err) {
+                console.error('合并 JSON 失败:', file.name, err);
+                summary.failed.push({ name: file.name, reason: err.message || '未知错误' });
+            }
+        }
+
+        const mergedMsg = `合并 ${summary.merged.length} 个文件`;
+        const skippedMsg = summary.skipped.length ? `，跳过未匹配 ${summary.skipped.length}` : '';
+        const failedMsg = summary.failed.length ? `，失败 ${summary.failed.length}` : '';
+        const type = summary.failed.length ? 'error' : (summary.merged.length ? 'success' : 'info');
+        this.showNotification(`导入完成：${mergedMsg}${skippedMsg}${failedMsg}`, type);
+        if (summary.failed.length) {
+            console.warn('JSON 导入失败详情:', summary.failed);
+        }
     }
 
     async createEmptyFilesFromPdfs() {
