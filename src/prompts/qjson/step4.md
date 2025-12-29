@@ -61,6 +61,9 @@
 
 ```json
 {
+  "meta_info": {
+    "doi":"",
+  },
   "exogeneity_and_threats": {
     "treatment_exogeneity_argument": "goto{...}",
     "selection_concerns": "not reported",

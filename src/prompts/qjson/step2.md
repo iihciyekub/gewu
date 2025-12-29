@@ -30,6 +30,9 @@
 
 ```json
 {
+  "meta_info": {
+    "doi":"",
+  },
   "sample_and_data": {
     "unit_of_analysis": "",
     "data_sources": [],

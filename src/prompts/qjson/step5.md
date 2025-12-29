@@ -13,6 +13,9 @@
 
 ```json
 {
+  "meta_info": {
+    "doi":"",
+  },
   "robustness_checks": {
     "placebo_tests": "",
     "alternative_samples": "",

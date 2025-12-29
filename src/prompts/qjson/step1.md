@@ -20,15 +20,13 @@
 ```json
 {
   "meta_info": {
-    "paper_id": "<第一作者firstname+年份.>",
     "title": "",
     "authors": [],
+    "doi":"",
     "year": null,
     "journal": "",
-    "doi": "",
     "wosid": "",
     "keywords": [],
-    "pdf_path": "<doi 按'/'替换为'_'再加'.pdf'>",
     "setting": {
       "country": "",
       "industry": "",

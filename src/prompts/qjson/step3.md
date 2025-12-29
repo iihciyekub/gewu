@@ -86,6 +86,9 @@
 示例：（实际使用时请用完整、对应字段、真实推理与引用后的数据替换，下例仅供格式参考，实际内容需更长更复杂）
 ```json
 {
+  "meta_info": {
+    "doi":"",
+  },
   "identification_strategy": {
     "method": "DID",
     "fixed_effects": {
