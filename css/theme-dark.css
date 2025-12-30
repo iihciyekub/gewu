@@ -1,0 +1,554 @@
+:root {
+    /* VS Code 暗色基准色 */
+    --vscode-bg: #1e1e1e;
+    --vscode-panel: #252526;
+    --vscode-border: #3c3c3c;
+    --vscode-text: #d4d4d4;
+    --vscode-text-muted: #9da1ad;
+    --vscode-accent: #569cd6;
+    --vscode-accent-strong: #3b8eea;
+    --vscode-hover: #2a2d2e;
+    --vscode-active: #3a3f41;
+}
+
+body.theme-dark {
+    --wos-blue: #2472c8;
+    --wos-blue-light: #3b8eea;
+    --wos-blue-dark: #1e4976;
+    --wos-orange: #ce9178;
+    --wos-orange-light: #d7ba7d;
+    --wos-bg: var(--vscode-bg);
+    --wos-sidebar: #1f1f1f;
+    --wos-border: var(--vscode-border);
+    --wos-text: var(--vscode-text);
+    --wos-text-light: var(--vscode-text-muted);
+    --wos-hover: var(--vscode-hover);
+    --wos-active: var(--vscode-active);
+    color: var(--vscode-text);
+    background: var(--vscode-bg);
+}
+
+body.theme-dark .container {
+    background: var(--vscode-bg);
+}
+
+body.theme-dark .left-panel,
+body.theme-dark .middle-panel,
+body.theme-dark .right-panel {
+    background: var(--vscode-panel);
+    color: var(--vscode-text);
+}
+
+body.theme-dark .panel-header,
+body.theme-dark .middle-header,
+body.theme-dark .file-filter,
+body.theme-dark .section-header {
+    background: #202225;
+    border-color: var(--vscode-border);
+    color: var(--vscode-text);
+}
+
+body.theme-dark #lastUpdateDisplay {
+    color: var(--vscode-text);
+}
+
+body.theme-dark #lastUpdateDisplay.unsaved-state {
+    background: #3a3f41;
+    color: var(--vscode-text);
+}
+
+body.theme-dark .panel-header .panel-header-left i,
+body.theme-dark .panel-header-actions button i {
+    color: var(--vscode-text);
+}
+
+body.theme-dark .file-list,
+body.theme-dark .file-group,
+body.theme-dark .file-group-body,
+body.theme-dark .flat-view,
+body.theme-dark .markdown-view {
+    background: var(--vscode-panel);
+    color: var(--vscode-text);
+}
+
+body.theme-dark .file-item {
+    color: var(--vscode-text);
+}
+
+body.theme-dark .file-item:hover {
+    background: var(--vscode-hover);
+}
+
+body.theme-dark .file-item.active {
+    background: var(--vscode-accent);
+    color: #fff;
+}
+
+body.theme-dark .file-item.active i,
+body.theme-dark .file-group-header,
+body.theme-dark .file-group-title {
+    color: #fff;
+}
+
+body.theme-dark .file-group {
+    border-color: var(--vscode-border);
+}
+
+body.theme-dark .file-group-header {
+    background: var(--vscode-hover);
+}
+
+body.theme-dark .file-group-header:hover {
+    background: var(--vscode-active);
+}
+
+body.theme-dark .file-item:hover {
+    background: var(--vscode-hover);
+    color: var(--vscode-text);
+}
+
+body.theme-dark .panel-header-actions .btn-switch-project,
+body.theme-dark .btn-sync-pdf,
+body.theme-dark .btn-import-json {
+    background: var(--vscode-hover);
+    color: var(--vscode-text);
+    border: 1px solid var(--vscode-border);
+}
+
+body.theme-dark .panel-header-actions .btn-switch-project:hover,
+body.theme-dark .btn-sync-pdf:hover,
+body.theme-dark .btn-import-json:hover {
+    background: var(--vscode-active);
+    color: var(--vscode-text);
+}
+
+body.theme-dark .middle-panel .table-container,
+body.theme-dark table {
+    background: var(--vscode-panel);
+    color: var(--vscode-text);
+}
+
+body.theme-dark input,
+body.theme-dark textarea,
+body.theme-dark select {
+    background: #1f1f1f;
+    color: var(--vscode-text);
+    border-color: var(--vscode-border);
+}
+
+body.theme-dark #editKeyInput,
+body.theme-dark #editTextarea {
+    background: #1f1f1f;
+    color: var(--vscode-text);
+    border: 1px solid var(--vscode-border);
+}
+
+body.theme-dark .btn {
+    color: var(--vscode-text);
+}
+
+body.theme-dark .btn-primary {
+    background: var(--vscode-accent);
+}
+
+body.theme-dark .btn-secondary,
+body.theme-dark .btn-switch-project,
+body.theme-dark .btn-sync-pdf {
+    background: var(--vscode-hover);
+    color: var(--vscode-text);
+    border: 1px solid var(--vscode-border);
+}
+
+body.theme-dark .btn:hover,
+body.theme-dark .btn-secondary:hover,
+body.theme-dark .btn-switch-project:hover,
+body.theme-dark .btn-sync-pdf:hover {
+    background: var(--vscode-active);
+}
+
+body.theme-dark .btn-theme-toggle {
+    background: var(--vscode-hover);
+    color: var(--vscode-text);
+    border: none;
+}
+
+body.theme-dark .btn-theme-toggle:hover {
+    background: var(--vscode-active);
+    color: #fff;
+}
+
+body.theme-dark .btn-pdfjs-fullscreen,
+body.theme-dark .btn-pdfjs-download {
+    background: var(--vscode-accent-strong);
+    box-shadow: 0 6px 16px rgba(36, 114, 200, 0.25);
+    color: var(--vscode-text);
+}
+
+body.theme-dark .btn-pdfjs-fullscreen:hover,
+body.theme-dark .btn-pdfjs-download:hover {
+    background: var(--vscode-accent);
+    box-shadow: 0 8px 18px rgba(36, 114, 200, 0.3);
+}
+
+body.theme-dark .right-panel iframe {
+    background: #0f1113;
+}
+
+body.theme-dark .context-menu {
+    background: var(--vscode-panel);
+    border-color: var(--vscode-border);
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4);
+}
+
+body.theme-dark .context-menu-item {
+    color: var(--vscode-text);
+}
+
+body.theme-dark .context-menu-item:hover {
+    background: var(--vscode-hover);
+}
+
+body.theme-dark .context-menu-item[data-action="delete"] {
+    color: #f28b82;
+}
+
+body.theme-dark .modal .modal-content,
+body.theme-dark .modal .modal-header,
+body.theme-dark .modal .modal-body,
+body.theme-dark .modal .modal-footer {
+    background: var(--vscode-panel);
+    color: var(--vscode-text);
+    border-color: var(--vscode-border);
+}
+
+body.theme-dark .json-editor textarea,
+body.theme-dark #jsonEditorTextarea {
+    background: #1f1f1f;
+    color: var(--vscode-text);
+    border-color: var(--vscode-border);
+}
+
+body.theme-dark .math-preview {
+    background: var(--vscode-panel);
+    color: var(--vscode-text);
+    border-color: var(--vscode-border);
+}
+
+body.theme-dark .file-filter input {
+    background: #1f1f1f;
+    color: var(--vscode-text);
+    border-color: var(--vscode-border);
+}
+
+body.theme-dark .json-table td:nth-child(2) {
+    color: #e3c07b;
+    background: #1f1f1f;
+    border-right: 1px solid var(--vscode-border);
+}
+
+body.theme-dark .json-table td:nth-child(3) {
+    color: var(--vscode-text);
+}
+
+body.theme-dark .json-table td.toggle-cell {
+    background: #1a1a1a;
+    border-right: 1px solid var(--vscode-border);
+}
+
+/* Key 文本保持暖金色，在暗色背景下更清晰 */
+body.theme-dark .json-table .editable-key {
+    color: #e3c07b;
+}
+
+body.theme-dark .json-table td {
+    border-bottom: 1px solid var(--vscode-border) !important;
+    background: var(--vscode-panel) !important;
+    color: var(--vscode-text) !important;
+}
+
+body.theme-dark .json-table tr {
+    border-color: var(--vscode-border) !important;
+    background: var(--vscode-panel) !important;
+}
+
+body.theme-dark .json-table th {
+    background: #1f1f1f !important;
+    color: var(--vscode-text) !important;
+    border: 1px solid var(--vscode-border) !important;
+}
+
+body.theme-dark .json-table tr:hover th,
+body.theme-dark .json-table tr.row-selected th {
+    background: #1f1f1f !important;
+    color: var(--vscode-text) !important;
+}
+
+body.theme-dark .json-table tr.row-selected {
+    background: rgba(86, 156, 214, 0.12);
+}
+
+body.theme-dark .json-table tr.drag-over {
+    outline-color: var(--vscode-accent);
+}
+
+body.theme-dark .json-table tr:hover {
+    background: var(--vscode-hover) !important;
+}
+
+body.theme-dark .json-table tr:hover td {
+    background: var(--vscode-hover) !important;
+}
+
+body.theme-dark .json-table tr:hover td:nth-child(2),
+body.theme-dark .json-table tr:hover td.toggle-cell {
+    background: #1c1c1c !important;
+}
+
+/* 折叠/展开后的行保持暗色背景，避免恢复白色 */
+body.theme-dark .json-table tr[style*="display: none"] {
+    background: var(--vscode-panel) !important;
+}
+
+body.theme-dark .json-table tr[style*="display: none"] td,
+body.theme-dark .json-table tr[style*="display: none"] th {
+    background: var(--vscode-panel) !important;
+    color: var(--vscode-text);
+}
+
+/* 嵌套表头/标题保持暗色 */
+body.theme-dark .nested-table-header {
+    background: #1f1f1f !important;
+    color: var(--vscode-text) !important;
+    border-color: var(--vscode-border) !important;
+}
+
+body.theme-dark .json-table td input,
+body.theme-dark .json-table td textarea,
+body.theme-dark .json-table td select {
+    background: #1f1f1f;
+    color: var(--vscode-text);
+    border: 1px solid var(--vscode-border);
+}
+
+/* 去除浏览器自动填充/聚焦的黄色背景 */
+body.theme-dark input:-webkit-autofill,
+body.theme-dark textarea:-webkit-autofill,
+body.theme-dark select:-webkit-autofill {
+    -webkit-box-shadow: 0 0 0px 1000px #1f1f1f inset;
+    -webkit-text-fill-color: var(--vscode-text);
+    caret-color: var(--vscode-text);
+}
+
+body.theme-dark .editable-value:hover {
+    background: var(--vscode-hover);
+    box-shadow: 0 0 0 1px var(--vscode-border);
+}
+
+/* 通用表单 */
+body.theme-dark .form-group label {
+    color: var(--vscode-text);
+}
+
+body.theme-dark .form-group input[type="text"],
+body.theme-dark .form-group input[type="number"],
+body.theme-dark .form-group select,
+body.theme-dark .form-group textarea {
+    background: #1f1f1f;
+    color: var(--vscode-text);
+    border: 1px solid var(--vscode-border);
+}
+
+body.theme-dark .form-group input:focus,
+body.theme-dark .form-group select:focus,
+body.theme-dark .form-group textarea:focus {
+    outline: none;
+    border-color: var(--vscode-accent);
+    box-shadow: 0 0 0 2px rgba(86, 156, 214, 0.25);
+}
+
+body.theme-dark .info-panel {
+    background: var(--vscode-panel);
+    color: var(--vscode-text);
+    border-color: var(--vscode-border);
+}
+
+body.theme-dark .prompt-chip {
+    border-color: var(--vscode-border);
+}
+
+body.theme-dark .prompt-chip:hover {
+    background: var(--vscode-hover);
+    color: var(--vscode-text);
+}
+
+body.theme-dark .prompt-chip.active {
+    background: var(--vscode-accent);
+    border-color: var(--vscode-border);
+    color: #fff;
+}
+
+body.theme-dark .header-dropdown-menu {
+    background: var(--vscode-panel);
+    border-color: var(--vscode-border);
+}
+
+body.theme-dark .header-dropdown-item {
+    color: var(--vscode-text);
+}
+
+body.theme-dark .header-dropdown-item:hover {
+    background: var(--vscode-hover);
+}
+
+body.theme-dark .header-dropdown-item i {
+    color: var(--vscode-accent);
+}
+
+body.theme-dark .right-panel {
+    background: #1b1d20;
+    border-left: 1px solid var(--vscode-border);
+}
+
+body.theme-dark .resizer {
+    background: #264763;
+    box-shadow: inset 0 0 0 1px rgba(86, 156, 214, 0.35);
+}
+
+body.theme-dark .resizer:hover {
+    background: #2f5b81;
+    box-shadow: inset 0 0 0 1px rgba(86, 156, 214, 0.55);
+}
+
+body.theme-dark .resizer-toggle {
+    color: var(--vscode-text);
+    background: #2b3847;
+    border-radius: 10px;
+    padding: 2px 6px;
+    box-shadow: inset 0 0 0 1px rgba(86, 156, 214, 0.45);
+}
+
+body.theme-dark .resizer-toggle:hover {
+    background: #33506e;
+    box-shadow: inset 0 0 0 1px rgba(86, 156, 214, 0.7);
+}
+
+body.theme-dark .resizer-toggle i {
+    background: transparent;
+    border-radius: 50%;
+    padding: 0;
+}
+
+body.theme-dark .collapsible-header {
+    background: var(--vscode-panel);
+    border-color: var(--vscode-border);
+    color: var(--vscode-text);
+}
+
+/* 折叠/选中状态也保持深色，不被默认浅色覆盖 */
+body.theme-dark .collapsible-section.section-selected > .collapsible-header {
+    background: var(--vscode-panel) !important;
+    box-shadow: none !important;
+    border-color: var(--vscode-border) !important;
+}
+
+body.theme-dark .collapsible-section.section-selected > .collapsible-header:hover {
+    background: var(--vscode-hover) !important;
+}
+
+body.theme-dark .collapsible-section.section-selected > .collapsible-header.active {
+    background: var(--vscode-active) !important;
+}
+
+body.theme-dark .collapsible-header:hover {
+    background: var(--vscode-hover);
+}
+
+body.theme-dark .collapsible-header.active {
+    background: var(--vscode-active) !important;
+    border-bottom: 1px solid var(--vscode-border);
+    color: var(--vscode-text);
+}
+
+body.theme-dark .collapsible-title {
+    color: var(--vscode-text);
+}
+
+body.theme-dark .collapsible-toggle,
+body.theme-dark .header-delete {
+    color: var(--vscode-text-muted);
+}
+
+body.theme-dark .header-add {
+    color: var(--vscode-accent);
+}
+
+body.theme-dark .header-actions {
+    color: #e6e9ef;
+}
+
+body.theme-dark .header-actions .btn.header-icon-only {
+    color: #e6e9ef;
+}
+
+body.theme-dark .header-actions .btn.header-icon-only:hover {
+    color: var(--vscode-accent);
+}
+
+/* 引文标签与暗色适配 */
+body.theme-dark .quote-tabs {
+    border-bottom: 1px solid var(--vscode-border);
+}
+
+body.theme-dark .quote-tab {
+    background: #262a30;
+    border: 1px solid var(--vscode-border);
+    border-bottom: none;
+    color: var(--vscode-text-muted);
+}
+
+body.theme-dark .quote-tab:hover {
+    background: var(--vscode-hover);
+    color: var(--vscode-accent);
+}
+
+body.theme-dark .quote-tab.active {
+    background: #2f333a;
+    color: var(--vscode-accent);
+    font-weight: 600;
+    border-color: var(--vscode-accent);
+    border-bottom: 1px solid #2f333a;
+    margin-bottom: -1px;
+}
+
+body.theme-dark .quote-tab .tab-remove {
+    color: var(--vscode-text-muted);
+}
+
+body.theme-dark .quote-tab .tab-remove:hover {
+    color: #f28b82;
+}
+
+/* Markdown 渲染保持浅色风格 */
+body.theme-dark .markdown-view {
+    background: #f6f7f9;
+    color: #1f1f1f;
+}
+
+body.theme-dark .markdown-body {
+    background: #f6f7f9;
+    color: #1f1f1f;
+}
+
+body.theme-dark .markdown-body h1,
+body.theme-dark .markdown-body h2,
+body.theme-dark .markdown-body h3,
+body.theme-dark .markdown-body h4,
+body.theme-dark .markdown-body h5,
+body.theme-dark .markdown-body h6 {
+    color: #111;
+}
+
+body.theme-dark .markdown-body code {
+    background: #e9edf3;
+    color: #b31d28;
+}

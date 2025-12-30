@@ -971,7 +971,7 @@ server.on('error', (err) => {
     process.exit(1);
 });
 
-server.listen(PORT, () => {
+server.listen(PORT, '127.0.0.1', () => {
     console.log('🚀 Server running at http://localhost:' + PORT + '/');
     console.log('📁 Serving files from: ' + __dirname);
     console.log('💾 JSON operations supported:');

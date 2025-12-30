@@ -12,6 +12,7 @@
     <link rel="stylesheet" href="js/core/fontawesome-free-6.7.2-web/css/all.min.css">
     <link rel="stylesheet" href="js/core/jquery.json-viewer.css">
     <link rel="stylesheet" href="css/styles.css">
+    <link rel="stylesheet" href="css/theme-dark.css">
     
     <!-- MathJax for LaTeX rendering -->
     <script>
@@ -153,6 +154,9 @@
                         </div>
                     </div>
                     <div class="header-actions">
+                        <button class="btn btn-theme-toggle header-icon-only" id="themeToggleBtn" title="切换夜间/日间模式" aria-label="切换夜间/日间模式">
+                            <i class="fas fa-moon"></i>
+                        </button>
                         <div class="header-dropdown" id="jsonMenuDropdown">
                             <button id="jsonMenuToggleBtn" class="btn header-icon-only" type="button" title="JSON 菜单" aria-label="JSON 菜单">
                                 <i class="fas fa-database"></i>
@@ -332,7 +336,7 @@
                 <textarea id="gotoEditTextarea" placeholder="Edit goto{...} text here"></textarea>
             </div>
             <div class="modal-footer">
-                <button class="btn" id="gotoEditCancel">取消</button>
+                <button class="btn btn-primary" id="gotoEditCancel">取消</button>
                 <button class="btn btn-primary" id="gotoEditSave">保存</button>
             </div>
         </div>

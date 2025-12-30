@@ -86,6 +86,7 @@ class PaperReviewerApp {
         this.groupMenuState = null; // { menuEl, groups, index }
         this.currentPdfLoadToken = 0;
         this.lastPdfLoadedUrl = '';
+        this.theme = this.loadTheme();
 
         this.init();
     }
@@ -103,6 +104,51 @@ class PaperReviewerApp {
     debugLog(...args) {
         if (!this.debugEnabled) return;
         console.log(...args);
+    }
+
+    loadTheme() {
+        try {
+            const saved = localStorage.getItem('reviewerTheme');
+            if (saved === 'dark' || saved === 'light') return saved;
+        } catch (_e) {
+            // ignore
+        }
+        return 'light';
+    }
+
+    persistTheme() {
+        try {
+            localStorage.setItem('reviewerTheme', this.theme);
+        } catch (_e) {
+            // ignore
+        }
+    }
+
+    applyTheme() {
+        const isDark = this.theme === 'dark';
+        document.body.classList.toggle('theme-dark', isDark);
+        document.body.classList.toggle('theme-vscode', isDark);
+        this.updateThemeToggleButton(isDark);
+    }
+
+    toggleTheme() {
+        this.theme = this.theme === 'dark' ? 'light' : 'dark';
+        this.applyTheme();
+        this.persistTheme();
+        // 同步到项目配置，方便重载后保持一致
+        try {
+            this.saveProjectConfig();
+        } catch (_e) {
+            // ignore
+        }
+    }
+
+    updateThemeToggleButton(isDark) {
+        const btn = document.getElementById('themeToggleBtn');
+        if (!btn) return;
+        const icon = btn.querySelector('i');
+        btn.title = isDark ? '切换到日间模式' : '切换到夜间模式';
+        if (icon) icon.className = isDark ? 'fas fa-sun' : 'fas fa-moon';
     }
 
     loadPromptSelectedByGroup() {
@@ -655,6 +701,7 @@ class PaperReviewerApp {
         this.updateMarkdownToolbar();
         this.updateMarkdownMenuState();
         this.applyEditLockState();
+        this.applyTheme();
         this.setupResizers();
         this.setupDraggableModal();
         this.loadPromptShortcuts();
@@ -678,6 +725,7 @@ class PaperReviewerApp {
                 this.recentProjects = data.recentProjects || [];
                 this.fileOrders = data.fileOrders || {};
                 this.fileGroups = data.fileGroups || {};
+                if (data.theme) this.theme = data.theme;
             }
         } catch (error) {
             console.error('Failed to load project config:', error);
@@ -691,7 +739,8 @@ class PaperReviewerApp {
                 currentProject: this.currentProject,
                 recentProjects: this.recentProjects,
                 fileOrders: this.fileOrders,
-                fileGroups: this.fileGroups
+                fileGroups: this.fileGroups,
+                theme: this.theme
             };
             localStorage.setItem('reviewerProjectConfig', JSON.stringify(config));
         } catch (error) {
@@ -1125,6 +1174,11 @@ class PaperReviewerApp {
                 e.preventDefault();
                 this.createGroup();
             });
+        }
+        const themeToggleBtn = document.getElementById('themeToggleBtn');
+        if (themeToggleBtn) {
+            themeToggleBtn.addEventListener('click', () => this.toggleTheme());
+            this.updateThemeToggleButton(this.theme === 'dark');
         }
 
         // 粘贴事件监听
