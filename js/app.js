@@ -79,6 +79,7 @@ class PaperReviewerApp {
         this.currentFileList = [];
         this.draggingFile = null; // { filename, fromGroupId }
         this.currentFileDragState = null; // { targetFilename, targetGroupId, placeAfter }
+        this.dragPreviewEl = null;
         this.selectedFiles = new Set();
         this.lastFileSelectionAnchor = null;
         this.visibleFileOrder = [];
@@ -546,6 +547,28 @@ class PaperReviewerApp {
         canvas.height = 1;
         this.blankDragImage = canvas;
         return canvas;
+    }
+
+    createDragPreview(label) {
+        if (!label) return null;
+        this.removeDragPreview();
+        const el = document.createElement('div');
+        el.className = 'file-drag-preview';
+        el.textContent = label;
+        document.body.appendChild(el);
+        // 放到视图外，避免闪烁
+        el.style.position = 'absolute';
+        el.style.left = '-9999px';
+        el.style.top = '-9999px';
+        this.dragPreviewEl = el;
+        return el;
+    }
+
+    removeDragPreview() {
+        if (this.dragPreviewEl && this.dragPreviewEl.parentElement) {
+            this.dragPreviewEl.parentElement.removeChild(this.dragPreviewEl);
+        }
+        this.dragPreviewEl = null;
     }
 
     applyRawJsonChanges() {
@@ -1784,7 +1807,7 @@ class PaperReviewerApp {
             count.className = 'file-group-count';
             const totalCount = (group.files || []).length;
             const filteredCount = group.filteredCount ?? totalCount;
-            count.textContent = this.fileFilter ? `${filteredCount}/${totalCount}` : `${totalCount}`;
+            count.textContent = `${filteredCount}/${totalCount}`;
 
             header.appendChild(toggle);
             header.appendChild(title);
@@ -1821,7 +1844,7 @@ class PaperReviewerApp {
                         window.paperReviewerApp.showFileContextMenu(e, file, fileItem);
                     });
 
-                    fileItem.addEventListener('dragstart', (e) => this.handleFileDragStart(e, file, group.id));
+                    fileItem.addEventListener('dragstart', (e) => this.handleFileDragStart(e, file, group.id, fileItem));
                     fileItem.addEventListener('dragover', (e) => this.handleFileDragOver(e, file, group.id, fileItem));
                     fileItem.addEventListener('dragleave', () => this.clearFileDragHighlights(fileItem));
                     fileItem.addEventListener('drop', (e) => this.handleFileDropOnItem(e, file, group.id));
@@ -1829,6 +1852,7 @@ class PaperReviewerApp {
                         this.draggingFile = null;
                         this.currentFileDragState = null;
                         this.clearAllFileDragHighlights();
+                        fileItem.classList.remove('dragging');
                     });
 
                     if (this.selectedFiles.has(file)) {
@@ -1855,14 +1879,23 @@ class PaperReviewerApp {
         }
     }
 
-    handleFileDragStart(e, filename, groupId) {
-        this.draggingFile = { filename, fromGroupId: groupId };
+    handleFileDragStart(e, filename, groupId, itemEl = null) {
+        const selected = this.getSelectedFilesArray();
+        const inSelection = selected.includes(filename);
+        const dragFiles = inSelection && selected.length > 1 ? selected : [filename];
+        this.draggingFile = { filename, fromGroupId: groupId, files: dragFiles };
         this.currentFileDragState = null;
+        const targetEl = itemEl || e?.target;
+        if (targetEl?.classList) targetEl.classList.add('dragging');
+
+        const count = dragFiles.length;
+        const label = count > 1 ? `移动 ${count} 个文件` : filename.replace(/\.[^.]+$/, '');
+        const preview = this.createDragPreview(label);
+
         if (e.dataTransfer) {
             e.dataTransfer.effectAllowed = 'move';
             e.dataTransfer.setData('text/plain', filename);
-            const blank = this.getBlankDragImage();
-            if (blank) e.dataTransfer.setDragImage(blank, 0, 0);
+            if (preview) e.dataTransfer.setDragImage(preview, -10, -10);
         }
     }
 
@@ -1870,6 +1903,10 @@ class PaperReviewerApp {
         if (!this.draggingFile) return;
         e.preventDefault();
         if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
+        if (this.draggingFile.files && this.draggingFile.files.length > 1) {
+            this.markFileDragPosition(targetEl, false);
+            return;
+        }
         const before = e.offsetY < (targetEl?.clientHeight || 0) / 2;
         this.currentFileDragState = { targetFilename, targetGroupId, placeAfter: !before };
         this.markFileDragPosition(targetEl, before);
@@ -1882,10 +1919,14 @@ class PaperReviewerApp {
             return;
         }
         e.preventDefault();
-        const placeAfter = this.currentFileDragState?.targetFilename === targetFilename
-            ? !!this.currentFileDragState.placeAfter
-            : (e.offsetY >= (e.currentTarget?.clientHeight || 0) / 2);
-        this.moveFileBetweenGroups(this.draggingFile.filename, targetGroupId, targetFilename, placeAfter);
+        if (this.draggingFile.files && this.draggingFile.files.length > 1) {
+            this.moveSelectedFilesToGroup(targetGroupId, { placeBottom: true });
+        } else {
+            const placeAfter = this.currentFileDragState?.targetFilename === targetFilename
+                ? !!this.currentFileDragState.placeAfter
+                : (e.offsetY >= (e.currentTarget?.clientHeight || 0) / 2);
+            this.moveFileBetweenGroups(this.draggingFile.filename, targetGroupId, targetFilename, placeAfter);
+        }
         this.draggingFile = null;
         this.currentFileDragState = null;
         this.clearAllFileDragHighlights();
@@ -1906,7 +1947,11 @@ class PaperReviewerApp {
         if (!this.draggingFile) return;
         e.preventDefault();
         e.stopPropagation();
-        this.moveFileBetweenGroups(this.draggingFile.filename, groupId);
+        if (this.draggingFile.files && this.draggingFile.files.length > 1) {
+            this.moveSelectedFilesToGroup(groupId, { placeBottom: true });
+        } else {
+            this.moveFileBetweenGroups(this.draggingFile.filename, groupId);
+        }
         this.draggingFile = null;
         this.currentFileDragState = null;
         this.clearAllFileDragHighlights();
@@ -1926,9 +1971,13 @@ class PaperReviewerApp {
     }
 
     clearAllFileDragHighlights() {
-        document.querySelectorAll('.file-item').forEach(el => this.clearFileDragHighlights(el));
+        document.querySelectorAll('.file-item').forEach(el => {
+            this.clearFileDragHighlights(el);
+            el.classList.remove('dragging');
+        });
         document.querySelectorAll('.file-group-body').forEach(el => el.classList.remove('file-group-drop'));
         document.querySelectorAll('.file-group-header').forEach(el => el.classList.remove('file-group-drop'));
+        this.removeDragPreview();
     }
 
     moveFileBetweenGroups(filename, targetGroupId, beforeFile = null, placeAfter = false) {
@@ -1936,7 +1985,6 @@ class PaperReviewerApp {
         const target = groups.find(g => g.id === targetGroupId) || groups[0];
         if (!target) return;
         if (!Array.isArray(target.files)) target.files = [];
-        target.collapsed = false;
         groups.forEach(g => {
             g.files = (g.files || []).filter(f => f !== filename);
         });
@@ -1947,20 +1995,26 @@ class PaperReviewerApp {
         this.persistGroupsAndRender(groups, filename);
     }
 
-    moveSelectedFilesToGroup(targetGroupId) {
+    moveSelectedFilesToGroup(targetGroupId, opts = {}) {
+        const placeBottom = opts.placeBottom !== false;
         const files = this.getSelectedFilesArray();
         if (!files.length) return;
         const groups = this.syncGroupsWithFiles(this.currentFileList || []);
         const target = groups.find(g => g.id === targetGroupId) || groups[0];
         if (!target) return;
         if (!Array.isArray(target.files)) target.files = [];
-        target.collapsed = false;
         groups.forEach(g => {
             g.files = (g.files || []).filter(f => !files.includes(f));
         });
-        files.forEach(f => {
-            if (!target.files.includes(f)) target.files.push(f);
-        });
+        if (placeBottom) {
+            files.forEach(f => {
+                if (!target.files.includes(f)) target.files.push(f);
+            });
+        } else {
+            files.forEach(f => {
+                if (!target.files.includes(f)) target.files.push(f);
+            });
+        }
         this.lastFileSelectionAnchor = files[files.length - 1] || null;
         this.persistGroupsAndRender(groups, files[files.length - 1]);
     }
@@ -2033,8 +2087,17 @@ class PaperReviewerApp {
         const oldMenu = document.querySelector('.context-menu');
         if (oldMenu) oldMenu.remove();
 
-        if (!this.selectedFiles.has(filename)) {
-            this.setSelectedFiles([filename], filename);
+        const alreadySelected = this.selectedFiles.has(filename);
+        if (!alreadySelected) {
+            const existing = this.getSelectedFilesArray();
+            if (e.metaKey || e.ctrlKey) {
+                this.setSelectedFiles([...existing, filename], filename);
+            } else if (existing.length) {
+                // keep existing multi-selection; only add the target
+                this.setSelectedFiles([...existing, filename], filename);
+            } else {
+                this.setSelectedFiles([filename], filename);
+            }
         }
         
         // 创建菜单
