@@ -1806,8 +1806,7 @@ class PaperReviewerApp {
             const count = document.createElement('span');
             count.className = 'file-group-count';
             const totalCount = (group.files || []).length;
-            const filteredCount = group.filteredCount ?? totalCount;
-            count.textContent = `${filteredCount}/${totalCount}`;
+            count.textContent = `${totalCount}`;
 
             header.appendChild(toggle);
             header.appendChild(title);
@@ -2112,9 +2111,6 @@ class PaperReviewerApp {
             <div class="context-menu-item" data-action="delete">
                 <i class="fas fa-trash"></i> 删除
             </div>
-            <div class="context-menu-item" data-action="copyPdfName">
-                <i class="fas fa-copy"></i> 复制 PDF 文件名
-            </div>
             <div class="context-menu-item" data-action="copyPdfFile">
                 <i class="fas fa-copy"></i> 复制 PDF 文件
             </div>
@@ -2147,8 +2143,6 @@ class PaperReviewerApp {
                     this.renameFile(filename, fileItem);
                 } else if (action === 'delete') {
                     this.deleteFile(filename, fileItem);
-                } else if (action === 'copyPdfName') {
-                    this.copyPdfNameToClipboard(filename);
                 } else if (action === 'copyPdfFile') {
                     this.copyPdfFileToClipboard(filename);
                 } else if (action === 'moveToGroup') {
