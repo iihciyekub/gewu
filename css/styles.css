@@ -427,6 +427,32 @@ body {
     white-space: nowrap;
 }
 
+.group-move-menu {
+    position: fixed;
+    background: white;
+    border: 1px solid var(--wos-border);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.18);
+    border-radius: 8px;
+    min-width: 200px;
+    max-width: 240px;
+    padding: 6px 0;
+    z-index: 11000;
+}
+
+.group-move-item {
+    padding: 8px 12px;
+    font-size: 12px;
+    cursor: pointer;
+    color: var(--wos-text);
+    transition: background 0.12s ease, color 0.12s ease;
+}
+
+.group-move-item:hover,
+.group-move-item.active {
+    background: var(--wos-blue);
+    color: white;
+}
+
 .file-item.drag-over-before {
     box-shadow: 0 -2px 0 var(--wos-blue);
 }

@@ -83,6 +83,7 @@ class PaperReviewerApp {
         this.selectedFiles = new Set();
         this.lastFileSelectionAnchor = null;
         this.visibleFileOrder = [];
+        this.groupMenuState = null; // { menuEl, groups, index }
 
         this.init();
     }
@@ -353,6 +354,37 @@ class PaperReviewerApp {
 
     getSelectedFilesArray() {
         return Array.from(this.selectedFiles || []);
+    }
+
+    findNextFileAfterSelection(selected = []) {
+        if (!selected || !selected.length) return null;
+        const groups = this.getCurrentGroups();
+        const moved = new Set(selected);
+        let source = null;
+        groups.forEach(g => {
+            if (source) return;
+            if ((g.files || []).some(f => moved.has(f))) source = g;
+        });
+        if (!source) return null;
+        const indices = [];
+        let minIdx = Number.POSITIVE_INFINITY;
+        (source.files || []).forEach((f, idx) => {
+            if (moved.has(f)) {
+                indices.push(idx);
+                if (idx < minIdx) minIdx = idx;
+            }
+        });
+        if (!indices.length) return null;
+        const maxIdx = Math.max(...indices);
+        for (let i = maxIdx + 1; i < (source.files || []).length; i++) {
+            const f = source.files[i];
+            if (!moved.has(f)) return f;
+        }
+        for (let i = 0; i < minIdx; i++) {
+            const f = source.files[i];
+            if (!moved.has(f)) return f;
+        }
+        return null;
     }
 
     setSelectedFiles(files = [], anchor = null) {
@@ -1033,7 +1065,13 @@ class PaperReviewerApp {
                 fileListEl.focus({ preventScroll: true });
             });
             fileListEl.addEventListener('keydown', (e) => {
+                if (this.groupMenuState) return;
                 if (!['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) return;
+                if ((e.metaKey || e.ctrlKey) && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) {
+                    e.preventDefault();
+                    this.openGroupMoveMenu();
+                    return;
+                }
                 const order = this.visibleFileOrder || [];
                 if (!order.length) return;
                 const selected = this.getSelectedFilesArray();
@@ -1979,6 +2017,102 @@ class PaperReviewerApp {
         this.removeDragPreview();
     }
 
+    openGroupMoveMenu() {
+        const groups = this.getCurrentGroups();
+        if (!groups.length) return;
+        this.closeGroupMoveMenu();
+        const menu = document.createElement('div');
+        menu.className = 'group-move-menu';
+        groups.forEach((g, idx) => {
+            const item = document.createElement('div');
+            item.className = 'group-move-item';
+            item.dataset.groupId = g.id;
+            item.textContent = g.name || `分组 ${idx + 1}`;
+            if (idx === 0) item.classList.add('active');
+            item.addEventListener('click', () => {
+                this.applyGroupMoveFromMenu(g.id);
+            });
+            menu.appendChild(item);
+        });
+        document.body.appendChild(menu);
+        const anchorFile = this.getSelectedFilesArray()[0] || this.currentFile;
+        const anchorEl = anchorFile ? document.querySelector(`.file-item[data-filename="${anchorFile}"]`) : null;
+        if (anchorEl) {
+            const rect = anchorEl.getBoundingClientRect();
+            const margin = 8;
+            const maxLeft = window.innerWidth - menu.offsetWidth - margin;
+            const maxTop = window.innerHeight - menu.offsetHeight - margin;
+            const left = Math.min(Math.max(rect.right + margin, margin), Math.max(maxLeft, margin));
+            const top = Math.min(Math.max(rect.top, margin), Math.max(maxTop, margin));
+            menu.style.left = `${left}px`;
+            menu.style.top = `${top}px`;
+            menu.style.transform = 'translate(0, 0)';
+        }
+        this.groupMenuState = { menuEl: menu, groups, index: 0 };
+
+        const keyHandler = (e) => {
+            if (!this.groupMenuState || !this.groupMenuState.menuEl) return;
+            if (['ArrowUp', 'ArrowDown', 'Enter', 'Escape'].includes(e.key)) {
+                e.preventDefault();
+                if (e.key === 'Escape') {
+                    this.closeGroupMoveMenu();
+                    return;
+                }
+                if (e.key === 'Enter') {
+                    const target = this.groupMenuState.groups[this.groupMenuState.index];
+                    if (target) this.applyGroupMoveFromMenu(target.id);
+                    return;
+                }
+                const delta = e.key === 'ArrowUp' ? -1 : 1;
+                let next = this.groupMenuState.index + delta;
+                if (next < 0) next = this.groupMenuState.groups.length - 1;
+                if (next >= this.groupMenuState.groups.length) next = 0;
+                this.groupMenuState.index = next;
+                this.refreshGroupMoveMenuActive();
+            }
+        };
+        const clickOutside = (e) => {
+            if (!menu.contains(e.target)) this.closeGroupMoveMenu();
+        };
+        menu._keyHandler = keyHandler;
+        menu._clickHandler = clickOutside;
+        document.addEventListener('keydown', keyHandler);
+        document.addEventListener('mousedown', clickOutside);
+    }
+
+    refreshGroupMoveMenuActive() {
+        if (!this.groupMenuState?.menuEl) return;
+        const items = Array.from(this.groupMenuState.menuEl.querySelectorAll('.group-move-item'));
+        items.forEach((el, idx) => el.classList.toggle('active', idx === this.groupMenuState.index));
+    }
+
+    closeGroupMoveMenu() {
+        const menu = this.groupMenuState?.menuEl;
+        if (menu) {
+            if (menu._keyHandler) document.removeEventListener('keydown', menu._keyHandler);
+            if (menu._clickHandler) document.removeEventListener('mousedown', menu._clickHandler);
+            menu.remove();
+        }
+        this.groupMenuState = null;
+    }
+
+    applyGroupMoveFromMenu(groupId) {
+        this.closeGroupMoveMenu();
+        if (!groupId) return;
+        let files = this.getSelectedFilesArray();
+        if (!files.length && this.currentFile) {
+            this.setSelectedFiles([this.currentFile], this.currentFile);
+            files = [this.currentFile];
+        }
+        const nextFocus = this.findNextFileAfterSelection(files);
+        this.moveSelectedFilesToGroup(groupId, { placeBottom: true });
+        if (nextFocus) {
+            this.setSelectedFiles([nextFocus], nextFocus);
+            const el = document.querySelector(`.file-item[data-filename="${nextFocus}"]`);
+            if (el) this.loadFile(nextFocus, el);
+        }
+    }
+
     moveFileBetweenGroups(filename, targetGroupId, beforeFile = null, placeAfter = false) {
         const groups = this.syncGroupsWithFiles(this.currentFileList || []);
         const target = groups.find(g => g.id === targetGroupId) || groups[0];
@@ -2002,6 +2136,17 @@ class PaperReviewerApp {
         const target = groups.find(g => g.id === targetGroupId) || groups[0];
         if (!target) return;
         if (!Array.isArray(target.files)) target.files = [];
+
+        // 如果已经在目标组且顺序一致，则不做任何调整
+        const existingInTarget = target.files.filter(f => files.includes(f));
+        const alreadyAllHere = existingInTarget.length === files.length;
+        const sameOrder = alreadyAllHere && files.every((f, idx) => existingInTarget[idx] === f);
+        if (sameOrder) {
+            this.lastFileSelectionAnchor = files[files.length - 1] || null;
+            this.persistGroupsAndRender(groups, files[files.length - 1]);
+            return;
+        }
+
         groups.forEach(g => {
             g.files = (g.files || []).filter(f => !files.includes(f));
         });
