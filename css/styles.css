@@ -453,6 +453,16 @@ body {
     color: white;
 }
 
+#pdfViewer {
+    transition: opacity 0.18s ease;
+    background: #f5f7fa;
+    opacity: 1;
+}
+
+#pdfViewer.pdf-loaded {
+    opacity: 1;
+}
+
 .file-item.drag-over-before {
     box-shadow: 0 -2px 0 var(--wos-blue);
 }

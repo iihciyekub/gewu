@@ -85,7 +85,7 @@ class PaperReviewerApp {
         this.visibleFileOrder = [];
         this.groupMenuState = null; // { menuEl, groups, index }
         this.currentPdfLoadToken = 0;
-        this.pdfViewState = {}; // { url: { pageNumber, scale } }
+        this.lastPdfLoadedUrl = '';
 
         this.init();
     }
@@ -6484,7 +6484,18 @@ class PaperReviewerApp {
             const pdfViewer = document.getElementById('pdfViewer');
             this.currentPdfUrl = url;
             this.setPdfSidebarPrefClosed();
-            
+            if (pdfViewer) {
+                pdfViewer.classList.remove('pdf-loaded');
+            }
+
+            // 同一路径已加载，直接复用现有渲染
+            if (this.lastPdfLoadedUrl === url) {
+                if (pdfViewer) {
+                    pdfViewer.classList.add('pdf-loaded');
+                }
+                return;
+            }
+
             // 使用PDF.js的web viewer
             // viewer.html在 js/pdfjs/web/ 目录，需要3个../才能回到根目录
             const viewerUrl = `js/pdfjs/web/viewer.html?file=${encodeURIComponent('../../../' + url)}#zoom=80`;
@@ -6522,14 +6533,6 @@ class PaperReviewerApp {
                         if (win.PDFViewerApplication?.overlayManager?.closeAll) {
                             win.PDFViewerApplication.overlayManager.closeAll();
                         }
-                        // 避免 PDF.js password 输入的控制台告警（不在 form 内）
-                        const pwdField = pdfDoc?.querySelector('input#password.toolbarField');
-                        if (pwdField) {
-                            pwdField.setAttribute('autocomplete', 'off');
-                            if (pwdField.getAttribute('type') === 'password') {
-                                pwdField.setAttribute('type', 'text');
-                            }
-                        }
                         // 用户点击 PDF 时清除搜索高亮，减少干扰
                         const bindClickClear = () => {
                             const viewerContainer = pdfDoc?.querySelector('#viewerContainer');
@@ -6549,34 +6552,13 @@ class PaperReviewerApp {
                             }
                         };
                         tryCloseSidebar();
-                        setTimeout(tryCloseSidebar, 100);
-                        setTimeout(tryCloseSidebar, 300);
+                        setTimeout(tryCloseSidebar, 120);
 
-                        // 恢复上次的页码/缩放
-                        const state = this.pdfViewState[url];
-                        if (state && win.PDFViewerApplication?.eventBus) {
-                            const { pageNumber, scale } = state;
-                            if (scale) {
-                                win.PDFViewerApplication.pdfViewer.currentScaleValue = scale;
-                            }
-                            if (pageNumber) {
-                                win.PDFViewerApplication.page = pageNumber;
-                            }
-                        }
-                        // 监听页码/缩放变更
-                        const eventBus = win.PDFViewerApplication?.eventBus;
-                        if (eventBus) {
-                            const saveState = () => {
-                                const app = win.PDFViewerApplication;
-                                const pageNumber = app?.page || app?.pdfViewer?.currentPageNumber;
-                                const scale = app?.pdfViewer?.currentScaleValue;
-                                this.pdfViewState[url] = { pageNumber, scale };
-                            };
-                            eventBus.on('pagechanging', saveState);
-                            eventBus.on('scalechanging', saveState);
-                            // 初始写入
-                            saveState();
-                        }
+                        requestAnimationFrame(() => {
+                            if (loadToken !== this.currentPdfLoadToken) return;
+                            pdfViewer.classList.add('pdf-loaded');
+                            this.lastPdfLoadedUrl = url;
+                        });
                     }
                 } catch (err) {
                     console.warn('Suppress PDF.js prompts failed:', err);
