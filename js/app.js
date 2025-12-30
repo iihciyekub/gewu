@@ -1780,8 +1780,7 @@ class PaperReviewerApp {
 
             const count = document.createElement('span');
             count.className = 'file-group-count';
-            const visibleCount = (group.visible || []).length;
-            count.textContent = `${visibleCount}/${(group.files || []).length}`;
+            count.textContent = `${(group.files || []).length}`;
 
             header.appendChild(toggle);
             header.appendChild(title);
