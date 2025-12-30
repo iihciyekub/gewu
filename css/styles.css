@@ -1377,6 +1377,7 @@ body.theme-vscode .nested-index-cell {
     font-size: 12px;
     line-height: 1.8;
     border: 1px solid var(--wos-border);
+    outline: none;
     border-radius: 4px;
     resize: vertical;
     box-sizing: border-box;
@@ -1738,7 +1739,7 @@ body.theme-vscode .qa-bubble {
     font-family: 'Source Code Pro', 'Menlo', 'Monaco', 'Consolas', 'DejaVu Sans Mono', 'Courier New', monospace;
     font-size: 12px;
     line-height: 1.8;
-    border: 1px solid var(--wos-border);
+    border: 0px solid var(--wos-border);
     outline: none;
     resize: vertical;
     box-sizing: border-box;

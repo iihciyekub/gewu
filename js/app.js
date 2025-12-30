@@ -141,6 +141,11 @@ class PaperReviewerApp {
         } catch (_e) {
             // ignore
         }
+        // 重新加载已打开的 PDF，使其采用对应主题
+        if (this.currentPdfUrl) {
+            this.lastPdfLoadedUrl = '';
+            this.loadPDF(this.currentPdfUrl);
+        }
     }
 
     updateThemeToggleButton(isDark) {
@@ -6552,7 +6557,7 @@ class PaperReviewerApp {
 
             // 使用PDF.js的web viewer
             // viewer.html在 js/pdfjs/web/ 目录，需要3个../才能回到根目录
-            const viewerUrl = `js/pdfjs/web/viewer.html?file=${encodeURIComponent('../../../' + url)}#zoom=80`;
+            const viewerUrl = `js/pdfjs/web/viewer.html?file=${encodeURIComponent('../../../' + url)}&theme=${this.theme === 'dark' ? 'dark' : 'light'}#zoom=80`;
             pdfViewer.src = viewerUrl;
             
             // 监听iframe加载完成（如需自定义滚动行为，可在此扩展）

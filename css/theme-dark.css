@@ -530,13 +530,14 @@ body.theme-dark .quote-tab .tab-remove:hover {
 
 /* Markdown 渲染保持浅色风格 */
 body.theme-dark .markdown-view {
-    background: #f6f7f9;
     color: #1f1f1f;
 }
 
 body.theme-dark .markdown-body {
     background: #f6f7f9;
     color: #1f1f1f;
+    border: 1px solid #d9dce3;
+    border-radius: 6px;
 }
 
 body.theme-dark .markdown-body h1,
