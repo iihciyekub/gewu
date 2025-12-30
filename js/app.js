@@ -84,6 +84,8 @@ class PaperReviewerApp {
         this.lastFileSelectionAnchor = null;
         this.visibleFileOrder = [];
         this.groupMenuState = null; // { menuEl, groups, index }
+        this.currentPdfLoadToken = 0;
+        this.pdfViewState = {}; // { url: { pageNumber, scale } }
 
         this.init();
     }
@@ -6477,9 +6479,11 @@ class PaperReviewerApp {
 
     // PDF Functions - 使用iframe加载完整的PDF.js viewer
     async loadPDF(url) {
+        const loadToken = ++this.currentPdfLoadToken;
         try {
             const pdfViewer = document.getElementById('pdfViewer');
             this.currentPdfUrl = url;
+            this.setPdfSidebarPrefClosed();
             
             // 使用PDF.js的web viewer
             // viewer.html在 js/pdfjs/web/ 目录，需要3个../才能回到根目录
@@ -6488,6 +6492,7 @@ class PaperReviewerApp {
             
             // 监听iframe加载完成（如需自定义滚动行为，可在此扩展）
             pdfViewer.onload = () => {
+                if (loadToken !== this.currentPdfLoadToken) return;
                 try {
                     const win = pdfViewer.contentWindow;
                     if (win) {
@@ -6544,7 +6549,34 @@ class PaperReviewerApp {
                             }
                         };
                         tryCloseSidebar();
-                        setTimeout(tryCloseSidebar, 200);
+                        setTimeout(tryCloseSidebar, 100);
+                        setTimeout(tryCloseSidebar, 300);
+
+                        // 恢复上次的页码/缩放
+                        const state = this.pdfViewState[url];
+                        if (state && win.PDFViewerApplication?.eventBus) {
+                            const { pageNumber, scale } = state;
+                            if (scale) {
+                                win.PDFViewerApplication.pdfViewer.currentScaleValue = scale;
+                            }
+                            if (pageNumber) {
+                                win.PDFViewerApplication.page = pageNumber;
+                            }
+                        }
+                        // 监听页码/缩放变更
+                        const eventBus = win.PDFViewerApplication?.eventBus;
+                        if (eventBus) {
+                            const saveState = () => {
+                                const app = win.PDFViewerApplication;
+                                const pageNumber = app?.page || app?.pdfViewer?.currentPageNumber;
+                                const scale = app?.pdfViewer?.currentScaleValue;
+                                this.pdfViewState[url] = { pageNumber, scale };
+                            };
+                            eventBus.on('pagechanging', saveState);
+                            eventBus.on('scalechanging', saveState);
+                            // 初始写入
+                            saveState();
+                        }
                     }
                 } catch (err) {
                     console.warn('Suppress PDF.js prompts failed:', err);
@@ -6553,6 +6585,15 @@ class PaperReviewerApp {
         } catch (error) {
             console.error('Error loading PDF:', error);
             this.showNotification(`PDF 加载失败: ${error.message}`, 'error');
+        }
+    }
+
+    setPdfSidebarPrefClosed() {
+        try {
+            // 让 PDF.js viewer 默认不展开侧边栏，避免初始闪烁
+            localStorage.setItem('pdfjs.sidebarViewOnLoad', '0');
+        } catch (_e) {
+            // ignore
         }
     }
 
