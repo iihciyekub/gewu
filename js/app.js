@@ -1707,13 +1707,15 @@ class PaperReviewerApp {
         const groups = this.syncGroupsWithFiles(baseOrder, groupsOverride);
         const filterText = (this.fileFilter || '').toLowerCase();
         const groupsView = groups.map(g => {
-            const visible = filterText
+            const filtered = filterText
                 ? (g.files || []).filter(f => f.toLowerCase().includes(filterText))
                 : [...(g.files || [])];
+            const visible = g.collapsed ? [] : filtered;
             return {
                 ...g,
                 collapsed: !!g.collapsed,
-                visible: g.collapsed ? [] : visible
+                filteredCount: filtered.length,
+                visible
             };
         });
         const flatVisible = groupsView.reduce((arr, g) => {
@@ -1780,7 +1782,9 @@ class PaperReviewerApp {
 
             const count = document.createElement('span');
             count.className = 'file-group-count';
-            count.textContent = `${(group.files || []).length}`;
+            const totalCount = (group.files || []).length;
+            const filteredCount = group.filteredCount ?? totalCount;
+            count.textContent = this.fileFilter ? `${filteredCount}/${totalCount}` : `${totalCount}`;
 
             header.appendChild(toggle);
             header.appendChild(title);
@@ -1967,9 +1971,10 @@ class PaperReviewerApp {
         const shift = e.shiftKey;
         let nextSelection = new Set(this.selectedFiles || []);
         if (shift && order.length) {
+            const selected = this.getSelectedFilesArray();
             const anchor = (this.lastFileSelectionAnchor && order.includes(this.lastFileSelectionAnchor))
                 ? this.lastFileSelectionAnchor
-                : order[0];
+                : (selected.length ? selected[selected.length - 1] : filename);
             const start = order.indexOf(anchor);
             const end = order.indexOf(filename);
             if (end >= 0) {
