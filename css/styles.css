@@ -297,6 +297,79 @@ body {
     padding: 6px;
 }
 
+.file-group {
+    border: 1px solid var(--wos-border);
+    border-radius: 4px;
+    margin-bottom: 4px;
+    background: white;
+}
+
+.file-group-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 2px;
+    padding: 1px 2px;
+    background: var(--gray-100);
+    border-bottom: 1px solid var(--wos-border);
+    font-size: 11px;
+    color: var(--gray-700);
+}
+
+.file-group-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 16px;
+    height: 16px;
+    font-size: 10px;
+    color: var(--gray-600);
+    transform: rotate(0deg);
+    transition: transform 0.12s ease;
+    cursor: pointer;
+}
+
+.file-group.collapsed .file-group-toggle {
+    transform: rotate(-90deg);
+}
+
+.file-group-title {
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.file-group-count {
+    font-variant-numeric: tabular-nums;
+    color: var(--gray-500);
+}
+
+.file-group-body {
+    padding: 4px 4px 6px;
+    min-height: 16px;
+    transition: background 0.12s ease;
+}
+
+.file-group.collapsed .file-group-body {
+    display: none;
+}
+
+.file-group-body.file-group-drop {
+    background: rgba(0, 62, 116, 0.06);
+}
+
+.file-group-header.file-group-drop {
+    background: rgba(0, 62, 116, 0.08);
+}
+
+.file-group-empty {
+    font-size: 11px;
+    color: var(--gray-500);
+    padding: 6px 4px;
+    border: 1px dashed var(--wos-border);
+    border-radius: 3px;
+    text-align: center;
+}
+
 .file-item {
     padding: 2px 4px;
     margin-bottom: 2px;
@@ -329,6 +402,18 @@ body {
 
 .file-item.active i {
     color: white;
+}
+
+.file-item.dragging-over {
+    background: rgba(0, 62, 116, 0.12);
+}
+
+.file-item.drag-over-before {
+    box-shadow: 0 -2px 0 var(--wos-blue);
+}
+
+.file-item.drag-over-after {
+    box-shadow: 0 2px 0 var(--wos-blue);
 }
 
 .file-index {
@@ -2442,6 +2527,11 @@ ol.json-array {
 
 .context-menu-item[data-action="delete"]:hover {
     background: #ffebee;
+}
+
+.context-menu-divider {
+    margin: 4px 0;
+    border-top: 1px solid #eee;
 }
 
 /* Citation links */

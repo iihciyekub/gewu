@@ -75,7 +75,13 @@ class PaperReviewerApp {
         this.currentProject = null; // { name, path }
         this.recentProjects = [];
         this.fileOrders = {}; // { projectPath: [filename1, filename2, ...] }
+        this.fileGroups = {}; // { projectPath: { groups: [{id, name, files: []}] } }
         this.currentFileList = [];
+        this.draggingFile = null; // { filename, fromGroupId }
+        this.currentFileDragState = null; // { targetFilename, targetGroupId, placeAfter }
+        this.selectedFiles = new Set();
+        this.lastFileSelectionAnchor = null;
+        this.visibleFileOrder = [];
 
         this.init();
     }
@@ -285,6 +291,194 @@ class PaperReviewerApp {
         return this.currentProject ? this.normalizeProjectPathString(this.currentProject.path) : 'user';
     }
 
+    normalizeFileGroups(raw) {
+        if (!raw) return [];
+        if (Array.isArray(raw)) {
+            return raw.map((g, idx) => ({
+                id: g?.id ? String(g.id) : `group-${idx + 1}`,
+                name: g?.name ? String(g.name) : (g?.id ? String(g.id) : `分组 ${idx + 1}`),
+                files: Array.isArray(g?.files) ? g.files.map(String) : [],
+                collapsed: !!g?.collapsed
+            }));
+        }
+        if (typeof raw === 'object') {
+            return Object.entries(raw).map(([key, value]) => ({
+                id: key,
+                name: key,
+                files: Array.isArray(value) ? value.map(String) : [],
+                collapsed: !!value?.collapsed
+            }));
+        }
+        return [];
+    }
+
+    ensureDefaultGroup(groups = []) {
+        const list = Array.isArray(groups) ? [...groups] : [];
+        if (!list.length) {
+            list.push({ id: 'group-default', name: '未分组', files: [], collapsed: false });
+            return list;
+        }
+        if (!list[0].id) list[0].id = 'group-default';
+        if (!list[0].name) list[0].name = '未分组';
+        if (!Array.isArray(list[0].files)) list[0].files = [];
+        if (typeof list[0].collapsed !== 'boolean') list[0].collapsed = false;
+        return list;
+    }
+
+    cloneFileGroups(groups = []) {
+        return groups.map(g => ({
+            id: g.id,
+            name: g.name,
+            files: Array.isArray(g.files) ? [...g.files] : [],
+            collapsed: !!g.collapsed
+        }));
+    }
+
+    flattenGroupFiles(groups = []) {
+        return groups.reduce((acc, g) => {
+            if (Array.isArray(g.files)) acc.push(...g.files);
+            return acc;
+        }, []);
+    }
+
+    dedupeFiles(files = []) {
+        const seen = new Set();
+        return (files || []).filter(f => {
+            if (!f || seen.has(f)) return false;
+            seen.add(f);
+            return true;
+        });
+    }
+
+    getSelectedFilesArray() {
+        return Array.from(this.selectedFiles || []);
+    }
+
+    setSelectedFiles(files = [], anchor = null) {
+        const list = Array.isArray(files) ? files : Array.from(files || []);
+        this.selectedFiles = new Set(list);
+        const anchorValue = anchor || (list.length ? list[list.length - 1] : null);
+        this.lastFileSelectionAnchor = anchorValue;
+        this.updateFileSelectionDom();
+    }
+
+    updateFileSelectionDom() {
+        const selected = this.selectedFiles || new Set();
+        document.querySelectorAll('.file-item').forEach(el => {
+            const fname = el.dataset.filename;
+            el.classList.toggle('active', selected.has(fname));
+        });
+    }
+
+    toggleGroupCollapse(groupId) {
+        const groups = this.getCurrentGroups();
+        const target = groups.find(g => g.id === groupId);
+        if (!target) return;
+        target.collapsed = !target.collapsed;
+        this.persistGroupsAndRender(groups, this.currentFile);
+    }
+
+    updateFilenameInGroups(oldName, newName) {
+        if (!oldName || !newName) return;
+        const groups = this.getCurrentGroups();
+        let touched = false;
+        groups.forEach(g => {
+            const idx = g.files.indexOf(oldName);
+            if (idx >= 0) {
+                g.files[idx] = newName;
+                touched = true;
+            }
+        });
+        if (!touched) return;
+        const order = (this.currentFileList || []).map(f => (f === oldName ? newName : f));
+        this.fileGroups[this.getProjectKey()] = { groups };
+        this.currentFileList = order;
+        this.fileOrders[this.getProjectKey()] = [...order];
+        this.saveFileOrderForProject(order, groups);
+        if (this.selectedFiles.has(oldName)) {
+            this.selectedFiles.delete(oldName);
+            this.selectedFiles.add(newName);
+            this.updateFileSelectionDom();
+        }
+        if (this.lastFileSelectionAnchor === oldName) {
+            this.lastFileSelectionAnchor = newName;
+        }
+    }
+
+    removeFilenameFromGroups(filename) {
+        if (!filename) return;
+        const groups = this.getCurrentGroups();
+        let touched = false;
+        groups.forEach(g => {
+            const before = g.files.length;
+            g.files = g.files.filter(f => f !== filename);
+            if (g.files.length !== before) touched = true;
+        });
+        if (!touched) return;
+        const order = (this.currentFileList || []).filter(f => f !== filename);
+        this.fileGroups[this.getProjectKey()] = { groups };
+        this.currentFileList = order;
+        this.fileOrders[this.getProjectKey()] = [...order];
+        this.saveFileOrderForProject(order, groups);
+        if (this.selectedFiles.has(filename)) {
+            this.selectedFiles.delete(filename);
+            this.updateFileSelectionDom();
+        }
+        if (this.lastFileSelectionAnchor === filename) {
+            this.lastFileSelectionAnchor = null;
+        }
+    }
+
+    getCurrentGroups() {
+        const key = this.getProjectKey();
+        const stored = this.fileGroups[key]?.groups || [];
+        return this.ensureDefaultGroup(this.cloneFileGroups(this.normalizeFileGroups(stored)));
+    }
+
+    syncGroupsWithFiles(files = [], baseGroups = null) {
+        const key = this.getProjectKey();
+        const sourceGroups = baseGroups
+            ? this.ensureDefaultGroup(this.cloneFileGroups(baseGroups))
+            : this.getCurrentGroups();
+        const fileSet = new Set(files);
+        const used = new Set();
+        const cleaned = sourceGroups.map((g, idx) => {
+            const id = g.id || `group-${idx + 1}`;
+            const name = g.name || id || `分组 ${idx + 1}`;
+            const collapsed = !!g.collapsed;
+            const uniqueFiles = [];
+            (g.files || []).forEach(f => {
+                if (fileSet.has(f) && !used.has(f)) {
+                    uniqueFiles.push(f);
+                    used.add(f);
+                }
+            });
+            return { id, name, files: uniqueFiles, collapsed };
+        });
+        if (!cleaned.length) cleaned.push({ id: 'group-default', name: '未分组', files: [], collapsed: false });
+        const defaultGroup = cleaned[0];
+        files.forEach(f => {
+            if (!used.has(f)) {
+                defaultGroup.files.push(f);
+                used.add(f);
+            }
+        });
+        defaultGroup.files = this.dedupeFiles(defaultGroup.files);
+        this.fileGroups[key] = { groups: cleaned };
+        this.currentFileList = this.flattenGroupFiles(cleaned);
+        this.fileOrders[key] = [...this.currentFileList];
+        return cleaned;
+    }
+
+    persistGroupsAndRender(groups = [], keepSelected = null) {
+        const cleaned = this.ensureDefaultGroup(this.cloneFileGroups(groups));
+        this.fileGroups[this.getProjectKey()] = { groups: cleaned };
+        const flat = this.flattenGroupFiles(cleaned);
+        this.currentFileList = flat;
+        this.saveFileOrderForProject(flat, cleaned);
+        this.renderFileList(flat, keepSelected || this.currentFile, true, cleaned);
+    }
+
     getSectionExpandedStateMap() {
         const key = this.getProjectKey();
         if (!this.sectionExpandedStateByProject[key]) this.sectionExpandedStateByProject[key] = {};
@@ -426,6 +620,7 @@ class PaperReviewerApp {
                 this.currentProject = data.currentProject;
                 this.recentProjects = data.recentProjects || [];
                 this.fileOrders = data.fileOrders || {};
+                this.fileGroups = data.fileGroups || {};
             }
         } catch (error) {
             console.error('Failed to load project config:', error);
@@ -438,7 +633,8 @@ class PaperReviewerApp {
             const config = {
                 currentProject: this.currentProject,
                 recentProjects: this.recentProjects,
-                fileOrders: this.fileOrders
+                fileOrders: this.fileOrders,
+                fileGroups: this.fileGroups
             };
             localStorage.setItem('reviewerProjectConfig', JSON.stringify(config));
         } catch (error) {
@@ -815,28 +1011,28 @@ class PaperReviewerApp {
             });
             fileListEl.addEventListener('keydown', (e) => {
                 if (!['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) return;
-                const items = Array.from(fileListEl.querySelectorAll('.file-item'));
-                if (!items.length) return;
-                const active = fileListEl.querySelector('.file-item.active');
-                let idx = items.indexOf(active);
+                const order = this.visibleFileOrder || [];
+                if (!order.length) return;
+                const selected = this.getSelectedFilesArray();
+                const anchor = selected.length ? selected[selected.length - 1] : (this.currentFile || order[0]);
+                let idx = order.indexOf(anchor);
                 if (idx < 0) idx = 0;
 
                 if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
                     e.preventDefault();
                     idx += e.key === 'ArrowDown' ? 1 : -1;
                     if (idx < 0) idx = 0;
-                    if (idx >= items.length) idx = items.length - 1;
-                    const target = items[idx];
-                    if (target) {
-                        items.forEach(el => el.classList.remove('active'));
-                        target.classList.add('active');
+                    if (idx >= order.length) idx = order.length - 1;
+                    const fname = order[idx];
+                    const target = fname ? fileListEl.querySelector(`.file-item[data-filename="${fname}"]`) : null;
+                    if (fname && target) {
+                        this.setSelectedFiles([fname], fname);
                         target.scrollIntoView({ block: 'nearest' });
-                        const fname = target.dataset.filename;
-                        if (fname) this.loadFile(fname, target);
+                        this.loadFile(fname, target);
                     }
                 } else if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
                     e.preventDefault();
-                    const filename = active?.dataset.filename;
+                    const filename = anchor;
                     if (!filename) return;
                     const offset = e.key === 'ArrowLeft' ? -1 : 1;
                     this.reorderFileItem(filename, offset);
@@ -858,6 +1054,13 @@ class PaperReviewerApp {
             fileFilterToggleBtn.addEventListener('click', (e) => {
                 e.preventDefault();
                 this.toggleFileFilter();
+            });
+        }
+        const addGroupBtn = document.getElementById('addGroupBtn');
+        if (addGroupBtn) {
+            addGroupBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                this.createGroup();
             });
         }
 
@@ -1102,10 +1305,14 @@ class PaperReviewerApp {
         return [...inStored, ...remaining];
     }
 
-    saveFileOrderForProject(order = []) {
+    saveFileOrderForProject(order = [], groups = null) {
         const projectKey = this.currentProject ? this.normalizeProjectPathString(this.currentProject.path) : 'user';
         this.fileOrders[projectKey] = [...order];
-        this.persistFileOrder(order).catch(err => console.warn('save order failed:', err));
+        if (groups) {
+            this.fileGroups[projectKey] = { groups: this.cloneFileGroups(groups) };
+        }
+        const groupsToSave = groups || this.fileGroups[projectKey]?.groups || null;
+        this.persistFileOrder(order, groupsToSave).catch(err => console.warn('save order failed:', err));
     }
 
     async fetchFileOrder() {
@@ -1121,38 +1328,45 @@ class PaperReviewerApp {
             if (data && Array.isArray(data.order)) {
                 const key = this.normalizeProjectPathString(projectPath);
                 this.fileOrders[key] = data.order;
+                if (data.groups) {
+                    this.fileGroups[key] = { groups: this.normalizeFileGroups(data.groups) };
+                }
             }
         } catch (err) {
             console.warn('fetch file order failed:', err);
         }
     }
 
-    async persistFileOrder(order = []) {
+    async persistFileOrder(order = [], groups = null) {
         const projectPath = this.currentProject ? this.currentProject.path : 'user';
+        const payload = { projectPath, action: 'set', order };
+        if (groups && Array.isArray(groups)) {
+            payload.groups = groups;
+        }
         const resp = await fetch('/file-order', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ projectPath, action: 'set', order })
+            body: JSON.stringify(payload)
         });
         if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
     }
 
     reorderFileItem(filename, offset = 0) {
         if (!offset) return;
-        const listEl = document.getElementById('fileList');
-        const domFiles = listEl ? Array.from(listEl.querySelectorAll('.file-item')).map(it => it.dataset.filename).filter(Boolean) : [];
-        const baseList = (this.currentFileList && this.currentFileList.length) ? [...this.currentFileList] : domFiles;
-        if (!baseList.length) return;
-        const idx = baseList.indexOf(filename);
-        if (idx < 0) return;
-        let target = idx + offset;
-        if (target < 0 || target >= baseList.length) return;
-        const temp = baseList[idx];
-        baseList[idx] = baseList[target];
-        baseList[target] = temp;
-        this.currentFileList = baseList;
-        this.saveFileOrderForProject(baseList);
-        this.renderFileList(baseList, filename, true);
+        const groups = this.getCurrentGroups();
+        let targetGroup = null;
+        groups.forEach(g => {
+            if (g.files?.includes(filename)) targetGroup = g;
+        });
+        if (!targetGroup) return;
+        const idx = targetGroup.files.indexOf(filename);
+        const next = idx + offset;
+        if (next < 0 || next >= targetGroup.files.length) return;
+        const newFiles = [...targetGroup.files];
+        const [removed] = newFiles.splice(idx, 1);
+        newFiles.splice(next, 0, removed);
+        targetGroup.files = newFiles;
+        this.persistGroupsAndRender(groups, filename);
     }
 
     // 保存面板宽度到本地存储
@@ -1405,6 +1619,8 @@ class PaperReviewerApp {
             this.currentPdfUrl = null;
             this.hasUnsavedChanges = false;
             this.tempDataCache = {};
+            this.selectedFiles = new Set();
+            this.lastFileSelectionAnchor = null;
             
             // 重新加载文件列表
             await this.loadFileList();
@@ -1466,10 +1682,10 @@ class PaperReviewerApp {
             await this.fetchFileOrder();
             // 应用自定义排序（若有），否则按字母排序
             const ordered = this.applyFileOrder(files);
-            this.currentFileList = ordered;
+            const groups = this.syncGroupsWithFiles(ordered);
             // 避免在加载列表时批量创建/检查 Markdown，以减少切换文件时的卡顿。
             // Markdown 的存在校验改为按需在 loadFile 阶段处理。
-            this.renderFileList(ordered, keepSelection ? currentSelected : null, true);
+            this.renderFileList(this.currentFileList, keepSelection ? currentSelected : null, true, groups);
         } catch (error) {
             console.error('Error loading file list:', error);
             this.showNotification('✗ 加载文件列表失败', 'error');
@@ -1477,76 +1693,324 @@ class PaperReviewerApp {
         }
     }
 
-    renderFileList(files, keepSelected = null, alreadyOrdered = false) {
+    renderFileList(files, keepSelected = null, alreadyOrdered = false, groupsOverride = null) {
         const fileListEl = document.getElementById('fileList');
         
         if (files.length === 0) {
+            this.visibleFileOrder = [];
+            this.selectedFiles = new Set();
             fileListEl.innerHTML = '<div class="empty-state"><p>暂无JSON文件</p></div>';
             return;
         }
 
-        // 按文件名排序
-        const sortedFiles = alreadyOrdered ? [...files] : [...files].sort();
-        const filtered = this.fileFilter
-            ? sortedFiles.filter(f => f.toLowerCase().includes(this.fileFilter.toLowerCase()))
-            : sortedFiles;
-        
-        if (filtered.length === 0) {
-            fileListEl.innerHTML = '<div class="empty-state"><p>无匹配文件</p></div>';
-            return;
+        const baseOrder = alreadyOrdered ? [...files] : [...files].sort();
+        const groups = this.syncGroupsWithFiles(baseOrder, groupsOverride);
+        const filterText = (this.fileFilter || '').toLowerCase();
+        const groupsView = groups.map(g => {
+            const visible = filterText
+                ? (g.files || []).filter(f => f.toLowerCase().includes(filterText))
+                : [...(g.files || [])];
+            return {
+                ...g,
+                collapsed: !!g.collapsed,
+                visible: g.collapsed ? [] : visible
+            };
+        });
+        const flatVisible = groupsView.reduce((arr, g) => {
+            arr.push(...(g.visible || []));
+            return arr;
+        }, []);
+        this.visibleFileOrder = [...flatVisible];
+
+        const selectedBefore = Array.from(this.selectedFiles || []);
+        let nextSelection = selectedBefore.filter(f => flatVisible.includes(f));
+        if (!nextSelection.length) {
+            const candidates = [
+                keepSelected,
+                this.currentFile,
+                this.getLastSelectedFile(),
+                flatVisible[0]
+            ].filter(f => f && flatVisible.includes(f));
+            if (candidates.length) nextSelection = [candidates[0]];
         }
-        
+        this.selectedFiles = new Set(nextSelection);
+        this.lastFileSelectionAnchor = nextSelection.length ? nextSelection[nextSelection.length - 1] : null;
+
         // 创建新的文件列表结构
         const newFileListEl = document.createElement('div');
-        
-        const selectedStillVisible = keepSelected && filtered.includes(keepSelected) ? keepSelected : null;
-        const lastSelected = !keepSelected ? this.getLastSelectedFile() : null;
-        const lastSelectedVisible = lastSelected && filtered.includes(lastSelected) ? lastSelected : null;
-        const activeTarget = selectedStillVisible ||
-            (!keepSelected && this.currentFile && filtered.includes(this.currentFile) ? this.currentFile : null) ||
-            lastSelectedVisible;
 
-        filtered.forEach((file, index) => {
-            const displayName = file.replace(/\.[^.]+$/, '');
-            const number = index + 1;
-            
-            // 始终创建新元素以避免事件引用旧文件
-            const fileItem = document.createElement('div');
-            fileItem.className = 'file-item';
-            fileItem.dataset.filename = file;
-            this.setFileItemContent(fileItem, displayName, number);
-            
-            // 左键点击加载文件
-            fileItem.addEventListener('click', function() {
-                window.paperReviewerApp.loadFile(file, this);
-            });
-            
-            // 右键菜单
-            fileItem.addEventListener('contextmenu', (e) => {
-                e.preventDefault();
-                window.paperReviewerApp.showFileContextMenu(e, file, fileItem);
-            });
-            
-            // 保持或恢复选中状态
-            if (selectedStillVisible && file === selectedStillVisible) {
-                fileItem.classList.add('active');
-            } else if (!selectedStillVisible) {
-                const noValidCurrent = !this.currentFile || !filtered.includes(this.currentFile);
-                const shouldAutoSelect = (activeTarget && file === activeTarget) || (noValidCurrent && !activeTarget && index === 0);
-                if (shouldAutoSelect) {
-                    fileItem.classList.add('active');
-                    setTimeout(() => {
-                        window.paperReviewerApp.loadFile(file, fileItem);
-                    }, 50);
-                }
+        let visibleCounter = 0;
+        const autoLoadTarget = (!this.currentFile || !flatVisible.includes(this.currentFile)) && nextSelection.length
+            ? nextSelection[0]
+            : null;
+
+        groupsView.forEach((group, gIndex) => {
+            const groupEl = document.createElement('div');
+            groupEl.className = 'file-group';
+            groupEl.dataset.groupId = group.id;
+            if (group.collapsed) {
+                groupEl.classList.add('collapsed');
             }
-            
-            newFileListEl.appendChild(fileItem);
+
+            const header = document.createElement('div');
+            header.className = 'file-group-header';
+            header.addEventListener('click', (ev) => {
+                if (ev.target.closest('.file-group-title')) return;
+                this.toggleGroupCollapse(group.id);
+            });
+            header.addEventListener('dragover', (e) => this.handleGroupDragOver(e, group.id));
+            header.addEventListener('drop', (e) => this.handleGroupDrop(e, group.id));
+            header.addEventListener('dragleave', () => this.clearAllFileDragHighlights());
+
+            const toggle = document.createElement('span');
+            toggle.className = 'file-group-toggle';
+            toggle.innerHTML = '<i class="fas fa-chevron-down"></i>';
+            toggle.addEventListener('click', (e) => {
+                e.stopPropagation();
+                this.toggleGroupCollapse(group.id);
+            });
+            const title = document.createElement('span');
+            title.className = 'file-group-title';
+            title.textContent = group.name || `分组 ${gIndex + 1}`;
+            title.title = '双击重命名分组';
+            title.addEventListener('dblclick', (e) => {
+                e.stopPropagation();
+                this.renameGroup(group.id);
+            });
+
+            const count = document.createElement('span');
+            count.className = 'file-group-count';
+            const visibleCount = (group.visible || []).length;
+            count.textContent = `${visibleCount}/${(group.files || []).length}`;
+
+            header.appendChild(toggle);
+            header.appendChild(title);
+            header.appendChild(count);
+            groupEl.appendChild(header);
+
+            const body = document.createElement('div');
+            body.className = 'file-group-body';
+            body.dataset.groupId = group.id;
+            body.addEventListener('dragover', (e) => this.handleGroupDragOver(e, group.id));
+            body.addEventListener('drop', (e) => this.handleGroupDrop(e, group.id));
+            body.addEventListener('dragleave', () => this.clearAllFileDragHighlights());
+
+            if (!group.visible || group.visible.length === 0) {
+                const placeholder = document.createElement('div');
+                placeholder.className = 'file-group-empty';
+                placeholder.textContent = this.fileFilter ? '无匹配文件' : '拖拽文件到此分组';
+                body.appendChild(placeholder);
+            } else {
+                group.visible.forEach((file) => {
+                    const displayName = file.replace(/\.[^.]+$/, '');
+                    const number = visibleCounter + 1;
+                    const fileItem = document.createElement('div');
+                    fileItem.className = 'file-item';
+                    fileItem.dataset.filename = file;
+                    fileItem.dataset.groupId = group.id;
+                    fileItem.draggable = true;
+                    this.setFileItemContent(fileItem, displayName, number);
+
+                    fileItem.addEventListener('click', (e) => this.handleFileClick(e, file, fileItem));
+
+                    fileItem.addEventListener('contextmenu', (e) => {
+                        e.preventDefault();
+                        window.paperReviewerApp.showFileContextMenu(e, file, fileItem);
+                    });
+
+                    fileItem.addEventListener('dragstart', (e) => this.handleFileDragStart(e, file, group.id));
+                    fileItem.addEventListener('dragover', (e) => this.handleFileDragOver(e, file, group.id, fileItem));
+                    fileItem.addEventListener('dragleave', () => this.clearFileDragHighlights(fileItem));
+                    fileItem.addEventListener('drop', (e) => this.handleFileDropOnItem(e, file, group.id));
+                    fileItem.addEventListener('dragend', () => {
+                        this.draggingFile = null;
+                        this.currentFileDragState = null;
+                        this.clearAllFileDragHighlights();
+                    });
+
+                    if (this.selectedFiles.has(file)) {
+                        fileItem.classList.add('active');
+                    }
+
+                    visibleCounter += 1;
+                    body.appendChild(fileItem);
+                });
+            }
+
+            groupEl.appendChild(body);
+            newFileListEl.appendChild(groupEl);
         });
-        
-        // 一次性替换整个列表（最小化重排）
+
         fileListEl.innerHTML = '';
         fileListEl.appendChild(newFileListEl);
+        this.updateFileSelectionDom();
+        if (autoLoadTarget) {
+            const autoEl = fileListEl.querySelector(`.file-item[data-filename="${autoLoadTarget}"]`);
+            if (autoEl) {
+                setTimeout(() => this.loadFile(autoLoadTarget, autoEl), 30);
+            }
+        }
+    }
+
+    handleFileDragStart(e, filename, groupId) {
+        this.draggingFile = { filename, fromGroupId: groupId };
+        this.currentFileDragState = null;
+        if (e.dataTransfer) {
+            e.dataTransfer.effectAllowed = 'move';
+            e.dataTransfer.setData('text/plain', filename);
+            const blank = this.getBlankDragImage();
+            if (blank) e.dataTransfer.setDragImage(blank, 0, 0);
+        }
+    }
+
+    handleFileDragOver(e, targetFilename, targetGroupId, targetEl) {
+        if (!this.draggingFile) return;
+        e.preventDefault();
+        if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
+        const before = e.offsetY < (targetEl?.clientHeight || 0) / 2;
+        this.currentFileDragState = { targetFilename, targetGroupId, placeAfter: !before };
+        this.markFileDragPosition(targetEl, before);
+    }
+
+    handleFileDropOnItem(e, targetFilename, targetGroupId) {
+        if (!this.draggingFile) return;
+        if (this.draggingFile.filename === targetFilename) {
+            this.clearAllFileDragHighlights();
+            return;
+        }
+        e.preventDefault();
+        const placeAfter = this.currentFileDragState?.targetFilename === targetFilename
+            ? !!this.currentFileDragState.placeAfter
+            : (e.offsetY >= (e.currentTarget?.clientHeight || 0) / 2);
+        this.moveFileBetweenGroups(this.draggingFile.filename, targetGroupId, targetFilename, placeAfter);
+        this.draggingFile = null;
+        this.currentFileDragState = null;
+        this.clearAllFileDragHighlights();
+    }
+
+    handleGroupDragOver(e, groupId) {
+        if (!this.draggingFile) return;
+        e.preventDefault();
+        e.stopPropagation();
+        if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
+        const body = e.currentTarget;
+        if (body && body.classList) {
+            body.classList.add('file-group-drop');
+        }
+    }
+
+    handleGroupDrop(e, groupId) {
+        if (!this.draggingFile) return;
+        e.preventDefault();
+        e.stopPropagation();
+        this.moveFileBetweenGroups(this.draggingFile.filename, groupId);
+        this.draggingFile = null;
+        this.currentFileDragState = null;
+        this.clearAllFileDragHighlights();
+    }
+
+    markFileDragPosition(targetEl, before) {
+        if (!targetEl) return;
+        targetEl.classList.add('dragging-over');
+        targetEl.classList.toggle('drag-over-before', before);
+        targetEl.classList.toggle('drag-over-after', !before);
+    }
+
+    clearFileDragHighlights(targetEl) {
+        if (targetEl?.classList) {
+            targetEl.classList.remove('dragging-over', 'drag-over-before', 'drag-over-after');
+        }
+    }
+
+    clearAllFileDragHighlights() {
+        document.querySelectorAll('.file-item').forEach(el => this.clearFileDragHighlights(el));
+        document.querySelectorAll('.file-group-body').forEach(el => el.classList.remove('file-group-drop'));
+        document.querySelectorAll('.file-group-header').forEach(el => el.classList.remove('file-group-drop'));
+    }
+
+    moveFileBetweenGroups(filename, targetGroupId, beforeFile = null, placeAfter = false) {
+        const groups = this.syncGroupsWithFiles(this.currentFileList || []);
+        const target = groups.find(g => g.id === targetGroupId) || groups[0];
+        if (!target) return;
+        if (!Array.isArray(target.files)) target.files = [];
+        target.collapsed = false;
+        groups.forEach(g => {
+            g.files = (g.files || []).filter(f => f !== filename);
+        });
+        const insertIdx = beforeFile ? target.files.indexOf(beforeFile) : -1;
+        const position = insertIdx >= 0 ? insertIdx + (placeAfter ? 1 : 0) : target.files.length;
+        target.files.splice(position, 0, filename);
+        this.lastFileSelectionAnchor = filename;
+        this.persistGroupsAndRender(groups, filename);
+    }
+
+    moveSelectedFilesToGroup(targetGroupId) {
+        const files = this.getSelectedFilesArray();
+        if (!files.length) return;
+        const groups = this.syncGroupsWithFiles(this.currentFileList || []);
+        const target = groups.find(g => g.id === targetGroupId) || groups[0];
+        if (!target) return;
+        if (!Array.isArray(target.files)) target.files = [];
+        target.collapsed = false;
+        groups.forEach(g => {
+            g.files = (g.files || []).filter(f => !files.includes(f));
+        });
+        files.forEach(f => {
+            if (!target.files.includes(f)) target.files.push(f);
+        });
+        this.lastFileSelectionAnchor = files[files.length - 1] || null;
+        this.persistGroupsAndRender(groups, files[files.length - 1]);
+    }
+
+    handleFileClick(e, filename, fileItem) {
+        const order = this.visibleFileOrder || [];
+        const meta = e.metaKey || e.ctrlKey;
+        const shift = e.shiftKey;
+        let nextSelection = new Set(this.selectedFiles || []);
+        if (shift && order.length) {
+            const anchor = (this.lastFileSelectionAnchor && order.includes(this.lastFileSelectionAnchor))
+                ? this.lastFileSelectionAnchor
+                : order[0];
+            const start = order.indexOf(anchor);
+            const end = order.indexOf(filename);
+            if (end >= 0) {
+                const [s, eidx] = start <= end ? [start, end] : [end, start];
+                nextSelection = new Set(order.slice(s, eidx + 1));
+            } else {
+                nextSelection = new Set([filename]);
+            }
+        } else if (meta) {
+            if (nextSelection.has(filename)) nextSelection.delete(filename);
+            else nextSelection.add(filename);
+            if (!nextSelection.size) nextSelection.add(filename);
+        } else {
+            nextSelection = new Set([filename]);
+        }
+        this.selectedFiles = nextSelection;
+        this.lastFileSelectionAnchor = filename;
+        this.updateFileSelectionDom();
+        this.setLastSelectedFile(filename);
+        this.loadFile(filename, fileItem);
+    }
+
+    renameGroup(groupId) {
+        if (!groupId) return;
+        const groups = this.getCurrentGroups();
+        const target = groups.find(g => g.id === groupId);
+        if (!target) return;
+        const nextName = prompt('输入分组名称', target.name || '');
+        if (!nextName) return;
+        target.name = nextName.trim();
+        this.persistGroupsAndRender(groups, this.currentFile);
+    }
+
+    createGroup() {
+        const name = prompt('输入新分组名称', '新分组');
+        if (!name) return;
+        const groups = this.getCurrentGroups();
+        const id = `group-${Date.now()}`;
+        groups.push({ id, name: name.trim(), files: [], collapsed: false });
+        this.persistGroupsAndRender(groups, this.currentFile);
     }
 
     setFileItemContent(fileItem, displayName, number) {
@@ -1564,6 +2028,10 @@ class PaperReviewerApp {
         // 移除旧菜单
         const oldMenu = document.querySelector('.context-menu');
         if (oldMenu) oldMenu.remove();
+
+        if (!this.selectedFiles.has(filename)) {
+            this.setSelectedFiles([filename], filename);
+        }
         
         // 创建菜单
         const menu = document.createElement('div');
@@ -1584,6 +2052,21 @@ class PaperReviewerApp {
                 <i class="fas fa-copy"></i> 复制 PDF 文件
             </div>
         `;
+
+        const groups = this.getCurrentGroups();
+        if (groups && groups.length) {
+            const divider = document.createElement('div');
+            divider.className = 'context-menu-divider';
+            menu.appendChild(divider);
+            groups.forEach(g => {
+                const item = document.createElement('div');
+                item.className = 'context-menu-item';
+                item.dataset.action = 'moveToGroup';
+                item.dataset.groupId = g.id;
+                item.innerHTML = `<i class="fas fa-layer-group"></i> 移动到: ${this.escapeHtml(g.name || g.id)}`;
+                menu.appendChild(item);
+            });
+        }
         
         document.body.appendChild(menu);
         
@@ -1601,6 +2084,9 @@ class PaperReviewerApp {
                     this.copyPdfNameToClipboard(filename);
                 } else if (action === 'copyPdfFile') {
                     this.copyPdfFileToClipboard(filename);
+                } else if (action === 'moveToGroup') {
+                    const gid = item.dataset.groupId;
+                    if (gid) this.moveSelectedFilesToGroup(gid);
                 }
             });
         });
@@ -1781,6 +2267,7 @@ class PaperReviewerApp {
             }
 
             this.showNotification(`✓ 已重命名为 ${finalFilename}`, 'success');
+            this.updateFilenameInGroups(oldFilename, finalFilename);
             
             // 如果当前打开的是这个文件，更新当前文件名
             if (this.currentFile === oldFilename) {
@@ -1855,6 +2342,7 @@ class PaperReviewerApp {
             }
             
             this.showNotification(`✓ 已删除 ${filename}${deletedMd ? `，笔记 ${mdName}` : ''}`, 'success');
+            this.removeFilenameFromGroups(filename);
             
             // 刷新列表，确保不加载已删除文件
             await this.loadFileList(true);
@@ -2118,6 +2606,9 @@ class PaperReviewerApp {
         const loadId = ++this.currentLoadToken;
         const hadTempCacheBefore = !!this.tempDataCache[filename];
         try {
+            if (!this.selectedFiles.has(filename)) {
+                this.setSelectedFiles([filename], filename);
+            }
             // 如果当前 Markdown 有未保存修改，提示用户
             if (this.hasUnsavedMarkdownChanges && this.currentFile && this.currentMarkdownExists) {
                 const mdFilename = this.getMarkdownFilename(this.currentFile);
@@ -2138,16 +2629,6 @@ class PaperReviewerApp {
                     // 放弃修改，清除临时缓存
                     delete this.tempDataCache[this.currentFile];
                 }
-            }
-
-            // Remove active class from all items
-            document.querySelectorAll('.file-item').forEach(item => {
-                item.classList.remove('active');
-            });
-
-            // Add active class to clicked item
-            if (clickedElement) {
-                clickedElement.classList.add('active');
             }
 
             // Show loading state

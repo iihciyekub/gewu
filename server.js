@@ -153,6 +153,27 @@ function collectPdfFiles(dir) {
     return result;
 }
 
+function normalizeGroupList(raw) {
+    if (!raw) return [];
+    if (Array.isArray(raw)) {
+        return raw.map((item, idx) => {
+            const id = item && (item.id || item.name || `group-${idx + 1}`);
+            const name = item && (item.name || id || `分组 ${idx + 1}`);
+            const files = Array.isArray(item?.files) ? item.files.map(String) : [];
+            const collapsed = typeof item?.collapsed === 'boolean' ? item.collapsed : false;
+            return { id: String(id), name: String(name), files, collapsed };
+        });
+    }
+    if (raw && typeof raw === 'object') {
+        return Object.entries(raw).map(([key, value]) => {
+            const files = Array.isArray(value) ? value.map(String) : [];
+            const collapsed = typeof value?.collapsed === 'boolean' ? value.collapsed : false;
+            return { id: key, name: key, files, collapsed };
+        });
+    }
+    return [];
+}
+
 function formatDate() {
     const d = new Date();
     const pad = (n) => n.toString().padStart(2, '0');
@@ -706,11 +727,14 @@ const server = http.createServer((req, res) => {
                 const projectPath = data.projectPath || 'user';
                 const action = data.action || 'get';
                 const order = Array.isArray(data.order) ? data.order : [];
+                const groups = normalizeGroupList(data.groups);
                 const { projectRoot } = resolveProjectDirs(projectPath);
                 const orderFile = path.join(projectRoot, FILE_ORDER_NAME);
 
                 if (action === 'set') {
-                    fs.writeFileSync(orderFile, JSON.stringify({ order }, null, 2), 'utf8');
+                    const payload = { order };
+                    if (groups.length) payload.groups = groups;
+                    fs.writeFileSync(orderFile, JSON.stringify(payload, null, 2), 'utf8');
                     res.writeHead(200, { 'Content-Type': 'application/json' });
                     res.end(JSON.stringify({ success: true }));
                     return;
@@ -723,6 +747,11 @@ const server = http.createServer((req, res) => {
                         const content = fs.readFileSync(orderFile, 'utf8');
                         const parsed = JSON.parse(content);
                         if (Array.isArray(parsed.order)) stored = parsed.order;
+                        if (parsed.groups) {
+                            res.writeHead(200, { 'Content-Type': 'application/json' });
+                            res.end(JSON.stringify({ success: true, order: stored, groups: normalizeGroupList(parsed.groups) }));
+                            return;
+                        }
                     } catch (err) {
                         console.warn('Read order file failed:', err);
                     }
