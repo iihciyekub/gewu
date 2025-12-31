@@ -4018,24 +4018,43 @@ class PaperReviewerApp {
     moveKey(pathArray, key, offset) {
         if (this.isEditLocked) {
             this.showLockedNotification('调整顺序');
-            return;
+            return null;
         }
-        if (!key || offset === 0) return;
+        if (!key || offset === 0) return null;
         let parent = this.currentData;
         for (const segment of pathArray) {
             if (segment && parent && typeof parent === 'object') {
                 parent = parent[segment];
             }
         }
-        if (!parent || typeof parent !== 'object') return;
+        if (!parent || typeof parent !== 'object') return null;
+
+        // 数组类型：按索引移动元素
+        if (Array.isArray(parent)) {
+            const index = parseInt(key, 10);
+            if (Number.isNaN(index) || index < 0 || index >= parent.length) return null;
+            let targetIndex = index + offset;
+            targetIndex = Math.max(0, Math.min(parent.length - 1, targetIndex));
+            if (targetIndex === index) return index;
+            const [item] = parent.splice(index, 1);
+            parent.splice(targetIndex, 0, item);
+
+            this.hasUnsavedChanges = true;
+            this.tempDataCache[this.currentFile] = this.currentData;
+            this.updateSaveButtonState();
+            this.renderStructuredView();
+            this.setupEditableListeners();
+            this.restoreReorderSelection();
+            return targetIndex;
+        }
 
         const keys = Object.keys(parent).filter(k => !k.endsWith('_loc'));
         const index = keys.indexOf(key);
-        if (index === -1) return;
+        if (index === -1) return null;
 
         let targetIndex = index + offset;
         targetIndex = Math.max(0, Math.min(keys.length - 1, targetIndex));
-        if (targetIndex === index) return;
+        if (targetIndex === index) return key;
 
         keys.splice(index, 1);
         keys.splice(targetIndex, 0, key);
@@ -4059,6 +4078,7 @@ class PaperReviewerApp {
         this.renderStructuredView();
         this.setupEditableListeners();
         this.restoreReorderSelection();
+        return key;
     }
 
     deleteField(pathArray, key) {
@@ -4159,9 +4179,10 @@ class PaperReviewerApp {
         if (this.selectedItem.type === 'row') {
             const pathArr = [...(this.selectedItem.path || [])];
             const key = this.selectedItem.key;
-            this.moveKey(pathArr, key, offset);
+            const newKey = this.moveKey(pathArr, key, offset);
             // 保持选中
-            this.setSelectedItem({ type: 'row', path: pathArr, key });
+            const nextKey = (typeof newKey === 'number') ? String(newKey) : (newKey || key);
+            this.setSelectedItem({ type: 'row', path: pathArr, key: nextKey });
             setTimeout(() => this.highlightSelectedItem(), 0);
         } else if (this.selectedItem.type === 'section') {
             const key = this.selectedItem.key;
