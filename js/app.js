@@ -3068,31 +3068,36 @@ class PaperReviewerApp {
                     const resolvedUrl = `${projectPath}/papers/${pdfFile}`;
                     this.currentPdfUrl = resolvedUrl;
                     this.pendingPdfUrl = resolvedUrl;
+                    // bump token to invalidate any previous PDF onload callbacks
+                    this.currentPdfLoadToken++;
                     const pdfViewer = document.getElementById('pdfViewer');
-                    const isAlreadyLoaded = this.lastPdfLoadedUrl === resolvedUrl && pdfViewer?.classList.contains('pdf-loaded');
-                    if (!isAlreadyLoaded) {
-                        if (pdfViewer) {
-                            pdfViewer.removeAttribute('src');
-                            pdfViewer.classList.remove('pdf-loaded');
-                        }
-                        this.updatePdfPlaceholder('pending');
-                        if (this.autoLoadPdf) {
-                            await this.ensurePdfLoaded();
-                        }
-                    } else {
-                        this.updatePdfPlaceholder('loaded');
+                    if (pdfViewer) {
+                        pdfViewer.onload = null;
+                        pdfViewer.removeAttribute('src');
+                        pdfViewer.classList.remove('pdf-loaded');
+                        delete pdfViewer.dataset.pdfSig;
+                    }
+                    this.lastPdfLoadedUrl = '';
+                    this.lastPdfLoadedKey = '';
+                    this.updatePdfPlaceholder('pending');
+                    if (this.autoLoadPdf) {
+                        await this.ensurePdfLoaded();
                     }
                 }
             } else {
                 this.currentPdfUrl = null;
                 this.pendingPdfUrl = null;
+                this.currentPdfLoadToken++;
                 const pdfViewer = document.getElementById('pdfViewer');
                 if (pdfViewer) {
+                    pdfViewer.onload = null;
                     pdfViewer.removeAttribute('src');
                     pdfViewer.classList.remove('pdf-loaded');
+                    delete pdfViewer.dataset.pdfSig;
                 }
                 this.updatePdfPlaceholder('empty');
                 this.lastPdfLoadedUrl = '';
+                this.lastPdfLoadedKey = '';
             }
             this.applyCurrentView();
         } catch (error) {
