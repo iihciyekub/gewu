@@ -94,6 +94,9 @@ class PaperReviewerApp {
         this.addSectionShowTimer = null;
         this.addSectionHoverCleanup = null;
         this.theme = this.loadTheme();
+        this.queryFieldOptions = [];
+        this.queryFieldSelected = new Set();
+        this.queryFieldsLoading = false;
 
         this.init();
     }
@@ -1015,6 +1018,36 @@ class PaperReviewerApp {
         document.getElementById('addItemModal').addEventListener('click', (e) => {
             if (e.target.id === 'addItemModal') this.closeAddItemModal();
         });
+        const queryExportBtn = document.getElementById('queryExportBtn');
+        if (queryExportBtn) {
+            queryExportBtn.addEventListener('click', () => this.openQueryExportModal());
+        }
+        const queryCancelBtn = document.getElementById('queryCancelBtn');
+        if (queryCancelBtn) {
+            queryCancelBtn.addEventListener('click', () => this.closeQueryExportModal());
+        }
+        const queryExportRunBtn = document.getElementById('queryExportRunBtn');
+        if (queryExportRunBtn) {
+            queryExportRunBtn.addEventListener('click', () => this.exportQueryData());
+        }
+        const querySelectAllBtn = document.getElementById('querySelectAllBtn');
+        if (querySelectAllBtn) {
+            querySelectAllBtn.addEventListener('click', () => {
+                this.queryFieldOptions.forEach(f => this.queryFieldSelected.add(f));
+                this.renderQueryFieldList();
+            });
+        }
+        const queryClearAllBtn = document.getElementById('queryClearAllBtn');
+        if (queryClearAllBtn) {
+            queryClearAllBtn.addEventListener('click', () => {
+                this.queryFieldSelected.clear();
+                this.renderQueryFieldList();
+            });
+        }
+        const queryRefreshFieldsBtn = document.getElementById('queryRefreshFieldsBtn');
+        if (queryRefreshFieldsBtn) {
+            queryRefreshFieldsBtn.addEventListener('click', () => this.refreshQueryFieldOptions());
+        }
         
         // Item category change
         document.getElementById('itemCategory').addEventListener('change', (e) => {
@@ -3211,7 +3244,7 @@ class PaperReviewerApp {
             if (e.target.closest('tr')) return;
             this.setSelectedItem({ type: 'section', path: [], key: title });
         });
-        this.renderObject(data, table, path);
+        this.renderObject(data, table, path, null);
         content.appendChild(table);
         
         // Toggle functionality / Reorder selection / Delete
@@ -3285,7 +3318,7 @@ class PaperReviewerApp {
         return wrapper;
     }
 
-    renderObject(obj, table, basePath) {
+    renderObject(obj, table, basePath, parentLocation = null) {
         for (const [key, value] of Object.entries(obj)) {
             // 跳过 *_loc 字段，使其不渲染到表格
             if (key.endsWith('_loc')) continue;
@@ -3362,17 +3395,18 @@ class PaperReviewerApp {
                 if (Array.isArray(value)) {
                     if (value.length === 1) {
                         const sole = value[0];
+                        const soleLoc = Array.isArray(locationInfo) ? locationInfo[0] : locationInfo;
                         if (sole && typeof sole === 'object') {
                             valueCell.innerHTML = '';
                             const subTable = document.createElement('table');
                             subTable.className = 'json-table nested-table';
                             const solePath = [...currentPath, '0'];
                             subTable.dataset.path = solePath.join('.');
-                            this.renderObject(sole, subTable, solePath);
+                            this.renderObject(sole, subTable, solePath, soleLoc);
                             valueCell.appendChild(subTable);
                         } else {
                             // 单元素原始值，直接以索引0为路径进行编辑
-                            valueCell.innerHTML = this.createEditableValue(sole, [...currentPath, '0'], locationInfo, key);
+                            valueCell.innerHTML = this.createEditableValue(sole, [...currentPath, '0'], soleLoc, key);
                         }
                     } else {
                         valueCell.innerHTML = '';
@@ -3380,7 +3414,13 @@ class PaperReviewerApp {
                         subTable.className = 'json-table nested-table';
                         subTable.dataset.path = currentPath.join('.');
                         const objValue = Object.fromEntries(value.map((v, i) => [i, v]));
-                        this.renderObject(objValue, subTable, currentPath);
+                        // 将对应的 loc 信息映射到子对象，便于数组元素也能显示引用/跳转
+                        if (Array.isArray(locationInfo)) {
+                            locationInfo.forEach((locItem, idx) => {
+                                objValue[`${idx}_loc`] = locItem;
+                            });
+                        }
+                        this.renderObject(objValue, subTable, currentPath, Array.isArray(locationInfo) ? null : locationInfo);
                         valueCell.appendChild(subTable);
                     }
                 } else {
@@ -3388,7 +3428,7 @@ class PaperReviewerApp {
                     const subTable = document.createElement('table');
                     subTable.className = 'json-table nested-table';
                     subTable.dataset.path = currentPath.join('.');
-                    this.renderObject(value, subTable, currentPath);
+                    this.renderObject(value, subTable, currentPath, locationInfo);
                     valueCell.appendChild(subTable);
                 }
             } else {
@@ -3617,9 +3657,13 @@ class PaperReviewerApp {
     }
 
     findFirstDoiInCurrentData() {
+        return this.findFirstDoiInData(this.currentData);
+    }
+
+    findFirstDoiInData(data) {
         const regex = /10\.\d{4,9}\/\S+/i;
         const seen = new Set();
-        const stack = [this.currentData];
+        const stack = [data];
         while (stack.length) {
             const cur = stack.pop();
             if (!cur || typeof cur !== 'object') continue;
@@ -3768,6 +3812,164 @@ class PaperReviewerApp {
             this.isAutoSavingMeta = false;
             this.metaDefaultsPatched = false;
         }
+    }
+
+    /* -------------------- Query & Export (DOI keyed) -------------------- */
+    openQueryExportModal() {
+        const modal = document.getElementById('queryExportModal');
+        if (!modal) return;
+        modal.classList.add('active');
+        this.refreshQueryFieldOptions();
+    }
+
+    closeQueryExportModal() {
+        const modal = document.getElementById('queryExportModal');
+        if (!modal) return;
+        modal.classList.remove('active');
+    }
+
+    getFieldUnionFromData(data) {
+        const set = new Set();
+        const walk = (node, prefix = '', depth = 0) => {
+            if (!node || typeof node !== 'object' || depth > 4) return;
+            const entries = Array.isArray(node) ? node.entries() : Object.entries(node);
+            for (const [rawKey, rawVal] of entries) {
+                const key = String(rawKey);
+                if (key.endsWith('_loc') || key === 'schema_version' || key === 'lastupdate') continue;
+                const isArray = Array.isArray(rawVal);
+                const path = prefix ? `${prefix}.${isArray ? key + '[]' : key}` : (isArray ? key + '[]' : key);
+                set.add(path);
+                if (isArray) {
+                    const first = rawVal.find(v => v && typeof v === 'object');
+                    if (first) {
+                        walk(first, `${path}`, depth + 1);
+                    }
+                } else if (rawVal && typeof rawVal === 'object') {
+                    walk(rawVal, path, depth + 1);
+                }
+            }
+        };
+        walk(data, '', 0);
+        return set;
+    }
+
+    async refreshQueryFieldOptions() {
+        if (this.queryFieldsLoading) return;
+        this.queryFieldsLoading = true;
+        const files = this.visibleFileOrder && this.visibleFileOrder.length ? this.visibleFileOrder : (this.currentFileList || []);
+        const union = new Set();
+        const prevSelected = new Set(this.queryFieldSelected);
+        for (const filename of files) {
+            try {
+                const resp = await fetch(this.getDataUrl(filename), { cache: 'no-store' });
+                if (!resp.ok) continue;
+                const data = await resp.json();
+                this.getFieldUnionFromData(data).forEach(f => union.add(f));
+            } catch (err) {
+                console.warn('refreshQueryFieldOptions failed for', filename, err);
+            }
+        }
+        this.queryFieldOptions = Array.from(union).sort();
+        // 保留仍存在的选择
+        this.queryFieldSelected = new Set([...prevSelected].filter(f => union.has(f)));
+        this.renderQueryFieldList();
+        this.queryFieldsLoading = false;
+    }
+
+    renderQueryFieldList() {
+        const container = document.getElementById('queryFieldList');
+        if (!container) return;
+        container.innerHTML = '';
+        if (!this.queryFieldOptions.length) {
+            container.innerHTML = '<p>No fields detected. Load project/files first.</p>';
+            return;
+        }
+        const frag = document.createDocumentFragment();
+        this.queryFieldOptions.forEach((field) => {
+            const id = `qf-${field.replace(/[^a-z0-9_-]/gi, '-')}`;
+            const wrapper = document.createElement('label');
+            wrapper.className = 'query-field-item';
+            wrapper.htmlFor = id;
+            wrapper.innerHTML = `
+                <input type="checkbox" id="${id}" data-field="${this.escapeAttr(field)}" ${this.queryFieldSelected.has(field) ? 'checked' : ''}>
+                <span>${this.escapeHtml(field)}</span>
+            `;
+            wrapper.querySelector('input').addEventListener('change', (e) => {
+                const f = e.target.dataset.field;
+                if (e.target.checked) this.queryFieldSelected.add(f);
+                else this.queryFieldSelected.delete(f);
+            });
+            frag.appendChild(wrapper);
+        });
+        container.appendChild(frag);
+    }
+
+    async exportQueryData() {
+        const files = this.visibleFileOrder && this.visibleFileOrder.length ? this.visibleFileOrder : (this.currentFileList || []);
+        if (!files.length) {
+            this.showNotification('No files to export', 'info');
+            return;
+        }
+        const rows = [];
+        for (const filename of files) {
+            try {
+                const resp = await fetch(this.getDataUrl(filename), { cache: 'no-store' });
+                if (!resp.ok) continue;
+                const data = await resp.json();
+                const doi = this.findFirstDoiInData(data) || (data.meta_info && data.meta_info.doi);
+                if (!doi) continue;
+                const row = { doi };
+                const fieldsToUse = this.queryFieldSelected.size ? Array.from(this.queryFieldSelected) : [];
+                fieldsToUse.forEach((field) => {
+                    if (field === 'doi') return;
+                    const val = this.getFieldValueForQuery(data, field);
+                    if (val !== undefined) {
+                        row[field] = val;
+                    }
+                });
+                rows.push(row);
+            } catch (err) {
+                console.warn('exportQueryData skip', filename, err);
+            }
+        }
+        if (!rows.length) {
+            this.showNotification('No DOI found in files', 'info');
+            return;
+        }
+        const payload = JSON.stringify(rows, null, 2);
+        const blob = new Blob([payload], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `query_export_${Date.now()}.json`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
+        this.showNotification(`Exported ${rows.length} records`, 'success');
+        this.closeQueryExportModal();
+    }
+
+    getFieldValueForQuery(data, field) {
+        if (!data || typeof data !== 'object') return undefined;
+        if (field === 'doi') {
+            return this.findFirstDoiInData(data) || '';
+        }
+        const segments = field.split('.').filter(Boolean);
+        const walk = (node, idx) => {
+            if (node === undefined || node === null) return undefined;
+            if (idx >= segments.length) return node;
+            const seg = segments[idx];
+            const isArraySeg = seg.endsWith('[]');
+            const key = isArraySeg ? seg.slice(0, -2) : seg;
+            const next = node[key];
+            if (isArraySeg) {
+                if (!Array.isArray(next)) return undefined;
+                return next.map(item => walk(item, idx + 1)).filter(v => v !== undefined);
+            }
+            return walk(next, idx + 1);
+        };
+        return walk(data, 0);
     }
 
     mergeIntoCurrentData(sourceObj, backup = false) {

@@ -2144,6 +2144,31 @@ body.theme-vscode .qa-bubble {
     box-shadow: 0 0 0 2px rgba(0, 62, 116, 0.1);
 }
 
+.query-actions {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    align-items: center;
+}
+
+.query-fields {
+    max-height: 360px;
+    overflow: auto;
+    border: 1px solid #e0e0e0;
+    border-radius: 6px;
+    padding: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.query-field-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+}
+
 .quote-empty-state {
     text-align: center;
     padding: 20px;
