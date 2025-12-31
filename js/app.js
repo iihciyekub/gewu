@@ -90,6 +90,7 @@ class PaperReviewerApp {
         this.pdfPlaceholderEl = null;
         this.settingsMenuVisible = false;
         this.autoLoadPdf = false;
+        this.metaDefaultsPatched = false;
         this.addSectionShowTimer = null;
         this.addSectionHoverCleanup = null;
         this.theme = this.loadTheme();
@@ -1081,15 +1082,41 @@ class PaperReviewerApp {
                 return;
             }
             if (this.isReorderMode && this.reorderSelected && middleActive && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
+                // 调整顺序需按下 Cmd/Ctrl + 上/下，且鼠标需在中间栏
+                if (!mod) return;
                 e.preventDefault();
                 const offset = e.key === 'ArrowUp' ? -1 : 1;
                 this.moveKey(this.reorderSelected.path, this.reorderSelected.key, offset);
             } else if (!this.isReorderMode && this.selectedItem && middleActive && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
+                // 调整选中项顺序需 Cmd/Ctrl + 上/下，且鼠标需在中间栏
+                if (!mod) return;
                 if (['INPUT', 'TEXTAREA'].includes(e.target.tagName) || e.target.isContentEditable) return;
                 if (!this.isMiddleActive) return; // 仅当鼠标在中间栏时允许键盘上下移动
                 e.preventDefault();
                 const offset = e.key === 'ArrowUp' ? -1 : 1;
                 this.moveSelectedItem(offset);
+            } else if (!middleActive && !mod && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
+                // 全局上下键控制左侧文件列表（无需鼠标悬停）
+                if (['INPUT', 'TEXTAREA'].includes(e.target.tagName) || e.target.isContentEditable) return;
+                if (this.groupMenuState) return;
+                const order = this.visibleFileOrder || [];
+                if (!order.length) return;
+                const selected = this.getSelectedFilesArray();
+                const anchor = selected.length ? selected[selected.length - 1] : (this.currentFile || order[0]);
+                let idx = order.indexOf(anchor);
+                if (idx < 0) idx = 0;
+                e.preventDefault();
+                idx += e.key === 'ArrowDown' ? 1 : -1;
+                if (idx < 0) idx = 0;
+                if (idx >= order.length) idx = order.length - 1;
+                const fname = order[idx];
+                const listEl = document.getElementById('fileList');
+                const target = fname && listEl ? listEl.querySelector(`.file-item[data-filename="${fname}"]`) : null;
+                if (fname && target) {
+                    this.setSelectedFiles([fname], fname);
+                    target.scrollIntoView({ block: 'nearest' });
+                    this.loadFile(fname, target);
+                }
             }
             if (e.key === 'Escape') {
                 this.closeEditModal();
@@ -3722,19 +3749,15 @@ class PaperReviewerApp {
             changed = true;
         }
         if (changed) {
-            this.hasUnsavedChanges = true;
-            if (this.currentFile || filename) {
-                const key = this.currentFile || filename;
-                this.tempDataCache[key] = this.currentData;
-            }
-            this.updateSaveButtonState();
+            // 仅记录默认值被填充，避免提示用户未保存
+            this.metaDefaultsPatched = true;
         }
         return changed;
     }
 
     async autoSaveMetaDefaults() {
         if (!this.currentFile || !this.currentData) return;
-        if (!this.hasUnsavedChanges) return;
+        if (!this.metaDefaultsPatched && !this.hasUnsavedChanges) return;
         if (this.isAutoSavingMeta) return;
         this.isAutoSavingMeta = true;
         try {
@@ -3743,6 +3766,7 @@ class PaperReviewerApp {
             console.warn('自动保存 meta 默认值失败:', err);
         } finally {
             this.isAutoSavingMeta = false;
+            this.metaDefaultsPatched = false;
         }
     }
 

@@ -1894,7 +1894,16 @@ body.theme-vscode .qa-bubble {
 }
 
 .pdf-placeholder-btn {
-    min-width: 120px;
+    background: transparent;
+    border: none;
+    box-shadow: none;
+    padding: 0;
+    width: 42px;
+    height: 42px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
 }
 
 .btn-theme-toggle {
