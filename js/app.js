@@ -464,6 +464,34 @@ class PaperReviewerApp {
         this.persistGroupsAndRender(groups, this.currentFile);
     }
 
+    deleteGroup(groupId) {
+        const groups = this.getCurrentGroups();
+        if (!groups.length) return;
+        if (groups.length <= 1) {
+            this.showNotification('至少保留一个分组，无法删除。', 'warning');
+            return;
+        }
+        const target = groups.find(g => g.id === groupId);
+        if (!target) return;
+        const defaultGroup = groups[0];
+        if (target.id === defaultGroup.id) {
+            this.showNotification('默认分组不可删除。', 'warning');
+            return;
+        }
+        const filesToMove = Array.isArray(target.files) ? [...target.files] : [];
+        if (filesToMove.length) {
+            const ok = window.confirm(`该分组包含 ${filesToMove.length} 个文件，删除后将移动到默认分组「${defaultGroup.name}」。确定删除吗？`);
+            if (!ok) return;
+            filesToMove.forEach(f => {
+                if (!defaultGroup.files.includes(f)) defaultGroup.files.push(f);
+            });
+        }
+        const filtered = groups.filter(g => g.id !== target.id);
+        this.persistGroupsAndRender(filtered, this.currentFile);
+        this.saveProjectConfig();
+        this.showNotification('分组已删除', 'info');
+    }
+
     updateFilenameInGroups(oldName, newName) {
         if (!oldName || !newName) return;
         const groups = this.getCurrentGroups();
@@ -1902,6 +1930,15 @@ class PaperReviewerApp {
                 this.renameGroup(group.id);
             });
 
+            const deleteBtn = document.createElement('button');
+            deleteBtn.className = 'file-group-delete';
+            deleteBtn.title = '删除分组';
+            deleteBtn.innerHTML = '<i class="fas fa-trash"></i>';
+            deleteBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                this.deleteGroup(group.id);
+            });
+
             const count = document.createElement('span');
             count.className = 'file-group-count';
             const totalCount = (group.files || []).length;
@@ -1910,6 +1947,7 @@ class PaperReviewerApp {
             header.appendChild(toggle);
             header.appendChild(title);
             header.appendChild(count);
+            header.appendChild(deleteBtn);
             groupEl.appendChild(header);
 
             const body = document.createElement('div');

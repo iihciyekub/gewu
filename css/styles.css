@@ -307,9 +307,8 @@ body {
 .file-group-header {
     display: flex;
     align-items: center;
-    justify-content: space-between;
-    gap: 2px;
-    padding: 1px 2px;
+    gap: 4px;
+    padding: 1px 4px 1px 6px;
     background: var(--gray-100);
     border-bottom: 1px solid var(--wos-border);
     font-size: 11px;
@@ -334,13 +333,33 @@ body {
 }
 
 .file-group-title {
+    text-align: left;
     font-weight: 600;
     cursor: pointer;
+}
+
+.file-group-delete {
+    background: transparent;
+    border: none;
+    color: var(--gray-500);
+    cursor: pointer;
+    padding: 2px 4px;
+    opacity: 0;
+    transition: color 0.15s ease, opacity 0.15s ease;
+}
+
+.file-group-header:hover .file-group-delete {
+    opacity: 1;
+}
+
+.file-group-delete:hover {
+    color: #f28b82;
 }
 
 .file-group-count {
     font-variant-numeric: tabular-nums;
     color: var(--gray-500);
+    margin-left: auto;
 }
 
 .file-group-body {
@@ -2325,6 +2344,9 @@ ol.json-array {
     top: 20px;
     right: 20px;
     padding: 12px 20px;
+    background: #ffffff;
+    color: var(--gray-800);
+    border: 1px solid var(--wos-border);
     border-radius: 6px;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
     z-index: 10000;

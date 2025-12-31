@@ -80,14 +80,25 @@ body.theme-dark .file-item:hover {
 }
 
 body.theme-dark .file-item.active {
-    background: var(--vscode-accent);
-    color: #fff;
+    background: #e3c07b;
+    color: #1b1f25;
 }
 
-body.theme-dark .file-item.active i,
+body.theme-dark .file-item.active i {
+    color: #1b1f25;
+}
+
+body.theme-dark .file-item:active,
+body.theme-dark .file-item:focus,
+body.theme-dark .file-item:focus-visible {
+    background: #e3c07b;
+    color: #1b1f25;
+    outline: none;
+}
+
 body.theme-dark .file-group-header,
 body.theme-dark .file-group-title {
-    color: #fff;
+    color: var(--vscode-text);
 }
 
 body.theme-dark .file-group {
@@ -102,9 +113,17 @@ body.theme-dark .file-group-header:hover {
     background: var(--vscode-active);
 }
 
+body.theme-dark .file-group-delete {
+    color: var(--vscode-text-muted);
+}
+
+body.theme-dark .file-group-delete:hover {
+    color: #f28b82;
+}
+
 body.theme-dark .file-item:hover {
-    background: var(--vscode-hover);
-    color: var(--vscode-text);
+    background: #f0dba1;
+    color: #1b1f25;
 }
 
 body.theme-dark .panel-header-actions .btn-switch-project,
@@ -387,6 +406,56 @@ body.theme-dark .prompt-chip.active {
     color: #fff;
 }
 
+/* 项目信息 / 快捷键面板暗色适配 */
+body.theme-dark #projectInfoPanel,
+body.theme-dark #shortcutsInfoPanel {
+    background: var(--vscode-panel);
+    color: var(--vscode-text);
+    border: 1px solid var(--vscode-border);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+}
+
+body.theme-dark #projectInfoBody,
+body.theme-dark #shortcutsInfoBody {
+    background: var(--vscode-panel);
+    color: var(--vscode-text);
+}
+
+body.theme-dark .info-body li {
+    border: 1px solid var(--vscode-border);
+    background: linear-gradient(135deg, #22242a, #1e1f24);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    color: var(--vscode-text);
+}
+
+/* 通知提示暗色适配 */
+body.theme-dark .notification-toast {
+    background: var(--vscode-panel);
+    color: var(--vscode-text);
+    border: 1px solid var(--vscode-border);
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.4);
+}
+
+body.theme-dark .notification-toast.success {
+    background: #2f5b81;
+    color: #e6e9ef;
+    box-shadow: 0 6px 18px rgba(47, 91, 129, 0.35);
+}
+
+body.theme-dark .notification-toast.error {
+    background: #9e2b2b;
+    color: #ffecec;
+    box-shadow: 0 6px 18px rgba(158, 43, 43, 0.4);
+}
+
+body.theme-dark .notification-toast.info {
+    background: #2f3f58;
+    color: #e6e9ef;
+    box-shadow: 0 6px 18px rgba(47, 63, 88, 0.4);
+}
+
+
+
 body.theme-dark .header-dropdown-menu {
     background: var(--vscode-panel);
     border-color: var(--vscode-border);
@@ -518,6 +587,10 @@ body.theme-dark .quote-tab.active {
     border-color: var(--vscode-accent);
     border-bottom: 1px solid #2f333a;
     margin-bottom: -1px;
+}
+
+body.theme-dark .quote-panel.active {
+    background: #2f333a;
 }
 
 body.theme-dark .quote-tab .tab-remove {
