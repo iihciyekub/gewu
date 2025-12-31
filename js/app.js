@@ -86,6 +86,12 @@ class PaperReviewerApp {
         this.groupMenuState = null; // { menuEl, groups, index }
         this.currentPdfLoadToken = 0;
         this.lastPdfLoadedUrl = '';
+        this.pendingPdfUrl = null;
+        this.pdfPlaceholderEl = null;
+        this.settingsMenuVisible = false;
+        this.autoLoadPdf = false;
+        this.addSectionShowTimer = null;
+        this.addSectionHoverCleanup = null;
         this.theme = this.loadTheme();
 
         this.init();
@@ -378,6 +384,15 @@ class PaperReviewerApp {
         if (!Array.isArray(list[0].files)) list[0].files = [];
         if (typeof list[0].collapsed !== 'boolean') list[0].collapsed = false;
         return list;
+    }
+
+    setAutoLoadPdf(enabled) {
+        this.autoLoadPdf = !!enabled;
+        this.saveProjectConfig();
+        this.updateAutoLoadMenuState();
+        if (this.autoLoadPdf && this.pendingPdfUrl) {
+            this.ensurePdfLoaded();
+        }
     }
 
     cloneFileGroups(groups = []) {
@@ -731,6 +746,7 @@ class PaperReviewerApp {
         
         this.setupEventListeners();
         this.updateJsonMenuState();
+        this.updateAutoLoadMenuState();
         this.updateMarkdownToolbar();
         this.updateMarkdownMenuState();
         this.applyEditLockState();
@@ -759,6 +775,7 @@ class PaperReviewerApp {
                 this.fileOrders = data.fileOrders || {};
                 this.fileGroups = data.fileGroups || {};
                 if (data.theme) this.theme = data.theme;
+                if (typeof data.autoLoadPdf === 'boolean') this.autoLoadPdf = data.autoLoadPdf;
             }
         } catch (error) {
             console.error('Failed to load project config:', error);
@@ -773,7 +790,8 @@ class PaperReviewerApp {
                 recentProjects: this.recentProjects,
                 fileOrders: this.fileOrders,
                 fileGroups: this.fileGroups,
-                theme: this.theme
+                theme: this.theme,
+                autoLoadPdf: this.autoLoadPdf
             };
             localStorage.setItem('reviewerProjectConfig', JSON.stringify(config));
         } catch (error) {
@@ -1017,7 +1035,9 @@ class PaperReviewerApp {
                 this.toggleJsonMdSource();
                 return;
             }
-            if (this.isEditLocked && (key === 'k' || e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
+            // 锁定时，仅当鼠标在中间栏时才拦截结构区的排序/移动
+            const middleActive = !!this.isMiddleActive;
+            if (this.isEditLocked && middleActive && (key === 'k' || e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
                 // 锁定时禁止排序模式切换和上下移动
                 if (mod && !e.shiftKey && key === 'k') {
                     e.preventDefault();
@@ -1060,11 +1080,11 @@ class PaperReviewerApp {
                 this.showNotification(msg, 'info');
                 return;
             }
-            if (this.isReorderMode && this.reorderSelected && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
+            if (this.isReorderMode && this.reorderSelected && middleActive && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
                 e.preventDefault();
                 const offset = e.key === 'ArrowUp' ? -1 : 1;
                 this.moveKey(this.reorderSelected.path, this.reorderSelected.key, offset);
-            } else if (!this.isReorderMode && this.selectedItem && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
+            } else if (!this.isReorderMode && this.selectedItem && middleActive && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
                 if (['INPUT', 'TEXTAREA'].includes(e.target.tagName) || e.target.isContentEditable) return;
                 if (!this.isMiddleActive) return; // 仅当鼠标在中间栏时允许键盘上下移动
                 e.preventDefault();
@@ -1213,6 +1233,36 @@ class PaperReviewerApp {
             themeToggleBtn.addEventListener('click', () => this.toggleTheme());
             this.updateThemeToggleButton(this.theme === 'dark');
         }
+        const settingsToggleBtn = document.getElementById('settingsToggleBtn');
+        const settingsMenu = document.getElementById('settingsMenu');
+        const settingsDropdown = document.getElementById('settingsDropdown');
+        const autoLoadOnItem = document.getElementById('autoLoadOnItem');
+        const autoLoadOffItem = document.getElementById('autoLoadOffItem');
+        if (settingsToggleBtn && settingsMenu) {
+            settingsToggleBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                this.toggleSettingsMenu();
+            });
+            settingsMenu.addEventListener('click', (e) => e.stopPropagation());
+            document.addEventListener('click', (e) => {
+                if (!this.settingsMenuVisible) return;
+                if (settingsDropdown && settingsDropdown.contains(e.target)) return;
+                this.toggleSettingsMenu(false);
+            });
+        }
+        if (autoLoadOnItem) {
+            autoLoadOnItem.addEventListener('click', () => {
+                this.setAutoLoadPdf(true);
+                this.toggleSettingsMenu(false);
+            });
+        }
+        if (autoLoadOffItem) {
+            autoLoadOffItem.addEventListener('click', () => {
+                this.setAutoLoadPdf(false);
+                this.toggleSettingsMenu(false);
+            });
+        }
 
         // 粘贴事件监听
         document.addEventListener('paste', (e) => this.handlePaste(e));
@@ -1220,13 +1270,37 @@ class PaperReviewerApp {
         // PDF.js 内置全屏模式快捷入口
         const pdfFullscreenBtn = document.getElementById('btnPdfJsFullscreen');
         if (pdfFullscreenBtn) {
-            pdfFullscreenBtn.addEventListener('click', () => this.enterPdfJsFullscreen());
+            pdfFullscreenBtn.addEventListener('click', async () => {
+                await this.ensurePdfLoaded();
+                this.enterPdfJsFullscreen();
+            });
         }
 
         // PDF.js 内置下载快捷入口
         const pdfDownloadBtn = document.getElementById('btnPdfJsDownload');
         if (pdfDownloadBtn) {
-            pdfDownloadBtn.addEventListener('click', () => this.downloadCurrentPdf());
+            pdfDownloadBtn.addEventListener('click', async () => {
+                await this.ensurePdfLoaded();
+                this.downloadCurrentPdf();
+            });
+        }
+
+        const rightPanel = document.querySelector('.right-panel');
+        if (rightPanel) {
+            rightPanel.addEventListener('mousedown', () => this.ensurePdfLoaded());
+        }
+
+        this.pdfPlaceholderEl = document.getElementById('pdfPlaceholder');
+        if (this.pdfPlaceholderEl) {
+            const btn = this.pdfPlaceholderEl.querySelector('.pdf-placeholder-btn');
+            if (btn) {
+                btn.addEventListener('click', async () => {
+                    await this.ensurePdfLoaded();
+                });
+            }
+            this.pdfPlaceholderEl.addEventListener('click', async () => {
+                await this.ensurePdfLoaded();
+            });
         }
     }
 
@@ -2978,7 +3052,7 @@ class PaperReviewerApp {
                 await this.autoSaveMetaDefaults();
             }
 
-            // Load PDF if available
+            // 准备 PDF，但懒加载，先不实际加载
             if (this.currentData.meta_info && this.currentData.meta_info.pdf_path) {
                 const rawPdfPath = this.currentData.meta_info.pdf_path;
                 const pdfFile = this.normalizePdfPathValue(rawPdfPath);
@@ -2991,8 +3065,34 @@ class PaperReviewerApp {
                 }
                 const projectPath = this.currentProject ? this.currentProject.path : 'user';
                 if (loadId === this.currentLoadToken) {
-                    await this.loadPDF(`${projectPath}/papers/${pdfFile}`);
+                    const resolvedUrl = `${projectPath}/papers/${pdfFile}`;
+                    this.currentPdfUrl = resolvedUrl;
+                    this.pendingPdfUrl = resolvedUrl;
+                    const pdfViewer = document.getElementById('pdfViewer');
+                    const isAlreadyLoaded = this.lastPdfLoadedUrl === resolvedUrl && pdfViewer?.classList.contains('pdf-loaded');
+                    if (!isAlreadyLoaded) {
+                        if (pdfViewer) {
+                            pdfViewer.removeAttribute('src');
+                            pdfViewer.classList.remove('pdf-loaded');
+                        }
+                        this.updatePdfPlaceholder('pending');
+                        if (this.autoLoadPdf) {
+                            await this.ensurePdfLoaded();
+                        }
+                    } else {
+                        this.updatePdfPlaceholder('loaded');
+                    }
                 }
+            } else {
+                this.currentPdfUrl = null;
+                this.pendingPdfUrl = null;
+                const pdfViewer = document.getElementById('pdfViewer');
+                if (pdfViewer) {
+                    pdfViewer.removeAttribute('src');
+                    pdfViewer.classList.remove('pdf-loaded');
+                }
+                this.updatePdfPlaceholder('empty');
+                this.lastPdfLoadedUrl = '';
             }
             this.applyCurrentView();
         } catch (error) {
@@ -3008,13 +3108,10 @@ class PaperReviewerApp {
         const markdownView = document.getElementById('markdownRender');
         const flatView = document.getElementById('flatView');
         
-        structuredView.innerHTML = '<div class="loading"><div class="spinner"></div>Loading data...</div>';
-        if (markdownView) {
-            markdownView.innerHTML = '<div class="loading"><div class="spinner"></div>Loading markdown...</div>';
-        }
-        if (flatView) {
-            flatView.innerHTML = '<div class="loading"><div class="spinner"></div>Loading data...</div>';
-        }
+        // 保持空白，不再显示“Loading”提示
+        structuredView.innerHTML = '';
+        if (markdownView) markdownView.innerHTML = '';
+        if (flatView) flatView.innerHTML = '';
     }
 
     renderStructuredView() {
@@ -3041,6 +3138,8 @@ class PaperReviewerApp {
 
         // 渲染完成后触发MathJax
         this.renderMath(container);
+        this.deferShowAddSectionButton();
+        this.attachAddSectionHover();
     }
 
     createCollapsibleSection(title, data, path) {
@@ -4215,6 +4314,15 @@ class PaperReviewerApp {
         menu.classList.toggle('visible', next);
     }
 
+    toggleSettingsMenu(forceVisible) {
+        const menu = document.getElementById('settingsMenu');
+        if (!menu) return;
+        const next = typeof forceVisible === 'boolean' ? forceVisible : !this.settingsMenuVisible;
+        if (next) this.closeHeaderMenus('settings');
+        this.settingsMenuVisible = next;
+        menu.classList.toggle('visible', next);
+    }
+
     toggleJsonMenu(forceVisible) {
         const menu = document.getElementById('jsonMenu');
         if (!menu) return;
@@ -4309,6 +4417,7 @@ class PaperReviewerApp {
         const keep = String(except || '').toLowerCase();
         if (keep !== 'json' && this.jsonMenuVisible) this.toggleJsonMenu(false);
         if (keep !== 'md' && this.mdMenuVisible) this.toggleMdMenu(false);
+        if (keep !== 'settings' && this.settingsMenuVisible) this.toggleSettingsMenu(false);
         if (keep !== 'prompt' && this.promptPanelVisible) this.togglePromptPanel(false, { skipClose: true });
         if (keep !== 'info' && this.projectInfoVisible) this.toggleProjectInfoPanel(false, { skipClose: true });
         if (keep !== 'shortcuts' && this.shortcutsVisible) this.toggleShortcutsPanel(false, { skipClose: true });
@@ -4378,6 +4487,13 @@ class PaperReviewerApp {
         renderItem.disabled = !hasFile || (inMarkdownView && !this.isMarkdownEditing);
         sourceItem.disabled = !hasFile || (inMarkdownView && this.isMarkdownEditing) || !this.currentMarkdownExists;
         saveItem.disabled = !hasFile || !inMarkdownView || !this.currentMarkdownExists || !this.hasUnsavedMarkdownChanges;
+    }
+
+    updateAutoLoadMenuState() {
+        const onItem = document.getElementById('autoLoadOnItem');
+        const offItem = document.getElementById('autoLoadOffItem');
+        if (onItem) onItem.classList.toggle('checked', !!this.autoLoadPdf);
+        if (offItem) offItem.classList.toggle('checked', !this.autoLoadPdf);
     }
 
     async loadPromptShortcuts() {
@@ -6580,6 +6696,7 @@ class PaperReviewerApp {
         try {
             const pdfViewer = document.getElementById('pdfViewer');
             this.currentPdfUrl = url;
+            this.pendingPdfUrl = url;
             this.setPdfSidebarPrefClosed();
             if (pdfViewer) {
                 pdfViewer.classList.remove('pdf-loaded');
@@ -6655,6 +6772,8 @@ class PaperReviewerApp {
                             if (loadToken !== this.currentPdfLoadToken) return;
                             pdfViewer.classList.add('pdf-loaded');
                             this.lastPdfLoadedUrl = url;
+                            this.pendingPdfUrl = url;
+                            this.updatePdfPlaceholder('loaded');
                         });
                     }
                 } catch (err) {
@@ -6667,6 +6786,36 @@ class PaperReviewerApp {
         }
     }
 
+    async ensurePdfLoaded() {
+        const url = this.pendingPdfUrl || this.currentPdfUrl;
+        if (!url) {
+            this.updatePdfPlaceholder('empty');
+            return;
+        }
+        if (this.lastPdfLoadedUrl === url) {
+            this.updatePdfPlaceholder('loaded');
+            return;
+        }
+        this.updatePdfPlaceholder('pending');
+        await this.loadPDF(url);
+    }
+
+    updatePdfPlaceholder(state) {
+        if (!this.pdfPlaceholderEl) return;
+        const textEl = this.pdfPlaceholderEl.querySelector('.pdf-placeholder-text');
+        const btn = this.pdfPlaceholderEl.querySelector('.pdf-placeholder-btn');
+        if (state === 'loaded') {
+            this.pdfPlaceholderEl.classList.remove('show');
+            return;
+        }
+        this.pdfPlaceholderEl.classList.add('show');
+        if (btn) btn.style.display = state === 'pending' ? 'inline-flex' : 'none';
+        if (textEl) {
+            if (state === 'pending') textEl.textContent = '点击加载 PDF';
+            else textEl.textContent = '无可用 PDF';
+        }
+    }
+
     setPdfSidebarPrefClosed() {
         try {
             // 让 PDF.js viewer 默认不展开侧边栏，避免初始闪烁
@@ -6674,6 +6823,52 @@ class PaperReviewerApp {
         } catch (_e) {
             // ignore
         }
+    }
+
+    deferShowAddSectionButton() {
+        if (this.addSectionShowTimer) {
+            clearTimeout(this.addSectionShowTimer);
+            this.addSectionShowTimer = null;
+        }
+        this.addSectionShowTimer = setTimeout(() => {
+            const addSectionBtn = document.getElementById('addSectionBtn');
+            if (addSectionBtn && this.currentData) {
+                addSectionBtn.style.display = 'inline-flex';
+                addSectionBtn.style.opacity = '0';
+                addSectionBtn.style.pointerEvents = 'none';
+            }
+        }, 120);
+    }
+
+    attachAddSectionHover() {
+        if (this.addSectionHoverCleanup) {
+            this.addSectionHoverCleanup();
+            this.addSectionHoverCleanup = null;
+        }
+        const container = document.getElementById('structuredView') || document.getElementById('structuredContent');
+        const btn = document.getElementById('addSectionBtn');
+        if (!container || !btn) return;
+        const onMove = (e) => {
+            const rect = container.getBoundingClientRect();
+            const nearBottom = (rect.bottom - e.clientY) <= 60;
+            if (nearBottom && this.currentData) {
+                btn.style.opacity = '1';
+                btn.style.pointerEvents = 'auto';
+            } else {
+                btn.style.opacity = '0';
+                btn.style.pointerEvents = 'none';
+            }
+        };
+        const onLeave = () => {
+            btn.style.opacity = '0';
+            btn.style.pointerEvents = 'none';
+        };
+        container.addEventListener('mousemove', onMove);
+        container.addEventListener('mouseleave', onLeave);
+        this.addSectionHoverCleanup = () => {
+            container.removeEventListener('mousemove', onMove);
+            container.removeEventListener('mouseleave', onLeave);
+        };
     }
 
     enterPdfJsFullscreen() {
@@ -7800,23 +7995,28 @@ class PaperReviewerApp {
         
         const addSectionBtn = document.getElementById('addSectionBtn');
         if (addSectionBtn) {
-            addSectionBtn.style.display = this.currentData ? 'inline-flex' : 'none';
-            addSectionBtn.onclick = () => {
-                this.hideSectionPreview();
-                this.createEmptySectionTemplate();
-            };
-            addSectionBtn.addEventListener('mouseenter', () => {
-                if (this.previewHoverTimer) clearTimeout(this.previewHoverTimer);
-                this.previewHoverTimer = setTimeout(() => this.showSectionPreviewInline(), 120);
-            });
-            addSectionBtn.addEventListener('mouseleave', () => {
-                if (this.previewHoverTimer) {
-                    clearTimeout(this.previewHoverTimer);
-                    this.previewHoverTimer = null;
-                }
-                this.hideSectionPreview();
-            });
+            addSectionBtn.style.display = 'none';
+            if (!addSectionBtn.dataset.inited) {
+                addSectionBtn.onclick = () => {
+                    this.hideSectionPreview();
+                    this.createEmptySectionTemplate();
+                };
+                addSectionBtn.addEventListener('mouseenter', () => {
+                    if (this.previewHoverTimer) clearTimeout(this.previewHoverTimer);
+                    this.previewHoverTimer = setTimeout(() => this.showSectionPreviewInline(), 120);
+                });
+                addSectionBtn.addEventListener('mouseleave', () => {
+                    if (this.previewHoverTimer) {
+                        clearTimeout(this.previewHoverTimer);
+                        this.previewHoverTimer = null;
+                    }
+                    this.hideSectionPreview();
+                });
+                addSectionBtn.dataset.inited = '1';
+            }
         }
+
+        this.updateAutoLoadMenuState();
         
         // 更新文件名显示，标记未保存状态
         if (lastUpdateEl) {

@@ -483,6 +483,15 @@ body.theme-dark .resizer {
     box-shadow: inset 0 0 0 1px rgba(86, 156, 214, 0.35);
 }
 
+body.theme-dark .pdf-placeholder {
+    background: rgba(30, 30, 30, 0.9);
+    color: var(--vscode-text);
+}
+
+body.theme-dark .pdf-placeholder i {
+    color: #e3c07b;
+}
+
 body.theme-dark .resizer:hover {
     background: #2f5b81;
     box-shadow: inset 0 0 0 1px rgba(86, 156, 214, 0.55);
@@ -560,6 +569,10 @@ body.theme-dark .header-actions .btn.header-icon-only {
 }
 
 body.theme-dark .header-actions .btn.header-icon-only:hover {
+    color: var(--vscode-accent);
+}
+
+body.theme-dark .header-dropdown-menu .header-dropdown-item.checked i[data-check] {
     color: var(--vscode-accent);
 }
 

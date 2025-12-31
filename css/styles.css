@@ -404,7 +404,8 @@ body {
 }
 
 .file-item:hover {
-    background: transparent;
+    background: rgba(36, 114, 200, 0.12);
+    color: var(--wos-blue);
 }
 
 .file-item.active {
@@ -720,6 +721,17 @@ body {
     box-shadow: none;
 }
 
+.header-dropdown-menu .header-dropdown-item i[data-check] {
+    width: 14px;
+    opacity: 0;
+    transition: opacity 0.15s ease;
+}
+
+.header-dropdown-menu .header-dropdown-item.checked i[data-check] {
+    opacity: 1;
+    color: var(--wos-blue);
+}
+
 /* APA 引用获取按钮 */
 .apa-actions {
     display: inline-flex;
@@ -804,6 +816,9 @@ body.theme-vscode .tab-btn:hover:not(.active) {
     align-items: center;
     gap: 6px;
     box-shadow: 0 2px 6px rgba(0,62,116,0.25);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.18s ease;
 }
 
 .btn-add-section.icon-only {
@@ -1841,6 +1856,45 @@ body.theme-vscode .qa-bubble {
 
 .btn-pdfjs-download i {
     font-size: 16px;
+}
+
+.pdf-placeholder {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(255, 255, 255, 0.9);
+    color: var(--gray-700);
+    text-align: center;
+    pointer-events: none;
+    transition: opacity 0.15s ease, visibility 0.15s ease;
+    visibility: hidden;
+    opacity: 0;
+    z-index: 10;
+}
+
+.pdf-placeholder.show {
+    visibility: visible;
+    opacity: 1;
+    pointer-events: auto;
+}
+
+.pdf-placeholder-inner {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    padding: 16px;
+}
+
+.pdf-placeholder i {
+    font-size: 24px;
+    color: var(--wos-blue);
+}
+
+.pdf-placeholder-btn {
+    min-width: 120px;
 }
 
 .btn-theme-toggle {
