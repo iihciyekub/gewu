@@ -142,6 +142,23 @@ function isParseOk(parsed) {
     return true;
 }
 
+// 将列表形式的解析结果转换为“类字段”对象，避免顶层为数组
+function normalizeParsedToObject(parsedList) {
+    const out = {};
+    if (!Array.isArray(parsedList)) return out;
+    parsedList.forEach((item = {}, idx) => {
+        if (!item || typeof item !== "object") return;
+        const { block_index, title, ...rest } = item;
+        // 以标题为键，缺省时用 block 索引占位
+        const key = (title && title.trim()) || `block_${typeof block_index === "number" ? block_index : idx}`;
+        if (!out[key]) out[key] = {};
+        Object.entries(rest).forEach(([k, v]) => {
+            out[key][k] = v;
+        });
+    });
+    return out;
+}
+
 async function main() {
     const argv = process.argv.slice(2);
     const targetDir = argv[0];
@@ -200,13 +217,19 @@ async function main() {
             continue;
         }
 
-        const jsonStr = toJsonString(parsed);
+        const jsonStr = toJsonString(normalizeParsedToObject(parsed));
 
         console.log(`OK -> WRITE JSON: ${path.basename(mdPath)} -> ${path.basename(jsonPath)}`);
         if (!dryRun) {
             try {
                 await fs.writeFile(jsonPath, jsonStr, "utf8");
                 okCount++;
+                // 转换成功后删除原 md
+                try {
+                    await fs.unlink(mdPath);
+                } catch (e) {
+                    console.warn(`  DELETE MD FAIL (post-convert): ${mdPath}\n  ${String(e)}`);
+                }
             } catch (e) {
                 console.warn(`  WRITE FAIL: ${jsonPath}\n  ${String(e)}`);
                 // 写失败也不删 md（避免误删）；按你的规则只在“解析失败”删 md

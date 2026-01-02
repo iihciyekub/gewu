@@ -453,9 +453,15 @@
                         <!-- dynamic checkboxes -->
                     </div>
                 </div>
+                <div class="form-group">
+                    <label for="queryDoiOrderInput">DOI 顺序（可选，换行分隔）</label>
+                    <textarea id="queryDoiOrderInput" rows="4" placeholder="输入 DOI，换行分隔。为空则按左侧文件顺序导出。"></textarea>
+                    <p class="help-text">留空：按当前文件列表顺序导出全部 DOI；填写后：仅导出匹配的 DOI，按输入顺序输出，未匹配的忽略。</p>
+                </div>
             </div>
             <div class="modal-footer">
                 <button class="btn btn-cancel" id="queryCancelBtn">Cancel</button>
+                <button class="btn btn-secondary" id="queryUpdateNoBtn" type="button">Update No</button>
                 <button class="btn btn-primary" id="queryExportRunBtn">Export</button>
             </div>
         </div>

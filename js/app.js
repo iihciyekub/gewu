@@ -102,8 +102,44 @@ class PaperReviewerApp {
         this.fileMetaByBase = {};
         this.availableJsonViews = [];
         this.currentJsonView = '';
+        this.queryDoiOrderText = '';
+        this.lastJsonViewByProject = this.loadLastJsonViewByProject();
 
         this.init();
+    }
+
+    async sortGroupByMetaNo(groupId) {
+        const view = this.currentJsonView || '';
+        const groups = this.getCurrentGroups();
+        const target = groups.find(g => g.id === groupId);
+        if (!target) return;
+        const files = (target.files || []).slice();
+        if (!files.length) return;
+
+        const fetchNo = async (base) => {
+            const path = this.getViewPathForBase(base, view);
+            if (!path) return { no: Number.MAX_SAFE_INTEGER, base };
+            try {
+                const resp = await fetch(this.getDataUrl(path), { cache: 'no-store' });
+                if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+                const data = await resp.json();
+                const noVal = data?.meta_info?.No;
+                const no = typeof noVal === 'number' ? noVal : Number(noVal);
+                return { no: Number.isFinite(no) ? no : Number.MAX_SAFE_INTEGER, base };
+            } catch (err) {
+                console.warn('sortGroupByMetaNo fetch failed for', base, err);
+                return { no: Number.MAX_SAFE_INTEGER, base };
+            }
+        };
+
+        const results = await Promise.all(files.map(f => fetchNo(f)));
+        const order = results
+            .sort((a, b) => a.no - b.no || a.base.localeCompare(b.base))
+            .map(r => r.base);
+
+        target.files = order;
+        this.persistGroupsAndRender(groups, this.currentFile);
+        this.showNotification(`按 No 排序完成 (${target.name})`, 'success');
     }
 
     loadDebugEnabled() {
@@ -225,6 +261,25 @@ class PaperReviewerApp {
             return parsed && typeof parsed === 'object' ? parsed : {};
         } catch (_e) {
             return {};
+        }
+    }
+
+    loadLastJsonViewByProject() {
+        try {
+            const raw = localStorage.getItem('lastJsonViewByProject');
+            if (!raw) return {};
+            const parsed = JSON.parse(raw);
+            return parsed && typeof parsed === 'object' ? parsed : {};
+        } catch (_e) {
+            return {};
+        }
+    }
+
+    persistLastJsonViewByProject() {
+        try {
+            localStorage.setItem('lastJsonViewByProject', JSON.stringify(this.lastJsonViewByProject || {}));
+        } catch (_e) {
+            // ignore
         }
     }
 
@@ -1045,7 +1100,12 @@ class PaperReviewerApp {
             jsonViewSelect.addEventListener('change', async (e) => {
                 const val = e.target.value;
                 const changed = val && val !== this.currentJsonView;
-                if (val) this.currentJsonView = val;
+                if (val) {
+                    this.currentJsonView = val;
+                    const key = this.getProjectKey();
+                    this.lastJsonViewByProject[key] = val;
+                    this.persistLastJsonViewByProject();
+                }
                 await this.switchToView('structured');
                 this.renderJsonViewSelector();
                 this.renderFileList(this.currentFileList || [], this.currentFileBase || null, true);
@@ -1107,6 +1167,10 @@ class PaperReviewerApp {
         if (queryExportRunBtn) {
             queryExportRunBtn.addEventListener('click', () => this.exportQueryData());
         }
+        const queryUpdateNoBtn = document.getElementById('queryUpdateNoBtn');
+        if (queryUpdateNoBtn) {
+            queryUpdateNoBtn.addEventListener('click', () => this.updateDoiSequenceNumbers());
+        }
         const querySelectAllBtn = document.getElementById('querySelectAllBtn');
         if (querySelectAllBtn) {
             querySelectAllBtn.addEventListener('click', () => {
@@ -1124,6 +1188,12 @@ class PaperReviewerApp {
         const queryRefreshFieldsBtn = document.getElementById('queryRefreshFieldsBtn');
         if (queryRefreshFieldsBtn) {
             queryRefreshFieldsBtn.addEventListener('click', () => this.refreshQueryFieldOptions());
+        }
+        const queryDoiOrderInput = document.getElementById('queryDoiOrderInput');
+        if (queryDoiOrderInput) {
+            queryDoiOrderInput.addEventListener('input', (e) => {
+                this.queryDoiOrderText = e.target.value || '';
+            });
         }
         
         // Item category change
@@ -2029,9 +2099,16 @@ class PaperReviewerApp {
             // 先从服务器拿到所有 json/md 文件，动态视图列表
             const { bases, views } = await this.loadFileBasesFromServer();
             this.availableJsonViews = views;
+            const projectKey = this.getProjectKey();
+            const savedView = this.lastJsonViewByProject?.[projectKey];
+            if (savedView && views.includes(savedView)) {
+                this.currentJsonView = savedView;
+            }
             if (!this.currentJsonView || !views.includes(this.currentJsonView)) {
                 this.currentJsonView = views[0] || 'view1';
             }
+            this.lastJsonViewByProject[projectKey] = this.currentJsonView;
+            this.persistLastJsonViewByProject();
             // 按文件配置/排序记录应用顺序
             const orderedBases = await this.applyFileListOrdering(bases);
             this.renderJsonViewSelector();
@@ -2090,23 +2167,7 @@ class PaperReviewerApp {
     }
 
     async applyFileListOrdering(bases = []) {
-        if (!bases.length) return [];
-        const projectKey = this.getProjectKey();
-        const configUrl = `/${projectKey}/file_list.json`;
-        try {
-            const resp = await fetch(configUrl, { cache: 'no-store' });
-            if (resp.ok) {
-                const data = await resp.json();
-                if (Array.isArray(data.order)) {
-                    const order = data.order.map(String);
-                    const set = new Set(order);
-                    const remaining = bases.filter(b => !set.has(b)).sort();
-                    return [...order.filter(b => bases.includes(b)), ...remaining];
-                }
-            }
-        } catch (err) {
-            console.warn('applyFileListOrdering failed:', err);
-        }
+        // Legacy file_list.json support removed; rely on .file_order.json via /file-order
         return [...bases];
     }
 
@@ -2206,6 +2267,15 @@ class PaperReviewerApp {
                 this.deleteGroup(group.id);
             });
 
+            const sortBtn = document.createElement('button');
+            sortBtn.className = 'file-group-sort';
+            sortBtn.title = '按 meta_info.No 升序排序';
+            sortBtn.innerHTML = '<i class="fas fa-sort-numeric-down-alt"></i>';
+            sortBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                this.sortGroupByMetaNo(group.id);
+            });
+
             const count = document.createElement('span');
             count.className = 'file-group-count';
             const totalCount = (group.files || []).length;
@@ -2214,6 +2284,7 @@ class PaperReviewerApp {
             header.appendChild(toggle);
             header.appendChild(title);
             header.appendChild(count);
+            header.appendChild(sortBtn);
             header.appendChild(deleteBtn);
             groupEl.appendChild(header);
 
@@ -3149,6 +3220,18 @@ class PaperReviewerApp {
         };
     }
 
+    getViewPathForBase(base, view) {
+        const clean = (base || '').replace(/\.json$/i, '');
+        const entry = this.fileMetaByBase?.[clean];
+        if (entry && entry.views && entry.views[view]) return entry.views[view];
+        if (view) return `json/${view}/${clean}.json`;
+        if (entry && entry.views) {
+            const first = Object.values(entry.views)[0];
+            if (first) return first;
+        }
+        return null;
+    }
+
     getAllJsonPathsForBase(base) {
         const clean = (base || '').replace(/\.json$/i, '');
         const entry = this.fileMetaByBase?.[clean];
@@ -3978,7 +4061,7 @@ class PaperReviewerApp {
         if (this.isAutoSavingMeta) return;
         this.isAutoSavingMeta = true;
         try {
-            await this.saveToFile({ silent: true });
+            await this.saveToFile({ silent: true, force: true });
         } catch (err) {
             console.warn('自动保存 meta 默认值失败:', err);
         } finally {
@@ -3993,6 +4076,10 @@ class PaperReviewerApp {
         if (!modal) return;
         modal.classList.add('active');
         this.refreshQueryFieldOptions();
+        const queryDoiOrderInput = document.getElementById('queryDoiOrderInput');
+        if (queryDoiOrderInput) {
+            queryDoiOrderInput.value = this.queryDoiOrderText || '';
+        }
     }
 
     closeQueryExportModal() {
@@ -4079,13 +4166,20 @@ class PaperReviewerApp {
         container.appendChild(frag);
     }
 
+    parseDoiOrderInput(text = '') {
+        return (text || '')
+            .split(/\r?\n/)
+            .map(s => s.trim())
+            .filter(Boolean);
+    }
+
     async exportQueryData() {
         const files = this.visibleFileOrder && this.visibleFileOrder.length ? this.visibleFileOrder : (this.currentFileList || []);
         if (!files.length) {
             this.showNotification('No files to export', 'info');
             return;
         }
-        const rows = [];
+        let rows = [];
         for (const filename of files) {
             const base = filename;
             const paths = this.getPathsForBase(base);
@@ -4115,7 +4209,11 @@ class PaperReviewerApp {
             }
             try {
                 if (!doi) continue;
-                const row = { doi };
+                const meta = data && data.meta_info ? data.meta_info : {};
+                const row = {
+                    doi,
+                    'meta_info.No': typeof meta.No === 'number' ? meta.No : (meta.No || 0)
+                };
                 const fieldsToUse = this.queryFieldSelected.size ? Array.from(this.queryFieldSelected) : [];
                 fieldsToUse.forEach((field) => {
                     if (field === 'doi') return;
@@ -4127,6 +4225,29 @@ class PaperReviewerApp {
                 rows.push(row);
             } catch (err) {
                 console.warn('exportQueryData skip', filename, err);
+            }
+        }
+        const doiInput = document.getElementById('queryDoiOrderInput');
+        const doiOrder = this.parseDoiOrderInput(doiInput ? doiInput.value : this.queryDoiOrderText);
+        if (doiOrder.length) {
+            const rowMap = new Map();
+            rows.forEach((r) => {
+                const key = (r.doi || '').trim().toLowerCase();
+                if (key && !rowMap.has(key)) {
+                    rowMap.set(key, r);
+                }
+            });
+            const orderedRows = [];
+            doiOrder.forEach((raw) => {
+                const key = raw.trim().toLowerCase();
+                if (!key) return;
+                const row = rowMap.get(key);
+                if (row) orderedRows.push(row);
+            });
+            rows = orderedRows;
+            if (!rows.length) {
+                this.showNotification('No matching DOI data found for export', 'info');
+                return;
             }
         }
         if (!rows.length) {
@@ -4145,6 +4266,125 @@ class PaperReviewerApp {
         URL.revokeObjectURL(url);
         this.showNotification(`Exported ${rows.length} records`, 'success');
         this.closeQueryExportModal();
+    }
+
+    async updateDoiSequenceNumbers() {
+        const files = this.visibleFileOrder && this.visibleFileOrder.length ? this.visibleFileOrder : (this.currentFileList || []);
+        if (!files.length) {
+            this.showNotification('No files to update', 'info');
+            return;
+        }
+        const view = this.currentJsonView || '';
+        const doiInput = document.getElementById('queryDoiOrderInput');
+        const doiOrder = this.parseDoiOrderInput(doiInput ? doiInput.value : this.queryDoiOrderText);
+        const makeKeys = (s) => {
+            const base = (s || '').trim().toLowerCase();
+            if (!base) return [];
+            const set = new Set([base, base.replace(/\//g, '_'), base.replace(/_/g, '/')]);
+            return Array.from(set).filter(Boolean);
+        };
+        const items = [];
+        const skipped = [];
+        for (const base of files) {
+            const primaryPath = this.getViewPathForBase(base, view);
+            const fallbackPath = this.getPathsForBase(base)?.json || base;
+            const jsonPath = primaryPath || fallbackPath;
+            if (!jsonPath) {
+                skipped.push(base);
+                console.warn('skip update No: no path for base', base, view);
+                continue;
+            }
+            try {
+                const resp = await fetch(this.getDataUrl(jsonPath), { cache: 'no-store' });
+                if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+                const data = await resp.json();
+                const rawMeta = data.meta_info;
+                const meta = (rawMeta && typeof rawMeta === 'object' && !Array.isArray(rawMeta)) ? rawMeta : {};
+                if (meta !== rawMeta) data.meta_info = meta; // keep existing meta fields, just add No
+                meta.No = 0;
+                const baseDoi = (base || '').replace(/_/g, '/');
+                const doi = this.findFirstDoiInData(data) || (meta && meta.doi) || baseDoi || '';
+                if (!meta.doi && doi) meta.doi = doi; // backfill for missing meta.doi
+                items.push({
+                    base,
+                    path: jsonPath,
+                    data,
+                    meta,
+                    doiKey: (doi || '').trim().toLowerCase(),
+                    changed: true
+                });
+            } catch (err) {
+                console.warn('updateDoiSequenceNumbers load failed for', base, err);
+            }
+        }
+        const buckets = new Map();
+        items.forEach((item) => {
+            if (!item.doiKey) return;
+            makeKeys(item.doiKey).forEach((k) => {
+                if (!buckets.has(k)) buckets.set(k, []);
+                buckets.get(k).push(item);
+            });
+        });
+        let seq = 1;
+        doiOrder.forEach((raw) => {
+            const keys = makeKeys(raw);
+            if (!keys.length) return;
+            let target = null;
+            for (const key of keys) {
+                const bucket = buckets.get(key);
+                if (bucket && bucket.length) {
+                    target = bucket.shift();
+                    break;
+                }
+            }
+            if (target) {
+                target.meta.No = seq++;
+            }
+        });
+
+        let saved = 0;
+        for (const item of items) {
+            if (!item || !item.data) continue;
+            if (!item.data.schema_version) {
+                item.data.schema_version = this.generateSchemaVersion();
+            }
+            item.data.lastupdate = this.generateLastUpdate();
+            const payload = JSON.stringify(item.data, null, 2);
+            try {
+                const resp = await fetch('/save-json', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        projectPath: this.currentProject ? this.currentProject.path : 'user',
+                        filename: item.path,
+                        content: payload
+                    })
+                });
+                if (!resp.ok) {
+                    console.warn('save failed for', item.path, await resp.text());
+                    continue;
+                }
+                saved++;
+                if (this.currentFile === item.path) {
+                    this.currentData = item.data;
+                    this.hasUnsavedChanges = false;
+                    delete this.tempDataCache[this.currentFile];
+                    this.updateSaveButtonState();
+                    this.updateSchemaBadge();
+                    this.renderStructuredView();
+                    this.renderFlatView();
+                }
+            } catch (err) {
+                console.warn('updateDoiSequenceNumbers save failed for', item.path, err);
+            }
+        }
+        const numbered = Math.max(0, seq - 1);
+        if (doiOrder.length && !numbered) {
+            this.showNotification('No matching DOI data found to number', 'info');
+            return;
+        }
+        const summary = `Updated No for ${saved}/${items.length} files (numbered ${numbered}${skipped.length ? `, skipped ${skipped.length}` : ''})`;
+        this.showNotification(summary, saved ? 'success' : 'info');
     }
 
     getFieldValueForQuery(data, field) {
@@ -9389,10 +9629,10 @@ class PaperReviewerApp {
     }
 
     async saveToFile(options = {}) {
-        const { silent = false } = options;
+        const { silent = false, force = false } = options;
         if (!this.currentFile || !this.currentData) return;
         // Only save when there are pending changes; avoid touching lastupdate otherwise
-        if (!this.hasUnsavedChanges) {
+        if (!this.hasUnsavedChanges && !force) {
             if (!silent) {
                 this.showNotification('No changes to save', 'info');
             }
