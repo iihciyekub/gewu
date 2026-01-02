@@ -97,6 +97,11 @@ class PaperReviewerApp {
         this.queryFieldOptions = [];
         this.queryFieldSelected = new Set();
         this.queryFieldsLoading = false;
+        this.importingExternal = false;
+        this.fileMetaByPath = {};
+        this.fileMetaByBase = {};
+        this.availableJsonViews = [];
+        this.currentJsonView = '';
 
         this.init();
     }
@@ -164,6 +169,52 @@ class PaperReviewerApp {
         const icon = btn.querySelector('i');
         btn.title = isDark ? '切换到日间模式' : '切换到夜间模式';
         if (icon) icon.className = isDark ? 'fas fa-sun' : 'fas fa-moon';
+    }
+
+    updateViewSwitchButton() {
+        const btn = document.getElementById('viewSwitchBtn');
+        if (!btn) return;
+        const icon = btn.querySelector('i');
+        const view = this.currentView || 'structured';
+        if (view === 'markdown') {
+            btn.title = '切换到 JSON 视图';
+            if (icon) icon.className = 'fas fa-table';
+        } else {
+            btn.title = '切换到 Markdown 视图';
+            if (icon) icon.className = 'fa-brands fa-markdown';
+        }
+    }
+
+    renderJsonViewSelector() {
+        const sel = document.getElementById('jsonViewSelect');
+        if (!sel) return;
+        const views = this.availableJsonViews || [];
+        const current = this.currentJsonView || (views[0] || '');
+        sel.innerHTML = views.map(v => `<option value="${this.escapeAttr(v)}"${v === current ? ' selected' : ''}>${this.escapeHtml(v)}</option>`).join('') || '<option value="">(no views)</option>';
+        this.currentJsonView = current;
+    }
+
+    updateViewSwitchButton() {
+        const btn = document.getElementById('viewSwitchBtn');
+        if (!btn) return;
+        const icon = btn.querySelector('i');
+        const view = this.currentView || 'structured';
+        if (view === 'markdown') {
+            btn.title = '切换到 JSON 视图';
+            if (icon) icon.className = 'fas fa-table';
+        } else {
+            btn.title = '切换到 Markdown 视图';
+            if (icon) icon.className = 'fa-brands fa-markdown';
+        }
+    }
+
+    renderJsonViewSelector() {
+        const sel = document.getElementById('jsonViewSelect');
+        if (!sel) return;
+        const views = this.availableJsonViews || [];
+        const current = this.currentJsonView || (views[0] || '');
+        sel.innerHTML = views.map(v => `<option value="${this.escapeAttr(v)}"${v === current ? ' selected' : ''}>${this.escapeHtml(v)}</option>`).join('') || '<option value=\"\">(no views)</option>';
+        this.currentJsonView = current;
     }
 
     loadPromptSelectedByGroup() {
@@ -353,7 +404,13 @@ class PaperReviewerApp {
     }
 
     getProjectKey() {
-        return this.currentProject ? this.normalizeProjectPathString(this.currentProject.path) : 'user';
+        if (!this.currentProject) return 'user';
+        const raw = this.normalizeProjectPathString(this.currentProject.path || '');
+        if (/^([A-Za-z]:)?[\\/]/.test(raw) || raw.startsWith('/')) {
+            const parts = raw.split('/').filter(Boolean);
+            return parts.length ? parts[parts.length - 1] : 'user';
+        }
+        return raw || 'user';
     }
 
     normalizeFileGroups(raw) {
@@ -981,6 +1038,26 @@ class PaperReviewerApp {
         const mdTextarea = document.getElementById('markdownTextarea');
         if (mdTextarea) {
             mdTextarea.addEventListener('input', () => this.onMarkdownEditorInput());
+        }
+        const jsonViewSelect = document.getElementById('jsonViewSelect');
+        if (jsonViewSelect) {
+            // 始终回到表格视图，即便选择当前项
+            jsonViewSelect.addEventListener('change', async (e) => {
+                const val = e.target.value;
+                const changed = val && val !== this.currentJsonView;
+                if (val) this.currentJsonView = val;
+                await this.switchToView('structured');
+                this.renderJsonViewSelector();
+                this.renderFileList(this.currentFileList || [], this.currentFileBase || null, true);
+                if (this.currentFileBase && changed) {
+                    this.loadFile(this.currentFileBase);
+                }
+            });
+            jsonViewSelect.addEventListener('click', async () => {
+                if (this.currentView !== 'structured') {
+                    await this.switchToView('structured');
+                }
+            });
         }
         const editLockToggleBtn = document.getElementById('editLockToggleBtn');
         if (editLockToggleBtn) {
@@ -1936,7 +2013,7 @@ class PaperReviewerApp {
 
     async loadFileList(keepSelection = false) {
         const fileListEl = document.getElementById('fileList');
-        const currentSelected = this.currentFile; // 保存当前选中的文件
+        const currentSelected = this.currentFileBase || (this.currentFile ? this.currentFile.split('/').pop()?.replace(/\.[^.]+$/, '') : null); // 保存当前选中的文件（基名）
         
         // 检查是否有当前项目
         if (!this.currentProject) {
@@ -1949,32 +2026,88 @@ class PaperReviewerApp {
         }
 
         try {
-            // 获取文件列表 API，传递项目路径
-            const response = await fetch('/list-json-files', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ projectPath: this.currentProject.path })
-            });
-            
-            if (!response.ok) {
-                throw new Error('Failed to fetch file list');
+            // 先从服务器拿到所有 json/md 文件，动态视图列表
+            const { bases, views } = await this.loadFileBasesFromServer();
+            this.availableJsonViews = views;
+            if (!this.currentJsonView || !views.includes(this.currentJsonView)) {
+                this.currentJsonView = views[0] || 'view1';
             }
-            
-            const data = await response.json();
-            const files = data.files || [];
-            // 读取服务器排序
+            // 按文件配置/排序记录应用顺序
+            const orderedBases = await this.applyFileListOrdering(bases);
+            this.renderJsonViewSelector();
+            // 读取服务器排序（基于基名）
             await this.fetchFileOrder();
-            // 应用自定义排序（若有），否则按字母排序
-            const ordered = this.applyFileOrder(files);
+            const ordered = this.applyFileOrder(orderedBases);
             const groups = this.syncGroupsWithFiles(ordered);
-            // 避免在加载列表时批量创建/检查 Markdown，以减少切换文件时的卡顿。
-            // Markdown 的存在校验改为按需在 loadFile 阶段处理。
+            this.currentFileList = ordered;
             this.renderFileList(this.currentFileList, keepSelection ? currentSelected : null, true, groups);
         } catch (error) {
             console.error('Error loading file list:', error);
             this.showNotification('✗ 加载文件列表失败', 'error');
             fileListEl.innerHTML = '<div class="empty-state"><p>加载失败，请检查服务器</p></div>';
         }
+    }
+
+    async loadFileBasesFromServer() {
+        const projectKey = this.getProjectKey();
+        const response = await fetch('/list-json-files', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ projectPath: projectKey })
+        });
+        if (!response.ok) throw new Error('Failed to fetch file list');
+        const data = await response.json();
+        const rawFiles = data.files || [];
+        this.fileMetaByBase = {};
+        this.fileMetaByPath = {};
+        const viewSet = new Set();
+        rawFiles.forEach((f) => {
+            if (typeof f !== 'object') return;
+            const rawName = f.name || f.path || '';
+            const isMd = (rawName || '').toLowerCase().endsWith('.md');
+            const kind = f.kind || (isMd ? 'md' : 'json');
+            const pathVal = f.path || f.name || '';
+            const category = f.category || (isMd ? 'md' : 'json.root');
+            const base = rawName.split('/').pop()?.replace(/\.(json|md)$/i, '') || rawName;
+            if (!base) return;
+            if (!this.fileMetaByBase[base]) {
+                this.fileMetaByBase[base] = { base, views: {}, mdPath: null, legacyJson: null };
+            }
+            if (kind === 'md' || category === 'md') {
+                this.fileMetaByBase[base].mdPath = pathVal;
+            } else if (category.startsWith('json.')) {
+                const viewName = category.split('.').slice(1).join('.') || 'view1';
+                viewSet.add(viewName);
+                this.fileMetaByBase[base].views[viewName] = pathVal;
+            } else {
+                this.fileMetaByBase[base].legacyJson = pathVal;
+            }
+            this.fileMetaByPath[pathVal] = { name: rawName, path: pathVal, kind, category };
+        });
+        const bases = Object.keys(this.fileMetaByBase).sort();
+        const views = Array.from(viewSet).sort();
+        return { bases, views: views.length ? views : ['view1'] };
+    }
+
+    async applyFileListOrdering(bases = []) {
+        if (!bases.length) return [];
+        const projectKey = this.getProjectKey();
+        const configUrl = `/${projectKey}/file_list.json`;
+        try {
+            const resp = await fetch(configUrl, { cache: 'no-store' });
+            if (resp.ok) {
+                const data = await resp.json();
+                if (Array.isArray(data.order)) {
+                    const order = data.order.map(String);
+                    const set = new Set(order);
+                    const remaining = bases.filter(b => !set.has(b)).sort();
+                    return [...order.filter(b => bases.includes(b)), ...remaining];
+                }
+            }
+        } catch (err) {
+            console.warn('applyFileListOrdering failed:', err);
+        }
+        return [...bases];
     }
 
     renderFileList(files, keepSelected = null, alreadyOrdered = false, groupsOverride = null) {
@@ -2098,7 +2231,7 @@ class PaperReviewerApp {
                 body.appendChild(placeholder);
             } else {
                 group.visible.forEach((file) => {
-                    const displayName = file.replace(/\.[^.]+$/, '');
+                    const displayName = file;
                     const number = visibleCounter + 1;
                     const fileItem = document.createElement('div');
                     fileItem.className = 'file-item';
@@ -2641,8 +2774,11 @@ class PaperReviewerApp {
     }
 
     getPdfUrl(pdfFile) {
-        const projectPath = this.currentProject ? this.currentProject.path : 'user';
-        const segments = `${projectPath}/papers/${pdfFile}`.split('/').filter(Boolean).map(encodeURIComponent);
+        const projectPath = this.getProjectKey();
+        const clean = (pdfFile || '').replace(/^\.?[\\/]+/, '');
+        const hasSub = clean.includes('/') || clean.includes('\\');
+        const rel = hasSub ? clean.split(/[/\\]+/).filter(Boolean).join('/') : `pdf/${clean}`;
+        const segments = `${projectPath}/${rel}`.split('/').filter(Boolean).map(encodeURIComponent);
         return `/${segments.join('/')}`;
     }
 
@@ -3001,6 +3137,29 @@ class PaperReviewerApp {
     }
 
     // 保存新的JSON文件
+    getPathsForBase(base) {
+        const clean = (base || '').replace(/\.json$/i, '');
+        const entry = this.fileMetaByBase?.[clean];
+        const jsonPath = entry?.views?.[this.currentJsonView] || entry?.views?.[Object.keys(entry?.views || {})[0]] || `json/view1/${clean}.json`;
+        const mdPath = entry?.mdPath || `md/${clean}.md`;
+        return {
+            json: jsonPath,
+            md: mdPath,
+            pdf: `pdf/${clean}.pdf`
+        };
+    }
+
+    getAllJsonPathsForBase(base) {
+        const clean = (base || '').replace(/\.json$/i, '');
+        const entry = this.fileMetaByBase?.[clean];
+        const paths = new Set();
+        if (entry?.views && typeof entry.views === 'object') {
+            Object.values(entry.views).forEach((p) => { if (p) paths.add(p); });
+        }
+        if (entry?.legacyJson) paths.add(entry.legacyJson);
+        return Array.from(paths);
+    }
+
     async saveNewJSONFile(filename, jsonData) {
         try {
             const jsonString = JSON.stringify(jsonData, null, 2);
@@ -3041,23 +3200,26 @@ class PaperReviewerApp {
         }
     }
 
-    async loadFile(filename, clickedElement = null) {
+    async loadFile(identifier, clickedElement = null) {
+        const base = (identifier || '').split('/').pop()?.replace(/\.json$/i, '') || identifier;
+        const paths = this.getPathsForBase(base);
+        const filename = paths.json;
         const loadId = ++this.currentLoadToken;
         const hadTempCacheBefore = !!this.tempDataCache[filename];
         try {
-            if (!this.selectedFiles.has(filename)) {
-                this.setSelectedFiles([filename], filename);
+            if (!this.selectedFiles.has(base)) {
+                this.setSelectedFiles([base], base);
             }
             // 如果当前 Markdown 有未保存修改，提示用户
             if (this.hasUnsavedMarkdownChanges && this.currentFile && this.currentMarkdownExists) {
                 const mdFilename = this.getMarkdownFilename(this.currentFile);
                 const shouldSave = confirm(`Markdown "${mdFilename}" 有未保存的修改，是否保存？`);
                 if (shouldSave) {
-                    await this.saveCurrentMarkdownSilently();
-                } else {
-                    this.discardCurrentMarkdownChanges();
-                }
-            }
+            await this.saveCurrentMarkdownSilently();
+        } else {
+            this.discardCurrentMarkdownChanges();
+        }
+    }
 
             // 如果当前文件有未保存的修改，提示用户
             if (this.hasUnsavedChanges && this.currentFile) {
@@ -3091,8 +3253,9 @@ class PaperReviewerApp {
             if (loadId !== this.currentLoadToken) return;
 
             this.currentFile = filename;
+            this.currentFileBase = base;
             const metaChanged = this.ensureMetaInfoDefaultsOnLoad(filename);
-            this.setLastSelectedFile(filename);
+            this.setLastSelectedFile(base);
             this.updateFileMeta();
 
             // 更新UI状态
@@ -3113,36 +3276,30 @@ class PaperReviewerApp {
             }
 
             // 准备 PDF，但懒加载，先不实际加载
-            if (this.currentData.meta_info && this.currentData.meta_info.pdf_path) {
-                const rawPdfPath = this.currentData.meta_info.pdf_path;
-                const pdfFile = this.normalizePdfPathValue(rawPdfPath);
-                // 若发现带路径的值，自动规范化为仅文件名，提示需要保存
-                if (pdfFile && rawPdfPath !== pdfFile) {
-                    this.currentData.meta_info.pdf_path = pdfFile;
-                    this.hasUnsavedChanges = true;
-                    this.tempDataCache[this.currentFile] = this.currentData;
-                    this.updateSaveButtonState();
+            const { relPath, fileName } = this.normalizePdfRel(this.currentData?.meta_info?.pdf_path || '');
+            const pdfName = fileName || (paths.pdf.split('/').pop() || '');
+            if (pdfName || relPath) {
+                const projectPath = this.getProjectKey();
+                const primaryUrl = relPath
+                    ? `/${projectPath}/${relPath}`
+                    : this.getPdfUrl(pdfName);
+                const fallbackUrl = relPath ? null : `/${projectPath}/papers/${pdfName}`;
+                this.currentPdfUrl = primaryUrl;
+                this.pendingPdfUrl = primaryUrl;
+                this.pendingPdfFallback = fallbackUrl;
+                this.currentPdfLoadToken++;
+                const pdfViewer = document.getElementById('pdfViewer');
+                if (pdfViewer) {
+                    pdfViewer.onload = null;
+                    pdfViewer.removeAttribute('src');
+                    pdfViewer.classList.remove('pdf-loaded');
+                    delete pdfViewer.dataset.pdfSig;
                 }
-                const projectPath = this.currentProject ? this.currentProject.path : 'user';
-                if (loadId === this.currentLoadToken) {
-                    const resolvedUrl = `${projectPath}/papers/${pdfFile}`;
-                    this.currentPdfUrl = resolvedUrl;
-                    this.pendingPdfUrl = resolvedUrl;
-                    // bump token to invalidate any previous PDF onload callbacks
-                    this.currentPdfLoadToken++;
-                    const pdfViewer = document.getElementById('pdfViewer');
-                    if (pdfViewer) {
-                        pdfViewer.onload = null;
-                        pdfViewer.removeAttribute('src');
-                        pdfViewer.classList.remove('pdf-loaded');
-                        delete pdfViewer.dataset.pdfSig;
-                    }
-                    this.lastPdfLoadedUrl = '';
-                    this.lastPdfLoadedKey = '';
-                    this.updatePdfPlaceholder('pending');
-                    if (this.autoLoadPdf) {
-                        await this.ensurePdfLoaded();
-                    }
+                this.lastPdfLoadedUrl = '';
+                this.lastPdfLoadedKey = '';
+                this.updatePdfPlaceholder('pending');
+                if (this.autoLoadPdf) {
+                    await this.ensurePdfLoaded();
                 }
             } else {
                 this.currentPdfUrl = null;
@@ -3724,6 +3881,16 @@ class PaperReviewerApp {
         return parts.length ? parts[parts.length - 1] : pathStr;
     }
 
+    normalizePdfRel(pathStr) {
+        if (!pathStr) return { relPath: '', fileName: '' };
+        const trimmed = (pathStr || '').replace(/^\.?[\\/]+/, '');
+        const cleaned = trimmed.split(/[/\\]+/).filter(Boolean).join('/');
+        const parts = cleaned.split('/');
+        const fileName = parts.length ? parts[parts.length - 1] : cleaned;
+        const relPath = parts.length > 1 ? cleaned : '';
+        return { relPath, fileName };
+    }
+
     getApaTooltipEl() {
         if (!this._apaTooltipEl) {
             const el = document.createElement('div');
@@ -3783,6 +3950,12 @@ class PaperReviewerApp {
         }
         const meta = this.currentData.meta_info;
         let changed = false;
+        const baseName = (filename || '').split('/').pop()?.replace(/\.json$/i, '') || '';
+        const defaultDoi = baseName ? baseName.replace(/_/g, '/') : (this.findFirstDoiInData(this.currentData) || '');
+        if (!Object.prototype.hasOwnProperty.call(meta, 'doi') || !meta.doi) {
+            meta.doi = defaultDoi;
+            changed = true;
+        }
         if (!Object.prototype.hasOwnProperty.call(meta, 'pdf_path')) {
             const base = filename ? filename.replace(/\.[^.]+$/, '') : (meta.paper_id || 'unknown');
             meta.pdf_path = `${this.normalizePdfPathValue(base)}.pdf`.replace(/\.pdf\.pdf$/i, '.pdf');
@@ -3860,8 +4033,10 @@ class PaperReviewerApp {
         const union = new Set();
         const prevSelected = new Set(this.queryFieldSelected);
         for (const filename of files) {
+            const paths = this.getPathsForBase(filename);
+            const jsonPath = paths?.json || filename;
             try {
-                const resp = await fetch(this.getDataUrl(filename), { cache: 'no-store' });
+                const resp = await fetch(this.getDataUrl(jsonPath), { cache: 'no-store' });
                 if (!resp.ok) continue;
                 const data = await resp.json();
                 this.getFieldUnionFromData(data).forEach(f => union.add(f));
@@ -3912,17 +4087,39 @@ class PaperReviewerApp {
         }
         const rows = [];
         for (const filename of files) {
+            const base = filename;
+            const paths = this.getPathsForBase(base);
+            const jsonPath = paths?.json || base;
+            const altJsonPaths = this.getAllJsonPathsForBase(base).filter(p => p && p !== jsonPath);
+            const fetchJson = async (path) => {
+                try {
+                    const resp = await fetch(this.getDataUrl(path), { cache: 'no-store' });
+                    if (!resp.ok) return null;
+                    return await resp.json();
+                } catch (err) {
+                    console.warn('exportQueryData fetch failed for', path, err);
+                    return null;
+                }
+            };
+
+            let data = await fetchJson(jsonPath);
+            let doi = data ? (this.findFirstDoiInData(data) || (data.meta_info && data.meta_info.doi)) : '';
+            if (!doi && altJsonPaths.length) {
+                for (const altPath of altJsonPaths) {
+                    const altData = await fetchJson(altPath);
+                    if (!altData) continue;
+                    if (!data) data = altData; // 备用数据用于字段提取
+                    doi = this.findFirstDoiInData(altData) || (altData.meta_info && altData.meta_info.doi);
+                    if (doi) break;
+                }
+            }
             try {
-                const resp = await fetch(this.getDataUrl(filename), { cache: 'no-store' });
-                if (!resp.ok) continue;
-                const data = await resp.json();
-                const doi = this.findFirstDoiInData(data) || (data.meta_info && data.meta_info.doi);
                 if (!doi) continue;
                 const row = { doi };
                 const fieldsToUse = this.queryFieldSelected.size ? Array.from(this.queryFieldSelected) : [];
                 fieldsToUse.forEach((field) => {
                     if (field === 'doi') return;
-                    const val = this.getFieldValueForQuery(data, field);
+                    const val = data ? this.getFieldValueForQuery(data, field) : undefined;
                     if (val !== undefined) {
                         row[field] = val;
                     }
@@ -5491,12 +5688,14 @@ class PaperReviewerApp {
 
     getMarkdownFilename(jsonFilename) {
         if (!jsonFilename) return '';
-        return jsonFilename.replace(/\.json$/i, '') + '.md';
+        const base = jsonFilename.split('/').pop()?.replace(/\.json$/i, '') || jsonFilename.replace(/\.json$/i, '');
+        return `md/${base}.md`;
     }
 
     getDataUrl(filename) {
-        const projectPath = this.currentProject ? this.currentProject.path : 'user';
-        const segments = `${projectPath}/data/${filename}`.split('/').filter(Boolean).map(encodeURIComponent);
+        const projectPath = this.getProjectKey();
+        const safe = (filename || '').replace(/^\/+/, '');
+        const segments = `${projectPath}/${safe}`.split('/').filter(Boolean).map(encodeURIComponent);
         return `/${segments.join('/')}`;
     }
 
@@ -5623,8 +5822,7 @@ class PaperReviewerApp {
             return;
         }
         const mdFilename = this.getMarkdownFilename(this.currentFile);
-        const projectPath = this.currentProject ? this.currentProject.path : 'user';
-        const mdUrl = `${projectPath}/data/${encodeURIComponent(mdFilename)}`;
+        const mdUrl = this.getDataUrl(mdFilename);
         const render = document.getElementById('markdownRender');
         if (render) {
             render.innerHTML = '<div class="loading"><div class="spinner"></div>Loading markdown...</div>';

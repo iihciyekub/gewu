@@ -358,8 +358,12 @@ const server = http.createServer((req, res) => {
                 }
                 
                 const { projectKey, fullPath } = normalizeProjectPath(projectPath);
-                // 保存到指定项目的 data/ 目录
-                const filePath = path.join(fullPath, 'data', filename);
+                // 保存到指定项目目录（新结构优先：json/... 或 md/...；旧结构兼容 data/...）
+                const safeName = filename.replace(/^[/\\]+/, '');
+                const usesNewLayout = safeName.startsWith('json/') || safeName.startsWith('md/');
+                const filePath = usesNewLayout
+                    ? path.join(fullPath, safeName)
+                    : path.join(fullPath, 'data', safeName);
                 
                 // 确保目录存在
                 const dir = path.dirname(filePath);
@@ -409,7 +413,11 @@ const server = http.createServer((req, res) => {
                     return;
                 }
                 const { fullPath } = normalizeProjectPath(projectPath);
-                const filePath = path.join(fullPath, 'data', filename);
+                const safeName = filename.replace(/^[/\\]+/, '');
+                const usesNewLayout = safeName.startsWith('json/') || safeName.startsWith('md/');
+                const filePath = usesNewLayout
+                    ? path.join(fullPath, safeName)
+                    : path.join(fullPath, 'data', safeName);
                 const dir = path.dirname(filePath);
                 if (!fs.existsSync(dir)) {
                     fs.mkdirSync(dir, { recursive: true });
@@ -447,9 +455,14 @@ const server = http.createServer((req, res) => {
                 }
                 
                 const { projectKey, fullPath } = normalizeProjectPath(projectPath);
+                const fix = (name) => {
+                    const safe = name.replace(/^[/\\]+/, '');
+                    if (safe.startsWith('json/') || safe.startsWith('md/')) return path.join(fullPath, safe);
+                    return path.join(fullPath, 'data', safe);
+                };
                 // 构建文件路径
-                const oldPath = path.join(fullPath, 'data', oldFilename);
-                const newPath = path.join(fullPath, 'data', newFilename);
+                const oldPath = fix(oldFilename);
+                const newPath = fix(newFilename);
                 
                 // 检查旧文件是否存在
                 if (!fs.existsSync(oldPath)) {
@@ -512,8 +525,10 @@ const server = http.createServer((req, res) => {
                 }
                 
                 const { projectKey, fullPath } = normalizeProjectPath(projectPath);
-                // 构建文件路径
-                const filePath = path.join(fullPath, 'data', filename);
+                const safe = filename.replace(/^[/\\]+/, '');
+                const filePath = safe.startsWith('json/') || safe.startsWith('md/')
+                    ? path.join(fullPath, safe)
+                    : path.join(fullPath, 'data', safe);
                 
                 // 检查文件是否存在
                 if (!fs.existsSync(filePath)) {
@@ -563,7 +578,7 @@ const server = http.createServer((req, res) => {
         return;
     }
 
-    // 处理获取文件列表请求
+    // 处理获取文件列表请求（新结构 json/<view>/ + md/ + 兼容 data/ 旧结构）
     if (req.method === 'POST' && pathname === '/list-json-files') {
         let body = '';
         
@@ -579,20 +594,42 @@ const server = http.createServer((req, res) => {
                 const { projectKey, fullPath } = normalizeProjectPath(projectPath);
                 const dataDir = path.join(fullPath, 'data');
                 
-                // 确保目录存在
-                if (!fs.existsSync(dataDir)) {
-                    fs.mkdirSync(dataDir, { recursive: true });
+                const collectFiles = (dir, kind, category) => {
+                    if (!fs.existsSync(dir)) return [];
+                    const entries = fs.readdirSync(dir, { withFileTypes: true });
+                    return entries
+                        .filter(ent => ent.isFile() && ((kind === 'json' && ent.name.toLowerCase().endsWith('.json')) || (kind === 'md' && ent.name.toLowerCase().endsWith('.md'))))
+                        .map(ent => ({
+                            name: ent.name,
+                            path: path.relative(fullPath, path.join(dir, ent.name)).split(path.sep).join('/'),
+                            kind,
+                            category
+                        }));
+                };
+
+                const files = [];
+                // 新结构：json/<view>/*
+                const jsonRoot = path.join(fullPath, 'json');
+                if (fs.existsSync(jsonRoot)) {
+                    const views = fs.readdirSync(jsonRoot, { withFileTypes: true })
+                        .filter(ent => ent.isDirectory())
+                        .map(ent => ent.name);
+                    views.forEach(v => {
+                        files.push(...collectFiles(path.join(jsonRoot, v), 'json', `json.${v}`));
+                    });
                 }
-                
-                // 读取目录中的所有.json文件
-                const files = fs.readdirSync(dataDir)
-                    .filter(file => file.endsWith('.json'))
-                    .sort();
+                // 新结构：md/
+                files.push(...collectFiles(path.join(fullPath, 'md'), 'md', 'md'));
+                // 兼容旧结构 data/
+                files.push(...collectFiles(path.join(dataDir, 'json.checklist'), 'json', 'json.checklist'));
+                files.push(...collectFiles(path.join(dataDir, 'json.qa'), 'json', 'json.qa'));
+                files.push(...collectFiles(dataDir, 'json', 'json.root'));
+                files.push(...collectFiles(path.join(dataDir, 'md'), 'md', 'md'));
                 
                 res.writeHead(200, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify({
                     success: true,
-                    files: files,
+                    files: files.sort((a, b) => a.path.localeCompare(b.path)),
                     projectKey
                 }));
                 
