@@ -110,6 +110,7 @@ class PaperReviewerApp {
         this.currentJsonView = '';
         this.queryDoiOrderText = '';
         this.lastJsonViewByProject = this.loadLastJsonViewByProject();
+        this.doiAutoNumberStart = null;
 
         this.init();
     }
@@ -1416,7 +1417,18 @@ class PaperReviewerApp {
             });
             fileListEl.addEventListener('keydown', (e) => {
                 if (this.groupMenuState) return;
-                if (!['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) return;
+                const mod = e.metaKey || e.ctrlKey;
+                const key = e.key;
+                if (mod && (key === 'Delete' || key === 'Backspace')) {
+                    e.preventDefault();
+                    const targets = this.getSelectedFilesArray();
+                    const fname = targets.length ? targets[targets.length - 1] : (this.currentFile || this.visibleFileOrder?.[0]);
+                    if (!fname) return;
+                    const item = fileListEl.querySelector(`.file-item[data-filename="${fname}"]`);
+                    this.deleteFile(fname, item);
+                    return;
+                }
+                if (!['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(key)) return;
                 if ((e.metaKey || e.ctrlKey) && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) {
                     e.preventDefault();
                     this.openGroupMoveMenu();
@@ -1547,6 +1559,27 @@ class PaperReviewerApp {
             this.pdfPlaceholderEl.addEventListener('click', async () => {
                 await this.ensurePdfLoaded();
             });
+        }
+
+        const doiBtn = document.getElementById('openDoiModalBtn');
+        if (doiBtn) {
+            doiBtn.addEventListener('click', () => this.openDoiModal());
+        }
+        const doiExtractBtn = document.getElementById('doiExtractBtn');
+        if (doiExtractBtn) {
+            doiExtractBtn.addEventListener('click', () => this.formatDoiInput());
+        }
+        const doiCreateBtn = document.getElementById('doiCreateBtn');
+        if (doiCreateBtn) {
+            doiCreateBtn.addEventListener('click', () => this.createJsonFromDoiList());
+        }
+        const doiInput = document.getElementById('doiInput');
+        if (doiInput) {
+            doiInput.addEventListener('input', () => this.updateDoiCount());
+        }
+        const doiAutonumBtn = document.getElementById('doiAutonumBtn');
+        if (doiAutonumBtn) {
+            doiAutonumBtn.addEventListener('click', () => this.applyDoiAutoNumberFromInput());
         }
     }
 
@@ -2248,6 +2281,260 @@ class PaperReviewerApp {
 
         // 清空input，允许重复选择
         e.target.value = '';
+    }
+
+    openDoiModal() {
+        if (!this.currentProject) {
+            this.showNotification('请先加载项目', 'error');
+            return;
+        }
+        const modal = document.getElementById('doiModal');
+        const textarea = document.getElementById('doiInput');
+        if (textarea && !textarea.value.trim()) {
+            const doi = this.currentData?.meta_info?.doi || '';
+            if (doi) textarea.value = doi;
+        }
+        this.doiAutoNumberStart = null;
+        if (modal) modal.classList.add('active');
+        this.updateDoiCount();
+    }
+
+    closeDoiModal() {
+        const modal = document.getElementById('doiModal');
+        if (modal) modal.classList.remove('active');
+    }
+
+    normalizeDoi(doi = '') {
+        return (doi || '')
+            .trim()
+            .replace(/^https?:\/\/(dx\.)?doi\.org\//i, '')
+            .replace(/[\s<>]+/g, '')
+            .replace(/[.]+$/g, '');
+    }
+
+    getDoiKeyVariants(doi = '') {
+        const base = this.normalizeDoi(doi).trim().toLowerCase();
+        if (!base) return [];
+        const set = new Set([base, base.replace(/\//g, '_'), base.replace(/_/g, '/')]);
+        return Array.from(set).filter(Boolean);
+    }
+
+    extractDoisFromText(text = '') {
+        const regex = /10\.\d{4,9}\/[^\s"<>]+/gi;
+        const matches = (text || '').match(regex) || [];
+        const seen = new Set();
+        const out = [];
+        matches.forEach((raw) => {
+            let clean = this.normalizeDoi(raw);
+            clean = clean.replace(/[)\]]+$/, '').replace(/[.,;]+$/, '');
+            if (!clean) return;
+            if (seen.has(clean)) return;
+            seen.add(clean);
+            out.push(clean);
+        });
+        return out;
+    }
+
+    updateDoiCount() {
+        const textarea = document.getElementById('doiInput');
+        const display = document.getElementById('doiCountDisplay');
+        if (!textarea || !display) return;
+        const dois = this.extractDoisFromText(textarea.value);
+        display.textContent = `${dois.length} 个 DOI`;
+    }
+
+    async applyDoiAutoNumberFromInput() {
+        if (!this.currentProject) {
+            this.showNotification('请先加载项目', 'error');
+            return;
+        }
+        const textarea = document.getElementById('doiInput');
+        if (!textarea) return;
+        const rawDois = this.extractDoisFromText(textarea.value);
+        const order = [];
+        const seenKeys = new Set();
+        rawDois.forEach((d) => {
+            const keys = this.getDoiKeyVariants(d);
+            if (!keys.length) return;
+            const dup = keys.some(k => seenKeys.has(k));
+            if (dup) return;
+            keys.forEach(k => seenKeys.add(k));
+            order.push(d);
+        });
+        if (!order.length) {
+            this.showNotification('未检测到 DOI', 'info');
+            return;
+        }
+        try {
+            const result = await this.reassignDoiSequence(order, { view: this.currentJsonView || '' });
+            if (Number.isFinite(result?.nextNo)) {
+                this.doiAutoNumberStart = result.nextNo;
+            }
+        } catch (err) {
+            console.error('自动编号失败:', err);
+            this.showNotification(`自动编号失败: ${err.message}`, 'error');
+        }
+    }
+
+    async getMaxMetaNo() {
+        const files = this.currentFileList || [];
+        const view = this.currentJsonView || 'view1';
+        let maxNo = 0;
+        for (const base of files) {
+            const path = this.getViewPathForBase(base, view);
+            if (!path) continue;
+            try {
+                const data = await this.readProjectFile(path);
+                const meta = data?.meta_info || {};
+                const raw = meta.No ?? meta.no ?? meta.NO ?? meta.No;
+                const num = Number(String(raw ?? '').trim());
+                if (Number.isFinite(num)) {
+                    maxNo = Math.max(maxNo, num);
+                }
+            } catch (_e) {
+                // ignore read errors
+            }
+        }
+        return maxNo;
+    }
+
+    formatDoiInput() {
+        const textarea = document.getElementById('doiInput');
+        if (!textarea) return;
+        const dois = this.extractDoisFromText(textarea.value);
+        if (!dois.length) {
+            this.showNotification('未检测到 DOI', 'info');
+            this.updateDoiCount();
+            return;
+        }
+        textarea.value = dois.join('\n');
+        this.updateDoiCount();
+        this.showNotification('已提取并格式化 DOI', 'success');
+    }
+
+    doiToFilenameBase(doi) {
+        const clean = this.normalizeDoi(doi);
+        const safe = clean.replace(/[^a-zA-Z0-9._-]+/g, '_');
+        return safe || 'doi_item';
+    }
+
+    buildDoiJsonTemplate(doi) {
+        const clean = this.normalizeDoi(doi);
+        return {
+            schema_version: '1.0',
+            meta_info: {
+                doi: clean,
+                title: '',
+                pdf_path: '',
+                No: null
+            },
+            review: {}
+        };
+    }
+
+    async saveJsonPayload(filename, jsonData) {
+        const jsonString = JSON.stringify(jsonData, null, 2);
+        const response = await fetch('/save-json', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                projectPath: this.currentProject ? this.currentProject.path : 'user',
+                filename,
+                content: jsonString
+            })
+        });
+        if (!response.ok) {
+            const msg = await response.text().catch(() => '');
+            throw new Error(msg || '保存失败');
+        }
+    }
+
+    async createJsonFromDoiList() {
+        if (!this.currentProject) {
+            this.showNotification('请先加载项目', 'error');
+            return;
+        }
+        let nextNo = Number.isFinite(this.doiAutoNumberStart) ? this.doiAutoNumberStart : null;
+        const textarea = document.getElementById('doiInput');
+        const modal = document.getElementById('doiModal');
+        const view = this.currentJsonView || 'view1';
+        if (!textarea) return;
+        const inputDois = this.extractDoisFromText(textarea.value);
+        // 去重（同一个 DOI 的不同写法也去重）
+        const seenKeys = new Set();
+        const dois = [];
+        inputDois.forEach((d) => {
+            const keys = this.getDoiKeyVariants(d);
+            const dup = keys.some(k => seenKeys.has(k));
+            if (dup) return;
+            keys.forEach(k => seenKeys.add(k));
+            dois.push(d);
+        });
+        if (!dois.length) {
+            this.showNotification('未检测到 DOI', 'info');
+            return;
+        }
+        if (nextNo === null) {
+            try {
+                const maxNo = await this.getMaxMetaNo();
+                nextNo = (Number.isFinite(maxNo) ? maxNo : 0) + 1;
+            } catch (err) {
+                console.warn('自动编号初始化失败，继续无编号创建', err);
+            }
+        }
+
+        const created = [];
+        const existing = [];
+        for (const doi of dois) {
+            const base = this.doiToFilenameBase(doi);
+            const already = this.fileMetaByBase?.[base]?.views?.[view];
+            if (already) {
+                existing.push(already);
+                continue;
+            }
+            const filename = `json/${view}/${base}.json`;
+            const payload = this.buildDoiJsonTemplate(doi);
+            if (Number.isFinite(nextNo)) {
+                payload.meta_info.No = nextNo;
+                nextNo += 1;
+            }
+            try {
+                await this.saveJsonPayload(filename, payload);
+                created.push(filename);
+            } catch (err) {
+                console.error('Create DOI file failed:', err);
+                this.showNotification(`创建失败 ${filename}: ${err.message}`, 'error');
+            }
+        }
+
+        // 刷新列表并打开首个目标
+        await this.loadFileList(true);
+        const target = created[0] || existing[0];
+        if (target) {
+            const targetBase = target.split('/').pop()?.replace(/\.json$/i, '') || target;
+            setTimeout(() => {
+                const item = Array.from(document.querySelectorAll('.file-item'))
+                    .find(el => (el.dataset.filename || '').replace(/\.json$/i, '') === targetBase);
+                if (item) {
+                    this.loadFile(item.dataset.filename, item);
+                }
+            }, 100);
+        }
+
+        if (modal) modal.classList.remove('active');
+
+        if (created.length && existing.length) {
+            this.showNotification(`已创建 ${created.length} 个，已有 ${existing.length} 个`, 'success');
+        } else if (created.length) {
+            this.showNotification(`已创建 ${created.length} 个 DOI 文件`, 'success');
+        } else {
+            this.showNotification(`已有 ${existing.length} 个 DOI 文件，无需创建`, 'info');
+        }
+
+        // 记录下一个可用编号
+        if (Number.isFinite(nextNo)) {
+            this.doiAutoNumberStart = nextNo;
+        }
     }
     
     async switchProject(project) {
@@ -3191,7 +3478,7 @@ class PaperReviewerApp {
                 <i class="fas fa-edit"></i> 重命名
             </div>
             <div class="context-menu-item" data-action="delete">
-                <i class="fas fa-trash"></i> 删除
+                <i class="fas fa-trash"></i> 删除 <span class="context-menu-hint">(Cmd/Ctrl + Delete)</span>
             </div>
             <div class="context-menu-item" data-action="copyPdfFile">
                 <i class="fas fa-copy"></i> 复制 PDF 文件
@@ -3325,15 +3612,20 @@ class PaperReviewerApp {
     }
 
     async getPdfFilenameForJson(jsonFilename) {
-        const fallback = `${(jsonFilename || '').replace(/\.[^.]+$/, '')}.pdf`;
+        const view = this.currentJsonView || 'view1';
+        const baseName = (jsonFilename || '').split('/').pop()?.replace(/\.json$/i, '') || (jsonFilename || '');
+        const jsonPath = (jsonFilename && jsonFilename.includes('/'))
+            ? jsonFilename
+            : (this.getViewPathForBase(baseName, view) || `json/${view}/${baseName}.json`);
+        const fallback = `${baseName}.pdf`;
         // 如果当前文件已加载且是目标文件，直接取内存中的 meta_info
-        if (this.currentFile === jsonFilename && this.currentData?.meta_info) {
+        if ((this.currentFile === jsonFilename || this.currentFile === jsonPath) && this.currentData?.meta_info) {
             const val = this.normalizePdfPathValue(this.currentData.meta_info.pdf_path);
             if (val) return val;
         }
         // 否则从文件读取 meta_info
         try {
-            const data = await this.readProjectFile(jsonFilename);
+            const data = await this.readProjectFile(jsonPath);
             const val = data?.meta_info ? this.normalizePdfPathValue(data.meta_info.pdf_path) : '';
             return val || fallback;
         } catch (err) {
@@ -3449,57 +3741,52 @@ class PaperReviewerApp {
 
     // 删除文件
     async deleteFile(filename, fileItem) {
-        if (!confirm(`确定要删除 "${filename}" 及其同名 Markdown 吗？此操作无法撤销！`)) return;
-        
         const projectPath = this.currentProject ? this.currentProject.path : 'user';
-        const mdName = this.getMarkdownFilename(filename);
+        const base = (filename || '').replace(/\.json$/i, '');
+        const targets = this.getAllPathsForDelete(base);
+        if (!targets.length) {
+            targets.push({ path: `json/${this.currentJsonView || 'view1'}/${base}.json`, type: 'json' });
+            targets.push({ path: `md/${base}.md`, type: 'md' });
+        }
+
+        const jsonCount = targets.filter(t => t.type === 'json').length;
+        const mdCount = targets.filter(t => t.type === 'md').length;
+        const ok = window.confirm(`确定删除 "${base}" 的所有 JSON (${jsonCount}) 和同名 Markdown (${mdCount}) 文件？此操作不可撤销！`);
+        if (!ok) return;
+        
         let deletedMd = false;
-
         try {
-            const response = await fetch('/delete-json', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ 
-                    projectPath,
-                    filename: filename 
-                })
-            });
-            
-            if (!response.ok) throw new Error('删除失败');
-
-            const result = await response.json().catch(() => ({}));
-            deletedMd = !!result.mdDeleted;
-
-            // 如果服务端未删除 md，再尝试一次客户端删除（兼容旧返回）
-            if (!deletedMd) {
+            for (const t of targets) {
                 try {
-                    const mdResp = await fetch('/delete-json', {
+                    const resp = await fetch('/delete-json', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
                             projectPath,
-                            filename: mdName
+                            filename: t.path
                         })
                     });
-                    if (mdResp.ok) deletedMd = true;
-                } catch (mdErr) {
-                    console.warn('删除同名 markdown 失败:', mdErr);
+                    if (!resp.ok) continue;
+                    if (t.type === 'md') deletedMd = true;
+                } catch (err) {
+                    console.warn('删除失败', t.path, err);
                 }
             }
-            
-            this.showNotification(`✓ 已删除 ${filename}${deletedMd ? `，笔记 ${mdName}` : ''}`, 'success');
-            this.removeFilenameFromGroups(filename);
+
+            this.showNotification(`✓ 已删除 ${jsonCount} 个 JSON${deletedMd ? '，同名 Markdown' : ''}`, 'success');
+            this.removeFilenameFromGroups(base);
             
             // 刷新列表，确保不加载已删除文件
             await this.loadFileList(true);
 
             // 如果删除的是当前文件，清空状态并加载第一个文件
-            if (this.currentFile === filename) {
+            if (this.currentFile === filename || this.currentFile === `${base}.json`) {
                 this.currentFile = null;
                 this.currentData = null;
                 this.hasUnsavedChanges = false;
                 delete this.tempDataCache[filename];
-                delete this.tempDataCache[mdName];
+                delete this.tempDataCache[`${base}.json`];
+                delete this.tempDataCache[`md/${base}.md`];
 
                 const nextFile = (this.currentFileList || [])[0];
                 if (nextFile) {
@@ -3718,6 +4005,27 @@ class PaperReviewerApp {
             md: mdPath,
             pdf: `pdf/${clean}.pdf`
         };
+    }
+
+    getAllPathsForDelete(base) {
+        const clean = (base || '').replace(/\.json$/i, '');
+        const entry = this.fileMetaByBase?.[clean];
+        const paths = [];
+        if (entry?.views && typeof entry.views === 'object') {
+            Object.values(entry.views).forEach(p => { if (p) paths.push({ path: p, type: 'json' }); });
+        }
+        if (entry?.legacyJson) paths.push({ path: entry.legacyJson, type: 'json' });
+        const mdPath = entry?.mdPath || `md/${clean}.md`;
+        if (mdPath) paths.push({ path: mdPath, type: 'md' });
+
+        // 去重
+        const seen = new Set();
+        return paths.filter(({ path }) => {
+            const key = path;
+            if (seen.has(key)) return false;
+            seen.add(key);
+            return true;
+        });
     }
 
     getViewPathForBase(base, view) {
@@ -4653,9 +4961,8 @@ class PaperReviewerApp {
             const paths = this.getPathsForBase(filename);
             const jsonPath = paths?.json || filename;
             try {
-                const resp = await fetch(this.getDataUrl(jsonPath), { cache: 'no-store' });
-                if (!resp.ok) continue;
-                const data = await resp.json();
+                const data = await this.readProjectFile(jsonPath);
+                if (!data) continue;
                 this.getFieldUnionFromData(data).forEach(f => union.add(f));
             } catch (err) {
                 console.warn('refreshQueryFieldOptions failed for', filename, err);
@@ -4776,9 +5083,7 @@ class PaperReviewerApp {
             const altJsonPaths = this.getAllJsonPathsForBase(base).filter(p => p && p !== jsonPath);
             const fetchJson = async (path) => {
                 try {
-                    const resp = await fetch(this.getDataUrl(path), { cache: 'no-store' });
-                    if (!resp.ok) return null;
-                    return await resp.json();
+                    return await this.readProjectFile(path);
                 } catch (err) {
                     console.warn('exportQueryData fetch failed for', path, err);
                     return null;
@@ -4860,24 +5165,27 @@ class PaperReviewerApp {
         this.closeQueryExportModal();
     }
 
-    async updateDoiSequenceNumbers() {
-        const files = this.visibleFileOrder && this.visibleFileOrder.length ? this.visibleFileOrder : (this.currentFileList || []);
+    async reassignDoiSequence(doiList = [], opts = {}) {
+        const view = typeof opts.view === 'string' ? opts.view : (this.currentJsonView || '');
+        const files = Array.isArray(opts.files) && opts.files.length
+            ? opts.files
+            : (this.visibleFileOrder && this.visibleFileOrder.length ? this.visibleFileOrder : (this.currentFileList || []));
         if (!files.length) {
-            this.showNotification('No files to update', 'info');
-            return;
+            if (opts.notify !== false) this.showNotification('No files to update', 'info');
+            return { saved: 0, nextNo: 1, processed: 0 };
         }
-        const view = this.currentJsonView || '';
-        const doiInput = document.getElementById('queryDoiOrderInput');
-        const { list: doiOrder, dupCount } = this.dedupeDoiOrder(this.parseDoiOrderInput(doiInput ? doiInput.value : this.queryDoiOrderText));
-        if (dupCount > 0) {
-            this.showNotification(`Detected and ignored ${dupCount} duplicate DOI entries`, 'info');
-        }
-        const makeKeys = (s) => {
-            const base = (s || '').trim().toLowerCase();
-            if (!base) return [];
-            const set = new Set([base, base.replace(/\//g, '_'), base.replace(/_/g, '/')]);
-            return Array.from(set).filter(Boolean);
-        };
+        // 去重 DOI 顺序（同一 DOI 的不同写法只保留一次）
+        const order = [];
+        const seenKeys = new Set();
+        (doiList || []).forEach((raw) => {
+            const keys = this.getDoiKeyVariants(raw);
+            if (!keys.length) return;
+            const dup = keys.some(k => seenKeys.has(k));
+            if (dup) return;
+            keys.forEach(k => seenKeys.add(k));
+            order.push(raw);
+        });
+
         const items = [];
         const skipped = [];
         for (const base of files) {
@@ -4890,13 +5198,12 @@ class PaperReviewerApp {
                 continue;
             }
             try {
-                const resp = await fetch(this.getDataUrl(jsonPath), { cache: 'no-store' });
-                if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-                const data = await resp.json();
+                const data = await this.readProjectFile(jsonPath);
+                if (!data) throw new Error('Empty data');
                 const rawMeta = data.meta_info;
                 const meta = (rawMeta && typeof rawMeta === 'object' && !Array.isArray(rawMeta)) ? rawMeta : {};
                 if (meta !== rawMeta) data.meta_info = meta; // keep existing meta fields, just add No
-                meta.No = 0;
+                meta.No = null; // 重置，稍后按 DOI 排序重新赋值
                 const baseDoi = (base || '').replace(/_/g, '/');
                 const doi = this.findFirstDoiInData(data) || (meta && meta.doi) || baseDoi || '';
                 if (!meta.doi && doi) meta.doi = doi; // backfill for missing meta.doi
@@ -4909,20 +5216,20 @@ class PaperReviewerApp {
                     changed: true
                 });
             } catch (err) {
-                console.warn('updateDoiSequenceNumbers load failed for', base, err);
+                console.warn('reassignDoiSequence load failed for', base, err);
             }
         }
         const buckets = new Map();
         items.forEach((item) => {
             if (!item.doiKey) return;
-            makeKeys(item.doiKey).forEach((k) => {
+            this.getDoiKeyVariants(item.doiKey).forEach((k) => {
                 if (!buckets.has(k)) buckets.set(k, []);
                 buckets.get(k).push(item);
             });
         });
-        let seq = 1;
-        doiOrder.forEach((raw) => {
-            const keys = makeKeys(raw);
+        const numberedItems = [];
+        order.forEach((raw) => {
+            const keys = this.getDoiKeyVariants(raw);
             if (!keys.length) return;
             let target = null;
             for (const key of keys) {
@@ -4933,8 +5240,12 @@ class PaperReviewerApp {
                 }
             }
             if (target) {
-                target.meta.No = seq++;
+                numberedItems.push(target);
             }
+        });
+        let seq = 1;
+        numberedItems.forEach((item) => {
+            item.meta.No = seq++;
         });
 
         let saved = 0;
@@ -4970,16 +5281,32 @@ class PaperReviewerApp {
                     this.renderFlatView();
                 }
             } catch (err) {
-                console.warn('updateDoiSequenceNumbers save failed for', item.path, err);
+                console.warn('reassignDoiSequence save failed for', item.path, err);
             }
         }
-        const numbered = Math.max(0, seq - 1);
-        if (doiOrder.length && !numbered) {
-            this.showNotification('No matching DOI data found to number', 'info');
-            return;
+        const numbered = numberedItems.length;
+        if (order.length && !numbered) {
+            if (opts.notify !== false) this.showNotification('No matching DOI data found to number', 'info');
+            return { saved, nextNo: seq, processed: items.length };
         }
-        const summary = `Updated No for ${saved}/${items.length} files (numbered ${numbered}${skipped.length ? `, skipped ${skipped.length}` : ''})`;
-        this.showNotification(summary, saved ? 'success' : 'info');
+        const totalInput = (doiList || []).length;
+        const uniqueInput = order.length;
+        const summary = `Updated No for ${saved}/${items.length} files (numbered ${numbered}${skipped.length ? `, skipped ${skipped.length}` : ''}) | input DOI ${totalInput}, unique ${uniqueInput}, matched ${numbered}`;
+        if (opts.notify !== false) this.showNotification(summary, saved ? 'success' : 'info');
+        return { saved, nextNo: seq, processed: items.length, numbered, totalInput, uniqueInput };
+    }
+
+    async updateDoiSequenceNumbers() {
+        const doiInput = document.getElementById('queryDoiOrderInput');
+        const rawList = this.parseDoiOrderInput(doiInput ? doiInput.value : this.queryDoiOrderText);
+        const { list, dupCount } = this.dedupeDoiOrder(rawList);
+        if (dupCount > 0) {
+            this.showNotification(`Detected and ignored ${dupCount} duplicate DOI entries`, 'info');
+        }
+        const result = await this.reassignDoiSequence(list, { view: this.currentJsonView || '' });
+        if (Number.isFinite(result?.nextNo)) {
+            this.doiAutoNumberStart = result.nextNo;
+        }
     }
 
     getFieldValueForQuery(data, field) {
@@ -8087,7 +8414,7 @@ class PaperReviewerApp {
                         if (!pdfDoc.getElementById(styleId)) {
                             const styleEl = pdfDoc.createElement('style');
                             styleEl.id = styleId;
-                            // 统一将 PDF.js 的主容器缩放到 80%，无需依赖浏览器的 zoom 兼容性
+                            // 统一将 PDF.js 的主容器缩放到 80%，并强制高亮颜色可见
                             styleEl.textContent = `
                                 :root { --pr-pdf-scale: 0.8; }
                                 #outerContainer {
@@ -8095,6 +8422,12 @@ class PaperReviewerApp {
                                     transform-origin: top left;
                                     width: calc(100% / var(--pr-pdf-scale));
                                     height: calc(100% / var(--pr-pdf-scale));
+                                }
+                                .textLayer .highlight {
+                                    background-color: rgba(255, 230, 90, 0.45) !important;
+                                }
+                                .textLayer .highlight.selected {
+                                    background-color: rgba(255, 200, 60, 0.6) !important;
                                 }
                             `;
                             pdfDoc.head.appendChild(styleEl);
@@ -8107,17 +8440,6 @@ class PaperReviewerApp {
                         if (win.PDFViewerApplication?.overlayManager?.closeAll) {
                             win.PDFViewerApplication.overlayManager.closeAll();
                         }
-                        // 用户点击 PDF 时清除搜索高亮，减少干扰
-                        const bindClickClear = () => {
-                            const viewerContainer = pdfDoc?.querySelector('#viewerContainer');
-                            if (viewerContainer && !viewerContainer.dataset.clearHighlightBound) {
-                                viewerContainer.addEventListener('click', () => this.clearPdfHighlights());
-                                viewerContainer.dataset.clearHighlightBound = '1';
-                            }
-                        };
-                        bindClickClear();
-                        setTimeout(bindClickClear, 300);
-
                         // 默认收起侧边栏，但保留按钮可用
                         const tryCloseSidebar = () => {
                             const pdfApp = win.PDFViewerApplication;
@@ -10326,11 +10648,6 @@ class PaperReviewerApp {
             const pdfDoc = iframe?.contentWindow?.document;
             if (pdfDoc?.getSelection) {
                 pdfDoc.getSelection().removeAllRanges();
-            }
-            if (pdfDoc) {
-                pdfDoc.querySelectorAll('.highlight').forEach(el => {
-                    el.classList.remove('highlight', 'selected', 'begin', 'end', 'middle');
-                });
             }
         } catch (err) {
             console.warn('清除 PDF 高亮失败:', err);
