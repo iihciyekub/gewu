@@ -2153,6 +2153,7 @@ body.theme-vscode .qa-bubble {
 
 .query-fields {
     max-height: 360px;
+    min-height: 360px;
     overflow: auto;
     border: 1px solid #e0e0e0;
     border-radius: 6px;

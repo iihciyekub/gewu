@@ -1,12 +1,14 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Research Reviewer - Overleaf Style</title>
-    
+
     <!-- Favicon (Overleaf-style green) -->
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='10' fill='%23138A07'/><text x='50' y='70' font-size='60' text-anchor='middle' fill='white' font-family='Arial,sans-serif'>R</text></svg>">
+    <link rel="icon"
+        href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='10' fill='%23138A07'/><text x='50' y='70' font-size='60' text-anchor='middle' fill='white' font-family='Arial,sans-serif'>R</text></svg>">
     <style>
         /* Query & Export modal layout */
         .query-export-grid {
@@ -16,26 +18,63 @@
             align-items: start;
             overflow-x: auto;
         }
-        .query-export-grid > * { min-width: 0; }
+
+        .query-export-grid>* {
+            min-width: 0;
+        }
+
         .query-card {
             background: #fff;
             border: 1px solid #e5e7eb;
             border-radius: 10px;
             padding: 12px;
             box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08);
+            display: flex;
+            flex-direction: column;
+            height: 100%;
         }
+
         .query-card h4 {
             margin: 0 0 8px;
             font-size: 13px;
             font-weight: 600;
             color: #1f2933;
         }
+
         .query-actions {
             display: flex;
-            flex-wrap: wrap;
-            gap: 6px;
-            margin: 0 0 8px;
+            flex-wrap: nowrap;
+            gap: 8px;
+            margin: 0 0 10px;
+            align-items: center;
+            height: 26px;
+            min-height: 26px;
         }
+
+        .query-actions .btn {
+            height: 26px;
+        }
+
+        .query-actions .query-filter-input {
+            height: 26px;
+            padding-top: 4px;
+            padding-bottom: 4px;
+        }
+
+        .query-actions .btn,
+        .query-actions .query-filter-input {
+            white-space: nowrap;
+        }
+
+        .query-actions h4 {
+            margin: 0;
+        }
+
+        .query-actions .btn {
+            padding: 6px 10px;
+            font-size: 12px;
+        }
+
         .query-filter-input {
             width: 100%;
             padding: 8px 10px;
@@ -43,15 +82,18 @@
             border: 1px solid #d7dce3;
             border-radius: 8px;
         }
+
         .query-field-list {
             margin-top: 8px;
-            height: 360px;
-            min-height: 360px;
             overflow: auto;
             font-size: 12px;
             line-height: 1.35;
             white-space: nowrap;
+            flex: 1;
+            min-height: 300px;
+            max-height: 300px;
         }
+
         .query-field-item {
             display: flex;
             align-items: flex-start;
@@ -59,12 +101,12 @@
             padding: 3px 0;
             font-size: 12px;
         }
+
         .query-field-item input {
             margin-top: 2px;
         }
+
         .query-selected-box {
-            height: 360px;
-            min-height: 360px;
             width: 100%;
             min-width: 100%;
             border: 1px solid #e5e7eb;
@@ -76,7 +118,10 @@
             grid-auto-rows: 32px;
             gap: 6px;
             overflow-y: auto;
+            flex: 1;
+            min-height: 0;
         }
+
         .query-chip {
             display: inline-flex;
             align-items: center;
@@ -97,40 +142,54 @@
             white-space: nowrap;
             cursor: pointer;
         }
+
         .query-chip:hover {
             background: #e2e8f0;
         }
+
         /* Dark theme tweaks */
         body.theme-dark .query-card {
             background: #1f2933;
             border-color: #2d3741;
             box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
         }
-        body.theme-dark .query-card h4 { color: #e5e7eb; }
+
+        body.theme-dark .query-card h4 {
+            color: #e5e7eb;
+        }
+
         body.theme-dark .query-filter-input {
             background: #111827;
             border-color: #374151;
             color: #e5e7eb;
         }
-        body.theme-dark .query-field-list { color: #e5e7eb; }
+
+        body.theme-dark .query-field-list {
+            color: #e5e7eb;
+        }
+
         body.theme-dark .query-selected-box {
             background: #111827;
             border-color: #2d3741;
         }
+
         body.theme-dark .query-chip {
             background: #243447;
             border-color: #2d3741;
             color: #e5e7eb;
         }
-        body.theme-dark .query-chip:hover { background: #2f3f55; }
+
+        body.theme-dark .query-chip:hover {
+            background: #2f3f55;
+        }
     </style>
-    
+
     <!-- External Libraries -->
     <link rel="stylesheet" href="js/core/fontawesome-free-6.7.2-web/css/all.min.css">
     <link rel="stylesheet" href="js/core/jquery.json-viewer.css">
     <link rel="stylesheet" href="css/styles.css">
     <link rel="stylesheet" href="css/theme-dark.css">
-    
+
     <!-- MathJax for LaTeX rendering -->
     <script>
         MathJax = {
@@ -158,6 +217,7 @@
     <script src="js/core/highlight/highlight.min.js"></script>
     <script src="js/core/jsonrepair.min.js"></script>
 </head>
+
 <body>
     <div class="prompt-quick-panel" id="promptQuickPanel">
         <div class="prompt-quick-header">
@@ -189,18 +249,19 @@
                     <i class="fas fa-info-circle"></i>
                     <p>请选择包含 <code>data/</code> 和 <code>papers/</code> 子文件夹的项目目录</p>
                 </div>
-                
+
                 <div class="form-group">
                     <label for="projectPathInput">项目路径:</label>
                     <div class="path-input-group">
-                        <input type="text" id="projectPathInput" placeholder="例如: /Users/username/my_project 或 user" readonly>
+                        <input type="text" id="projectPathInput" placeholder="例如: /Users/username/my_project 或 user"
+                            readonly>
                         <button class="btn btn-browse" onclick="document.getElementById('projectFolderInput').click()">
                             <i class="fas fa-folder"></i> 浏览
                         </button>
                     </div>
                     <input type="file" id="projectFolderInput" webkitdirectory directory style="display: none;">
                 </div>
-                
+
                 <div class="recent-projects" id="recentProjectsList">
                     <h4><i class="fas fa-history"></i> 最近的项目</h4>
                     <div class="recent-projects-list" id="recentProjectsContent">
@@ -237,7 +298,8 @@
                     <button class="btn-sync-pdf" id="syncPdfBtn" title="扫描 papers/ 并创建空 JSON+MD">
                         <i class="fas fa-magic"></i>
                     </button>
-                    <button class="btn-switch-project" onclick="window.paperReviewerApp.showProjectSelector()" title="切换项目">
+                    <button class="btn-switch-project" onclick="window.paperReviewerApp.showProjectSelector()"
+                        title="切换项目">
                         <i class="fas fa-exchange-alt"></i>
                     </button>
                 </div>
@@ -261,97 +323,118 @@
         </div>
 
         <!-- Middle Panel - JSON Editor -->
-            <div class="middle-panel">
-                <div class="middle-header">
-                    <div class="file-meta">
-                        <div class="file-sub">
-                            <i class="fas fa-clock"></i>
-                            <span id="lastUpdateDisplay">Last update: -</span>
-                            <span class="markdown-status" id="markdownStatus"></span>
-                        </div>
-                    </div>
-                    <div class="header-actions">
-                        <div class="header-dropdown" id="jsonMenuDropdown">
-                            <button id="jsonMenuToggleBtn" class="btn header-icon-only" type="button" title="JSON 菜单" aria-label="JSON 菜单">
-                                <i class="fas fa-database"></i>
-                            </button>
-                            <div class="header-dropdown-menu" id="jsonMenu" role="menu" aria-label="JSON 菜单">
-                                <button class="header-dropdown-item" id="jsonViewStructuredItem" type="button" role="menuitem" title="表格视图">
-                                    <i class="fas fa-table"></i><span>表格视图</span>
-                                </button>
-                                <button class="header-dropdown-item" id="jsonViewFlatItem" type="button" role="menuitem" title="JSON 代码">
-                                    <i class="fas fa-code"></i><span>JSON 代码</span>
-                                </button>
-                                <button class="header-dropdown-item" id="jsonFormatItem" type="button" role="menuitem" title="格式化 JSON">
-                                    <i class="fas fa-align-left"></i><span>格式化</span>
-                                </button>
-                                <button class="header-dropdown-item" id="jsonSaveItem" type="button" role="menuitem" title="保存 JSON (Ctrl+S)">
-                                    <i class="fas fa-save"></i><span>保存 JSON</span>
-                                </button>
-                            </div>
-                        </div>
-                        <select id="jsonViewSelect" class="json-view-select" title="选择 JSON 视图"></select>
-                        <div class="header-dropdown" id="mdMenuDropdown">
-                            <button id="mdMenuToggleBtn" class="btn header-icon-only" type="button" title="Markdown 菜单" aria-label="Markdown 菜单">
-                                <i class="fa-brands fa-markdown"></i>
-                            </button>
-                            <div class="header-dropdown-menu" id="mdMenu" role="menu" aria-label="Markdown 菜单">
-                                <button class="header-dropdown-item" id="mdRenderItem" type="button" role="menuitem" title="Markdown 渲染后视图">
-                                    <i class="fas fa-eye"></i><span>MD 渲染</span>
-                                </button>
-                                <button class="header-dropdown-item" id="mdSourceItem" type="button" role="menuitem" title="Markdown 源码">
-                                    <i class="fas fa-pen"></i><span>MD 源码</span>
-                                </button>
-                                <button class="header-dropdown-item" id="mdCiteRenderItem" type="button" role="menuitem" title="渲染引文与参考文献">
-                                    <i class="fas fa-quote-right"></i><span>生成引用/参考文献</span>
-                                </button>
-                                <button class="header-dropdown-item" id="mdClearCiteCacheCurrentItem" type="button" role="menuitem" title="清除当前文档引文缓存">
-                                    <i class="fas fa-eraser"></i><span>清除当前文档缓存</span>
-                                </button>
-                                <button class="header-dropdown-item" id="mdClearCiteCacheItem" type="button" role="menuitem" title="清除全部引文缓存">
-                                    <i class="fas fa-broom"></i><span>清除全部引文缓存</span>
-                                </button>
-                                <button class="header-dropdown-item" id="mdSaveItem" type="button" role="menuitem" title="保存 Markdown">
-                                    <i class="fas fa-save"></i><span>MD 保存</span>
-                                </button>
-                            </div>
-                        </div>
-                        <button class="btn btn-theme-toggle header-icon-only" id="themeToggleBtn" title="切换夜间/日间模式" aria-label="切换夜间/日间模式">
-                            <i class="fas fa-moon"></i>
-                        </button>
-                        <button id="editLockToggleBtn" class="btn header-icon-only" type="button" title="编辑未锁定" aria-label="锁定编辑">
-                            <i class="fas fa-lock-open"></i>
-                        </button>
-                        <button class="btn header-icon-only" id="queryExportBtn" type="button" title="Query & Export (DOI keyed)" aria-label="Query & Export">
-                            <i class="fas fa-list-check"></i>
-                        </button>
-                        <div class="header-dropdown" id="settingsDropdown">
-                            <button id="settingsToggleBtn" class="btn header-icon-only" type="button" title="设置" aria-label="设置">
-                                <i class="fas fa-cog"></i>
-                            </button>
-                            <div class="header-dropdown-menu" id="settingsMenu" role="menu" aria-label="设置">
-                                <button class="header-dropdown-item" id="autoLoadOnItem" type="button" role="menuitem" title="切换文件后自动加载 PDF 预览">
-                                    <i class="fas fa-check" data-check="on" style="opacity:0"></i>
-                                    <span>开启 PDF 自动加载</span>
-                                </button>
-                                <button class="header-dropdown-item" id="autoLoadOffItem" type="button" role="menuitem" title="仅在点击右侧时加载 PDF 预览">
-                                    <i class="fas fa-check" data-check="off" style="opacity:0"></i>
-                                    <span>关闭 PDF 自动加载</span>
-                                </button>
-                            </div>
-                        </div>
-                        <div class="header-divider"></div>
-                        <button id="aideCopyToggleBtn" class="btn header-icon-only" type="button" title="打开工具面板 (Cmd+Shift+G)" aria-label="打开工具面板">
-                            <i class="fas fa-code-branch"></i>
-                        </button>
-                        <button id="projectInfoBtn" class="btn header-icon-only" type="button" title="项目说明" aria-label="项目说明">
-                            <i class="fas fa-info-circle"></i>
-                        </button>
-                        <button id="shortcutsInfoBtn" class="btn header-icon-only" type="button" title="快捷键说明" aria-label="快捷键说明">
-                            <i class="fas fa-keyboard"></i>
-                        </button>
+        <div class="middle-panel">
+            <div class="middle-header">
+                <div class="file-meta">
+                    <div class="file-sub">
+                        <i class="fas fa-clock"></i>
+                        <span id="lastUpdateDisplay">Last update: -</span>
+                        <span class="markdown-status" id="markdownStatus"></span>
                     </div>
                 </div>
+                <div class="header-actions">
+                    <div class="header-dropdown" id="jsonMenuDropdown">
+                        <button id="jsonMenuToggleBtn" class="btn header-icon-only" type="button" title="JSON 菜单"
+                            aria-label="JSON 菜单">
+                            <i class="fas fa-database"></i>
+                        </button>
+                        <div class="header-dropdown-menu" id="jsonMenu" role="menu" aria-label="JSON 菜单">
+                            <button class="header-dropdown-item" id="jsonViewStructuredItem" type="button"
+                                role="menuitem" title="表格视图">
+                                <i class="fas fa-table"></i><span>表格视图</span>
+                            </button>
+                            <button class="header-dropdown-item" id="jsonViewFlatItem" type="button" role="menuitem"
+                                title="JSON 代码">
+                                <i class="fas fa-code"></i><span>JSON 代码</span>
+                            </button>
+                            <button class="header-dropdown-item" id="jsonFormatItem" type="button" role="menuitem"
+                                title="格式化 JSON">
+                                <i class="fas fa-align-left"></i><span>格式化</span>
+                            </button>
+                            <button class="header-dropdown-item" id="jsonSaveItem" type="button" role="menuitem"
+                                title="保存 JSON (Ctrl+S)">
+                                <i class="fas fa-save"></i><span>保存 JSON</span>
+                            </button>
+                        </div>
+                    </div>
+                    <select id="jsonViewSelect" class="json-view-select" title="选择 JSON 视图"></select>
+                    <div class="header-dropdown" id="mdMenuDropdown">
+                        <button id="mdMenuToggleBtn" class="btn header-icon-only" type="button" title="Markdown 菜单"
+                            aria-label="Markdown 菜单">
+                            <i class="fa-brands fa-markdown"></i>
+                        </button>
+                        <div class="header-dropdown-menu" id="mdMenu" role="menu" aria-label="Markdown 菜单">
+                            <button class="header-dropdown-item" id="mdRenderItem" type="button" role="menuitem"
+                                title="Markdown 渲染后视图">
+                                <i class="fas fa-eye"></i><span>MD 渲染</span>
+                            </button>
+                            <button class="header-dropdown-item" id="mdSourceItem" type="button" role="menuitem"
+                                title="Markdown 源码">
+                                <i class="fas fa-pen"></i><span>MD 源码</span>
+                            </button>
+                            <button class="header-dropdown-item" id="mdCiteRenderItem" type="button" role="menuitem"
+                                title="渲染引文与参考文献">
+                                <i class="fas fa-quote-right"></i><span>生成引用/参考文献</span>
+                            </button>
+                            <button class="header-dropdown-item" id="mdClearCiteCacheCurrentItem" type="button"
+                                role="menuitem" title="清除当前文档引文缓存">
+                                <i class="fas fa-eraser"></i><span>清除当前文档缓存</span>
+                            </button>
+                            <button class="header-dropdown-item" id="mdClearCiteCacheItem" type="button" role="menuitem"
+                                title="清除全部引文缓存">
+                                <i class="fas fa-broom"></i><span>清除全部引文缓存</span>
+                            </button>
+                            <button class="header-dropdown-item" id="mdSaveItem" type="button" role="menuitem"
+                                title="保存 Markdown">
+                                <i class="fas fa-save"></i><span>MD 保存</span>
+                            </button>
+                        </div>
+                    </div>
+                    <button class="btn btn-theme-toggle header-icon-only" id="themeToggleBtn" title="切换夜间/日间模式"
+                        aria-label="切换夜间/日间模式">
+                        <i class="fas fa-moon"></i>
+                    </button>
+                    <button id="editLockToggleBtn" class="btn header-icon-only" type="button" title="编辑未锁定"
+                        aria-label="锁定编辑">
+                        <i class="fas fa-lock-open"></i>
+                    </button>
+                    <button class="btn header-icon-only" id="queryExportBtn" type="button"
+                        title="Query & Export (DOI keyed)" aria-label="Query & Export">
+                        <i class="fas fa-list-check"></i>
+                    </button>
+                    <div class="header-dropdown" id="settingsDropdown">
+                        <button id="settingsToggleBtn" class="btn header-icon-only" type="button" title="设置"
+                            aria-label="设置">
+                            <i class="fas fa-cog"></i>
+                        </button>
+                        <div class="header-dropdown-menu" id="settingsMenu" role="menu" aria-label="设置">
+                            <button class="header-dropdown-item" id="autoLoadOnItem" type="button" role="menuitem"
+                                title="切换文件后自动加载 PDF 预览">
+                                <i class="fas fa-check" data-check="on" style="opacity:0"></i>
+                                <span>开启 PDF 自动加载</span>
+                            </button>
+                            <button class="header-dropdown-item" id="autoLoadOffItem" type="button" role="menuitem"
+                                title="仅在点击右侧时加载 PDF 预览">
+                                <i class="fas fa-check" data-check="off" style="opacity:0"></i>
+                                <span>关闭 PDF 自动加载</span>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="header-divider"></div>
+                    <button id="aideCopyToggleBtn" class="btn header-icon-only" type="button"
+                        title="打开工具面板 (Cmd+Shift+G)" aria-label="打开工具面板">
+                        <i class="fas fa-code-branch"></i>
+                    </button>
+                    <button id="projectInfoBtn" class="btn header-icon-only" type="button" title="项目说明"
+                        aria-label="项目说明">
+                        <i class="fas fa-info-circle"></i>
+                    </button>
+                    <button id="shortcutsInfoBtn" class="btn header-icon-only" type="button" title="快捷键说明"
+                        aria-label="快捷键说明">
+                        <i class="fas fa-keyboard"></i>
+                    </button>
+                </div>
+            </div>
             <div class="editor-container">
                 <div class="structured-view active" id="structuredView">
                     <div id="structuredContent">
@@ -419,26 +502,26 @@
     <div class="modal" id="editModal">
         <div class="modal-content">
             <div class="modal-header" id="modalTitle">Edit Value</div>
-                <div class="modal-body">
-                    <div class="form-group">
-                        <label for="editKeyInput">Field key:</label>
-                        <input type="text" id="editKeyInput" placeholder="Edit field name">
-                    </div>
-                    <div class="form-group">
-                        <label for="editTextarea">内容:</label>
-                        <textarea id="editTextarea"></textarea>
-                    </div>
-                
+            <div class="modal-body">
+                <div class="form-group">
+                    <label for="editKeyInput">Field key:</label>
+                    <input type="text" id="editKeyInput" placeholder="Edit field name">
+                </div>
+                <div class="form-group">
+                    <label for="editTextarea">内容:</label>
+                    <textarea id="editTextarea"></textarea>
+                </div>
+
                 <!-- 页码和引用编辑区 -->
                 <div class="location-edit-section" id="locationEditSection" style="display: none;">
                     <div class="section-divider"></div>
                     <h4><i class="fa-solid fa-location-dot"></i> PDF 位置信息</h4>
-                    
+
                     <div class="form-group">
                         <label for="editPageNumber">页码:</label>
                         <input type="number" id="editPageNumber" placeholder="PDF页码" min="1">
                     </div>
-                    
+
                     <div class="form-group">
                         <div class="quotes-header">
                             <label>引用文本:</label>
@@ -454,10 +537,10 @@
                                 </button>
                             </div>
                         </div>
-                        
+
                         <!-- 标签页头部 -->
                         <div class="quote-tabs" id="quoteTabs"></div>
-                        
+
                         <!-- 标签页内容 -->
                         <div class="quote-panels" id="quotePanels"></div>
                     </div>
@@ -504,27 +587,27 @@
                         <option value="custom">Custom (自定义)</option>
                     </select>
                 </div>
-                
+
                 <div class="form-group" id="customKeyGroup" style="display: none;">
                     <label for="customKey">自定义键名:</label>
                     <input type="text" id="customKey" placeholder="例如: related_work">
                 </div>
-                
+
                 <div class="form-group">
                     <label for="itemContent">内容:</label>
                     <textarea id="itemContent" rows="4" placeholder="输入条目内容"></textarea>
                 </div>
-                
+
                 <!-- PDF 位置信息 -->
                 <div class="location-edit-section">
                     <div class="section-divider"></div>
                     <h4><i class="fa-solid fa-location-dot"></i> PDF 位置信息 (可选)</h4>
-                    
+
                     <div class="form-group">
                         <label for="itemPageNumber">页码:</label>
                         <input type="number" id="itemPageNumber" placeholder="PDF页码" min="1">
                     </div>
-                    
+
                     <div class="form-group">
                         <div class="quotes-header">
                             <label>引用文本:</label>
@@ -532,10 +615,10 @@
                                 <i class="fas fa-plus"></i> 添加引用
                             </button>
                         </div>
-                        
+
                         <!-- 标签页头部 -->
                         <div class="quote-tabs" id="quoteTabsItem"></div>
-                        
+
                         <!-- 标签页内容 -->
                         <div class="quote-panels" id="quotePanelsItem"></div>
                     </div>
@@ -558,32 +641,44 @@
                 <div class="form-group">
                     <p>Select fields to export (dynamic from JSONs). If nothing is selected, only DOI is exported.</p>
                 </div>
-                <div class="form-group">
-                    <input type="text" id="queryFieldFilterInput" placeholder="Filter fields..." autocomplete="off" class="query-filter-input">
-                </div>
                 <div class="form-group query-export-grid">
                     <div class="query-card">
-                        <h4>Available fields</h4>
-                        <div class="query-actions">
-                            <button class="btn btn-secondary" id="querySelectAllBtn" type="button">Select all</button>
-                            <button class="btn btn-secondary" id="queryClearAllBtn" type="button">Clear</button>
-                            <button class="btn btn-primary" id="queryRefreshFieldsBtn" type="button">Refresh fields</button>
+                        <div class="query-actions" style="justify-content:space-between; width:100%;">
+                            <div
+                                style="display:flex; gap:8px; align-items:center; justify-content:flex-end; flex:1; flex-wrap:nowrap;">
+                                <input type="text" id="queryFieldFilterInput" placeholder="Filter fields..."
+                                    autocomplete="off" class="query-filter-input"
+                                    style="flex:1 1 auto; min-width:220px; max-width:none;">
+                                <button class="btn btn-secondary" id="querySelectAllBtn" type="button">Select
+                                    all</button>
+                                <button class="btn btn-secondary" id="queryClearAllBtn" type="button">Clear</button>
+                                <button class="btn btn-primary" id="queryRefreshFieldsBtn" type="button">Refresh
+                                    fields</button>
+                            </div>
                         </div>
                         <div class="query-fields query-field-list" id="queryFieldList">
                             <!-- dynamic checkboxes -->
                         </div>
                     </div>
                     <div class="query-card" style="display:flex;flex-direction:column;gap:8px;">
-                        <h4 style="margin-bottom:4px;">Selected fields</h4>
+                        <div class="query-actions" style="justify-content:space-between; width:100%;">
+                            <div
+                                style="display:flex; gap:8px; align-items:center; justify-content:flex-end; flex:1; flex-wrap:nowrap;">
+                                <button class="btn btn-secondary" id="queryClearSelectedBtn" type="button">Clear
+                                    selected list</button>
+                            </div>
+                        </div>
                         <div id="querySelectedSummary" class="query-selected-box"></div>
                     </div>
                 </div>
                 <div class="form-group">
-                    <label for="queryDoiOrderInput">DOI 顺序（可选，换行分隔）</label>
+                    <label for="queryDoiOrderInput">Export DOIs in order (optional, line-separated)</label>
                     <textarea id="queryDoiOrderInput" rows="4" placeholder="输入 DOI，换行分隔。为空则按左侧文件顺序导出。"></textarea>
-                    <div id="queryDoiStats" style="margin-top:6px;font-size:12px;color:#6b7280;">0 unique | 0 duplicates</div>
                     <div class="query-actions" style="margin-top:8px;">
-                        <button class="btn btn-secondary" id="queryUpdateNoBtn" type="button">添加/更新 meta_info.No 序号</button>
+                        <button class="btn btn-secondary" id="queryUpdateNoBtn" type="button">添加/更新 meta_info.No
+                            序号</button>
+                        <div id="queryDoiStats" style="margin-top:6px;font-size:12px;color:#6b7280;">0 unique | 0
+                            duplicates</div>
                     </div>
                     <p class="help-text">留空：按当前文件列表顺序导出全部 DOI；填写后：仅导出匹配的 DOI，按输入顺序输出，未匹配的忽略。</p>
                 </div>
@@ -600,4 +695,5 @@
     <script src="js/core/jquery.json-viewer.js"></script>
     <script src="js/app.js"></script>
 </body>
+
 </html>

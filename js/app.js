@@ -1185,6 +1185,13 @@ class PaperReviewerApp {
                 this.renderQueryFieldList();
             });
         }
+        const queryClearSelectedBtn = document.getElementById('queryClearSelectedBtn');
+        if (queryClearSelectedBtn) {
+            queryClearSelectedBtn.addEventListener('click', () => {
+                this.queryFieldSelected.clear();
+                this.renderQueryFieldList();
+            });
+        }
         const queryRefreshFieldsBtn = document.getElementById('queryRefreshFieldsBtn');
         if (queryRefreshFieldsBtn) {
             queryRefreshFieldsBtn.addEventListener('click', () => this.refreshQueryFieldOptions());
