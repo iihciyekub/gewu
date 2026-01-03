@@ -1,13 +1,14 @@
 #!/usr/bin/env node
 /**
- * Simple HTTP Server with JSON save support
- * 支持直接保存JSON文件到 user/data/ 目录
+ * Simple HTTP Server with JSON/MD/PDF support (new layout only)
+ * Layout: json/<view>/*, md/*, pdf/*
  */
 
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const url = require('url');
+const os = require('os');
 const { execFileSync } = require('child_process');
 
 const PORT = process.env.PORT ? Number(process.env.PORT) : 8000;
@@ -20,6 +21,17 @@ const TOOLS_ROOTS = [
 const CUSTOM_MANIFEST_PATH = path.join(ROOT_DIR, 'manifest.json');
 const FILE_ORDER_NAME = '.file_order.json';
 let promptManifestCache = null;
+const ALLOWED_ROOTS = (() => {
+    const fsRoot = path.parse(process.cwd()).root || path.sep;
+    const envRoots = (process.env.ALLOWED_ROOTS || '')
+        .split(/[;,]/)
+        .map(s => s.trim())
+        .filter(Boolean)
+        .map(p => path.resolve(p));
+    const defaults = [ROOT_DIR, os.homedir(), fsRoot].filter(Boolean);
+    const roots = envRoots.length ? envRoots : defaults;
+    return Array.from(new Set(roots));
+})();
 
 function normalizeBasePath(basePath = '') {
     const clean = String(basePath || '').trim() || '/';
@@ -204,34 +216,54 @@ function buildDefaultMarkdown(baseName) {
     return `# ${baseName}\n\n> 自动创建的 Markdown 笔记文件。\n\n- 可添加章节、要点、引用等。\n- 与 JSON 同名，便于版本记录。\n`;
 }
 
+function ensureProjectStructure(fullPath) {
+    const jsonDir = path.join(fullPath, 'json', 'view1');
+    const mdDir = path.join(fullPath, 'md');
+    const pdfDir = path.join(fullPath, 'pdf');
+    fs.mkdirSync(jsonDir, { recursive: true });
+    fs.mkdirSync(mdDir, { recursive: true });
+    fs.mkdirSync(pdfDir, { recursive: true });
+    return { jsonDir, mdDir, pdfDir };
+}
+
+function getJsonTargetPath(fullPath, filename) {
+    const safeName = String(filename || '').replace(/^[/\\]+/, '');
+    if (!safeName) throw new Error('Missing filename');
+    if (safeName.startsWith('json/')) return path.join(fullPath, safeName);
+    return path.join(fullPath, 'json', 'view1', safeName);
+}
+
+function getMdTargetPath(fullPath, filename) {
+    const safeName = String(filename || '').replace(/^[/\\]+/, '');
+    if (!safeName) throw new Error('Missing filename');
+    if (safeName.startsWith('md/')) return path.join(fullPath, safeName);
+    return path.join(fullPath, 'md', safeName);
+}
+
 // Build manifest once at startup
 ensurePromptManifest();
 
-// 路径规范化，返回安全的 projectKey 以及完整路径
+// 路径规范化，返回安全的 projectKey 以及完整路径（限定在 ALLOWED_ROOTS 内）
 function normalizeProjectPath(projectPath = 'user') {
     const raw = (projectPath || 'user').trim() || 'user';
-    
-    // 如果是绝对路径，直接使用
-    if (path.isAbsolute(raw)) {
-        const fullPath = path.normalize(raw);
-        // 使用绝对路径作为 projectKey，方便识别
-        const projectKey = fullPath;
-        return { projectKey, fullPath };
-    }
-    
-    // 相对路径：相对于项目根目录
     const normalizedInput = raw.replace(/^[/\\]+/, '');
-    const candidate = path.resolve(ROOT_DIR, normalizedInput);
-    const relative = path.relative(ROOT_DIR, candidate);
-    
-    // 检查是否试图访问项目根目录之外（仅对相对路径）
-    if (relative.startsWith('..')) {
-        throw new Error('相对路径不能访问项目根目录之外的位置');
+    const candidate = path.isAbsolute(raw)
+        ? path.normalize(raw)
+        : path.resolve(ROOT_DIR, normalizedInput);
+
+    const allowedRoot = ALLOWED_ROOTS.find((root) => {
+        const rel = path.relative(root, candidate);
+        return !rel.startsWith('..') && !path.isAbsolute(rel);
+    });
+    if (!allowedRoot) {
+        throw new Error('Invalid project path: outside allowed roots');
     }
 
-    // 如果选择了项目根，默认使用 user 目录
-    const projectKey = !relative || relative === '.' ? 'user' : relative;
-    const fullPath = projectKey === 'user' ? path.join(ROOT_DIR, 'user') : candidate;
+    const relToRoot = path.relative(allowedRoot, candidate);
+    const projectKey = relToRoot && relToRoot !== '.'
+        ? relToRoot.split(path.sep).join('/')
+        : (path.basename(candidate) || 'user');
+    const fullPath = candidate;
     return { projectKey, fullPath };
 }
 
@@ -298,13 +330,7 @@ const server = http.createServer((req, res) => {
                 
                 // 创建项目根目录和三个必须的子目录
                 fs.mkdirSync(fullPath, { recursive: true });
-                const jsonDir = path.join(fullPath, 'json');
-                const mdDir = path.join(fullPath, 'md');
-                const pdfDir = path.join(fullPath, 'pdf');
-                
-                fs.mkdirSync(jsonDir, { recursive: true });
-                fs.mkdirSync(mdDir, { recursive: true });
-                fs.mkdirSync(pdfDir, { recursive: true });
+                const { jsonDir, mdDir, pdfDir } = ensureProjectStructure(fullPath);
                 
                 // 创建一个 .project 标记文件（可选，用于识别项目根目录）
                 const projectMarker = path.join(fullPath, '.project');
@@ -354,60 +380,26 @@ const server = http.createServer((req, res) => {
                     return;
                 }
                 
-                // 验证项目结构并规范路径
                 const { projectKey, fullPath } = normalizeProjectPath(projectPath);
-                
+
                 if (!fs.existsSync(fullPath)) {
                     res.writeHead(200, { 'Content-Type': 'application/json' });
-                    res.end(JSON.stringify({ 
-                        valid: false, 
-                        message: '项目路径不存在' 
+                    res.end(JSON.stringify({
+                        valid: false,
+                        message: '项目路径不存在'
                     }));
                     return;
                 }
-                
-                // 检查新的目录结构 (json, md, pdf) - 这是必需的
-                const jsonDir = path.join(fullPath, 'json');
-                const mdDir = path.join(fullPath, 'md');
-                const pdfDir = path.join(fullPath, 'pdf');
-                
-                // 创建必要的目录
-                if (!fs.existsSync(jsonDir)) {
-                    fs.mkdirSync(jsonDir, { recursive: true });
-                }
-                if (!fs.existsSync(mdDir)) {
-                    fs.mkdirSync(mdDir, { recursive: true });
-                }
-                if (!fs.existsSync(pdfDir)) {
-                    fs.mkdirSync(pdfDir, { recursive: true });
-                }
-                
-                // 检查旧结构是否存在（用于兼容性）
-                const dataDir = path.join(fullPath, 'data');
-                const papersDir = path.join(fullPath, 'papers');
-                const hasOldStructure = fs.existsSync(dataDir) || fs.existsSync(papersDir);
-                
-                // 如果是旧项目，确保这些目录存在
-                if (hasOldStructure) {
-                    if (!fs.existsSync(dataDir)) {
-                        fs.mkdirSync(dataDir, { recursive: true });
-                    }
-                    if (!fs.existsSync(papersDir)) {
-                        fs.mkdirSync(papersDir, { recursive: true });
-                    }
-                }
-                
+
+                // 确保必须的目录存在（json/view1、md、pdf）
+                const dirs = ensureProjectStructure(fullPath);
+
                 res.writeHead(200, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify({
                     valid: true,
                     message: '项目结构有效',
-                    dataDir: dataDir,
-                    papersDir: papersDir,
-                    jsonDir: jsonDir,
-                    mdDir: mdDir,
-                    pdfDir: pdfDir,
-                    projectKey,
-                    hasOldStructure
+                    dirs,
+                    projectKey
                 }));
                 
             } catch (error) {
@@ -436,30 +428,20 @@ const server = http.createServer((req, res) => {
                 const data = JSON.parse(body);
                 const { projectPath = 'user', filename, content } = data;
                 
-                if (!filename || !content) {
+                if (!filename || typeof content === 'undefined') {
                     res.writeHead(400, { 'Content-Type': 'application/json' });
                     res.end(JSON.stringify({ success: false, error: 'Missing filename or content' }));
                     return;
                 }
                 
                 const { projectKey, fullPath } = normalizeProjectPath(projectPath);
-                // 保存到指定项目目录（新结构优先：json/... 或 md/...；旧结构兼容 data/...）
-                const safeName = filename.replace(/^[/\\]+/, '');
-                const usesNewLayout = safeName.startsWith('json/') || safeName.startsWith('md/');
-                const filePath = usesNewLayout
-                    ? path.join(fullPath, safeName)
-                    : path.join(fullPath, 'data', safeName);
-                
-                // 确保目录存在
-                const dir = path.dirname(filePath);
-                if (!fs.existsSync(dir)) {
-                    fs.mkdirSync(dir, { recursive: true });
-                }
-                
-                // 写入文件
+                ensureProjectStructure(fullPath);
+
+                const filePath = getJsonTargetPath(fullPath, filename);
+                fs.mkdirSync(path.dirname(filePath), { recursive: true });
                 fs.writeFileSync(filePath, content, 'utf8');
                 
-                console.log(`✓ Saved: ${filePath}`);
+                console.log(`✓ Saved JSON: ${filePath}`);
                 
                 res.writeHead(200, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify({
@@ -498,15 +480,9 @@ const server = http.createServer((req, res) => {
                     return;
                 }
                 const { fullPath } = normalizeProjectPath(projectPath);
-                const safeName = filename.replace(/^[/\\]+/, '');
-                const usesNewLayout = safeName.startsWith('json/') || safeName.startsWith('md/');
-                const filePath = usesNewLayout
-                    ? path.join(fullPath, safeName)
-                    : path.join(fullPath, 'data', safeName);
-                const dir = path.dirname(filePath);
-                if (!fs.existsSync(dir)) {
-                    fs.mkdirSync(dir, { recursive: true });
-                }
+                ensureProjectStructure(fullPath);
+                const filePath = getMdTargetPath(fullPath, filename);
+                fs.mkdirSync(path.dirname(filePath), { recursive: true });
                 fs.writeFileSync(filePath, content, 'utf8');
                 console.log(`✓ Saved Markdown: ${filePath}`);
                 res.writeHead(200, { 'Content-Type': 'application/json' });
@@ -540,14 +516,15 @@ const server = http.createServer((req, res) => {
                 }
                 
                 const { projectKey, fullPath } = normalizeProjectPath(projectPath);
-                const fix = (name) => {
-                    const safe = name.replace(/^[/\\]+/, '');
-                    if (safe.startsWith('json/') || safe.startsWith('md/')) return path.join(fullPath, safe);
-                    return path.join(fullPath, 'data', safe);
+                ensureProjectStructure(fullPath);
+                const resolveTarget = (name) => {
+                    const lower = String(name).toLowerCase();
+                    return lower.endsWith('.md')
+                        ? getMdTargetPath(fullPath, name)
+                        : getJsonTargetPath(fullPath, name);
                 };
-                // 构建文件路径
-                const oldPath = fix(oldFilename);
-                const newPath = fix(newFilename);
+                const oldPath = resolveTarget(oldFilename);
+                const newPath = resolveTarget(newFilename);
                 
                 // 检查旧文件是否存在
                 if (!fs.existsSync(oldPath)) {
@@ -610,10 +587,11 @@ const server = http.createServer((req, res) => {
                 }
                 
                 const { projectKey, fullPath } = normalizeProjectPath(projectPath);
-                const safe = filename.replace(/^[/\\]+/, '');
-                const filePath = safe.startsWith('json/') || safe.startsWith('md/')
-                    ? path.join(fullPath, safe)
-                    : path.join(fullPath, 'data', safe);
+                ensureProjectStructure(fullPath);
+                const lower = filename.toLowerCase();
+                const filePath = lower.endsWith('.md')
+                    ? getMdTargetPath(fullPath, filename)
+                    : getJsonTargetPath(fullPath, filename);
                 
                 // 检查文件是否存在
                 if (!fs.existsSync(filePath)) {
@@ -625,28 +603,13 @@ const server = http.createServer((req, res) => {
                 // 删除文件
                 fs.unlinkSync(filePath);
 
-                // 若是 .json，同步删除同名 .md（忽略不存在的情况）
-                let mdDeleted = false;
-                if (filename.toLowerCase().endsWith('.json')) {
-                    const mdPath = path.join(fullPath, 'data', filename.replace(/\.json$/i, '.md'));
-                    if (fs.existsSync(mdPath)) {
-                        try {
-                            fs.unlinkSync(mdPath);
-                            mdDeleted = true;
-                        } catch (err) {
-                            console.warn('Delete markdown failed:', mdPath, err);
-                        }
-                    }
-                }
-
-                console.log(`✓ Deleted: ${filename}${mdDeleted ? ' (+md)' : ''}`);
+                console.log(`✓ Deleted: ${filename}`);
                 
                 res.writeHead(200, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify({
                     success: true,
                     message: `File deleted successfully`,
                     filename,
-                    mdDeleted,
                     projectKey
                 }));
                 
@@ -785,7 +748,7 @@ const server = http.createServer((req, res) => {
         return;
     }
 
-    // 处理获取文件列表请求（新结构 json/<view>/ + md/ + 兼容 data/ 旧结构）
+    // 处理获取文件列表请求（仅新结构 json/<view>/ + md/）
     if (req.method === 'POST' && pathname === '/list-json-files') {
         let body = '';
         
@@ -798,16 +761,15 @@ const server = http.createServer((req, res) => {
                 const data = JSON.parse(body);
                 const { projectPath = 'user' } = data;
                 
-                console.log('📂 收到文件列表请求，项目路径:', projectPath);
                 const { projectKey, fullPath } = normalizeProjectPath(projectPath);
-                console.log('📍 规范化后的完整路径:', fullPath);
-                const dataDir = path.join(fullPath, 'data');
-                
+                ensureProjectStructure(fullPath);
+
+                const files = [];
+
                 const collectFiles = (dir, kind, category) => {
-                    console.log(`  扫描目录: ${dir} (存在: ${fs.existsSync(dir)})`);
                     if (!fs.existsSync(dir)) return [];
                     const entries = fs.readdirSync(dir, { withFileTypes: true });
-                    const collected = entries
+                    return entries
                         .filter(ent => ent.isFile() && ((kind === 'json' && ent.name.toLowerCase().endsWith('.json')) || (kind === 'md' && ent.name.toLowerCase().endsWith('.md'))))
                         .map(ent => ({
                             name: ent.name,
@@ -815,62 +777,25 @@ const server = http.createServer((req, res) => {
                             kind,
                             category
                         }));
-                    console.log(`  找到 ${collected.length} 个 ${kind} 文件`);
-                    return collected;
                 };
 
-                const files = [];
-                
-                // 新结构（优先）：json/view1, json/view2 等
+                // 新结构：json/viewX
                 const jsonRoot = path.join(fullPath, 'json');
-                console.log('🔍 检查 json/ 目录:', jsonRoot);
                 if (fs.existsSync(jsonRoot)) {
                     const entries = fs.readdirSync(jsonRoot, { withFileTypes: true });
-                    console.log(`  json/ 目录下有 ${entries.length} 个条目`);
-                    // 直接在 json/ 目录下的 .json 文件（作为 json.view1）
-                    entries.filter(ent => ent.isFile() && ent.name.toLowerCase().endsWith('.json')).forEach(ent => {
-                        files.push({
-                            name: ent.name,
-                            path: path.relative(fullPath, path.join(jsonRoot, ent.name)).split(path.sep).join('/'),
-                            kind: 'json',
-                            category: 'json.view1'
-                        });
-                    });
-                    // 或者在 json/<view>/ 子目录下
+                    // 直接在 json/ 目录下的 .json 文件
+                    files.push(...collectFiles(jsonRoot, 'json', 'json'));
                     const subDirs = entries.filter(ent => ent.isDirectory());
-                    console.log(`  找到 ${subDirs.length} 个子目录:`, subDirs.map(d => d.name));
                     subDirs.forEach(viewDir => {
                         const viewName = viewDir.name;
                         const viewPath = path.join(jsonRoot, viewName);
-                        console.log(`  扫描子目录: ${viewPath}`);
-                        const jsonFiles = fs.readdirSync(viewPath, { withFileTypes: true })
-                            .filter(f => f.isFile() && f.name.toLowerCase().endsWith('.json'));
-                        console.log(`    找到 ${jsonFiles.length} 个 JSON 文件`);
-                        jsonFiles.forEach(f => {
-                            files.push({
-                                name: f.name,
-                                path: path.relative(fullPath, path.join(viewPath, f.name)).split(path.sep).join('/'),
-                                kind: 'json',
-                                category: `json.${viewName}`
-                            });
-                        });
+                        files.push(...collectFiles(viewPath, 'json', `json.${viewName}`));
                     });
                 }
-                
-                // 新结构：md/
-                console.log('🔍 检查 md/ 目录');
+
+                // md/
                 files.push(...collectFiles(path.join(fullPath, 'md'), 'md', 'md'));
-                
-                // 兼容旧结构 data/（用于向后兼容）
-                console.log('🔍 检查 data/ 目录（旧结构）');
-                if (fs.existsSync(dataDir)) {
-                    files.push(...collectFiles(path.join(dataDir, 'json.checklist'), 'json', 'json.checklist'));
-                    files.push(...collectFiles(path.join(dataDir, 'json.qa'), 'json', 'json.qa'));
-                    files.push(...collectFiles(dataDir, 'json', 'json.root'));
-                    files.push(...collectFiles(path.join(dataDir, 'md'), 'md', 'md'));
-                }
-                
-                console.log(`✅ 总共找到 ${files.length} 个文件`);
+
                 res.writeHead(200, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify({
                     success: true,
@@ -887,41 +812,6 @@ const server = http.createServer((req, res) => {
                 }));
             }
         });
-        
-        return;
-    }
-
-    // 获取JSON文件列表
-    if (req.method === 'GET' && pathname === '/list-json-files') {
-        try {
-            const dataDir = path.join(ROOT_DIR, 'user', 'data');
-            
-            // 确保目录存在
-            if (!fs.existsSync(dataDir)) {
-                fs.mkdirSync(dataDir, { recursive: true });
-            }
-            
-            // 读取目录中的所有JSON文件
-            const files = fs.readdirSync(dataDir)
-                .filter(file => file.endsWith('.json'))
-                .sort(); // 按文件名排序
-            
-            res.writeHead(200, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify({
-                success: true,
-                files: files,
-                count: files.length,
-                projectKey: 'user'
-            }));
-            
-        } catch (error) {
-            console.error('✗ Error listing files:', error);
-            res.writeHead(500, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify({ 
-                success: false, 
-                error: error.message 
-            }));
-        }
         
         return;
     }
@@ -1010,8 +900,9 @@ const server = http.createServer((req, res) => {
                 const action = data.action || 'get';
                 const order = Array.isArray(data.order) ? data.order : [];
                 const groups = normalizeGroupList(data.groups);
-                const { projectRoot } = resolveProjectDirs(projectPath);
-                const orderFile = path.join(projectRoot, FILE_ORDER_NAME);
+                const { fullPath } = normalizeProjectPath(projectPath);
+                ensureProjectStructure(fullPath);
+                const orderFile = path.join(fullPath, FILE_ORDER_NAME);
 
                 if (action === 'set') {
                     const payload = { order };
@@ -1044,202 +935,6 @@ const server = http.createServer((req, res) => {
                 console.error('✗ Error handling file-order:', err);
                 res.writeHead(500, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify({ success: false, error: err.message }));
-            }
-        });
-        return;
-    }
-
-    // 扫描 papers/ 并在 data/ 创建同名空 JSON/MD
-    if (req.method === 'POST' && pathname === '/sync-pdfs') {
-        let body = '';
-        req.on('data', chunk => { body += chunk.toString(); });
-        req.on('end', () => {
-            try {
-                const data = body ? JSON.parse(body) : {};
-                const projectPath = data.projectPath || 'user';
-                const mode = data.mode || 'new-only'; // 'new-only' 或 'all'
-                
-                console.log('📄 同步PDF请求，项目路径:', projectPath, '模式:', mode);
-                const { projectKey, fullPath } = normalizeProjectPath(projectPath);
-                
-                // 新目录结构
-                const pdfDir = path.join(fullPath, 'pdf');
-                const jsonDir = path.join(fullPath, 'json');
-                const mdDir = path.join(fullPath, 'md');
-                
-                console.log('📍 PDF目录:', pdfDir);
-                console.log('📍 JSON目录:', jsonDir);
-                console.log('📍 MD目录:', mdDir);
-
-                // 确保基础目录存在
-                if (!fs.existsSync(pdfDir)) {
-                    fs.mkdirSync(pdfDir, { recursive: true });
-                    console.log('✅ 创建PDF目录');
-                }
-                if (!fs.existsSync(jsonDir)) {
-                    fs.mkdirSync(jsonDir, { recursive: true });
-                    console.log('✅ 创建JSON目录');
-                }
-                if (!fs.existsSync(mdDir)) {
-                    fs.mkdirSync(mdDir, { recursive: true });
-                    console.log('✅ 创建MD目录');
-                }
-
-                // 扫描PDF目录（包括子目录）
-                const pdfFiles = collectPdfFiles(pdfDir);
-                console.log(`🔍 找到 ${pdfFiles.length} 个PDF文件`);
-                
-                const createdJson = [];
-                const createdMd = [];
-                const updatedJson = [];
-
-                pdfFiles.forEach((pdfPath) => {
-                    const baseName = path.basename(pdfPath, path.extname(pdfPath));
-                    const pdfFileName = path.basename(pdfPath);
-                    
-                    // 在json目录下创建JSON文件（扁平结构，不保留子目录）
-                    const jsonPath = path.join(jsonDir, `${baseName}.json`);
-                    const mdPath = path.join(mdDir, `${baseName}.md`);
-
-                    const jsonExists = fs.existsSync(jsonPath);
-                    const mdExists = fs.existsSync(mdPath);
-                    
-                    // 根据模式决定是否处理已存在的文件
-                    if (mode === 'new-only' && jsonExists && mdExists) {
-                        // 仅更新pdf_path
-                        try {
-                            const raw = fs.readFileSync(jsonPath, 'utf8');
-                            const parsed = JSON.parse(raw);
-                            if (!parsed.meta_info || typeof parsed.meta_info !== 'object') {
-                                parsed.meta_info = {};
-                            }
-                            if (parsed.meta_info.pdf_path !== pdfFileName) {
-                                parsed.meta_info.pdf_path = pdfFileName;
-                                fs.writeFileSync(jsonPath, JSON.stringify(parsed, null, 2), 'utf8');
-                                updatedJson.push(`json/${baseName}.json`);
-                                console.log(`  ✅ 更新PDF路径: ${baseName}.json`);
-                            }
-                        } catch (err) {
-                            console.warn('  ⚠️ 更新meta_info.pdf_path失败:', baseName, err);
-                        }
-                        return;
-                    }
-
-                    // 创建或覆盖JSON文件
-                    if (!jsonExists || mode === 'all') {
-                        const tpl = {
-                            schema_version: formatDate(),
-                            lastupdate: formatDateTime(),
-                            meta_info: {
-                                paper_id: baseName,
-                                title: '',
-                                pdf_path: pdfFileName
-                            }
-                        };
-                        fs.writeFileSync(jsonPath, JSON.stringify(tpl, null, 2), 'utf8');
-                        if (jsonExists) {
-                            updatedJson.push(`json/${baseName}.json`);
-                            console.log(`  ✅ 覆盖JSON: ${baseName}.json`);
-                        } else {
-                            createdJson.push(`json/${baseName}.json`);
-                            console.log(`  ✅ 创建JSON: ${baseName}.json`);
-                        }
-                    } else {
-                        // 更新现有JSON的pdf_path
-                        try {
-                            const raw = fs.readFileSync(jsonPath, 'utf8');
-                            const parsed = JSON.parse(raw);
-                            if (!parsed.meta_info || typeof parsed.meta_info !== 'object') {
-                                parsed.meta_info = {};
-                            }
-                            if (parsed.meta_info.pdf_path !== pdfFileName) {
-                                parsed.meta_info.pdf_path = pdfFileName;
-                                fs.writeFileSync(jsonPath, JSON.stringify(parsed, null, 2), 'utf8');
-                                updatedJson.push(`json/${baseName}.json`);
-                                console.log(`  ✅ 更新PDF路径: ${baseName}.json`);
-                            }
-                        } catch (err) {
-                            console.warn('  ⚠️ 更新meta_info.pdf_path失败:', baseName, err);
-                        }
-                    }
-                    
-                    // 创建或覆盖MD文件
-                    if (!mdExists || mode === 'all') {
-                        fs.writeFileSync(mdPath, buildDefaultMarkdown(baseName), 'utf8');
-                        if (mdExists) {
-                            console.log(`  ✅ 覆盖MD: ${baseName}.md`);
-                        } else {
-                            createdMd.push(`md/${baseName}.md`);
-                            console.log(`  ✅ 创建MD: ${baseName}.md`);
-                        }
-                    }
-                });
-
-                const message = pdfFiles.length
-                    ? `完成扫描（新建 ${createdJson.length} 个，更新 ${updatedJson.length} 个）`
-                    : '未找到 PDF 文件，已确保目录存在';
-                
-                console.log(`✅ ${message}`);
-                
-                res.writeHead(200, { 'Content-Type': 'application/json' });
-                res.end(JSON.stringify({
-                    success: true,
-                    createdJson,
-                    createdMd,
-                    updatedJson,
-                    scanned: pdfFiles.length,
-                    message
-                }));
-            } catch (error) {
-                console.error('✗ Error syncing pdfs:', error);
-                res.writeHead(500, { 'Content-Type': 'application/json' });
-                res.end(JSON.stringify({ success: false, error: error.message }));
-            }
-        });
-        return;
-    }
-
-    // 将指定 PDF 复制到系统剪贴板（仅支持本机、macOS）
-    if (req.method === 'POST' && pathname === '/copy-pdf-to-clipboard') {
-        let body = '';
-        req.on('data', chunk => { body += chunk.toString(); });
-        req.on('end', () => {
-            try {
-                const data = body ? JSON.parse(body) : {};
-                const projectPath = data.projectPath || 'user';
-                const pdfFile = data.pdfFile || '';
-                const { papersDir } = resolveProjectDirs(projectPath);
-                const safeName = path.basename(pdfFile);
-                const pdfPath = path.join(papersDir, safeName);
-                const resolvedPapersDir = path.resolve(papersDir);
-                const resolvedPdf = path.resolve(pdfPath);
-                if (!resolvedPdf.startsWith(resolvedPapersDir)) {
-                    res.writeHead(400, { 'Content-Type': 'application/json' });
-                    res.end(JSON.stringify({ success: false, error: 'Invalid path' }));
-                    return;
-                }
-                if (!safeName.toLowerCase().endsWith('.pdf')) {
-                    res.writeHead(400, { 'Content-Type': 'application/json' });
-                    res.end(JSON.stringify({ success: false, error: '仅支持 PDF 文件' }));
-                    return;
-                }
-                if (!fs.existsSync(resolvedPdf)) {
-                    res.writeHead(404, { 'Content-Type': 'application/json' });
-                    res.end(JSON.stringify({ success: false, error: 'PDF 不存在' }));
-                    return;
-                }
-                const ok = copyFileToSystemClipboard(resolvedPdf);
-                if (!ok) {
-                    res.writeHead(400, { 'Content-Type': 'application/json' });
-                    res.end(JSON.stringify({ success: false, error: '当前系统不支持复制文件到剪贴板（需要 macOS）' }));
-                    return;
-                }
-                res.writeHead(200, { 'Content-Type': 'application/json' });
-                res.end(JSON.stringify({ success: true }));
-            } catch (error) {
-                console.error('✗ Error copying pdf to clipboard:', error);
-                res.writeHead(500, { 'Content-Type': 'application/json' });
-                res.end(JSON.stringify({ success: false, error: error.message }));
             }
         });
         return;

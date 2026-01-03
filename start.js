@@ -39,7 +39,7 @@ function main() {
   console.log('');
   console.log(`📂 Project directory: ${rootDir}`);
   console.log(`🌐 Access the application at: http://localhost:${port}`);
-  console.log('💾 JSON files will be saved to: user/data/');
+  console.log('💾 Default project layout: json/view1/, md/, pdf/');
   console.log('');
   console.log('Press Ctrl+C to stop the server');
   console.log('=========================================');
@@ -51,4 +51,3 @@ function main() {
 }
 
 main();
-
