@@ -98,6 +98,12 @@ class PaperReviewerApp {
         this.queryFieldSelected = new Set();
         this.queryFieldsLoading = false;
         this.importingExternal = false;
+        this.importJsonMode = 'match'; // 导入模式：match(仅匹配), all(全部), match-and-new(匹配+新增)
+        this.importJsonTargetPath = 'json/imported';
+        this.jsonTargetCallback = null;
+        this.importModeCallback = null;
+        this.syncModeCallback = null;
+        this.selectedJsonTargetPath = null;
         this.fileMetaByPath = {};
         this.fileMetaByBase = {};
         this.availableJsonViews = [];
@@ -211,6 +217,7 @@ class PaperReviewerApp {
         const btn = document.getElementById('viewSwitchBtn');
         if (!btn) return;
         const icon = btn.querySelector('i');
+
         const view = this.currentView || 'structured';
         if (view === 'markdown') {
             btn.title = '切换到 JSON 视图';
@@ -460,12 +467,8 @@ class PaperReviewerApp {
 
     getProjectKey() {
         if (!this.currentProject) return 'user';
-        const raw = this.normalizeProjectPathString(this.currentProject.path || '');
-        if (/^([A-Za-z]:)?[\\/]/.test(raw) || raw.startsWith('/')) {
-            const parts = raw.split('/').filter(Boolean);
-            return parts.length ? parts[parts.length - 1] : 'user';
-        }
-        return raw || 'user';
+        // 直接返回规范化的路径，服务端会正确处理绝对路径和相对路径
+        return this.normalizeProjectPathString(this.currentProject.path || '') || 'user';
     }
 
     normalizeFileGroups(raw) {
@@ -850,7 +853,7 @@ class PaperReviewerApp {
 
     async init() {
         // 先加载项目配置
-        this.loadProjectConfig();
+            this.loadProjectConfig();
         
         // 如果没有当前项目，显示项目选择器
         if (!this.currentProject) {
@@ -1072,7 +1075,7 @@ class PaperReviewerApp {
         if (mdClearCiteCacheItem) {
             mdClearCiteCacheItem.addEventListener('click', (e) => {
                 e.preventDefault();
-                this.clearCitationCache();
+                        const targetFilename = `${targetPath.replace(/\/+$/, '')}/${file.name}`.replace(/\/+/g, '/');
                 this.toggleMdMenu(false);
             });
         }
@@ -1232,6 +1235,10 @@ class PaperReviewerApp {
             }
             if (key === 'escape') {
                 this.closeQueryExportModal();
+                this.closeImportModeDialog();
+                this.closeSyncModeDialog();
+                this.closeJsonTargetDialog();
+                this.closeCreateGroupDialog();
             }
             // 锁定时，仅当鼠标在中间栏时才拦截结构区的排序/移动
             const middleActive = !!this.isMiddleActive;
@@ -1327,17 +1334,21 @@ class PaperReviewerApp {
         });
 
         // 项目选择器事件
-        document.getElementById('projectFolderInput').addEventListener('change', (e) => {
-            const files = e.target.files;
-            if (files.length > 0) {
-                const folderPath = files[0].webkitRelativePath.split('/')[0];
-                const fullPath = files[0].path ? files[0].path.replace(/\/[^/]+$/, '') : folderPath;
-                document.getElementById('projectPathInput').value = fullPath;
-            }
-        });
+        // 浏览项目目录
+        const folderBrowser = document.getElementById('projectFolderBrowser');
+        if (folderBrowser) {
+            folderBrowser.addEventListener('change', (e) => {
+                this.handleBrowserSelection(e);
+            });
+        }
 
         document.getElementById('loadProjectBtn').addEventListener('click', () => {
             this.loadSelectedProject();
+        });
+
+        // 创建新项目按钮
+        document.getElementById('createProjectBtn').addEventListener('click', () => {
+            this.handleCreateProject();
         });
 
         // 工具面板按钮（打开 Cmd+Shift+G 面板）
@@ -1370,14 +1381,19 @@ class PaperReviewerApp {
         if (importJsonBtn && importJsonFolderInput) {
             importJsonBtn.addEventListener('click', (e) => {
                 e.preventDefault();
-                importJsonFolderInput.value = '';
-                importJsonFolderInput.click();
+                this.startImportJsonFlow(importJsonFolderInput);
             });
             importJsonFolderInput.addEventListener('change', (e) => this.handleJsonFolderImport(e));
         }
         const syncPdfBtn = document.getElementById('syncPdfBtn');
         if (syncPdfBtn) {
-            syncPdfBtn.addEventListener('click', () => this.createEmptyFilesFromPdfs());
+            syncPdfBtn.addEventListener('click', () => {
+                this.showSyncModeDialog((mode) => {
+                    if (mode) {
+                        this.createEmptyFilesFromPdfs(mode);
+                    }
+                });
+            });
         }
         const promptCloseBtn = document.getElementById('promptPanelClose');
         if (promptCloseBtn) {
@@ -1449,7 +1465,7 @@ class PaperReviewerApp {
         if (addGroupBtn) {
             addGroupBtn.addEventListener('click', (e) => {
                 e.preventDefault();
-                this.createGroup();
+                this.showCreateGroupDialog();
             });
         }
         const themeToggleBtn = document.getElementById('themeToggleBtn');
@@ -1920,6 +1936,189 @@ class PaperReviewerApp {
 
     // ========== 项目管理方法 ==========
     
+    showImportModeDialog(callback) {
+        this.importModeCallback = callback;
+        document.getElementById('importModeModal').classList.add('active');
+    }
+    
+    closeImportModeDialog() {
+        document.getElementById('importModeModal').classList.remove('active');
+        if (this.importModeCallback) {
+            this.importModeCallback(null);
+            this.importModeCallback = null;
+        }
+    }
+    
+    selectImportMode(mode) {
+        document.getElementById('importModeModal').classList.remove('active');
+        if (this.importModeCallback) {
+            this.importModeCallback(mode);
+            this.importModeCallback = null;
+        }
+    }
+    
+    showSyncModeDialog(callback) {
+        this.syncModeCallback = callback;
+        document.getElementById('syncModeModal').classList.add('active');
+    }
+    
+    closeSyncModeDialog() {
+        document.getElementById('syncModeModal').classList.remove('active');
+        if (this.syncModeCallback) {
+            this.syncModeCallback(null);
+            this.syncModeCallback = null;
+        }
+    }
+    
+    selectSyncMode(mode) {
+        document.getElementById('syncModeModal').classList.remove('active');
+        if (this.syncModeCallback) {
+            this.syncModeCallback(mode);
+            this.syncModeCallback = null;
+        }
+    }
+
+    async startImportJsonFlow(importJsonFolderInput) {
+        if (!this.currentProject) {
+            this.showNotification('请先加载项目后再导入 JSON', 'error');
+            return;
+        }
+
+        const target = await this.waitForJsonTargetSelection();
+        if (!target) return;
+
+        const mode = await this.waitForImportModeSelection();
+        if (!mode) return;
+
+        this.importJsonTargetPath = target;
+        this.importJsonMode = mode;
+        if (importJsonFolderInput) {
+            importJsonFolderInput.value = '';
+            importJsonFolderInput.click();
+        }
+    }
+
+    async waitForImportModeSelection() {
+        return new Promise((resolve) => {
+            this.showImportModeDialog((mode) => resolve(mode));
+        });
+    }
+
+    async waitForJsonTargetSelection() {
+        // 确保已有文件列表以获取子目录，如果没有则加载
+        if (!this.currentFileList || !this.currentFileList.length) {
+            await this.loadFileList(true);
+        }
+        return new Promise((resolve) => {
+            this.showJsonTargetDialog((selected) => resolve(selected));
+        });
+    }
+
+    // JSON 子目录选择对话框
+    showJsonTargetDialog(callback) {
+        this.jsonTargetCallback = callback;
+        this.selectedJsonTargetPath = null;
+        this.populateJsonTargetOptions();
+        const input = document.getElementById('jsonTargetInput');
+        if (input) input.value = '';
+        document.getElementById('jsonTargetModal').classList.add('active');
+    }
+
+    closeJsonTargetDialog() {
+        document.getElementById('jsonTargetModal').classList.remove('active');
+        if (this.jsonTargetCallback) {
+            this.jsonTargetCallback(null);
+            this.jsonTargetCallback = null;
+        }
+        this.selectedJsonTargetPath = null;
+    }
+
+    selectJsonTarget(path) {
+        const normalized = this.normalizeJsonTargetPath(path || 'json/imported');
+        document.getElementById('jsonTargetModal').classList.remove('active');
+        if (this.jsonTargetCallback) {
+            this.jsonTargetCallback(normalized);
+            this.jsonTargetCallback = null;
+        }
+        this.selectedJsonTargetPath = null;
+    }
+
+    populateJsonTargetOptions() {
+        const listEl = document.getElementById('jsonTargetList');
+        if (!listEl) return;
+
+        const subdirs = this.collectJsonSubdirs();
+        const unique = Array.from(new Set(subdirs));
+        // 默认值保证至少有一个
+        if (!unique.length) {
+            unique.push('json/imported');
+        }
+        // 确保根目录选项
+        if (!unique.includes('json')) {
+            unique.unshift('json');
+        }
+
+        // 默认选中第一个
+        this.selectedJsonTargetPath = this.normalizeJsonTargetPath(unique[0]);
+
+        listEl.innerHTML = unique.map(dir => {
+            const normalized = this.normalizeJsonTargetPath(dir);
+            const display = normalized.replace(/^json\/?/, '') || '（根目录）';
+            const isSelected = normalized === this.selectedJsonTargetPath;
+            return `
+                <div class="json-target-option ${isSelected ? 'selected' : ''}" data-path="${this.escapeHtml(normalized)}">
+                    <div class="json-target-path">
+                        <i class="fas fa-folder"></i>
+                        <span>${this.escapeHtml(normalized)}</span>
+                    </div>
+                    <span class="json-target-badge">${display || '根目录'}</span>
+                </div>
+            `;
+        }).join('');
+
+        listEl.querySelectorAll('.json-target-option').forEach(opt => {
+            opt.addEventListener('click', () => {
+                listEl.querySelectorAll('.json-target-option').forEach(o => o.classList.remove('selected'));
+                opt.classList.add('selected');
+                this.selectedJsonTargetPath = this.normalizeJsonTargetPath(opt.getAttribute('data-path') || 'json/imported');
+            });
+        });
+
+        const confirmBtn = document.getElementById('confirmJsonTargetBtn');
+        if (confirmBtn) {
+            const handler = () => {
+                const input = document.getElementById('jsonTargetInput');
+                const custom = input ? input.value.trim() : '';
+                const chosen = custom ? this.normalizeJsonTargetPath(custom) : (this.selectedJsonTargetPath || 'json/imported');
+                this.selectJsonTarget(chosen);
+            };
+            confirmBtn.onclick = handler;
+        }
+    }
+
+    normalizeJsonTargetPath(pathStr = 'json/imported') {
+        let p = (pathStr || '').trim();
+        p = p.replace(/^\/+/, '').replace(/^json\//, '');
+        if (!p) return 'json';
+        return `json/${p}`.replace(/\/+$/, '');
+    }
+
+    collectJsonSubdirs() {
+        const set = new Set();
+        const meta = this.fileMetaByPath || {};
+        Object.keys(meta).forEach((p) => {
+            if (!p.toLowerCase().startsWith('json/')) return;
+            const parts = p.split('/');
+            if (parts.length <= 2) {
+                set.add('json');
+                return;
+            }
+            const dir = parts.slice(0, parts.length - 1).join('/');
+            set.add(dir);
+        });
+        return Array.from(set);
+    }
+    
     showProjectSelector() {
         this.renderRecentProjects();
         document.getElementById('projectSelectorModal').classList.add('active');
@@ -2024,23 +2223,66 @@ class PaperReviewerApp {
         
         await this.switchProject(project);
     }
+
+    // 触发浏览对话框
+    browseAndFillPath() {
+        const browser = document.getElementById('projectFolderBrowser');
+        if (browser) {
+            browser.click();
+        }
+    }
+
+    // 处理浏览器目录选择
+    handleBrowserSelection(e) {
+        const files = e.target.files;
+        if (!files || files.length === 0) return;
+
+        const firstFile = files[0];
+        const relativePath = firstFile.webkitRelativePath;
+        
+        if (!relativePath) return;
+
+        // 提取目录名
+        const folderName = relativePath.split('/')[0];
+
+        // 智能提示：让用户确认或修改路径
+        const userPath = prompt(
+            `检测到目录：${folderName}\n\n请输入该目录的完整路径：\n（浏览器无法自动获取绝对路径，需要您手动输入）`,
+            `/Users/yjli/Desktop/${folderName}`
+        );
+
+        if (userPath && userPath.trim()) {
+            document.getElementById('projectPathInput').value = userPath.trim();
+            this.showNotification(`✓ 路径已设置`, 'success');
+        }
+
+        // 清空input，允许重复选择
+        e.target.value = '';
+    }
     
     async switchProject(project) {
         try {
             // 验证项目结构
+            console.log('🔍 验证项目路径:', project.path);
             const response = await fetch('/validate-project', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ projectPath: project.path })
             });
             
+            console.log('📡 响应状态:', response.status, response.statusText);
+            
             if (!response.ok) {
+                const errorText = await response.text();
+                console.error('❌ 响应错误:', errorText);
                 throw new Error('项目验证失败');
             }
             
             const result = await response.json();
+            console.log('✅ 验证结果:', result);
             
             if (!result.valid) {
+                console.error('❌ 项目无效:', result.message);
                 this.showNotification(`✗ 无效的项目结构: ${result.message}`, 'error');
                 return;
             }
@@ -2065,10 +2307,27 @@ class PaperReviewerApp {
             this.currentFile = null;
             this.currentData = null;
             this.currentPdfUrl = null;
+            this.currentPdfPath = null;
             this.hasUnsavedChanges = false;
             this.tempDataCache = {};
             this.selectedFiles = new Set();
             this.lastFileSelectionAnchor = null;
+            this.currentFileList = [];
+            this.visibleFileOrder = [];
+            
+            // 清空UI
+            const fileListEl = document.getElementById('fileList');
+            if (fileListEl) {
+                fileListEl.innerHTML = '<div class="loading"><div class="spinner"></div>加载中...</div>';
+            }
+            const editorEl = document.getElementById('editor');
+            if (editorEl) {
+                editorEl.innerHTML = '';
+            }
+            const pdfContainerEl = document.getElementById('pdfContainer');
+            if (pdfContainerEl) {
+                pdfContainerEl.innerHTML = '';
+            }
             
             // 重新加载文件列表
             await this.loadFileList();
@@ -2096,6 +2355,126 @@ class PaperReviewerApp {
         if (this.recentProjects.length > 5) {
             this.recentProjects = this.recentProjects.slice(0, 5);
         }
+    }
+
+    async handleCreateProject() {
+        // 第一步：触发目录选择
+        const browser = document.getElementById('createProjectBrowser');
+        if (!browser) {
+            // 如果没有浏览器元素，创建一个临时的
+            const tempBrowser = document.createElement('input');
+            tempBrowser.type = 'file';
+            tempBrowser.id = 'createProjectBrowser';
+            tempBrowser.webkitdirectory = true;
+            tempBrowser.style.display = 'none';
+            document.body.appendChild(tempBrowser);
+            
+            tempBrowser.addEventListener('change', (e) => {
+                this.handleCreateProjectSelection(e);
+            });
+            
+            tempBrowser.click();
+        } else {
+            browser.click();
+        }
+    }
+
+    // 处理创建项目的目录选择
+    async handleCreateProjectSelection(e) {
+        const files = e.target.files;
+        if (!files || files.length === 0) return;
+
+        // 第二步：让用户输入父目录路径
+        const parentPath = prompt(
+            '请输入要创建项目的父目录路径：\n\n例如：\n/Users/yjli/Desktop\n/Users/yjli/Documents',
+            '/Users/yjli/Desktop'
+        );
+
+        if (!parentPath || !parentPath.trim()) {
+            this.showNotification('✗ 已取消创建项目', 'info');
+            e.target.value = '';
+            return;
+        }
+
+        // 第三步：让用户输入项目名称
+        const projectName = prompt(
+            '请输入新项目的名称：\n\n（将在选定目录下创建此项目文件夹）',
+            'my_project'
+        );
+
+        if (!projectName || !projectName.trim()) {
+            this.showNotification('✗ 项目名称不能为空', 'error');
+            e.target.value = '';
+            return;
+        }
+
+        // 组合完整路径
+        const fullPath = `${parentPath.trim().replace(/\/$/, '')}/${projectName.trim()}`;
+
+        try {
+            const response = await fetch('/create-project', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ projectPath: fullPath })
+            });
+            
+            const result = await response.json();
+            
+            if (!result.success) {
+                this.showNotification(`✗ 创建项目失败: ${result.error}`, 'error');
+                e.target.value = '';
+                return;
+            }
+            
+            // 自动加载新创建的项目
+            const newProject = {
+                name: projectName.trim(),
+                path: fullPath
+            };
+            
+            this.currentProject = newProject;
+            this.currentFileList = [];
+            this.updateRecentProjects(newProject);
+            this.saveProjectConfig();
+            this.updateProjectDisplay();
+            this.closeProjectSelector();
+            
+            // 清空当前状态
+            this.currentFile = null;
+            this.currentData = null;
+            this.currentPdfUrl = null;
+            this.currentPdfPath = null;
+            this.hasUnsavedChanges = false;
+            this.tempDataCache = {};
+            this.selectedFiles = new Set();
+            this.lastFileSelectionAnchor = null;
+            this.visibleFileOrder = [];
+            
+            // 清空UI
+            const fileListEl = document.getElementById('fileList');
+            if (fileListEl) {
+                fileListEl.innerHTML = '<div class="loading"><div class="spinner"></div>加载中...</div>';
+            }
+            const editorEl = document.getElementById('editor');
+            if (editorEl) {
+                editorEl.innerHTML = '';
+            }
+            const pdfContainerEl = document.getElementById('pdfContainer');
+            if (pdfContainerEl) {
+                pdfContainerEl.innerHTML = '';
+            }
+            
+            // 重新加载文件列表
+            await this.loadFileList();
+            
+            this.showNotification(`✓ 项目 "${projectName.trim()}" 创建成功！路径：${fullPath}`, 'success');
+        } catch (error) {
+            console.error('Error creating project:', error);
+            this.showNotification(`✗ 创建项目出错: ${error.message}`, 'error');
+        }
+
+        // 清空input，允许重复创建
+        e.target.value = '';
     }
 
     async loadFileList(keepSelection = false) {
@@ -2144,14 +2523,18 @@ class PaperReviewerApp {
 
     async loadFileBasesFromServer() {
         const projectKey = this.getProjectKey();
+        console.log('🔍 加载文件列表，项目路径:', projectKey);
         const response = await fetch('/list-json-files', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ projectPath: projectKey })
         });
+        console.log('📡 服务器响应状态:', response.status, response.statusText);
         if (!response.ok) throw new Error('Failed to fetch file list');
         const data = await response.json();
+        console.log('📦 收到文件数据:', data);
         const rawFiles = data.files || [];
+        console.log('📂 原始文件数量:', rawFiles.length);
         this.fileMetaByBase = {};
         this.fileMetaByPath = {};
         const viewSet = new Set();
@@ -2668,6 +3051,112 @@ class PaperReviewerApp {
         groups.push({ id, name: name.trim(), files: [], collapsed: false });
         this.persistGroupsAndRender(groups, this.currentFile);
     }
+    
+    showCreateGroupDialog() {
+        document.getElementById('createGroupModal').classList.add('active');
+        const input = document.getElementById('groupNamesInput');
+        if (input) {
+            input.value = '';
+            input.focus();
+            // 添加实时预览
+            input.addEventListener('input', () => this.updateGroupPreview());
+        }
+        
+        // 绑定确认按钮
+        const confirmBtn = document.getElementById('confirmCreateGroupBtn');
+        if (confirmBtn) {
+            const handler = () => this.handleConfirmCreateGroups();
+            confirmBtn.removeEventListener('click', handler);
+            confirmBtn.addEventListener('click', handler);
+        }
+        
+        this.updateGroupPreview();
+    }
+    
+    closeCreateGroupDialog() {
+        document.getElementById('createGroupModal').classList.remove('active');
+        const input = document.getElementById('groupNamesInput');
+        if (input) {
+            input.value = '';
+        }
+        this.updateGroupPreview();
+    }
+    
+    updateGroupPreview() {
+        const input = document.getElementById('groupNamesInput');
+        const preview = document.getElementById('groupPreview');
+        const previewList = document.getElementById('groupPreviewList');
+        
+        if (!input || !preview || !previewList) return;
+        
+        const text = input.value;
+        const lines = text.split('\n')
+            .map(line => line.trim())
+            .filter(line => line.length > 0);
+        
+        if (lines.length === 0) {
+            preview.style.display = 'none';
+            return;
+        }
+        
+        preview.style.display = 'block';
+        previewList.innerHTML = lines.map((name, index) => `
+            <div class="group-preview-item">
+                <i class="fas fa-layer-group"></i>
+                <span class="group-preview-name">${this.escapeHtml(name)}</span>
+                <span class="group-preview-badge">分组 ${index + 1}</span>
+            </div>
+        `).join('');
+    }
+    
+    handleConfirmCreateGroups() {
+        const input = document.getElementById('groupNamesInput');
+        if (!input) return;
+        
+        const text = input.value;
+        const names = text.split('\n')
+            .map(line => line.trim())
+            .filter(line => line.length > 0);
+        
+        if (names.length === 0) {
+            this.showNotification('✗ 请输入至少一个分组名称', 'error');
+            return;
+        }
+        
+        const groups = this.getCurrentGroups();
+        const existingNames = new Set(groups.map(g => g.name.toLowerCase()));
+        const created = [];
+        const skipped = [];
+        
+        names.forEach(name => {
+            const trimmedName = name.trim();
+            if (existingNames.has(trimmedName.toLowerCase())) {
+                skipped.push(trimmedName);
+            } else {
+                const id = `group-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+                groups.push({ id, name: trimmedName, files: [], collapsed: false });
+                existingNames.add(trimmedName.toLowerCase());
+                created.push(trimmedName);
+            }
+        });
+        
+        if (created.length > 0) {
+            this.persistGroupsAndRender(groups, this.currentFile);
+        }
+        
+        this.closeCreateGroupDialog();
+        
+        // 显示结果通知
+        const createdMsg = created.length ? `创建 ${created.length} 个分组` : '';
+        const skippedMsg = skipped.length ? `跳过 ${skipped.length} 个重复` : '';
+        const parts = [createdMsg, skippedMsg].filter(s => s);
+        const type = created.length > 0 ? 'success' : 'info';
+        this.showNotification(`✓ ${parts.join('，')}`, type);
+        
+        if (skipped.length > 0) {
+            console.log('跳过的重复分组名称:', skipped);
+        }
+    }
 
     setFileItemContent(fileItem, displayName, number) {
         const numText = `${number}`;
@@ -2850,9 +3339,7 @@ class PaperReviewerApp {
         }
         // 否则从文件读取 meta_info
         try {
-            const response = await fetch(this.getDataUrl(jsonFilename), { cache: 'no-store' });
-            if (!response.ok) throw new Error(`读取失败 (${response.status})`);
-            const data = await response.json();
+            const data = await this.readProjectFile(jsonFilename);
             const val = data?.meta_info ? this.normalizePdfPathValue(data.meta_info.pdf_path) : '';
             return val || fallback;
         } catch (err) {
@@ -2864,10 +3351,12 @@ class PaperReviewerApp {
     getPdfUrl(pdfFile) {
         const projectPath = this.getProjectKey();
         const clean = (pdfFile || '').replace(/^\.?[\\/]+/, '');
-        const hasSub = clean.includes('/') || clean.includes('\\');
-        const rel = hasSub ? clean.split(/[/\\]+/).filter(Boolean).join('/') : `pdf/${clean}`;
-        const segments = `${projectPath}/${rel}`.split('/').filter(Boolean).map(encodeURIComponent);
-        return `/${segments.join('/')}`;
+        
+        // 使用新的 /get-pdf API endpoint (支持外部项目)
+        // 手动构建URL避免双重编码问题
+        const encodedProjectPath = encodeURIComponent(projectPath);
+        const encodedFile = encodeURIComponent(clean);
+        return `/get-pdf?projectPath=${encodedProjectPath}&file=${encodedFile}`;
     }
 
     // 重命名文件
@@ -3340,11 +3829,8 @@ class PaperReviewerApp {
                 this.currentData = this.tempDataCache[filename];
                 this.hasUnsavedChanges = true;
             } else {
-                // Fetch JSON file，使用项目路径
-                const projectPath = this.currentProject ? this.currentProject.path : 'user';
-                const response = await fetch(this.getDataUrl(filename), { cache: 'no-store' });
-                if (!response.ok) throw new Error('Failed to load file');
-                const data = await response.json();
+                // Fetch JSON file，使用新的 API（支持外部项目）
+                const data = await this.readProjectFile(filename);
                 // 若在加载过程中用户切换了文件，放弃应用结果
                 if (loadId !== this.currentLoadToken) return;
                 this.currentData = data;
@@ -4582,18 +5068,54 @@ class PaperReviewerApp {
         if (!this.currentFileList || !this.currentFileList.length) {
             await this.loadFileList(true);
         }
-        const existingNames = new Set((this.currentFileList || []).map(name => name.toLowerCase()));
-        const summary = { merged: [], skipped: [], failed: [] };
+        const targetPath = this.normalizeJsonTargetPath(this.importJsonTargetPath || 'json/imported');
+        const existingJsonPaths = Object.keys(this.fileMetaByPath || {}).filter(p => p.toLowerCase().endsWith('.json'));
+        const existingNames = new Set(existingJsonPaths.map(p => p.toLowerCase()));
+        const mode = this.importJsonMode || 'match'; // match, all, match-and-new
+        const summary = { merged: [], imported: [], skipped: [], failed: [] };
 
         for (const file of jsonFiles) {
-            if (!existingNames.has(file.name.toLowerCase())) {
-                summary.skipped.push(file.name);
+            const targetFilename = `${targetPath.replace(/\/+$/, '')}/${file.name}`.replace(/\+/g, '/');
+            const targetKey = targetFilename.toLowerCase();
+            const isExisting = existingNames.has(targetKey);
+            
+            // 根据模式决定是否处理该文件
+            if (mode === 'match' && !isExisting) {
+                summary.skipped.push(targetFilename);
                 continue;
             }
+            
             try {
                 const incomingText = await file.text();
                 const incomingData = JSON.parse(incomingText);
-                const resp = await fetch(this.getDataUrl(file.name), { cache: 'no-store' });
+                
+                // 如果文件不存在且模式允许创建新文件
+                if (!isExisting && (mode === 'all' || mode === 'match-and-new')) {
+                    // 直接保存为新文件
+                    if (!incomingData.schema_version) {
+                        incomingData.schema_version = this.generateSchemaVersion();
+                    }
+                    incomingData.lastupdate = this.generateLastUpdate();
+                    
+                    const saveResp = await fetch('/save-json', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            projectPath: this.currentProject ? this.currentProject.path : 'user',
+                            filename: targetFilename,
+                            content: JSON.stringify(incomingData, null, 2)
+                        })
+                    });
+                    if (!saveResp.ok) {
+                        const text = await saveResp.text();
+                        throw new Error(text || '保存失败');
+                    }
+                    summary.imported.push(targetFilename);
+                    continue;
+                }
+                
+                // 合并现有文件
+                const resp = await fetch(this.getDataUrl(targetFilename), { cache: 'no-store' });
                 if (!resp.ok) throw new Error('读取项目内同名文件失败');
                 const currentData = await resp.json();
                 const merged = JSON.parse(JSON.stringify(currentData || {}));
@@ -4607,7 +5129,7 @@ class PaperReviewerApp {
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         projectPath: this.currentProject ? this.currentProject.path : 'user',
-                        filename: file.name,
+                        filename: targetFilename,
                         content: JSON.stringify(merged, null, 2)
                     })
                 });
@@ -4615,12 +5137,12 @@ class PaperReviewerApp {
                     const text = await saveResp.text();
                     throw new Error(text || '保存失败');
                 }
-                summary.merged.push(file.name);
+                summary.merged.push(targetFilename);
 
-                if (this.currentFile === file.name) {
+                if (this.currentFile === targetFilename || this.currentFile === file.name) {
                     this.currentData = merged;
                     this.hasUnsavedChanges = false;
-                    delete this.tempDataCache[file.name];
+                    delete this.tempDataCache[targetFilename];
                     this.updateSaveButtonState();
                     this.updateSchemaBadge();
                     this.renderStructuredView();
@@ -4634,23 +5156,29 @@ class PaperReviewerApp {
             }
         }
 
-        const mergedMsg = `合并 ${summary.merged.length} 个文件`;
-        const skippedMsg = summary.skipped.length ? `，跳过未匹配 ${summary.skipped.length}` : '';
-        const failedMsg = summary.failed.length ? `，失败 ${summary.failed.length}` : '';
-        const type = summary.failed.length ? 'error' : (summary.merged.length ? 'success' : 'info');
-        this.showNotification(`导入完成：${mergedMsg}${skippedMsg}${failedMsg}`, type);
+        const mergedMsg = summary.merged.length ? `合并 ${summary.merged.length} 个` : '';
+        const importedMsg = summary.imported.length ? `新增 ${summary.imported.length} 个` : '';
+        const skippedMsg = summary.skipped.length ? `跳过 ${summary.skipped.length} 个` : '';
+        const failedMsg = summary.failed.length ? `失败 ${summary.failed.length} 个` : '';
+        const parts = [mergedMsg, importedMsg, skippedMsg, failedMsg].filter(s => s);
+        const type = summary.failed.length ? 'error' : ((summary.merged.length || summary.imported.length) ? 'success' : 'info');
+        this.showNotification(`导入完成：${parts.join('，')}`, type);
         if (summary.failed.length) {
             console.warn('JSON 导入失败详情:', summary.failed);
         }
+        if (summary.merged.length || summary.imported.length) {
+            await this.loadFileList();
+        }
     }
 
-    async createEmptyFilesFromPdfs() {
+    async createEmptyFilesFromPdfs(mode = 'new-only') {
         try {
             const resp = await fetch('/sync-pdfs', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    projectPath: this.currentProject ? this.currentProject.path : 'user'
+                    projectPath: this.currentProject ? this.currentProject.path : 'user',
+                    mode: mode // 'new-only' 或 'all'
                 })
             });
             if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
@@ -6022,6 +6550,31 @@ class PaperReviewerApp {
         return `/${segments.join('/')}`;
     }
 
+    // 新方法：通过 API 读取文件（支持外部项目）
+    async readProjectFile(filename) {
+        const projectPath = this.currentProject ? this.currentProject.path : 'user';
+        const response = await fetch('/read-file', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                projectPath: projectPath,
+                filePath: filename
+            }),
+            cache: 'no-store'
+        });
+        
+        if (!response.ok) {
+            throw new Error(`Failed to read file: ${response.status}`);
+        }
+        
+        const contentType = response.headers.get('content-type');
+        if (contentType && contentType.includes('application/json')) {
+            return await response.json();
+        } else {
+            return await response.text();
+        }
+    }
+
     async persistMarkdown(filename, content) {
         const projectPath = this.currentProject ? this.currentProject.path : 'user';
         const payload = {
@@ -6061,13 +6614,12 @@ class PaperReviewerApp {
     async ensureMarkdownForFiles(files = []) {
         const tasks = files.map(async (file) => {
             const mdFilename = this.getMarkdownFilename(file);
-            const url = this.getDataUrl(mdFilename);
             try {
-                const resp = await fetch(url, { method: 'GET', cache: 'no-store' });
-                if (!resp.ok) {
-                    await this.persistMarkdown(mdFilename, this.buildDefaultMarkdownForFilename(file));
-                }
+                const text = await this.readProjectFile(mdFilename);
+                // 文件存在，无需创建
+                return;
             } catch (err) {
+                // 404或其他错误，创建默认MD文件
                 console.warn('Ensure markdown fetch failed, try create:', mdFilename, err);
                 try {
                     await this.persistMarkdown(mdFilename, this.buildDefaultMarkdownForFilename(file));
@@ -6092,16 +6644,17 @@ class PaperReviewerApp {
     async ensureMarkdownExistsForFile(jsonFilename) {
         if (!jsonFilename) return;
         const mdFilename = this.getMarkdownFilename(jsonFilename);
-        const projectPath = this.currentProject ? this.currentProject.path : 'user';
-        const mdUrl = this.getDataUrl(mdFilename);
         try {
-            const resp = await fetch(mdUrl, { method: 'GET', cache: 'no-store' });
-            if (resp.ok) return;
-            if (resp.status === 404) {
-                await this.persistMarkdown(mdFilename, this.buildDefaultMarkdownForFilename(jsonFilename));
-            }
+            const text = await this.readProjectFile(mdFilename);
+            // 文件存在，无需创建
         } catch (err) {
-            console.warn('ensureMarkdownExistsForFile failed:', jsonFilename, err);
+            // 404或其他错误，创建默认MD文件
+            console.warn('ensureMarkdownExistsForFile failed, creating:', jsonFilename, err);
+            try {
+                await this.persistMarkdown(mdFilename, this.buildDefaultMarkdownForFilename(jsonFilename));
+            } catch (err2) {
+                console.warn('Failed to create markdown:', err2);
+            }
         }
     }
 
@@ -6145,18 +6698,17 @@ class PaperReviewerApp {
             return;
         }
         const mdFilename = this.getMarkdownFilename(this.currentFile);
-        const mdUrl = this.getDataUrl(mdFilename);
         const render = document.getElementById('markdownRender');
         if (render) {
             render.innerHTML = '<div class="loading"><div class="spinner"></div>Loading markdown...</div>';
         }
         try {
             let text = '';
-            const resp = await fetch(mdUrl, { cache: 'no-store' });
-            if (resp.ok) {
-                text = await resp.text();
+            try {
+                text = await this.readProjectFile(mdFilename);
                 this.currentMarkdownExists = true;
-            } else if (resp.status === 404) {
+            } catch (err) {
+                // 404或读取失败
                 // 自动创建空的同名 Markdown 文件，保证渲染流程正常
                 try {
                     await this.persistMarkdown(mdFilename, '');
@@ -6167,8 +6719,6 @@ class PaperReviewerApp {
                     this.currentMarkdownExists = false;
                     text = '';
                 }
-            } else {
-                throw new Error(`加载失败：${resp.status}`);
             }
             this.currentMarkdownFile = mdFilename;
             this.currentMarkdownText = text;
@@ -7484,8 +8034,10 @@ class PaperReviewerApp {
             }
 
             // 使用PDF.js的web viewer
-            // viewer.html在 js/pdfjs/web/ 目录，需要3个../才能回到根目录
-            const viewerUrl = `js/pdfjs/web/viewer.html?file=${encodeURIComponent('../../../' + url)}&theme=${this.theme === 'dark' ? 'dark' : 'light'}#zoom=80`;
+            // viewer.html在 js/pdfjs/web/ 目录
+            // 使用完整的URL路径，确保iframe可以正确访问
+            const absoluteUrl = window.location.origin + url;
+            const viewerUrl = `js/pdfjs/web/viewer.html?file=${encodeURIComponent(absoluteUrl)}&theme=${this.theme === 'dark' ? 'dark' : 'light'}#zoom=80`;
             pdfViewer.src = viewerUrl;
             
             // 监听iframe加载完成（如需自定义滚动行为，可在此扩展）

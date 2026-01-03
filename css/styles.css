@@ -2634,6 +2634,14 @@ ol.json-array {
     font-size: 10px;
 }
 
+.form-group .hint {
+    display: block;
+    margin-top: 4px;
+    font-size: 9px;
+    color: var(--gray-500);
+    font-style: italic;
+}
+
 .form-group input[type="text"],
 .form-group input[type="number"],
 .form-group select,
@@ -2829,6 +2837,43 @@ ol.json-array {
 
 .btn-browse:hover {
     background: #616161;
+}
+
+.quick-paths {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 8px;
+    flex-wrap: wrap;
+}
+
+.btn-quick-path {
+    background: var(--wos-blue-light);
+    color: white;
+    border: none;
+    padding: 3px 8px;
+    border-radius: 3px;
+    font-size: 9px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    white-space: nowrap;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.btn-quick-path:hover {
+    background: var(--wos-blue);
+    transform: translateY(-1px);
+    box-shadow: 0 2px 4px rgba(0, 62, 116, 0.2);
+}
+
+.btn-quick-path:active {
+    transform: translateY(0);
+}
+
+.btn-quick-path i {
+    font-size: 8px;
 }
 
 .recent-projects {
@@ -3197,4 +3242,363 @@ body.theme-vscode .header-dropdown-menu {
 
 body.theme-vscode .header-dropdown-item:hover {
     background: #2d2d2d;
+}
+
+/* Mode Selection Dialog Styles */
+.mode-selector-content {
+    max-width: 520px;
+}
+
+.mode-option {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 16px;
+    margin-bottom: 12px;
+    border: 2px solid var(--gray-200);
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    background: white;
+}
+
+.mode-option:hover {
+    border-color: var(--wos-blue-light);
+    background: var(--wos-hover);
+    box-shadow: 0 2px 8px rgba(0, 62, 116, 0.1);
+}
+
+.mode-option:last-child {
+    margin-bottom: 0;
+}
+
+.mode-icon {
+    flex-shrink: 0;
+    width: 48px;
+    height: 48px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--wos-blue);
+    color: white;
+    border-radius: 8px;
+    font-size: 24px;
+}
+
+.mode-icon.warning {
+    background: var(--wos-orange);
+}
+
+.mode-info {
+    flex: 1;
+}
+
+.mode-info h4 {
+    margin: 0 0 4px 0;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--wos-text);
+}
+
+.mode-info p {
+    margin: 0;
+    font-size: 12px;
+    color: var(--wos-text-light);
+    line-height: 1.5;
+}
+
+.mode-info .warning-text {
+    color: var(--wos-orange);
+    font-weight: 500;
+}
+
+.mode-action {
+    flex-shrink: 0;
+}
+
+.mode-action .btn {
+    padding: 8px 20px;
+    font-size: 13px;
+    white-space: nowrap;
+}
+
+.btn-warning {
+    background: var(--wos-orange);
+    color: white;
+    border: none;
+}
+
+.btn-warning:hover {
+    background: var(--wos-orange-light);
+    box-shadow: 0 2px 6px rgba(255, 106, 0, 0.3);
+}
+
+/* Dark theme support for mode selector */
+body.theme-vscode .mode-option {
+    background: #1e1e1e;
+    border-color: #3e3e3e;
+}
+
+body.theme-vscode .mode-option:hover {
+    background: #2d2d2d;
+    border-color: var(--wos-blue-light);
+}
+
+body.theme-vscode .mode-info h4 {
+    color: #e0e0e0;
+}
+
+/* JSON Target Dialog Styles */
+.json-target-content {
+    max-width: 520px;
+}
+
+.json-target-info {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 12px;
+    background: var(--wos-hover);
+    border: 1px solid var(--wos-blue-light);
+    border-radius: 6px;
+    margin-bottom: 14px;
+}
+
+.json-target-info i {
+    color: var(--wos-blue);
+    font-size: 16px;
+    flex-shrink: 0;
+    margin-top: 2px;
+}
+
+.json-target-info p {
+    margin: 0;
+    font-size: 12px;
+    color: var(--wos-text);
+    line-height: 1.5;
+}
+
+.json-target-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.json-target-option {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 12px;
+    border: 2px solid var(--gray-200);
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    background: white;
+}
+
+.json-target-option:hover {
+    border-color: var(--wos-blue-light);
+    box-shadow: 0 2px 8px rgba(0, 62, 116, 0.08);
+}
+
+.json-target-option.selected {
+    border-color: var(--wos-blue);
+    background: var(--wos-hover);
+    box-shadow: 0 2px 10px rgba(0, 62, 116, 0.12);
+}
+
+.json-target-path {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    color: var(--wos-text);
+    word-break: break-all;
+}
+
+.json-target-path i {
+    color: var(--wos-blue);
+}
+
+.json-target-badge {
+    padding: 4px 10px;
+    border-radius: 10px;
+    background: var(--wos-blue);
+    color: white;
+    font-size: 11px;
+    white-space: nowrap;
+}
+
+#jsonTargetInput {
+    margin-top: 6px;
+}
+
+/* Dark theme support for json target dialog */
+body.theme-vscode .json-target-info {
+    background: #2d2d2d;
+    border-color: var(--wos-blue-light);
+}
+
+body.theme-vscode .json-target-info p {
+    color: #e0e0e0;
+}
+
+body.theme-vscode .json-target-option {
+    background: #1e1e1e;
+    border-color: #3e3e3e;
+}
+
+body.theme-vscode .json-target-option:hover {
+    border-color: var(--wos-blue-light);
+    background: #252526;
+}
+
+body.theme-vscode .json-target-option.selected {
+    border-color: var(--wos-blue);
+    background: #252526;
+}
+
+body.theme-vscode .mode-info p {
+    color: #a0a0a0;
+}
+
+/* Create Group Dialog Styles */
+.create-group-content {
+    max-width: 560px;
+}
+
+.create-group-info {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px;
+    background: var(--wos-hover);
+    border: 1px solid var(--wos-blue-light);
+    border-radius: 6px;
+    margin-bottom: 16px;
+}
+
+.create-group-info i {
+    color: var(--wos-blue);
+    font-size: 16px;
+    flex-shrink: 0;
+}
+
+.create-group-info p {
+    margin: 0;
+    font-size: 12px;
+    color: var(--wos-text);
+    line-height: 1.5;
+}
+
+#groupNamesInput {
+    width: 100%;
+    min-height: 150px;
+    padding: 10px;
+    border: 2px solid var(--gray-300);
+    border-radius: 6px;
+    font-size: 13px;
+    line-height: 1.6;
+    resize: vertical;
+    background: white;
+    transition: border-color 0.2s ease;
+}
+
+#groupNamesInput:focus {
+    outline: none;
+    border-color: var(--wos-blue-light);
+    box-shadow: 0 0 0 3px rgba(0, 102, 204, 0.1);
+}
+
+.create-group-preview {
+    margin-top: 16px;
+    padding: 12px;
+    background: var(--gray-50);
+    border-radius: 6px;
+    border: 1px solid var(--gray-200);
+}
+
+.create-group-preview h4 {
+    margin: 0 0 10px 0;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--wos-text);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.create-group-preview h4 i {
+    color: var(--wos-blue);
+}
+
+.group-preview-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.group-preview-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 10px;
+    background: white;
+    border: 1px solid var(--gray-200);
+    border-radius: 4px;
+    font-size: 12px;
+    color: var(--wos-text);
+}
+
+.group-preview-item i {
+    color: var(--wos-blue);
+    font-size: 14px;
+}
+
+.group-preview-item .group-preview-name {
+    flex: 1;
+    font-weight: 500;
+}
+
+.group-preview-item .group-preview-badge {
+    font-size: 10px;
+    padding: 2px 8px;
+    background: var(--wos-blue);
+    color: white;
+    border-radius: 10px;
+}
+
+/* Dark theme support for create group dialog */
+body.theme-vscode .create-group-info {
+    background: #2d2d2d;
+    border-color: var(--wos-blue-light);
+}
+
+body.theme-vscode .create-group-info p {
+    color: #e0e0e0;
+}
+
+body.theme-vscode #groupNamesInput {
+    background: #1e1e1e;
+    border-color: #3e3e3e;
+    color: #e0e0e0;
+}
+
+body.theme-vscode #groupNamesInput:focus {
+    border-color: var(--wos-blue-light);
+}
+
+body.theme-vscode .create-group-preview {
+    background: #1e1e1e;
+    border-color: #3e3e3e;
+}
+
+body.theme-vscode .create-group-preview h4 {
+    color: #e0e0e0;
+}
+
+body.theme-vscode .group-preview-item {
+    background: #252526;
+    border-color: #3e3e3e;
+    color: #e0e0e0;
 }

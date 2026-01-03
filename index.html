@@ -247,22 +247,32 @@
             <div class="modal-body">
                 <div class="project-selector-info">
                     <i class="fas fa-info-circle"></i>
-                    <p>请选择包含 <code>data/</code> 和 <code>papers/</code> 子文件夹的项目目录</p>
+                    <p>请选择包含 <code>json/</code> <code>md/</code> <code>pdf/</code> 子文件夹的项目目录</p>
+                </div>
+
+                <div style="margin-bottom: 20px; border-bottom: 1px solid #e0e0e0; padding-bottom: 20px;">
+                    <h4 style="margin-top: 0; margin-bottom: 12px; font-size: 14px; font-weight: 600;">创建新项目</h4>
+                    <p style="font-size: 12px; color: var(--gray-600); margin-bottom: 12px;">
+                        点击下方按钮，系统将引导您选择目录并输入项目名称
+                    </p>
+                    <button class="btn btn-primary" id="createProjectBtn" style="width: 100%; padding: 8px;">
+                        <i class="fas fa-plus-circle"></i> 创建新项目
+                    </button>
                 </div>
 
                 <div class="form-group">
-                    <label for="projectPathInput">项目路径:</label>
+                    <label for="projectPathInput">加载现有项目:</label>
                     <div class="path-input-group">
-                        <input type="text" id="projectPathInput" placeholder="例如: /Users/username/my_project 或 user"
-                            readonly>
-                        <button class="btn btn-browse" onclick="document.getElementById('projectFolderInput').click()">
-                            <i class="fas fa-folder"></i> 浏览
+                        <input type="text" id="projectPathInput" placeholder="输入完整路径，例如: /Users/yjli/Desktop/user_test">
+                        <button class="btn btn-browse" onclick="window.paperReviewerApp.browseAndFillPath()" title="浏览选择目录">
+                            <i class="fas fa-folder-open"></i> 浏览
                         </button>
                     </div>
-                    <input type="file" id="projectFolderInput" webkitdirectory directory style="display: none;">
+                    <input type="file" id="projectFolderBrowser" webkitdirectory directory style="display: none;">
+                    <small class="hint">💡 提示：点击"浏览"选择目录，或直接输入完整路径</small>
                 </div>
 
-                <div class="recent-projects" id="recentProjectsList">
+                <div class="recent-projects" id="recentProjectsList" style="display: none;">
                     <h4><i class="fas fa-history"></i> 最近的项目</h4>
                     <div class="recent-projects-list" id="recentProjectsContent">
                         <!-- 动态加载最近项目 -->
@@ -272,6 +282,178 @@
             <div class="modal-footer">
                 <button class="btn btn-cancel" onclick="window.paperReviewerApp.closeProjectSelector()">取消</button>
                 <button class="btn btn-primary" id="loadProjectBtn">加载项目</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Import Mode Selection Modal -->
+    <div class="modal" id="importModeModal">
+        <div class="modal-content mode-selector-content">
+            <div class="modal-header">
+                <span>选择导入模式</span>
+                <button class="close-btn" onclick="window.paperReviewerApp.closeImportModeDialog()">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="mode-option" data-mode="match">
+                    <div class="mode-icon">
+                        <i class="fas fa-sync-alt"></i>
+                    </div>
+                    <div class="mode-info">
+                        <h4>仅匹配更新</h4>
+                        <p>只合并同名的 JSON 文件，跳过项目中不存在的文件</p>
+                    </div>
+                    <div class="mode-action">
+                        <button class="btn btn-primary" onclick="window.paperReviewerApp.selectImportMode('match')">
+                            选择
+                        </button>
+                    </div>
+                </div>
+                <div class="mode-option" data-mode="all">
+                    <div class="mode-icon">
+                        <i class="fas fa-file-import"></i>
+                    </div>
+                    <div class="mode-info">
+                        <h4>全部导入</h4>
+                        <p>导入所有 JSON 文件，包括项目中不存在的新文件</p>
+                    </div>
+                    <div class="mode-action">
+                        <button class="btn btn-primary" onclick="window.paperReviewerApp.selectImportMode('all')">
+                            选择
+                        </button>
+                    </div>
+                </div>
+                <div class="mode-option" data-mode="match-and-new">
+                    <div class="mode-icon">
+                        <i class="fas fa-layer-group"></i>
+                    </div>
+                    <div class="mode-info">
+                        <h4>匹配更新 + 新增</h4>
+                        <p>合并同名文件，同时将未匹配到的文件也导入项目</p>
+                    </div>
+                    <div class="mode-action">
+                        <button class="btn btn-primary" onclick="window.paperReviewerApp.selectImportMode('match-and-new')">
+                            选择
+                        </button>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-cancel" onclick="window.paperReviewerApp.closeImportModeDialog()">取消</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Sync PDF Mode Selection Modal -->
+    <div class="modal" id="syncModeModal">
+        <div class="modal-content mode-selector-content">
+            <div class="modal-header">
+                <span>选择同步模式</span>
+                <button class="close-btn" onclick="window.paperReviewerApp.closeSyncModeDialog()">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="mode-option" data-mode="new-only">
+                    <div class="mode-icon">
+                        <i class="fas fa-plus-circle"></i>
+                    </div>
+                    <div class="mode-info">
+                        <h4>仅创建新文件</h4>
+                        <p>只为没有对应 JSON/MD 的 PDF 创建文件，跳过已存在的</p>
+                    </div>
+                    <div class="mode-action">
+                        <button class="btn btn-primary" onclick="window.paperReviewerApp.selectSyncMode('new-only')">
+                            选择
+                        </button>
+                    </div>
+                </div>
+                <div class="mode-option" data-mode="all">
+                    <div class="mode-icon warning">
+                        <i class="fas fa-redo-alt"></i>
+                    </div>
+                    <div class="mode-info">
+                        <h4>全部重新创建</h4>
+                        <p class="warning-text">⚠️ 覆盖所有已存在的 JSON/MD 文件（慎用！）</p>
+                    </div>
+                    <div class="mode-action">
+                        <button class="btn btn-warning" onclick="window.paperReviewerApp.selectSyncMode('all')">
+                            选择
+                        </button>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-cancel" onclick="window.paperReviewerApp.closeSyncModeDialog()">取消</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- JSON Target Selection Modal -->
+    <div class="modal" id="jsonTargetModal">
+        <div class="modal-content json-target-content">
+            <div class="modal-header">
+                <span>选择导入的 JSON 子目录</span>
+                <button class="close-btn" onclick="window.paperReviewerApp.closeJsonTargetDialog()">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="json-target-info">
+                    <i class="fas fa-info-circle"></i>
+                    <p>请选择要将外部 JSON 导入到项目的哪个 <code>json/</code> 子目录中。若不存在子目录，将使用默认目录。</p>
+                </div>
+                <div class="json-target-list" id="jsonTargetList">
+                    <!-- 动态填充子目录选项 -->
+                </div>
+                <div class="form-group" style="margin-top: 12px;">
+                    <label for="jsonTargetInput">自定义子目录（可选）:</label>
+                    <input type="text" id="jsonTargetInput" placeholder="例如：json/imported 或 json/view1/new">
+                    <small class="hint">留空则使用上方选择；不需要以斜杠开头，系统会自动加上 <code>json/</code></small>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-cancel" onclick="window.paperReviewerApp.closeJsonTargetDialog()">取消</button>
+                <button class="btn btn-primary" id="confirmJsonTargetBtn">确定</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Create Group Modal -->
+    <div class="modal" id="createGroupModal">
+        <div class="modal-content create-group-content">
+            <div class="modal-header">
+                <span>创建文件分组</span>
+                <button class="close-btn" onclick="window.paperReviewerApp.closeCreateGroupDialog()">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="create-group-info">
+                    <i class="fas fa-info-circle"></i>
+                    <p>支持批量创建多个分组，每行一个分组名称</p>
+                </div>
+                
+                <div class="form-group">
+                    <label for="groupNamesInput">分组名称:</label>
+                    <textarea id="groupNamesInput" 
+                              placeholder="输入分组名称，支持批量创建（每行一个）&#10;例如：&#10;需要复审的论文&#10;已完成的论文&#10;待讨论的论文" 
+                              rows="8"
+                              style="font-family: inherit; font-size: 13px; line-height: 1.6;"></textarea>
+                    <small class="hint">💡 提示：每行输入一个分组名称，留空行将被忽略</small>
+                </div>
+                
+                <div class="create-group-preview" id="groupPreview" style="display: none;">
+                    <h4><i class="fas fa-eye"></i> 预览</h4>
+                    <div class="group-preview-list" id="groupPreviewList"></div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-cancel" onclick="window.paperReviewerApp.closeCreateGroupDialog()">取消</button>
+                <button class="btn btn-primary" id="confirmCreateGroupBtn">
+                    <i class="fas fa-check"></i> 创建分组
+                </button>
             </div>
         </div>
     </div>
@@ -295,7 +477,7 @@
                     <button class="btn-sync-pdf btn-import-json" id="importJsonBtn" title="导入并合并目录中的 JSON（仅同名文件）">
                         <i class="fas fa-file-import"></i>
                     </button>
-                    <button class="btn-sync-pdf" id="syncPdfBtn" title="扫描 papers/ 并创建空 JSON+MD">
+                    <button class="btn-sync-pdf" id="syncPdfBtn" title="扫描 pdf/ 目录并为每个PDF创建对应的空 JSON+MD 文件">
                         <i class="fas fa-magic"></i>
                     </button>
                     <button class="btn-switch-project" onclick="window.paperReviewerApp.showProjectSelector()"

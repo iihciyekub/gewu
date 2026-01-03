@@ -16,3 +16,4 @@ coverage
 logs
 *.log
 user/
+*.code-workspace
