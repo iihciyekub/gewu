@@ -141,11 +141,11 @@ class PaperReviewerApp {
             const path = this.getViewPathForBase(base, view);
             if (!path) return { no: Number.MAX_SAFE_INTEGER, base };
             try {
-                const resp = await fetch(this.getDataUrl(path), { cache: 'no-store' });
-                if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-                const data = await resp.json();
-                const noVal = data?.meta_info?.No;
-                const no = typeof noVal === 'number' ? noVal : Number(noVal);
+                const data = await this.readProjectFile(path);
+                const meta = data?.meta_info || {};
+                const noVal = meta.No ?? meta.no ?? meta.NO ?? meta.No;
+                const parsed = typeof noVal === 'number' ? noVal : Number(String(noVal).trim());
+                const no = Number.isFinite(parsed) ? parsed : Number.MAX_SAFE_INTEGER;
                 return { no: Number.isFinite(no) ? no : Number.MAX_SAFE_INTEGER, base };
             } catch (err) {
                 console.warn('sortGroupByMetaNo fetch failed for', base, err);
