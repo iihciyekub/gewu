@@ -166,7 +166,7 @@ body {
     font-weight: 600;
     font-size: 11px;
     color: white;
-    height: 26px;
+    height: 7mm;
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -533,7 +533,7 @@ body {
     justify-content: space-between;
     align-items: center;
     gap: 12px;
-    height: 26px;
+    height: 7mm;
     line-height: 32px;
     flex-shrink: 0;
 }
