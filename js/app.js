@@ -87,6 +87,7 @@ class PaperReviewerApp {
         this.currentPdfLoadToken = 0;
         this.lastPdfLoadedUrl = '';
         this.pendingPdfUrl = null;
+        this.pendingPdfFallback = null;
         this.pdfPlaceholderEl = null;
         this.settingsMenuVisible = false;
         this.autoLoadPdf = false;
@@ -216,7 +217,7 @@ class PaperReviewerApp {
         // 重新加载已打开的 PDF，使其采用对应主题
         if (this.currentPdfUrl) {
             this.lastPdfLoadedUrl = '';
-            this.loadPDF(this.currentPdfUrl);
+            this.ensurePdfLoaded();
         }
     }
 
@@ -2240,7 +2241,9 @@ class PaperReviewerApp {
 
         if (userPath && userPath.trim()) {
             document.getElementById('projectPathInput').value = userPath.trim();
-            this.showNotification(`✓ 路径已设置`, 'success');
+            this.showNotification(`✓ 路径已设置，正在加载项目...`, 'success');
+            // 直接加载项目，减少一次点击
+            this.loadSelectedProject();
         }
 
         // 清空input，允许重复选择
@@ -2295,26 +2298,30 @@ class PaperReviewerApp {
             this.currentData = null;
             this.currentPdfUrl = null;
             this.currentPdfPath = null;
+            this.pendingPdfUrl = null;
+            this.pendingPdfFallback = null;
+            this.lastPdfLoadedUrl = '';
+            this.currentPdfLoadToken++;
+            this.currentLoadToken++;
             this.hasUnsavedChanges = false;
             this.tempDataCache = {};
             this.selectedFiles = new Set();
             this.lastFileSelectionAnchor = null;
             this.currentFileList = [];
             this.visibleFileOrder = [];
+            this.currentMarkdownText = '';
+            this.currentMarkdownFile = '';
+            this.currentMarkdownBaselineText = '';
+            this.currentMarkdownExists = false;
+            this.isMarkdownEditing = false;
+            this.hasUnsavedMarkdownChanges = false;
             
             // 清空UI
             const fileListEl = document.getElementById('fileList');
             if (fileListEl) {
                 fileListEl.innerHTML = '<div class="loading"><div class="spinner"></div>加载中...</div>';
             }
-            const editorEl = document.getElementById('editor');
-            if (editorEl) {
-                editorEl.innerHTML = '';
-            }
-            const pdfContainerEl = document.getElementById('pdfContainer');
-            if (pdfContainerEl) {
-                pdfContainerEl.innerHTML = '';
-            }
+            this.resetMainPanelsForProject();
             
             // 重新加载文件列表
             await this.loadFileList();
@@ -3861,13 +3868,7 @@ class PaperReviewerApp {
                 this.pendingPdfUrl = primaryUrl;
                 this.pendingPdfFallback = fallbackUrl;
                 this.currentPdfLoadToken++;
-                const pdfViewer = document.getElementById('pdfViewer');
-                if (pdfViewer) {
-                    pdfViewer.onload = null;
-                    pdfViewer.removeAttribute('src');
-                    pdfViewer.classList.remove('pdf-loaded');
-                    delete pdfViewer.dataset.pdfSig;
-                }
+                this.resetPdfViewerFrame();
                 this.lastPdfLoadedUrl = '';
                 this.lastPdfLoadedKey = '';
                 this.updatePdfPlaceholder('pending');
@@ -3877,14 +3878,9 @@ class PaperReviewerApp {
             } else {
                 this.currentPdfUrl = null;
                 this.pendingPdfUrl = null;
+                this.pendingPdfFallback = null;
                 this.currentPdfLoadToken++;
-                const pdfViewer = document.getElementById('pdfViewer');
-                if (pdfViewer) {
-                    pdfViewer.onload = null;
-                    pdfViewer.removeAttribute('src');
-                    pdfViewer.classList.remove('pdf-loaded');
-                    delete pdfViewer.dataset.pdfSig;
-                }
+                this.resetPdfViewerFrame();
                 this.updatePdfPlaceholder('empty');
                 this.lastPdfLoadedUrl = '';
                 this.lastPdfLoadedKey = '';
@@ -3896,6 +3892,49 @@ class PaperReviewerApp {
             alert(`Failed to load file: ${error.message}${spaceHint}`);
             this.showNotification(`✗ Failed to load file${spaceHint}`, 'error');
         }
+    }
+
+    resetMainPanelsForProject() {
+        const structuredView = document.getElementById('structuredContent') || document.getElementById('structuredView');
+        if (structuredView) {
+            structuredView.innerHTML = `
+                <div class="empty-state">
+                    <i class="fas fa-file-alt"></i>
+                    <h3>No File Selected</h3>
+                    <p>Select a JSON file from the left panel to start editing</p>
+                </div>
+            `;
+        }
+
+        const markdownView = document.getElementById('markdownRender');
+        if (markdownView) {
+            markdownView.innerHTML = `
+                <div class="empty-state">
+                    <i class="fas fa-file-alt"></i>
+                    <h3>No File Selected</h3>
+                    <p>选择左侧 JSON 文件以查看对应的 Markdown 笔记</p>
+                </div>
+            `;
+        }
+
+        const markdownEditor = document.getElementById('markdownEditor');
+        if (markdownEditor) markdownEditor.style.display = 'none';
+        const markdownTextarea = document.getElementById('markdownTextarea');
+        if (markdownTextarea) markdownTextarea.value = '';
+
+        const flatView = document.getElementById('flatView');
+        if (flatView) {
+            flatView.innerHTML = `
+                <div class="empty-state">
+                    <i class="fas fa-code"></i>
+                    <h3>No File Selected</h3>
+                    <p>选择左侧 JSON 查看原始 JSON</p>
+                </div>
+            `;
+        }
+
+        this.resetPdfViewerFrame();
+        this.updatePdfPlaceholder('empty');
     }
 
     showLoading() {
@@ -8000,6 +8039,15 @@ class PaperReviewerApp {
         }
     }
 
+    resetPdfViewerFrame() {
+        const pdfViewer = document.getElementById('pdfViewer');
+        if (!pdfViewer) return;
+        pdfViewer.onload = null;
+        pdfViewer.removeAttribute('src');
+        pdfViewer.classList.remove('pdf-loaded');
+        delete pdfViewer.dataset.pdfSig;
+    }
+
     // PDF Functions - 使用iframe加载完整的PDF.js viewer
     async loadPDF(url) {
         const loadToken = ++this.currentPdfLoadToken;
@@ -8098,8 +8146,43 @@ class PaperReviewerApp {
         }
     }
 
+    async checkPdfAvailable(url) {
+        try {
+            const resp = await fetch(url, { method: 'GET', cache: 'no-store' });
+            if (!resp.ok) return false;
+            const type = (resp.headers.get('content-type') || '').toLowerCase();
+            if (resp.body && typeof resp.body.cancel === 'function') {
+                try {
+                    resp.body.cancel();
+                } catch (_e) {
+                    // ignore cancel errors
+                }
+            }
+            if (!type) return true;
+            return type.includes('application/pdf') || type.includes('pdf');
+        } catch (error) {
+            console.warn('PDF availability check failed:', error);
+            return false;
+        }
+    }
+
+    async resolvePdfUrl(url) {
+        const candidates = [];
+        if (url) candidates.push(url);
+        if (this.pendingPdfFallback && this.pendingPdfFallback !== url) {
+            candidates.push(this.pendingPdfFallback);
+        }
+
+        for (const candidate of candidates) {
+            const ok = await this.checkPdfAvailable(candidate);
+            if (ok) return candidate;
+        }
+        return '';
+    }
+
     async ensurePdfLoaded() {
         const url = this.pendingPdfUrl || this.currentPdfUrl;
+        const loadToken = this.currentPdfLoadToken;
         if (!url) {
             this.updatePdfPlaceholder('empty');
             return;
@@ -8109,7 +8192,24 @@ class PaperReviewerApp {
             return;
         }
         this.updatePdfPlaceholder('pending');
-        await this.loadPDF(url);
+
+        const availableUrl = await this.resolvePdfUrl(url);
+        if (loadToken !== this.currentPdfLoadToken) return;
+
+        if (!availableUrl) {
+            this.resetPdfViewerFrame();
+            this.currentPdfUrl = null;
+            this.pendingPdfUrl = null;
+            this.pendingPdfFallback = null;
+            this.lastPdfLoadedUrl = '';
+            this.updatePdfPlaceholder('empty');
+            this.showNotification('未找到 PDF 文件', 'warning');
+            return;
+        }
+
+        this.currentPdfUrl = availableUrl;
+        this.pendingPdfUrl = availableUrl;
+        await this.loadPDF(availableUrl);
     }
 
     updatePdfPlaceholder(state) {
@@ -9263,10 +9363,22 @@ class PaperReviewerApp {
 
         // 如果更新了 meta_info.pdf_path，则立即按新路径加载 PDF
         if (shouldReloadPdf && nextPdfFile) {
-            const projectPath = this.currentProject ? this.currentProject.path : 'user';
-            const pdfUrl = `${projectPath}/papers/${nextPdfFile}`;
+            const projectPath = this.getProjectKey();
+            const { relPath, fileName } = this.normalizePdfRel(nextPdfFile);
+            const pdfName = fileName || nextPdfFile;
+            const primaryUrl = relPath
+                ? `/${projectPath}/${relPath}`
+                : this.getPdfUrl(pdfName);
+            const fallbackUrl = relPath ? null : `/${projectPath}/papers/${pdfName}`;
+            this.currentPdfUrl = primaryUrl;
+            this.pendingPdfUrl = primaryUrl;
+            this.pendingPdfFallback = fallbackUrl;
+            this.currentPdfLoadToken++;
+            this.resetPdfViewerFrame();
+            this.lastPdfLoadedUrl = '';
+            this.updatePdfPlaceholder('pending');
             try {
-                await this.loadPDF(pdfUrl);
+                await this.ensurePdfLoaded();
             } catch (err) {
                 console.warn('重新加载PDF失败:', err);
             }
