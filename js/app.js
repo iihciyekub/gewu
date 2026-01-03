@@ -1189,10 +1189,17 @@ class PaperReviewerApp {
         if (queryRefreshFieldsBtn) {
             queryRefreshFieldsBtn.addEventListener('click', () => this.refreshQueryFieldOptions());
         }
+        const queryFieldFilterInput = document.getElementById('queryFieldFilterInput');
+        if (queryFieldFilterInput) {
+            queryFieldFilterInput.addEventListener('input', () => {
+                this.renderQueryFieldList(queryFieldFilterInput.value || '');
+            });
+        }
         const queryDoiOrderInput = document.getElementById('queryDoiOrderInput');
         if (queryDoiOrderInput) {
             queryDoiOrderInput.addEventListener('input', (e) => {
                 this.queryDoiOrderText = e.target.value || '';
+                this.updateDoiStats();
             });
         }
         
@@ -1215,6 +1222,9 @@ class PaperReviewerApp {
                 e.preventDefault();
                 this.toggleJsonMdSource();
                 return;
+            }
+            if (key === 'escape') {
+                this.closeQueryExportModal();
             }
             // 锁定时，仅当鼠标在中间栏时才拦截结构区的排序/移动
             const middleActive = !!this.isMiddleActive;
@@ -4080,6 +4090,7 @@ class PaperReviewerApp {
         if (queryDoiOrderInput) {
             queryDoiOrderInput.value = this.queryDoiOrderText || '';
         }
+        this.updateDoiStats();
     }
 
     closeQueryExportModal() {
@@ -4138,16 +4149,22 @@ class PaperReviewerApp {
         this.queryFieldsLoading = false;
     }
 
-    renderQueryFieldList() {
+    renderQueryFieldList(filterText = '') {
         const container = document.getElementById('queryFieldList');
         if (!container) return;
         container.innerHTML = '';
-        if (!this.queryFieldOptions.length) {
+        const filterInput = document.getElementById('queryFieldFilterInput');
+        const filter = ((filterText !== null && filterText !== undefined) ? filterText : (filterInput ? filterInput.value : '')).toLowerCase();
+        const options = filter
+            ? this.queryFieldOptions.filter(f => f.toLowerCase().includes(filter))
+            : this.queryFieldOptions;
+        if (!options.length) {
             container.innerHTML = '<p>No fields detected. Load project/files first.</p>';
+            this.renderQuerySelectedChips();
             return;
         }
         const frag = document.createDocumentFragment();
-        this.queryFieldOptions.forEach((field) => {
+        options.forEach((field) => {
             const id = `qf-${field.replace(/[^a-z0-9_-]/gi, '-')}`;
             const wrapper = document.createElement('label');
             wrapper.className = 'query-field-item';
@@ -4160,10 +4177,38 @@ class PaperReviewerApp {
                 const f = e.target.dataset.field;
                 if (e.target.checked) this.queryFieldSelected.add(f);
                 else this.queryFieldSelected.delete(f);
+                this.renderQuerySelectedChips();
             });
             frag.appendChild(wrapper);
         });
         container.appendChild(frag);
+        this.renderQuerySelectedChips();
+    }
+
+    renderQuerySelectedChips() {
+        const container = document.getElementById('querySelectedSummary');
+        if (!container) return;
+        container.innerHTML = '';
+        const selected = Array.from(this.queryFieldSelected);
+        if (!selected.length) {
+            container.innerHTML = '<span style="color:#888;">No fields selected</span>';
+            return;
+        }
+        const filterInput = document.getElementById('queryFieldFilterInput');
+        const currentFilter = filterInput ? filterInput.value || '' : '';
+        selected.forEach((field) => {
+            const chip = document.createElement('button');
+            chip.type = 'button';
+            chip.className = 'chip-btn';
+            chip.textContent = field;
+            chip.title = 'Click to remove';
+            chip.classList.add('query-chip');
+            chip.addEventListener('click', () => {
+                this.queryFieldSelected.delete(field);
+                this.renderQueryFieldList(currentFilter);
+            });
+            container.appendChild(chip);
+        });
     }
 
     parseDoiOrderInput(text = '') {
@@ -4171,6 +4216,31 @@ class PaperReviewerApp {
             .split(/\r?\n/)
             .map(s => s.trim())
             .filter(Boolean);
+    }
+
+    dedupeDoiOrder(order = []) {
+        const seen = new Set();
+        const out = [];
+        let dupCount = 0;
+        order.forEach((raw) => {
+            const key = (raw || '').trim().toLowerCase();
+            if (!key) return;
+            if (seen.has(key)) {
+                dupCount++;
+                return;
+            }
+            seen.add(key);
+            out.push(raw);
+        });
+        return { list: out, dupCount };
+    }
+
+    updateDoiStats() {
+        const statsEl = document.getElementById('queryDoiStats');
+        if (!statsEl) return;
+        const input = document.getElementById('queryDoiOrderInput');
+        const { list, dupCount } = this.dedupeDoiOrder(this.parseDoiOrderInput(input ? input.value : this.queryDoiOrderText));
+        statsEl.textContent = `${list.length} unique | ${dupCount} duplicates`;
     }
 
     async exportQueryData() {
@@ -4228,7 +4298,10 @@ class PaperReviewerApp {
             }
         }
         const doiInput = document.getElementById('queryDoiOrderInput');
-        const doiOrder = this.parseDoiOrderInput(doiInput ? doiInput.value : this.queryDoiOrderText);
+        const { list: doiOrder, dupCount } = this.dedupeDoiOrder(this.parseDoiOrderInput(doiInput ? doiInput.value : this.queryDoiOrderText));
+        if (dupCount > 0) {
+            this.showNotification(`Detected and ignored ${dupCount} duplicate DOI entries`, 'info');
+        }
         if (doiOrder.length) {
             const rowMap = new Map();
             rows.forEach((r) => {
@@ -4276,7 +4349,10 @@ class PaperReviewerApp {
         }
         const view = this.currentJsonView || '';
         const doiInput = document.getElementById('queryDoiOrderInput');
-        const doiOrder = this.parseDoiOrderInput(doiInput ? doiInput.value : this.queryDoiOrderText);
+        const { list: doiOrder, dupCount } = this.dedupeDoiOrder(this.parseDoiOrderInput(doiInput ? doiInput.value : this.queryDoiOrderText));
+        if (dupCount > 0) {
+            this.showNotification(`Detected and ignored ${dupCount} duplicate DOI entries`, 'info');
+        }
         const makeKeys = (s) => {
             const base = (s || '').trim().toLowerCase();
             if (!base) return [];
