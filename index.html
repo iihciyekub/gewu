@@ -296,44 +296,30 @@
                 </button>
             </div>
             <div class="modal-body">
-                <div class="mode-option" data-mode="match">
+                <div class="mode-option" data-mode="join">
                     <div class="mode-icon">
-                        <i class="fas fa-sync-alt"></i>
+                        <i class="fas fa-link"></i>
                     </div>
                     <div class="mode-info">
-                        <h4>仅匹配更新</h4>
-                        <p>只合并同名的 JSON 文件，跳过项目中不存在的文件</p>
+                        <h4>交集更新（Join）</h4>
+                        <p>仅处理当前视图里已存在的同名 JSON，对已有字段做交集更新，不新增文件和新字段。</p>
                     </div>
                     <div class="mode-action">
-                        <button class="btn btn-primary" onclick="window.paperReviewerApp.selectImportMode('match')">
+                        <button class="btn btn-primary" onclick="window.paperReviewerApp.selectImportMode('join')">
                             选择
                         </button>
                     </div>
                 </div>
-                <div class="mode-option" data-mode="all">
+                <div class="mode-option" data-mode="union">
                     <div class="mode-icon">
-                        <i class="fas fa-file-import"></i>
+                        <i class="fas fa-object-group"></i>
                     </div>
                     <div class="mode-info">
-                        <h4>全部导入</h4>
-                        <p>导入所有 JSON 文件，包括项目中不存在的新文件</p>
+                        <h4>并集更新（Union）</h4>
+                        <p>合并同名文件并新增缺失字段，同时将不存在的文件导入到目标目录。</p>
                     </div>
                     <div class="mode-action">
-                        <button class="btn btn-primary" onclick="window.paperReviewerApp.selectImportMode('all')">
-                            选择
-                        </button>
-                    </div>
-                </div>
-                <div class="mode-option" data-mode="match-and-new">
-                    <div class="mode-icon">
-                        <i class="fas fa-layer-group"></i>
-                    </div>
-                    <div class="mode-info">
-                        <h4>匹配更新 + 新增</h4>
-                        <p>合并同名文件，同时将未匹配到的文件也导入项目</p>
-                    </div>
-                    <div class="mode-action">
-                        <button class="btn btn-primary" onclick="window.paperReviewerApp.selectImportMode('match-and-new')">
+                        <button class="btn btn-primary" onclick="window.paperReviewerApp.selectImportMode('union')">
                             选择
                         </button>
                     </div>
@@ -341,51 +327,6 @@
             </div>
             <div class="modal-footer">
                 <button class="btn btn-cancel" onclick="window.paperReviewerApp.closeImportModeDialog()">取消</button>
-            </div>
-        </div>
-    </div>
-
-    <!-- Sync PDF Mode Selection Modal -->
-    <div class="modal" id="syncModeModal">
-        <div class="modal-content mode-selector-content">
-            <div class="modal-header">
-                <span>选择同步模式</span>
-                <button class="close-btn" onclick="window.paperReviewerApp.closeSyncModeDialog()">
-                    <i class="fas fa-times"></i>
-                </button>
-            </div>
-            <div class="modal-body">
-                <div class="mode-option" data-mode="new-only">
-                    <div class="mode-icon">
-                        <i class="fas fa-plus-circle"></i>
-                    </div>
-                    <div class="mode-info">
-                        <h4>仅创建新文件</h4>
-                        <p>只为没有对应 JSON/MD 的 PDF 创建文件，跳过已存在的</p>
-                    </div>
-                    <div class="mode-action">
-                        <button class="btn btn-primary" onclick="window.paperReviewerApp.selectSyncMode('new-only')">
-                            选择
-                        </button>
-                    </div>
-                </div>
-                <div class="mode-option" data-mode="all">
-                    <div class="mode-icon warning">
-                        <i class="fas fa-redo-alt"></i>
-                    </div>
-                    <div class="mode-info">
-                        <h4>全部重新创建</h4>
-                        <p class="warning-text">⚠️ 覆盖所有已存在的 JSON/MD 文件（慎用！）</p>
-                    </div>
-                    <div class="mode-action">
-                        <button class="btn btn-warning" onclick="window.paperReviewerApp.selectSyncMode('all')">
-                            选择
-                        </button>
-                    </div>
-                </div>
-            </div>
-            <div class="modal-footer">
-                <button class="btn btn-cancel" onclick="window.paperReviewerApp.closeSyncModeDialog()">取消</button>
             </div>
         </div>
     </div>
@@ -476,9 +417,6 @@
                     </button>
                     <button class="btn-sync-pdf btn-import-json" id="importJsonBtn" title="导入并合并目录中的 JSON（仅同名文件）">
                         <i class="fas fa-file-import"></i>
-                    </button>
-                    <button class="btn-sync-pdf" id="syncPdfBtn" title="扫描 pdf/ 目录并为每个PDF创建对应的空 JSON+MD 文件">
-                        <i class="fas fa-magic"></i>
                     </button>
                     <button class="btn-switch-project" onclick="window.paperReviewerApp.showProjectSelector()"
                         title="切换项目">

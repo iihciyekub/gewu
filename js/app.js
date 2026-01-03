@@ -98,11 +98,10 @@ class PaperReviewerApp {
         this.queryFieldSelected = new Set();
         this.queryFieldsLoading = false;
         this.importingExternal = false;
-        this.importJsonMode = 'match'; // 导入模式：match(仅匹配), all(全部), match-and-new(匹配+新增)
+        this.importJsonMode = 'join'; // 导入模式：join(仅匹配并更新交集), union(并集更新)
         this.importJsonTargetPath = 'json/imported';
         this.jsonTargetCallback = null;
         this.importModeCallback = null;
-        this.syncModeCallback = null;
         this.selectedJsonTargetPath = null;
         this.fileMetaByPath = {};
         this.fileMetaByBase = {};
@@ -112,6 +111,22 @@ class PaperReviewerApp {
         this.lastJsonViewByProject = this.loadLastJsonViewByProject();
 
         this.init();
+    }
+
+    closeAllModals(exceptId = '') {
+        const modals = document.querySelectorAll('.modal');
+        modals.forEach((m) => {
+            if (!exceptId || m.id !== exceptId) {
+                m.classList.remove('active');
+            }
+        });
+    }
+
+    activateModal(modalId) {
+        if (!modalId) return;
+        this.closeAllModals(modalId);
+        const modal = document.getElementById(modalId);
+        if (modal) modal.classList.add('active');
     }
 
     async sortGroupByMetaNo(groupId) {
@@ -1385,16 +1400,6 @@ class PaperReviewerApp {
             });
             importJsonFolderInput.addEventListener('change', (e) => this.handleJsonFolderImport(e));
         }
-        const syncPdfBtn = document.getElementById('syncPdfBtn');
-        if (syncPdfBtn) {
-            syncPdfBtn.addEventListener('click', () => {
-                this.showSyncModeDialog((mode) => {
-                    if (mode) {
-                        this.createEmptyFilesFromPdfs(mode);
-                    }
-                });
-            });
-        }
         const promptCloseBtn = document.getElementById('promptPanelClose');
         if (promptCloseBtn) {
             promptCloseBtn.addEventListener('click', () => this.togglePromptPanel(false));
@@ -1938,11 +1943,11 @@ class PaperReviewerApp {
     
     showImportModeDialog(callback) {
         this.importModeCallback = callback;
-        document.getElementById('importModeModal').classList.add('active');
+        this.activateModal('importModeModal');
     }
     
     closeImportModeDialog() {
-        document.getElementById('importModeModal').classList.remove('active');
+        this.closeAllModals();
         if (this.importModeCallback) {
             this.importModeCallback(null);
             this.importModeCallback = null;
@@ -1950,33 +1955,14 @@ class PaperReviewerApp {
     }
     
     selectImportMode(mode) {
-        document.getElementById('importModeModal').classList.remove('active');
+        this.closeAllModals();
         if (this.importModeCallback) {
             this.importModeCallback(mode);
             this.importModeCallback = null;
         }
     }
     
-    showSyncModeDialog(callback) {
-        this.syncModeCallback = callback;
-        document.getElementById('syncModeModal').classList.add('active');
-    }
-    
-    closeSyncModeDialog() {
-        document.getElementById('syncModeModal').classList.remove('active');
-        if (this.syncModeCallback) {
-            this.syncModeCallback(null);
-            this.syncModeCallback = null;
-        }
-    }
-    
-    selectSyncMode(mode) {
-        document.getElementById('syncModeModal').classList.remove('active');
-        if (this.syncModeCallback) {
-            this.syncModeCallback(mode);
-            this.syncModeCallback = null;
-        }
-    }
+    // 同步 PDF 功能已移除
 
     async startImportJsonFlow(importJsonFolderInput) {
         if (!this.currentProject) {
@@ -2021,11 +2007,11 @@ class PaperReviewerApp {
         this.populateJsonTargetOptions();
         const input = document.getElementById('jsonTargetInput');
         if (input) input.value = '';
-        document.getElementById('jsonTargetModal').classList.add('active');
+        this.activateModal('jsonTargetModal');
     }
 
     closeJsonTargetDialog() {
-        document.getElementById('jsonTargetModal').classList.remove('active');
+        this.closeAllModals();
         if (this.jsonTargetCallback) {
             this.jsonTargetCallback(null);
             this.jsonTargetCallback = null;
@@ -2048,7 +2034,8 @@ class PaperReviewerApp {
         if (!listEl) return;
 
         const subdirs = this.collectJsonSubdirs();
-        const unique = Array.from(new Set(subdirs));
+        const preferred = this.currentJsonView ? [`json/${this.currentJsonView}`] : [];
+        const unique = Array.from(new Set([...preferred, ...subdirs]));
         // 默认值保证至少有一个
         if (!unique.length) {
             unique.push('json/imported');
@@ -2121,11 +2108,11 @@ class PaperReviewerApp {
     
     showProjectSelector() {
         this.renderRecentProjects();
-        document.getElementById('projectSelectorModal').classList.add('active');
+        this.activateModal('projectSelectorModal');
     }
     
     closeProjectSelector() {
-        document.getElementById('projectSelectorModal').classList.remove('active');
+        this.closeAllModals();
     }
     
     renderRecentProjects() {
@@ -3053,7 +3040,7 @@ class PaperReviewerApp {
     }
     
     showCreateGroupDialog() {
-        document.getElementById('createGroupModal').classList.add('active');
+        this.activateModal('createGroupModal');
         const input = document.getElementById('groupNamesInput');
         if (input) {
             input.value = '';
@@ -3074,7 +3061,7 @@ class PaperReviewerApp {
     }
     
     closeCreateGroupDialog() {
-        document.getElementById('createGroupModal').classList.remove('active');
+        this.closeAllModals();
         const input = document.getElementById('groupNamesInput');
         if (input) {
             input.value = '';
@@ -4577,7 +4564,7 @@ class PaperReviewerApp {
     openQueryExportModal() {
         const modal = document.getElementById('queryExportModal');
         if (!modal) return;
-        modal.classList.add('active');
+        this.activateModal('queryExportModal');
         this.refreshQueryFieldOptions();
         const queryDoiOrderInput = document.getElementById('queryDoiOrderInput');
         if (queryDoiOrderInput) {
@@ -4589,7 +4576,7 @@ class PaperReviewerApp {
     closeQueryExportModal() {
         const modal = document.getElementById('queryExportModal');
         if (!modal) return;
-        modal.classList.remove('active');
+        this.closeAllModals();
     }
 
     getFieldUnionFromData(data) {
@@ -5028,6 +5015,19 @@ class PaperReviewerApp {
         });
     }
 
+    // 仅更新目标中已存在的键，忽略新键
+    mergeIntersection(target, source) {
+        Object.entries(target).forEach(([k, v]) => {
+            if (!Object.prototype.hasOwnProperty.call(source, k)) return;
+            const incoming = source[k];
+            if (this.isPlainObject(v) && this.isPlainObject(incoming)) {
+                this.mergeIntersection(v, incoming);
+            } else {
+                target[k] = incoming;
+            }
+        });
+    }
+
     undoLastPaste() {
         if (!this.lastPasteBackup || !this.currentFile || this.lastPasteBackup.file !== this.currentFile) {
             this.showNotification('没有可撤销的粘贴', 'error');
@@ -5071,7 +5071,10 @@ class PaperReviewerApp {
         const targetPath = this.normalizeJsonTargetPath(this.importJsonTargetPath || 'json/imported');
         const existingJsonPaths = Object.keys(this.fileMetaByPath || {}).filter(p => p.toLowerCase().endsWith('.json'));
         const existingNames = new Set(existingJsonPaths.map(p => p.toLowerCase()));
-        const mode = this.importJsonMode || 'match'; // match, all, match-and-new
+        let mode = this.importJsonMode || 'join'; // join / union
+        // 兼容旧模式命名
+        if (mode === 'match') mode = 'join';
+        if (mode === 'all' || mode === 'match-and-new') mode = 'union';
         const summary = { merged: [], imported: [], skipped: [], failed: [] };
 
         for (const file of jsonFiles) {
@@ -5080,7 +5083,7 @@ class PaperReviewerApp {
             const isExisting = existingNames.has(targetKey);
             
             // 根据模式决定是否处理该文件
-            if (mode === 'match' && !isExisting) {
+            if (mode === 'join' && !isExisting) {
                 summary.skipped.push(targetFilename);
                 continue;
             }
@@ -5090,7 +5093,7 @@ class PaperReviewerApp {
                 const incomingData = JSON.parse(incomingText);
                 
                 // 如果文件不存在且模式允许创建新文件
-                if (!isExisting && (mode === 'all' || mode === 'match-and-new')) {
+                if (!isExisting && mode === 'union') {
                     // 直接保存为新文件
                     if (!incomingData.schema_version) {
                         incomingData.schema_version = this.generateSchemaVersion();
@@ -5119,7 +5122,11 @@ class PaperReviewerApp {
                 if (!resp.ok) throw new Error('读取项目内同名文件失败');
                 const currentData = await resp.json();
                 const merged = JSON.parse(JSON.stringify(currentData || {}));
-                this.deepMerge(merged, incomingData || {});
+                if (mode === 'join') {
+                    this.mergeIntersection(merged, incomingData || {});
+                } else {
+                    this.deepMerge(merged, incomingData || {});
+                }
                 if (!merged.schema_version) {
                     merged.schema_version = this.generateSchemaVersion();
                 }
@@ -5172,27 +5179,7 @@ class PaperReviewerApp {
     }
 
     async createEmptyFilesFromPdfs(mode = 'new-only') {
-        try {
-            const resp = await fetch('/sync-pdfs', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    projectPath: this.currentProject ? this.currentProject.path : 'user',
-                    mode: mode // 'new-only' 或 'all'
-                })
-            });
-            if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-            const data = await resp.json();
-            if (!data.success) throw new Error(data.error || '同步失败');
-            const jsonCount = data.createdJson?.length || 0;
-            const mdCount = data.createdMd?.length || 0;
-            const msg = data.message || '扫描完成';
-            this.showNotification(`${msg}：新建 JSON ${jsonCount} 个，MD ${mdCount} 个`, 'success');
-            await this.loadFileList();
-        } catch (error) {
-            console.error('同步 PDF 生成空文件失败:', error);
-            this.showNotification(`同步失败: ${error.message}`, 'error');
-        }
+        this.showNotification('当前版本不再支持一键同步 PDF，请手动添加 pdf/json/md 文件。', 'info');
     }
 
     ensureSchemaVersion() {
