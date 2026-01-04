@@ -113,6 +113,7 @@ class PaperReviewerApp {
         this.doiAutoNumberStart = null;
         this.lastGotoLink = null;
         this.lastGotoAttemptText = '';
+        this.completeGroupsForCurrentProject = null; // 存储完整的、未被view过滤的分组结构
 
         this.init();
     }
@@ -514,11 +515,11 @@ class PaperReviewerApp {
     ensureDefaultGroup(groups = []) {
         const list = Array.isArray(groups) ? [...groups] : [];
         if (!list.length) {
-            list.push({ id: 'group-default', name: '未分组', files: [], collapsed: false });
+            list.push({ id: 'init', name: 'init', files: [], collapsed: false });
             return list;
         }
-        if (!list[0].id) list[0].id = 'group-default';
-        if (!list[0].name) list[0].name = '未分组';
+        if (!list[0].id) list[0].id = 'init';
+        if (!list[0].name) list[0].name = 'init';
         if (!Array.isArray(list[0].files)) list[0].files = [];
         if (typeof list[0].collapsed !== 'boolean') list[0].collapsed = false;
         return list;
@@ -610,7 +611,10 @@ class PaperReviewerApp {
     }
 
     toggleGroupCollapse(groupId) {
-        const groups = this.getCurrentGroups();
+        // Use the complete, unfiltered groups that were saved during last renderFileList
+        const groups = this.completeGroupsForCurrentProject 
+            ? this.cloneFileGroups(this.completeGroupsForCurrentProject)
+            : this.getCurrentGroups();
         const target = groups.find(g => g.id === groupId);
         if (!target) return;
         target.collapsed = !target.collapsed;
@@ -618,6 +622,11 @@ class PaperReviewerApp {
     }
 
     deleteGroup(groupId) {
+        // 'init' group cannot be deleted
+        if (groupId === 'init') {
+            this.showNotification('默认分组 "init" 不可删除。', 'warning');
+            return;
+        }
         const groups = this.getCurrentGroups();
         if (!groups.length) return;
         if (groups.length <= 1) {
@@ -626,11 +635,7 @@ class PaperReviewerApp {
         }
         const target = groups.find(g => g.id === groupId);
         if (!target) return;
-        const defaultGroup = groups[0];
-        if (target.id === defaultGroup.id) {
-            this.showNotification('默认分组不可删除。', 'warning');
-            return;
-        }
+        const defaultGroup = groups[0]; // 'init' group
         const filesToMove = Array.isArray(target.files) ? [...target.files] : [];
         if (filesToMove.length) {
             const ok = window.confirm(`该分组包含 ${filesToMove.length} 个文件，删除后将移动到默认分组「${defaultGroup.name}」。确定删除吗？`);
@@ -722,7 +727,7 @@ class PaperReviewerApp {
             });
             return { id, name, files: uniqueFiles, collapsed };
         });
-        if (!cleaned.length) cleaned.push({ id: 'group-default', name: '未分组', files: [], collapsed: false });
+        if (!cleaned.length) cleaned.push({ id: 'init', name: 'init', files: [], collapsed: false });
         const defaultGroup = cleaned[0];
         files.forEach(f => {
             if (!used.has(f)) {
@@ -1130,9 +1135,31 @@ class PaperReviewerApp {
                 }
                 await this.switchToView('structured');
                 this.renderJsonViewSelector();
-                this.renderFileList(this.currentFileList || [], this.currentFileBase || null, true);
-                if (this.currentFileBase && changed) {
-                    this.loadFile(this.currentFileBase);
+                
+                // Re-render file list with filtering applied to current view
+                const filesToRender = this.currentFileList || [];
+                this.renderFileList(filesToRender, this.currentFileBase || null, true);
+                
+                // If the current file doesn't exist in the new view, clear it and show the view
+                if (changed && this.currentFileBase) {
+                    const entry = this.fileMetaByBase?.[this.currentFileBase];
+                    const hasInCurrentView = !!(entry?.views && entry.views[this.currentJsonView]);
+                    if (!hasInCurrentView) {
+                        // Current file doesn't exist in new view, clear it
+                        this.currentFile = null;
+                        this.currentFileBase = null;
+                        this.currentData = null;
+                        const middleContent = document.getElementById('middleContent');
+                        if (middleContent) {
+                            const structuredView = middleContent.querySelector('.structured-view');
+                            if (structuredView) {
+                                structuredView.innerHTML = '<div class="empty-state"><i class="fas fa-code"></i><h3>No File Selected</h3><p>选择左侧 JSON 文件以查看数据</p></div>';
+                            }
+                        }
+                    } else {
+                        // File exists in new view, reload it
+                        this.loadFile(this.currentFileBase);
+                    }
                 }
             });
             jsonViewSelect.addEventListener('click', async () => {
@@ -2806,6 +2833,9 @@ class PaperReviewerApp {
             return;
         }
         
+        // 检查并确保存在 'init' 分组
+        this.ensureInitGroupExists();
+        
         if (!keepSelection) {
             fileListEl.innerHTML = '<div class="loading"><div class="spinner"></div>Loading files...</div>';
         }
@@ -2830,13 +2860,56 @@ class PaperReviewerApp {
             // 读取服务器排序（基于基名）
             await this.fetchFileOrder();
             const ordered = this.applyFileOrder(orderedBases);
-            const groups = this.syncGroupsWithFiles(ordered);
-            this.currentFileList = ordered;
-            this.renderFileList(this.currentFileList, keepSelection ? currentSelected : null, true, groups);
+            // Store all files for reference, but renderFileList will filter them
+            this.allProjectFiles = ordered;
+            // renderFileList will handle filtering and grouping
+            this.renderFileList(ordered, keepSelection ? currentSelected : null, true);
         } catch (error) {
             console.error('Error loading file list:', error);
             this.showNotification('✗ 加载文件列表失败', 'error');
             fileListEl.innerHTML = '<div class="empty-state"><p>加载失败，请检查服务器</p></div>';
+        }
+    }
+
+    // Ensure 'init' group exists in the current project
+    ensureInitGroupExists() {
+        const key = this.getProjectKey();
+        
+        // Get the stored groups directly without processing
+        const stored = this.fileGroups[key]?.groups || [];
+        
+        // Check if 'init' group already exists
+        const hasInitGroup = stored.some(g => g.id === 'init');
+        
+        if (!hasInitGroup) {
+            console.log('⚠️  "init" 分组不存在，正在创建...');
+            
+            // Create init group as the first group
+            const initGroup = { id: 'init', name: 'init', files: [], collapsed: false };
+            
+            if (stored.length === 0) {
+                // No groups exist, create just init
+                stored.push(initGroup);
+            } else {
+                // Groups exist, collect all files and put in init
+                const allFiles = [];
+                stored.forEach(g => {
+                    if (g.files && Array.isArray(g.files)) {
+                        allFiles.push(...g.files);
+                    }
+                });
+                // Replace all groups with just init containing all files
+                stored.length = 0;
+                initGroup.files = allFiles;
+                stored.push(initGroup);
+            }
+            
+            // Ensure proper structure and save
+            const cleanedGroups = this.ensureDefaultGroup(this.cloneFileGroups(stored));
+            this.fileGroups[key] = { groups: cleanedGroups };
+            const flatFiles = this.flattenGroupFiles(cleanedGroups);
+            this.saveFileOrderForProject(flatFiles, cleanedGroups);
+            console.log('✅ "init" 分组已创建，包含', flatFiles.length, '个文件');
         }
     }
 
@@ -2897,18 +2970,53 @@ class PaperReviewerApp {
         return [...bases];
     }
 
+    // Filter files to show only those that exist in the current JSON view
+    filterFilesByCurrentView(files) {
+        const currentView = this.currentJsonView || 'view1';
+        const filtered = files.filter(base => {
+            const entry = this.fileMetaByBase?.[base];
+            if (!entry) return false;
+            const hasView = !!(entry.views && entry.views[currentView]);
+            return hasView;
+        });
+        return filtered;
+    }
+
+    // Apply view filtering to groups while preserving group structure globally
+    getFilteredGroupsForCurrentView(groups = []) {
+        const currentView = this.currentJsonView || 'view1';
+        return groups.map(g => ({
+            ...g,
+            files: (g.files || []).filter(base => {
+                const entry = this.fileMetaByBase?.[base];
+                if (!entry) return false;
+                return !!(entry.views && entry.views[currentView]);
+            })
+        }));
+    }
+
     renderFileList(files, keepSelected = null, alreadyOrdered = false, groupsOverride = null) {
         const fileListEl = document.getElementById('fileList');
         
-        if (files.length === 0) {
-            this.visibleFileOrder = [];
-            this.selectedFiles = new Set();
-            fileListEl.innerHTML = '<div class="empty-state"><p>暂无JSON文件</p></div>';
-            return;
+        // Get global groups (either override or from storage)
+        const sourceGroups = groupsOverride 
+            ? this.cloneFileGroups(groupsOverride)
+            : this.getCurrentGroups();
+        
+        // Save the complete, unfiltered groups for later use (e.g., when toggling collapse)
+        this.completeGroupsForCurrentProject = this.cloneFileGroups(sourceGroups);
+        
+        // Apply view filtering to groups - preserves group structure, filters files within groups
+        const groups = this.getFilteredGroupsForCurrentView(sourceGroups);
+        
+        // Only update fileGroups if groupsOverride was provided (explicit save)
+        // This prevents accidentally resetting fileGroups from getCurrentGroups
+        if (groupsOverride) {
+            const key = this.getProjectKey();
+            this.fileGroups[key] = { groups: sourceGroups };
         }
-
-        const baseOrder = alreadyOrdered ? [...files] : [...files].sort();
-        const groups = this.syncGroupsWithFiles(baseOrder, groupsOverride);
+        
+        // Calculate flattened visible files for this view
         const filterText = (this.fileFilter || '').toLowerCase();
         const groupsView = groups.map(g => {
             const filtered = filterText
@@ -2927,6 +3035,23 @@ class PaperReviewerApp {
             return arr;
         }, []);
         this.visibleFileOrder = [...flatVisible];
+        
+        // Update currentFileList with all files in current view (used for search/filter)
+        const allFilesInView = groupsView.reduce((arr, g) => {
+            arr.push(...(g.files || []));
+            return arr;
+        }, []);
+        this.currentFileList = allFilesInView;
+        
+        // Handle empty state only when the project truly has no files for this view
+        const hasAnyFile = allFilesInView.length > 0;
+        if (flatVisible.length === 0 && !hasAnyFile) {
+            this.visibleFileOrder = [];
+            this.selectedFiles = new Set();
+            const msg = `当前视图 "${this.currentJsonView}" 中暂无文件`;
+            fileListEl.innerHTML = `<div class="empty-state"><p>${msg}</p></div>`;
+            return;
+        }
 
         const selectedBefore = Array.from(this.selectedFiles || []);
         let nextSelection = selectedBefore.filter(f => flatVisible.includes(f));
@@ -2978,20 +3103,25 @@ class PaperReviewerApp {
             const title = document.createElement('span');
             title.className = 'file-group-title';
             title.textContent = group.name || `分组 ${gIndex + 1}`;
-            title.title = '双击重命名分组';
+            title.title = group.id === 'init' ? '默认分组，不可删除' : '双击重命名分组';
             title.addEventListener('dblclick', (e) => {
-                e.stopPropagation();
-                this.renameGroup(group.id);
+                if (group.id !== 'init') {
+                    e.stopPropagation();
+                    this.renameGroup(group.id);
+                }
             });
 
             const deleteBtn = document.createElement('button');
             deleteBtn.className = 'file-group-delete';
-            deleteBtn.title = '删除分组';
+            deleteBtn.title = group.id === 'init' ? '默认分组，不可删除' : '删除分组';
             deleteBtn.innerHTML = '<i class="fas fa-trash"></i>';
-            deleteBtn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                this.deleteGroup(group.id);
-            });
+            deleteBtn.disabled = group.id === 'init';
+            if (group.id !== 'init') {
+                deleteBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    this.deleteGroup(group.id);
+                });
+            }
 
             const sortBtn = document.createElement('button');
             sortBtn.className = 'file-group-sort';
@@ -3456,7 +3586,10 @@ class PaperReviewerApp {
         
         names.forEach(name => {
             const trimmedName = name.trim();
-            if (existingNames.has(trimmedName.toLowerCase())) {
+            // Prevent creating group named 'init' (reserved for default group)
+            if (trimmedName.toLowerCase() === 'init') {
+                skipped.push(`"${trimmedName}"(保留名称)`);
+            } else if (existingNames.has(trimmedName.toLowerCase())) {
                 skipped.push(trimmedName);
             } else {
                 const id = `group-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
@@ -3523,7 +3656,10 @@ class PaperReviewerApp {
                 <i class="fas fa-edit"></i> 重命名
             </div>
             <div class="context-menu-item" data-action="delete">
-                <i class="fas fa-trash"></i> 删除 <span class="context-menu-hint">(Cmd/Ctrl + Delete)</span>
+                <i class="fas fa-trash"></i> 删除当前View <span class="context-menu-hint">(Cmd/Ctrl + Delete)</span>
+            </div>
+            <div class="context-menu-item" data-action="deleteAll">
+                <i class="fas fa-trash-alt"></i> 删除所有文件
             </div>
             <div class="context-menu-item" data-action="copyPdfFile">
                 <i class="fas fa-copy"></i> 复制 PDF 文件
@@ -3556,7 +3692,9 @@ class PaperReviewerApp {
                 if (action === 'rename') {
                     this.renameFile(filename, fileItem);
                 } else if (action === 'delete') {
-                    this.deleteFile(filename, fileItem);
+                    this.deleteFile(filename, fileItem, false);
+                } else if (action === 'deleteAll') {
+                    this.deleteFile(filename, fileItem, true);
                 } else if (action === 'copyPdfFile') {
                     this.copyPdfFileToClipboard(filename);
                 } else if (action === 'moveToGroup') {
@@ -3785,20 +3923,55 @@ class PaperReviewerApp {
     }
 
     // 删除文件
-    async deleteFile(filename, fileItem) {
+    async deleteFile(filename, fileItem, deleteAll = false) {
         const projectPath = this.currentProject ? this.currentProject.path : 'user';
         const base = (filename || '').replace(/\.json$/i, '');
-        const targets = this.getAllPathsForDelete(base);
-        if (!targets.length) {
-            targets.push({ path: `json/${this.currentJsonView || 'view1'}/${base}.json`, type: 'json' });
+        
+        let targets = [];
+        let pdfPath = null;
+        
+        if (deleteAll) {
+            // 删除所有同名文件：所有 JSON views、MD、PDF
+            targets = this.getAllPathsForDelete(base);
+            
+            // 添加 PDF 文件路径
+            const pdfInMeta = Object.entries(this.fileMetaByPath || {}).find(([path, meta]) => {
+                const baseName = path.split('/').pop()?.replace(/\.(pdf|JSON|md)$/i, '');
+                return baseName === base && meta.kind === 'pdf';
+            });
+            if (pdfInMeta) {
+                pdfPath = pdfInMeta[0];
+                targets.push({ path: pdfPath, type: 'pdf' });
+            }
+            
+            const jsonCount = targets.filter(t => t.type === 'json').length;
+            const mdCount = targets.filter(t => t.type === 'md').length;
+            const pdfCount = targets.filter(t => t.type === 'pdf').length;
+            const ok = window.confirm(
+                `确定删除 "${base}" 的所有文件吗？\n` +
+                `JSON: ${jsonCount}个\n` +
+                `Markdown: ${mdCount}个\n` +
+                `PDF: ${pdfCount}个\n` +
+                `此操作不可撤销！`
+            );
+            if (!ok) return;
+        } else {
+            // 仅删除当前 view 的 JSON 文件和同名 MD
+            const currentView = this.currentJsonView || 'view1';
+            const jsonPath = `json/${currentView}/${base}.json`;
+            targets.push({ path: jsonPath, type: 'json' });
             targets.push({ path: `md/${base}.md`, type: 'md' });
+            
+            const ok = window.confirm(`确定删除 "${base}" 在当前View(${currentView})下的 JSON 和同名 Markdown 文件？此操作不可撤销！`);
+            if (!ok) return;
+        }
+        
+        if (!targets.length) {
+            this.showNotification('✗ 没有找到要删除的文件', 'error');
+            return;
         }
 
-        const jsonCount = targets.filter(t => t.type === 'json').length;
-        const mdCount = targets.filter(t => t.type === 'md').length;
-        const ok = window.confirm(`确定删除 "${base}" 的所有 JSON (${jsonCount}) 和同名 Markdown (${mdCount}) 文件？此操作不可撤销！`);
-        if (!ok) return;
-        
+        let deletedCount = 0;
         let deletedMd = false;
         try {
             for (const t of targets) {
@@ -3812,13 +3985,17 @@ class PaperReviewerApp {
                         })
                     });
                     if (!resp.ok) continue;
+                    deletedCount++;
                     if (t.type === 'md') deletedMd = true;
                 } catch (err) {
                     console.warn('删除失败', t.path, err);
                 }
             }
 
-            this.showNotification(`✓ 已删除 ${jsonCount} 个 JSON${deletedMd ? '，同名 Markdown' : ''}`, 'success');
+            const msg = deleteAll 
+                ? `✓ 已删除 "${base}" 的所有文件 (${deletedCount}个)` 
+                : `✓ 已删除 ${deletedCount} 个文件`;
+            this.showNotification(msg, 'success');
             this.removeFilenameFromGroups(base);
             
             // 刷新列表，确保不加载已删除文件
@@ -4288,6 +4465,9 @@ class PaperReviewerApp {
 
         this.resetPdfViewerFrame();
         this.updatePdfPlaceholder('empty');
+        
+        // Reset complete groups cache when project changes
+        this.completeGroupsForCurrentProject = null;
     }
 
     showLoading() {
@@ -6457,17 +6637,40 @@ class PaperReviewerApp {
         const confirmed = confirm(`确定要退出项目 "${this.currentProject.name}" 吗？`);
         if (!confirmed) return;
         
+        // 清除所有项目相关状态
         this.currentProject = null;
         this.currentFile = null;
         this.currentData = null;
+        this.currentPdfUrl = null;
+        this.currentPdfPath = null;
+        this.pendingPdfUrl = null;
+        this.pendingPdfFallback = null;
+        this.lastPdfLoadedUrl = '';
+        this.currentPdfLoadToken++;
+        this.currentLoadToken++;
         this.currentFileList = [];
         this.fileMetaByBase = {};
         this.fileMetaByPath = {};
+        this.hasUnsavedChanges = false;
+        this.tempDataCache = {};
+        this.selectedFiles = new Set();
+        this.lastFileSelectionAnchor = null;
+        this.visibleFileOrder = [];
+        this.currentMarkdownText = '';
+        this.currentMarkdownFile = '';
+        this.currentMarkdownBaselineText = '';
+        this.currentMarkdownExists = false;
+        this.isMarkdownEditing = false;
+        this.hasUnsavedMarkdownChanges = false;
         
-        // 清除UI
-        document.getElementById('fileList').innerHTML = '<div class="empty-state"><p>请先加载项目</p></div>';
-        document.getElementById('middleContent').innerHTML = '';
-        document.getElementById('rightPanel').innerHTML = '';
+        // 清除UI - 文件列表
+        const fileListEl = document.getElementById('fileList');
+        if (fileListEl) {
+            fileListEl.innerHTML = '<div class="empty-state"><p>请先加载项目</p></div>';
+        }
+        
+        // 清除UI - 主面板
+        this.resetMainPanelsForProject();
         
         // 保存配置
         this.saveProjectConfig();
@@ -6476,11 +6679,11 @@ class PaperReviewerApp {
         this.projectInfoVisible = false;
         document.getElementById('projectInfoPanel')?.classList.remove('visible');
         
-        // 显示提示
-        this.showNotification('已退出项目', 'success');
-        
         // 更新显示
         this.updateProjectDisplay();
+        
+        // 显示提示
+        this.showNotification('已退出项目', 'success');
     }
 
     async toggleProjectInfoPanel(forceVisible, opts = {}) {
