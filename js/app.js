@@ -111,6 +111,8 @@ class PaperReviewerApp {
         this.queryDoiOrderText = '';
         this.lastJsonViewByProject = this.loadLastJsonViewByProject();
         this.doiAutoNumberStart = null;
+        this.lastGotoLink = null;
+        this.lastGotoAttemptText = '';
 
         this.init();
     }
@@ -8190,7 +8192,7 @@ class PaperReviewerApp {
         this.showNotification('引用文本已更新', 'success');
     }
 
-    async updateMarkdownGotoText(oldText = '', newText, targetIndex = 0) {
+    async updateMarkdownGotoText(oldText = '', newText, targetIndex = 0, opts = {}) {
         if (!this.currentMarkdownExists || typeof this.currentMarkdownText !== 'string') return;
         const reAll = /goto\{([^}]*?)\}/g;
         const matches = [...this.currentMarkdownText.matchAll(reAll)];
@@ -8249,6 +8251,36 @@ class PaperReviewerApp {
         }
         this.renderMarkdownView(this.currentMarkdownText);
         this.updateMarkdownToolbar();
+
+        // 同步 JSON 中的 _loc.quote 文本（如果提供了 valuePath）
+        if (opts.valuePath) {
+            const pathArr = opts.valuePath.split('.').filter(Boolean);
+            const locKey = pathArr[pathArr.length - 1] + '_loc';
+            let node = this.currentData;
+            for (let i = 0; i < pathArr.length - 1; i++) {
+                if (node && typeof node === 'object' && node.hasOwnProperty(pathArr[i])) {
+                    node = node[pathArr[i]];
+                } else {
+                    node = null;
+                    break;
+                }
+            }
+            if (node && node[locKey]) {
+                const quotes = Array.isArray(node[locKey].quote) ? [...node[locKey].quote] : [];
+                if (quotes.length) {
+                    const idx = Number.isFinite(targetIndex) ? targetIndex : 0;
+                    if (idx >= 0 && idx < quotes.length) {
+                        quotes[idx] = newText;
+                        node[locKey].quote = quotes;
+                        this.hasUnsavedChanges = true;
+                        if (this.currentFile) this.tempDataCache[this.currentFile] = this.currentData;
+                        this.updateSaveButtonState();
+                        this.renderStructuredView();
+                        this.renderFlatView();
+                    }
+                }
+            }
+        }
     }
 
     showSectionPreviewInline() {
@@ -8758,6 +8790,80 @@ class PaperReviewerApp {
         }
     }
 
+    buildSearchVariants(text = '') {
+        const clean = (text || '').trim();
+        if (!clean) return [];
+        const tokens = clean.split(/\s+/).filter(Boolean);
+        const variants = [clean];
+        let dropFront = 0;
+        let dropBack = 0;
+        const maxDrops = Math.max(0, tokens.length - 2);
+        let step = 0;
+        while (dropFront + dropBack < maxDrops) {
+            if (step % 2 === 0) dropFront++;
+            else dropBack++;
+            step++;
+            const slice = tokens.slice(dropFront, tokens.length - dropBack);
+            if (slice.length >= 2) {
+                variants.push(slice.join(' '));
+            }
+        }
+        // 进一步字符级缩短（处理用户手动删几个字母的情况）
+        const sanitized = clean.replace(/[，。！？、,.!?;:]/g, ' ').trim();
+        if (sanitized && sanitized !== clean) variants.push(sanitized);
+        const base = sanitized || clean;
+        const maxTrim = Math.min(6, Math.max(0, Math.floor(base.length / 2) - 2));
+        for (let i = 1; i <= maxTrim; i++) {
+            const candidate = base.slice(i, base.length - i).trim();
+            if (candidate.length >= 4) variants.push(candidate);
+        }
+        return Array.from(new Set(variants)).filter(Boolean);
+    }
+
+    runPdfSearch(pdfApp, query) {
+        return new Promise((resolve) => {
+            let found = false;
+            let total = 0;
+            const cleanup = () => {
+                pdfApp.eventBus.off('updatefindcontrolstate', resultListener);
+                pdfApp.eventBus.off('updatefindmatchescount', matchListener);
+            };
+            const resultListener = (evt) => {
+                if (evt.state === 1) {
+                    found = true;
+                }
+            };
+            const matchListener = (evt) => {
+                if (evt.matchesCount) {
+                    total = evt.matchesCount.total || 0;
+                    if (total > 0) {
+                        found = true;
+                        cleanup();
+                        resolve({ found, total });
+                    }
+                }
+            };
+
+            pdfApp.eventBus.on('updatefindcontrolstate', resultListener);
+            pdfApp.eventBus.on('updatefindmatchescount', matchListener);
+            pdfApp.eventBus.dispatch('findbarclose');
+            pdfApp.eventBus.dispatch('find', {
+                source: window,
+                type: 'find',
+                query,
+                phraseSearch: true,
+                caseSensitive: false,
+                highlightAll: true,
+                findPrevious: false
+            });
+
+            setTimeout(() => {
+                cleanup();
+                resolve({ found, total });
+            }, 1500);
+        });
+    }
+
     // 跳转到指定页面并搜索（简化版：直接搜索全文，滚动到第一个结果）
     jumpToPage(page, searchText = '', valuePath = null) {
         const pdfViewer = document.getElementById('pdfViewer');
@@ -8765,6 +8871,7 @@ class PaperReviewerApp {
         
         try {
             const cleanText = searchText ? searchText.trim() : '';
+            this.lastGotoAttemptText = cleanText;
             
             // 高亮右侧面板
             const rightPanel = document.querySelector('.right-panel');
@@ -8882,101 +8989,78 @@ class PaperReviewerApp {
             console.error('❌ EventBus不可用');
             return;
         }
-        
-        // 检查是否是相同的搜索文本和字段（不管quoteIndex）
-        const isSameSearch = this.lastSearchText === searchText && this.lastSearchValuePath === valuePath;
-        
+
+        const variants = this.buildSearchVariants(searchText);
+        if (!variants.length) return;
+        this.showNotification('Deep searching in PDF...', 'info');
+
+        const isSameSearch = this.lastSearchText === variants[0] && this.lastSearchValuePath === valuePath;
         if (isSameSearch && this.searchMatchCount > 1) {
-            // 相同的搜索，且PDF中有多个匹配，循环查找下一个
             this.currentMatchIndex = (this.currentMatchIndex + 1) % this.searchMatchCount;
-            
             pdfApp.eventBus.dispatch('find', {
                 source: window,
                 type: 'again',
-                query: searchText,
+                query: this.lastSearchText,
                 phraseSearch: true,
                 caseSensitive: false,
                 highlightAll: true,
                 findPrevious: false
             });
-            
-            setTimeout(() => {
-                this.scrollToCurrentMatch(pdfApp);
-            }, 300);
+            setTimeout(() => this.scrollToCurrentMatch(pdfApp), 300);
             return;
         } else if (isSameSearch && this.searchMatchCount === 1) {
-            // 相同搜索但只有1个匹配，直接跳转到那个位置
-            setTimeout(() => {
-                this.scrollToCurrentMatch(pdfApp);
-            }, 100);
+            setTimeout(() => this.scrollToCurrentMatch(pdfApp), 100);
             return;
         }
-        
-        // 新的搜索文本或不同字段，重置状态
-        this.lastSearchText = searchText;
-        this.lastSearchValuePath = valuePath;
-        this.searchMatchCount = 0;
-        this.currentMatchIndex = 0;
-        
-        // 用于跟踪搜索结果
-        let searchResult = {
-            found: false,
-            total: 0,
-            notified: false
-        };
-        
-        // 监听搜索状态
-        const resultListener = (evt) => {
-            if (evt.state === 1) { // FOUND
-                searchResult.found = true;
-                
-                // 搜索成功后，延迟滚动到第一个高亮文本中央
-                setTimeout(() => {
-                    this.scrollToCurrentMatch(pdfApp);
-                }, 600);
-            } else if (evt.state === 3) { // NOT_FOUND
-                searchResult.found = false;
+
+        const trySearch = async () => {
+            this.searchMatchCount = 0;
+            this.currentMatchIndex = 0;
+            let usedQuery = '';
+            let total = 0;
+            let matchedVariant = '';
+            for (const query of variants) {
+                const result = await this.runPdfSearch(pdfApp, query, valuePath);
+                if (result.total > 0) {
+                    usedQuery = query;
+                    total = result.total;
+                    matchedVariant = query;
+                    break;
+                }
             }
-        };
-        
-        // 监听匹配数量
-        const matchListener = (evt) => {
-            if (evt.matchesCount && evt.matchesCount.total > 0) {
-                searchResult.total = evt.matchesCount.total;
-                searchResult.found = true;
-                this.searchMatchCount = evt.matchesCount.total;
-                searchResult.notified = true;
-            } else if (evt.matchesCount && evt.matchesCount.total === 0) {
-                searchResult.total = 0;
-                searchResult.found = false;
+
+            if (total > 0) {
+                this.lastSearchText = usedQuery;
+                this.lastSearchValuePath = valuePath;
+                this.searchMatchCount = total;
+                this.currentMatchIndex = 0;
+                if (matchedVariant && matchedVariant !== (this.lastGotoAttemptText || variants[0])) {
+                    // 替换 goto 文本：链接自身 & 对应 markdown 源
+                    const link = this.lastGotoLink;
+                    if (link) {
+                        link.dataset.quoteText = matchedVariant;
+                        if (link.classList.contains('goto-link') && link.textContent) {
+                            link.textContent = matchedVariant;
+                        }
+                    }
+                    // 更新 markdown 源中的 goto{...} 文本
+                    const oldText = this.lastGotoAttemptText || variants[0];
+                    if (oldText) {
+                        await this.updateMarkdownGotoText(oldText, matchedVariant, 0, { replaceAllMatches: false, valuePath });
+                    }
+                    this.showNotification(`Adjusted goto text to: ${matchedVariant}`, 'success');
+                }
+                setTimeout(() => this.scrollToCurrentMatch(pdfApp), 200);
+            } else {
+                this.lastSearchText = variants[0];
+                this.lastSearchValuePath = valuePath;
                 this.searchMatchCount = 0;
+                this.currentMatchIndex = 0;
+                this.showNotification('No match found in PDF after deep search', 'info');
             }
         };
-        
-        pdfApp.eventBus.on('updatefindcontrolstate', resultListener);
-        pdfApp.eventBus.on('updatefindmatchescount', matchListener);
-        
-        // 清除旧搜索
-        pdfApp.eventBus.dispatch('findbarclose');
-        
-        // 执行新搜索（搜索整个文档）
-        setTimeout(() => {
-            pdfApp.eventBus.dispatch('find', {
-                source: window,
-                type: 'find',
-                query: searchText,
-                phraseSearch: true,        // 完整短语搜索
-                caseSensitive: false,      // 不区分大小写
-                highlightAll: true,        // 高亮所有匹配
-                findPrevious: false        // 从前往后搜索
-            });
-            
-            // 10秒后清理监听器
-            setTimeout(() => {
-                pdfApp.eventBus.off('updatefindcontrolstate', resultListener);
-                pdfApp.eventBus.off('updatefindmatchescount', matchListener);
-            }, 10000);
-        }, 200);
+
+        trySearch();
     }
 
     // 滚动到当前匹配结果的中央（丝滑动画）
@@ -10170,6 +10254,7 @@ class PaperReviewerApp {
             
             if (link) {
                 e.preventDefault();
+                this.lastGotoLink = link;
                 const pageRaw = link.dataset.page || '';
                 const valuePath = link.dataset.valuePath;
                 const quoteIndex = link.dataset.quoteIndex !== undefined ? parseInt(link.dataset.quoteIndex) : 0;

@@ -1,14 +1,15 @@
 {
   "src": {
     "prompts": {
+      "basePath": "/src/prompts/checkDID/",
       "checkDID": {
         "files": [
           "[0]checked.md",
           "[1]exact_DID.md"
-        ],
-        "basePath": "/src/prompts/checkDID/"
+        ]
       },
       "qjson": {
+        "basePath": "/src/prompts/qjson/",
         "files": [
           "step1.md",
           "step2.md",
@@ -16,10 +17,10 @@
           "step4.md",
           "step5.md",
           "step6.md"
-        ],
-        "basePath": "/src/prompts/qjson/"
+        ]
       },
       "qmd": {
+        "basePath": "/src/prompts/qmd/",
         "files": [
           "p1.md",
           "p2.md",
@@ -27,17 +28,16 @@
           "p4.md",
           "p5.md",
           "p6.md"
-        ],
-        "basePath": "/src/prompts/qmd/"
+        ]
       }
     },
     "tools": {
       "aide": {
+        "basePath": "/src/tools/",
         "files": [
-          "chatgptAide.js",
-          "wosAide.js"
-        ],
-        "basePath": "/src/tools/"
+          "wosAide.js",
+          "chatgptAide.js"
+        ]
       }
     }
   }
