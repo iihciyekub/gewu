@@ -1137,8 +1137,11 @@ class PaperReviewerApp {
                 this.renderJsonViewSelector();
                 
                 // Re-render file list with filtering applied to current view
-                const filesToRender = this.currentFileList || [];
-                this.renderFileList(filesToRender, this.currentFileBase || null, true);
+                // Use allProjectFiles instead of currentFileList to get all files, then filter by view
+                const filesToRender = this.allProjectFiles || [];
+                // Ensure all files are assigned to groups, especially files that appear in the new view
+                const ensuredGroups = this.ensureInitGroupExists(filesToRender);
+                this.renderFileList(filesToRender, this.currentFileBase || null, true, ensuredGroups);
                 
                 // If the current file doesn't exist in the new view, clear it and show the view
                 if (changed && this.currentFileBase) {
@@ -2604,6 +2607,8 @@ class PaperReviewerApp {
             // 保存当前项目
             this.currentProject = project;
             this.currentFileList = [];
+            // 确保当前项目记录中存在默认分组
+            this.ensureInitGroupExists();
             
             // 更新最近项目列表
             this.updateRecentProjects(project);
@@ -2769,6 +2774,8 @@ class PaperReviewerApp {
             
             this.currentProject = newProject;
             this.currentFileList = [];
+            // 新建项目也要保证默认分组存在
+            this.ensureInitGroupExists();
             this.updateRecentProjects(newProject);
             this.saveProjectConfig();
             this.updateProjectDisplay();
@@ -2832,10 +2839,7 @@ class PaperReviewerApp {
             fileListEl.innerHTML = '<div class="empty-state"><p>请先加载项目</p></div>';
             return;
         }
-        
-        // 检查并确保存在 'init' 分组
-        this.ensureInitGroupExists();
-        
+
         if (!keepSelection) {
             fileListEl.innerHTML = '<div class="loading"><div class="spinner"></div>Loading files...</div>';
         }
@@ -2860,10 +2864,12 @@ class PaperReviewerApp {
             // 读取服务器排序（基于基名）
             await this.fetchFileOrder();
             const ordered = this.applyFileOrder(orderedBases);
+            // 确保存在 init 默认分组，并补齐缺失的文件
+            const ensuredGroups = this.ensureInitGroupExists(ordered);
             // Store all files for reference, but renderFileList will filter them
             this.allProjectFiles = ordered;
             // renderFileList will handle filtering and grouping
-            this.renderFileList(ordered, keepSelection ? currentSelected : null, true);
+            this.renderFileList(ordered, keepSelection ? currentSelected : null, true, ensuredGroups);
         } catch (error) {
             console.error('Error loading file list:', error);
             this.showNotification('✗ 加载文件列表失败', 'error');
@@ -2871,46 +2877,44 @@ class PaperReviewerApp {
         }
     }
 
-    // Ensure 'init' group exists in the current project
-    ensureInitGroupExists() {
+    // Ensure 'init' group exists in the current project; optionally fill with provided files
+    ensureInitGroupExists(allFiles = null) {
         const key = this.getProjectKey();
-        
-        // Get the stored groups directly without processing
-        const stored = this.fileGroups[key]?.groups || [];
-        
-        // Check if 'init' group already exists
-        const hasInitGroup = stored.some(g => g.id === 'init');
-        
-        if (!hasInitGroup) {
+        const prevGroups = this.fileGroups[key]?.groups || [];
+        const prevSerialized = JSON.stringify(prevGroups);
+        const stored = this.cloneFileGroups(prevGroups);
+        const initIndex = stored.findIndex(g => g.id === 'init');
+        let groups = stored;
+
+        if (initIndex === -1) {
             console.log('⚠️  "init" 分组不存在，正在创建...');
-            
-            // Create init group as the first group
-            const initGroup = { id: 'init', name: 'init', files: [], collapsed: false };
-            
-            if (stored.length === 0) {
-                // No groups exist, create just init
-                stored.push(initGroup);
-            } else {
-                // Groups exist, collect all files and put in init
-                const allFiles = [];
-                stored.forEach(g => {
-                    if (g.files && Array.isArray(g.files)) {
-                        allFiles.push(...g.files);
-                    }
-                });
-                // Replace all groups with just init containing all files
-                stored.length = 0;
-                initGroup.files = allFiles;
-                stored.push(initGroup);
+            groups = [{ id: 'init', name: 'init', files: [], collapsed: false }, ...stored];
+        } else if (initIndex !== 0) {
+            // 确保默认分组位于首位
+            const initGroup = stored[initIndex];
+            const others = stored.filter((_, idx) => idx !== initIndex);
+            groups = [initGroup, ...others];
+        }
+
+        if (Array.isArray(allFiles) && allFiles.length) {
+            const assigned = new Set();
+            groups.forEach(g => (g.files || []).forEach(f => assigned.add(f)));
+            const missing = allFiles.filter(f => !assigned.has(f));
+            if (missing.length) {
+                const initGroup = groups.find(g => g.id === 'init') || groups[0];
+                initGroup.files = this.dedupeFiles([...(initGroup.files || []), ...missing]);
             }
-            
-            // Ensure proper structure and save
-            const cleanedGroups = this.ensureDefaultGroup(this.cloneFileGroups(stored));
-            this.fileGroups[key] = { groups: cleanedGroups };
+        }
+
+        const cleanedGroups = this.ensureDefaultGroup(groups);
+        const newSerialized = JSON.stringify(cleanedGroups);
+        this.fileGroups[key] = { groups: cleanedGroups };
+        if (newSerialized !== prevSerialized) {
             const flatFiles = this.flattenGroupFiles(cleanedGroups);
             this.saveFileOrderForProject(flatFiles, cleanedGroups);
-            console.log('✅ "init" 分组已创建，包含', flatFiles.length, '个文件');
+            console.log('✅ 已确保 "init" 分组存在，当前文件数:', flatFiles.length);
         }
+        return cleanedGroups;
     }
 
     async loadFileBasesFromServer() {
@@ -3649,6 +3653,7 @@ class PaperReviewerApp {
         // 创建菜单
         const menu = document.createElement('div');
         menu.className = 'context-menu';
+        // 初始位置
         menu.style.left = `${e.pageX}px`;
         menu.style.top = `${e.pageY}px`;
         menu.innerHTML = `
@@ -3682,6 +3687,16 @@ class PaperReviewerApp {
         }
         
         document.body.appendChild(menu);
+
+        // 约束菜单不超出可视区域
+        const margin = 8;
+        const rect = menu.getBoundingClientRect();
+        const maxLeft = window.innerWidth - rect.width - margin;
+        const maxTop = window.innerHeight - rect.height - margin;
+        const nextLeft = Math.max(margin, Math.min(e.pageX, maxLeft));
+        const nextTop = Math.max(margin, Math.min(e.pageY, maxTop));
+        menu.style.left = `${nextLeft}px`;
+        menu.style.top = `${nextTop}px`;
         
         // 菜单项点击事件
         menu.querySelectorAll('.context-menu-item').forEach(item => {
