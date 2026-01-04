@@ -748,6 +748,53 @@ const server = http.createServer((req, res) => {
         return;
     }
 
+    // 上传 PDF 文件到项目 pdf 目录（防覆盖）
+    if (req.method === 'POST' && pathname === '/upload-pdf') {
+        let body = '';
+        req.on('data', chunk => { body += chunk.toString(); });
+        req.on('end', () => {
+            try {
+                const data = JSON.parse(body || '{}');
+                const projectPath = data.projectPath || 'user';
+                const filename = String(data.filename || '').trim();
+                const base64 = String(data.content || '').trim();
+
+                if (!filename.toLowerCase().endsWith('.pdf')) {
+                    throw new Error('仅支持 PDF 文件');
+                }
+                if (!base64) {
+                    throw new Error('缺少文件内容');
+                }
+
+                const { fullPath } = normalizeProjectPath(projectPath);
+                const safeName = path.basename(filename);
+                const pdfDir = path.join(fullPath, 'pdf');
+                const target = path.join(pdfDir, safeName);
+
+                if (!fs.existsSync(pdfDir)) {
+                    fs.mkdirSync(pdfDir, { recursive: true });
+                }
+
+                if (fs.existsSync(target)) {
+                    res.writeHead(200, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ success: true, skipped: true, message: 'PDF already exists' }));
+                    return;
+                }
+
+                const buffer = Buffer.from(base64, 'base64');
+                fs.writeFileSync(target, buffer);
+
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ success: true, skipped: false, path: path.relative(fullPath, target).split(path.sep).join('/') }));
+            } catch (error) {
+                console.error('✗ 上传PDF错误:', error);
+                res.writeHead(400, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ success: false, error: error.message }));
+            }
+        });
+        return;
+    }
+
     // 处理复制PDF文件到剪贴板请求
     if (req.method === 'POST' && pathname === '/copy-pdf-to-clipboard') {
         let body = '';

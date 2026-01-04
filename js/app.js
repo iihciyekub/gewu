@@ -1586,6 +1586,9 @@ class PaperReviewerApp {
         const rightPanel = document.querySelector('.right-panel');
         if (rightPanel) {
             rightPanel.addEventListener('mousedown', () => this.ensurePdfLoaded());
+            rightPanel.addEventListener('dragover', (e) => this.handlePdfPanelDragOver(e));
+            rightPanel.addEventListener('dragenter', (e) => this.handlePdfPanelDragOver(e));
+            rightPanel.addEventListener('drop', (e) => this.handlePdfPanelDrop(e));
         }
 
         this.pdfPlaceholderEl = document.getElementById('pdfPlaceholder');
@@ -4047,12 +4050,112 @@ class PaperReviewerApp {
         }
     }
 
+    handlePdfPanelDragOver(e) {
+        if (!e?.dataTransfer) return;
+        const hasPdf = Array.from(e.dataTransfer.items || []).some(item => {
+            if (item.kind !== 'file') return false;
+            const type = (item.type || '').toLowerCase();
+            const name = (item.getAsFile?.()?.name || '').toLowerCase();
+            return type.includes('pdf') || name.endsWith('.pdf');
+        });
+        if (!hasPdf) return;
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'copy';
+    }
+
+    handlePdfPanelDrop(e) {
+        if (!e?.dataTransfer) return;
+        const files = Array.from(e.dataTransfer.files || []);
+        const pdfFiles = files.filter(f => this.isPdfFile(f));
+        if (!pdfFiles.length) return;
+        e.preventDefault();
+        this.handlePdfDropOrPaste(pdfFiles, 'drop');
+    }
+
+    async handlePdfDropOrPaste(files = [], source = 'drop') {
+        const pdfFile = (files || []).find(f => this.isPdfFile(f));
+        if (!pdfFile) return;
+
+        const baseName = this.currentFileBase
+            || (this.currentFile ? this.currentFile.split('/').pop()?.replace(/\.json$/i, '') : '');
+        if (!this.currentProject || !baseName) {
+            this.showNotification('请先选择一个 JSON 文件，再粘贴/拖入 PDF', 'warning');
+            return;
+        }
+
+        const targetName = `${baseName}.pdf`;
+        const pdfPathKey = `pdf/${targetName}`;
+        if (this.fileMetaByPath?.[pdfPathKey]) {
+            this.showNotification('已有同名 PDF，未执行覆盖', 'info');
+            return;
+        }
+
+        try {
+            const dataUrl = await this.readFileAsDataUrl(pdfFile);
+            const base64 = (String(dataUrl).split(',')[1] || '').trim();
+            if (!base64) throw new Error('无法读取 PDF 内容');
+
+            const resp = await fetch('/upload-pdf', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    projectPath: this.currentProject.path,
+                    filename: targetName,
+                    content: base64
+                })
+            });
+            const result = await resp.json();
+            if (!resp.ok || !result.success) {
+                throw new Error(result.error || '上传失败');
+            }
+
+            if (!this.fileMetaByPath) this.fileMetaByPath = {};
+            this.fileMetaByPath[pdfPathKey] = { name: targetName, path: pdfPathKey, kind: 'pdf', category: 'pdf' };
+
+            if (result.skipped) {
+                this.showNotification('已有同名 PDF，未覆盖', 'info');
+                return;
+            }
+
+            // 如当前 meta_info 未设置 pdf_path，则自动填充
+            if (this.currentData?.meta_info && !this.currentData.meta_info.pdf_path) {
+                this.currentData.meta_info.pdf_path = targetName;
+                this.hasUnsavedChanges = true;
+                this.tempDataCache[this.currentFile] = this.currentData;
+                this.updateSaveButtonState();
+            }
+
+            this.showNotification(`✓ PDF 已保存为 ${targetName}`, 'success');
+
+            // 刷新当前 PDF 预览
+            this.currentPdfUrl = this.getPdfUrl(targetName);
+            this.pendingPdfUrl = this.currentPdfUrl;
+            this.pendingPdfFallback = null;
+            this.currentPdfLoadToken++;
+            this.resetPdfViewerFrame();
+            await this.ensurePdfLoaded();
+        } catch (error) {
+            console.error('PDF 处理失败:', error);
+            this.showNotification(`✗ PDF 处理失败: ${error.message}`, 'error');
+        }
+    }
+
     // 处理粘贴事件
     async handlePaste(e) {
         try {
             // Markdown 编辑器特殊处理：粘贴 QA 代码块时插入并渲染
             // 如果在输入框中粘贴，不处理
             if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+
+            // 在右侧 PDF 区域粘贴 PDF 文件
+            const clipboardFiles = Array.from((e.clipboardData && e.clipboardData.files) || []);
+            const inRightPanel = !!e.target.closest('.right-panel');
+            const pdfFiles = clipboardFiles.filter(f => this.isPdfFile(f));
+            if (inRightPanel && pdfFiles.length) {
+                e.preventDefault();
+                await this.handlePdfDropOrPaste(pdfFiles, 'paste');
+                return;
+            }
 
             // 在 Markdown 渲染区域粘贴 QA 代码块：尾部追加，提示标题，可撤销
             if ((this.currentView || 'structured') === 'markdown' && !this.isMarkdownEditing) {
@@ -5044,8 +5147,10 @@ class PaperReviewerApp {
 
     normalizePdfPathValue(pathStr) {
         if (!pathStr) return '';
-        const parts = pathStr.split(/[/\\]+/).filter(Boolean);
-        return parts.length ? parts[parts.length - 1] : pathStr;
+        const trimmed = String(pathStr).trim();
+        if (!trimmed) return '';
+        const parts = trimmed.split(/[/\\]+/).filter(Boolean);
+        return parts.length ? parts[parts.length - 1] : trimmed;
     }
 
     normalizePdfRel(pathStr) {
@@ -5056,6 +5161,22 @@ class PaperReviewerApp {
         const fileName = parts.length ? parts[parts.length - 1] : cleaned;
         const relPath = parts.length > 1 ? cleaned : '';
         return { relPath, fileName };
+    }
+
+    isPdfFile(file) {
+        if (!file) return false;
+        const name = (file.name || '').toLowerCase();
+        const type = (file.type || '').toLowerCase();
+        return name.endsWith('.pdf') || type.includes('pdf');
+    }
+
+    readFileAsDataUrl(file) {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(reader.result);
+            reader.onerror = (err) => reject(err);
+            reader.readAsDataURL(file);
+        });
     }
 
     getApaTooltipEl() {
