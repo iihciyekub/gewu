@@ -748,6 +748,118 @@ const server = http.createServer((req, res) => {
         return;
     }
 
+    // 处理复制PDF文件到剪贴板请求
+    if (req.method === 'POST' && pathname === '/copy-pdf-to-clipboard') {
+        let body = '';
+        
+        req.on('data', chunk => {
+            body += chunk.toString();
+        });
+        
+        req.on('end', () => {
+            try {
+                const data = JSON.parse(body);
+                const { projectPath = 'user', pdfFile } = data;
+                
+                if (!pdfFile) {
+                    res.writeHead(400, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ success: false, error: 'PDF file name is required' }));
+                    return;
+                }
+                
+                console.log('📋 复制PDF到剪贴板:', { projectPath, pdfFile });
+                
+                const { projectKey, fullPath } = normalizeProjectPath(projectPath);
+                
+                // 构建PDF文件路径
+                let targetFile;
+                if (pdfFile.includes('/') || pdfFile.includes('\\')) {
+                    // 包含路径分隔符，视为相对路径
+                    targetFile = path.join(fullPath, pdfFile);
+                } else {
+                    // 纯文件名，在pdf目录中查找
+                    targetFile = path.join(fullPath, 'pdf', pdfFile);
+                }
+                
+                // 安全检查：确保目标文件在项目目录内
+                const relativePath = path.relative(fullPath, targetFile);
+                if (relativePath.startsWith('..')) {
+                    throw new Error('访问被拒绝：文件必须在项目目录内');
+                }
+                
+                console.log('📍 复制文件:', targetFile);
+                
+                if (!fs.existsSync(targetFile)) {
+                    res.writeHead(404, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ success: false, error: '文件不存在' }));
+                    return;
+                }
+                
+                // 根据操作系统选择合适的命令
+                const platform = os.platform();
+                const absolutePath = path.resolve(targetFile);
+                
+                try {
+                    if (platform === 'darwin') {
+                        // macOS: 使用 osascript 通过 Finder 将文件复制到剪贴板
+                        // 这是复制文件（而非内容）的正确方法
+                        const escapedPath = absolutePath.replace(/"/g, '\\"');
+                        const script = `
+                        tell application "Finder"
+                            set the clipboard to (POSIX file "${escapedPath}") as «class furl»
+                        end tell
+                        `;
+                        execFileSync('osascript', ['-e', script], {
+                            encoding: 'utf8',
+                            stdio: 'pipe',
+                            timeout: 5000
+                        });
+                    } else if (platform === 'win32') {
+                        // Windows: 使用 PowerShell 和 Set-Clipboard 复制文件路径
+                        const escapedPath = absolutePath.replace(/"/g, '""');
+                        const psCmd = `
+                        Add-Type -Assembly System.Windows.Forms
+                        [System.Windows.Forms.Clipboard]::SetFileDropList([System.Collections.Specialized.StringCollection]@('${escapedPath}'))
+                        `;
+                        execFileSync('powershell.exe', ['-Command', psCmd], {
+                            encoding: 'utf8',
+                            stdio: 'pipe',
+                            timeout: 5000
+                        });
+                    } else if (platform === 'linux') {
+                        // Linux: 使用 xclip 复制文件 URI
+                        const fileUri = `file://${absolutePath}`;
+                        execFileSync('xclip', ['-selection', 'clipboard', '-t', 'text/uri-list'], {
+                            input: fileUri,
+                            encoding: 'utf8',
+                            stdio: ['pipe', 'pipe', 'pipe'],
+                            timeout: 5000
+                        });
+                    } else {
+                        throw new Error(`不支持的操作系统: ${platform}`);
+                    }
+                    
+                    console.log('✅ 文件已复制到剪贴板:', absolutePath);
+                    res.writeHead(200, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ success: true, message: '文件已复制到剪贴板' }));
+                } catch (execError) {
+                    console.error('执行复制命令失败:', execError.message, execError);
+                    throw new Error(`复制失败: ${execError.message}`);
+                }
+                
+            } catch (error) {
+                console.error('✗ 复制PDF到剪贴板错误:', error);
+                res.writeHead(500, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ 
+                    success: false, 
+                    error: error.message 
+                }));
+            }
+        });
+        
+        return;
+    }
+
     // 处理获取文件列表请求（仅新结构 json/<view>/ + md/）
     if (req.method === 'POST' && pathname === '/list-json-files') {
         let body = '';
