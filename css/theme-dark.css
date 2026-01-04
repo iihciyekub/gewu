@@ -248,6 +248,12 @@ body.theme-dark .modal .modal-footer {
     border-color: var(--vscode-border);
 }
 
+body.theme-dark .modal .modal-content {
+    border: 1px solid #4a4a4a;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.8), 
+                0 0 0 1px rgba(255, 255, 255, 0.1);
+}
+
 body.theme-dark .json-editor textarea,
 body.theme-dark #jsonEditorTextarea {
     background: #1f1f1f;
@@ -397,6 +403,9 @@ body.theme-dark .info-panel {
     background: var(--vscode-panel);
     color: var(--vscode-text);
     border-color: var(--vscode-border);
+    border: 1px solid #4a4a4a;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.8),
+                0 0 0 1px rgba(255, 255, 255, 0.1);
 }
 
 body.theme-dark .prompt-chip {
@@ -678,7 +687,6 @@ body.theme-dark .stat-label {
 body.theme-dark .stat-value {
     color: #569cd6;
 }
-
 body.theme-dark .detail-action-btn {
     background: #569cd6;
     color: white;
@@ -686,6 +694,14 @@ body.theme-dark .detail-action-btn {
 
 body.theme-dark .detail-action-btn:hover {
     background: #7aa3d6;
+}
+
+body.theme-dark .detail-section {
+    border-bottom-color: #4a4a4a;
+}
+
+body.theme-dark .detail-section h3 {
+    color: #569cd6;
 }
 
 /* DOI 复制按钮 - 深色主题 */

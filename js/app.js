@@ -2717,6 +2717,23 @@ class PaperReviewerApp {
                 return;
             }
             
+            // 先退出旧项目
+            if (this.currentProject) {
+                this.currentProject = null;
+                this.currentFile = null;
+                this.currentData = null;
+                this.currentPdfUrl = null;
+                this.currentPdfPath = null;
+                this.currentFileList = [];
+                this.fileMetaByBase = {};
+                this.fileMetaByPath = {};
+                this.hasUnsavedChanges = false;
+                this.tempDataCache = {};
+                this.selectedFiles = new Set();
+                this.lastFileSelectionAnchor = null;
+                this.visibleFileOrder = [];
+            }
+            
             // 自动加载新创建的项目
             const newProject = {
                 name: projectName.trim(),
@@ -2746,6 +2763,14 @@ class PaperReviewerApp {
             if (fileListEl) {
                 fileListEl.innerHTML = '<div class="loading"><div class="spinner"></div>加载中...</div>';
             }
+            const middleContentEl = document.getElementById('middleContent');
+            if (middleContentEl) {
+                middleContentEl.innerHTML = '';
+            }
+            const rightPanelEl = document.getElementById('rightPanel');
+            if (rightPanelEl) {
+                rightPanelEl.innerHTML = '';
+            }
             const editorEl = document.getElementById('editor');
             if (editorEl) {
                 editorEl.innerHTML = '';
@@ -2754,6 +2779,9 @@ class PaperReviewerApp {
             if (pdfContainerEl) {
                 pdfContainerEl.innerHTML = '';
             }
+            
+            // 调用统一的面板重置函数
+            this.resetMainPanelsForProject();
             
             // 重新加载文件列表
             await this.loadFileList();

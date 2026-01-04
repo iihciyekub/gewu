@@ -2283,6 +2283,7 @@ body.theme-vscode .qa-bubble {
     top: 50%;
     transform: translate(-50%, -50%);
     box-shadow: 0 10px 28px rgba(0, 0, 0, 0.25);
+    border: 1px solid #e0e0e0;
     pointer-events: auto;
     /* 允许操作自身 */
 }
@@ -3102,7 +3103,8 @@ ol.json-array {
     background: var(--wos-bg);
     border: 1px solid var(--wos-border);
     border-radius: 8px;
-    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15), 
+                0 0 0 1px rgba(0, 0, 0, 0.05);
     z-index: 3200;
     display: none;
     flex-direction: column;
@@ -3158,6 +3160,11 @@ ol.json-array {
 .detail-section {
     border-bottom: 1px solid var(--wos-border);
     padding-bottom: 12px;
+    padding-top: 12px;
+}
+
+.detail-section:first-child {
+    padding-top: 0;
 }
 
 .detail-section:last-child {
