@@ -639,3 +639,12 @@ body.theme-dark .markdown-body code {
     background: #e9edf3;
     color: #b31d28;
 }
+
+/* DOI 复制按钮 - 深色主题 */
+body.theme-dark .doi-copy-btn {
+    color: #569cd6;
+}
+
+body.theme-dark .doi-copy-btn:hover {
+    color: #9fcbff;
+}

@@ -4557,12 +4557,19 @@ class PaperReviewerApp {
         const displayValue = typeof value === 'string' ? value : JSON.stringify(value);
         
         const keyLower = (key || '').toLowerCase();
-        // 特殊处理: DOI 字段，添加 Web of Science 链接
+        // 特殊处理: DOI 字段，添加 Web of Science 链接和复制按钮
         if (keyLower === 'doi' && typeof value === 'string' && value.trim()) {
             const wosUrl = this.generateWosUrl(value.trim());
-            return `<a href="${wosUrl}" target="_blank" class="doi-link" title="View on Web of Science">
-                <i class="fas fa-external-link-alt"></i> ${this.escapeHtml(displayValue)}
-            </a>`;
+            const escapedDoi = this.escapeHtml(displayValue);
+            const copyBtnId = `doi-copy-btn-${Math.random().toString(36).substr(2, 9)}`;
+            return `<span class="doi-with-copy">
+                <a href="${wosUrl}" target="_blank" class="doi-link" title="View on Web of Science">
+                    <i class="fas fa-external-link-alt"></i> ${escapedDoi}
+                </a>
+                <button class="doi-copy-btn" id="${copyBtnId}" data-doi="${this.escapeAttr(value.trim())}" title="Copy DOI">
+                    <i class="fas fa-copy"></i>
+                </button>
+            </span>`;
         }
         // 特殊处理: keywords 字段，解析为数组并为每个关键词生成 WoS 链接（AK=）
         if (keyLower === 'keywords' && value) {
@@ -10246,6 +10253,9 @@ class PaperReviewerApp {
         if (this._apaBtnLeaveHandler) {
             document.removeEventListener('mouseout', this._apaBtnLeaveHandler);
         }
+        if (this._doiCopyBtnHandler) {
+            document.removeEventListener('click', this._doiCopyBtnHandler);
+        }
         
         this._locationLinkHandler = (e) => {
             const target = e.target;
@@ -10346,12 +10356,40 @@ class PaperReviewerApp {
             if (!btn) return;
             this.hideApaTooltip();
         };
+        this._doiCopyBtnHandler = async (e) => {
+            const btn = e.target.closest('.doi-copy-btn');
+            if (!btn) return;
+            e.preventDefault();
+            e.stopPropagation();
+            const doi = btn.dataset.doi || '';
+            if (!doi.trim()) {
+                this.showNotification('DOI 不能为空', 'error');
+                return;
+            }
+            try {
+                await this.writeTextToClipboard(doi);
+                // 显示复制成功的反馈
+                const originalHtml = btn.innerHTML;
+                const originalBg = btn.style.background;
+                btn.innerHTML = '<i class="fas fa-check"></i>';
+                btn.style.background = '#22863a';
+                setTimeout(() => {
+                    btn.innerHTML = originalHtml;
+                    btn.style.background = originalBg;
+                }, 1500);
+                this.showNotification(`已复制 DOI: ${doi}`, 'success');
+            } catch (err) {
+                console.error('复制 DOI 失败:', err);
+                this.showNotification(`复制失败: ${err.message}`, 'error');
+            }
+        };
         
         document.addEventListener('click', this._locationLinkHandler);
         document.addEventListener('dblclick', this._locationLinkDblHandler);
         document.addEventListener('click', this._apaBtnHandler);
         document.addEventListener('mouseover', this._apaBtnHoverHandler);
         document.addEventListener('mouseout', this._apaBtnLeaveHandler);
+        document.addEventListener('click', this._doiCopyBtnHandler);
         document.addEventListener('click', (e) => {
             if (this.projectInfoVisible) {
                 const panel = document.getElementById('projectInfoPanel');

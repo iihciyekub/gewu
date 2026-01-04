@@ -1355,6 +1355,48 @@ body.theme-vscode .nested-index-cell {
     margin: 0 2px;
 }
 
+.doi-with-copy {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.doi-copy-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: auto;
+    height: auto;
+    padding: 0 4px;
+    border: none;
+    border-radius: 0;
+    background: transparent;
+    color: var(--wos-blue);
+    cursor: pointer;
+    transition: all 0.2s ease;
+    font-size: 11px;
+    flex-shrink: 0;
+}
+
+.doi-copy-btn:hover {
+    background: transparent;
+    border-color: transparent;
+    color: var(--wos-blue-light);
+    box-shadow: none;
+}
+
+.doi-copy-btn:active {
+    transform: scale(0.95);
+}
+
+.doi-copy-btn i {
+    font-size: 11px;
+}
+
+.doi-copy-btn i {
+    font-size: 10px;
+}
+
 .keyword-tooltip {
     position: fixed;
     padding: 6px 8px;
