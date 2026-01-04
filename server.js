@@ -795,6 +795,56 @@ const server = http.createServer((req, res) => {
         return;
     }
 
+    // 删除项目 pdf 目录下的 PDF 文件
+    if (req.method === 'POST' && pathname === '/delete-pdf') {
+        let body = '';
+        req.on('data', chunk => { body += chunk.toString(); });
+        req.on('end', () => {
+            try {
+                const data = JSON.parse(body || '{}');
+                const projectPath = data.projectPath || 'user';
+                const filename = String(data.filename || '').trim();
+                if (!filename.toLowerCase().endsWith('.pdf')) {
+                    throw new Error('仅支持删除 PDF 文件');
+                }
+
+                const { fullPath } = normalizeProjectPath(projectPath);
+                const safeName = filename.includes('/') || filename.includes('\\')
+                    ? path.normalize(filename).replace(/^[/\\]+/, '')
+                    : filename;
+
+                const candidates = [
+                    path.join(fullPath, safeName),
+                    path.join(fullPath, 'pdf', safeName),
+                    path.join(fullPath, 'papers', safeName)
+                ];
+
+                const target = candidates.find(p => fs.existsSync(p));
+
+                if (!target) {
+                    res.writeHead(404, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ success: false, error: 'PDF not found' }));
+                    return;
+                }
+
+                // 安全检查，确保仍在项目内
+                const rel = path.relative(fullPath, target);
+                if (rel.startsWith('..') || path.isAbsolute(rel)) {
+                    throw new Error('非法路径');
+                }
+
+                fs.unlinkSync(target);
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ success: true }));
+            } catch (error) {
+                console.error('✗ 删除PDF错误:', error);
+                res.writeHead(400, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ success: false, error: error.message }));
+            }
+        });
+        return;
+    }
+
     // 处理复制PDF文件到剪贴板请求
     if (req.method === 'POST' && pathname === '/copy-pdf-to-clipboard') {
         let body = '';

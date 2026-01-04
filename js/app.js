@@ -3812,6 +3812,53 @@ class PaperReviewerApp {
         }
     }
 
+    async copyPdfFileByName(pdfFile) {
+        const clean = this.normalizePdfPathValue(pdfFile);
+        if (!clean) throw new Error('PDF 文件名为空');
+        try {
+            await this.copyPdfFileWithBrowserClipboard(clean);
+            this.showNotification(`已复制 PDF: ${clean}`, 'success');
+            return;
+        } catch (browserErr) {
+            console.warn('Browser copy failed, fallback server:', browserErr);
+        }
+        await this.copyPdfFileViaServer(clean);
+        this.showNotification(`已通过系统剪贴板复制 PDF: ${clean}`, 'success');
+    }
+
+    async deletePdfFileByName(pdfFile) {
+        const clean = this.normalizePdfPathValue(pdfFile);
+        if (!clean) throw new Error('PDF 文件名为空');
+        const projectPath = this.currentProject ? this.currentProject.path : 'user';
+        const resp = await fetch('/delete-pdf', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ projectPath, filename: clean })
+        });
+        if (!resp.ok) {
+            const text = await resp.text().catch(() => '');
+            throw new Error(text || `删除失败 (${resp.status})`);
+        }
+        const result = await resp.json().catch(() => ({}));
+        if (!result.success) {
+            throw new Error(result.error || '删除失败');
+        }
+        // 更新缓存的文件元信息
+        const key = `pdf/${clean}`;
+        if (this.fileMetaByPath && this.fileMetaByPath[key]) {
+            delete this.fileMetaByPath[key];
+        }
+        // 如果当前正在显示这个 PDF，重置预览
+        const currentName = this.normalizePdfPathValue(this.currentData?.meta_info?.pdf_path || '');
+        if (currentName === clean) {
+            this.currentPdfUrl = null;
+            this.pendingPdfUrl = null;
+            this.pendingPdfFallback = null;
+            this.resetPdfViewerFrame();
+            this.updatePdfPlaceholder('empty');
+        }
+    }
+
     async getPdfFilenameForJson(jsonFilename) {
         const view = this.currentJsonView || 'view1';
         const baseName = (jsonFilename || '').split('/').pop()?.replace(/\.json$/i, '') || (jsonFilename || '');
@@ -4909,6 +4956,21 @@ class PaperReviewerApp {
                 </a>
                 <button class="doi-copy-btn" id="${copyBtnId}" data-doi="${this.escapeAttr(value.trim())}" title="Copy DOI">
                     <i class="fas fa-copy"></i>
+                </button>
+            </span>`;
+        }
+        // 特殊处理: pdf_path 字段，增加复制/删除按钮
+        if (keyLower === 'pdf_path' && typeof value === 'string' && value.trim()) {
+            const clean = this.normalizePdfPathValue(value);
+            const copyId = `pdf-copy-btn-${Math.random().toString(36).substr(2, 9)}`;
+            const deleteId = `pdf-delete-btn-${Math.random().toString(36).substr(2, 9)}`;
+            return `<span class="pdf-path-with-actions">
+                <span class="pdf-path-text">${this.escapeHtml(clean)}</span>
+                <button class="pdf-path-copy-btn" id="${copyId}" data-pdf="${this.escapeAttr(clean)}" title="复制 PDF 文件">
+                    <i class="fas fa-copy"></i>
+                </button>
+                <button class="pdf-path-delete-btn" id="${deleteId}" data-pdf="${this.escapeAttr(clean)}" title="删除 PDF 文件">
+                    <i class="fas fa-trash"></i>
                 </button>
             </span>`;
         }
@@ -9126,8 +9188,11 @@ class PaperReviewerApp {
         this.pdfPlaceholderEl.classList.add('show');
         if (btn) btn.style.display = state === 'pending' ? 'inline-flex' : 'none';
         if (textEl) {
-            if (state === 'pending') textEl.textContent = '点击加载 PDF';
-            else textEl.textContent = '无可用 PDF';
+            if (state === 'pending') {
+                textEl.textContent = 'Loading PDF...';
+            } else {
+                textEl.textContent = 'Drop or paste a PDF here to auto link and display.';
+            }
         }
     }
 
@@ -10925,6 +10990,47 @@ class PaperReviewerApp {
                 this.showNotification(`复制失败: ${err.message}`, 'error');
             }
         };
+        this._pdfCopyBtnHandler = async (e) => {
+            const btn = e.target.closest('.pdf-path-copy-btn');
+            if (!btn) return;
+            if (btn.dataset.busy === '1') return;
+            btn.dataset.busy = '1';
+            btn.classList.add('copy-guard-shake');
+            btn.disabled = true;
+            e.preventDefault();
+            e.stopPropagation();
+            const pdf = btn.dataset.pdf || '';
+            if (!pdf) return;
+            try {
+                await this.copyPdfFileByName(pdf);
+            } catch (err) {
+                console.error('复制 PDF 失败:', err);
+                this.showNotification(`复制 PDF 失败: ${err.message}`, 'error');
+            } finally {
+                setTimeout(() => {
+                    btn.dataset.busy = '0';
+                    btn.classList.remove('copy-guard-shake');
+                    btn.disabled = false;
+                }, 600);
+            }
+        };
+        this._pdfDeleteBtnHandler = async (e) => {
+            const btn = e.target.closest('.pdf-path-delete-btn');
+            if (!btn) return;
+            e.preventDefault();
+            e.stopPropagation();
+            const pdf = btn.dataset.pdf || '';
+            if (!pdf) return;
+            const ok = window.confirm(`确定删除 PDF "${pdf}" 吗？此操作不可恢复。`);
+            if (!ok) return;
+            try {
+                await this.deletePdfFileByName(pdf);
+                this.showNotification(`已删除 PDF: ${pdf}`, 'success');
+            } catch (err) {
+                console.error('删除 PDF 失败:', err);
+                this.showNotification(`删除 PDF 失败: ${err.message}`, 'error');
+            }
+        };
         
         document.addEventListener('click', this._locationLinkHandler);
         document.addEventListener('dblclick', this._locationLinkDblHandler);
@@ -10932,6 +11038,8 @@ class PaperReviewerApp {
         document.addEventListener('mouseover', this._apaBtnHoverHandler);
         document.addEventListener('mouseout', this._apaBtnLeaveHandler);
         document.addEventListener('click', this._doiCopyBtnHandler);
+        document.addEventListener('click', this._pdfCopyBtnHandler);
+        document.addEventListener('click', this._pdfDeleteBtnHandler);
         document.addEventListener('click', (e) => {
             if (this.projectInfoVisible) {
                 const panel = document.getElementById('projectInfoPanel');
