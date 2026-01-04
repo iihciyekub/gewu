@@ -62,6 +62,14 @@ body.theme-dark .panel-header-actions button i {
     color: var(--vscode-text);
 }
 
+body.theme-dark .project-name-btn {
+    color: var(--vscode-text);
+}
+
+body.theme-dark .project-name-btn:hover {
+    color: #569cd6;
+}
+
 body.theme-dark .file-list,
 body.theme-dark .file-group,
 body.theme-dark .file-group-body,
@@ -638,6 +646,46 @@ body.theme-dark .markdown-body h6 {
 body.theme-dark .markdown-body code {
     background: #e9edf3;
     color: #b31d28;
+}
+
+/* 项目详情面板 - 深色主题 */
+body.theme-dark .detail-section h3 {
+    color: #569cd6;
+}
+
+body.theme-dark .detail-item label {
+    color: var(--vscode-text);
+}
+
+body.theme-dark .detail-value {
+    color: var(--vscode-text-muted);
+}
+
+body.theme-dark .detail-path {
+    background: var(--vscode-active);
+    color: var(--vscode-text);
+}
+
+body.theme-dark .stat-item {
+    background: #2d3748;
+    border-color: var(--vscode-border);
+}
+
+body.theme-dark .stat-label {
+    color: var(--vscode-text-muted);
+}
+
+body.theme-dark .stat-value {
+    color: #569cd6;
+}
+
+body.theme-dark .detail-action-btn {
+    background: #569cd6;
+    color: white;
+}
+
+body.theme-dark .detail-action-btn:hover {
+    background: #7aa3d6;
 }
 
 /* DOI 复制按钮 - 深色主题 */

@@ -943,7 +943,7 @@ class PaperReviewerApp {
         
         if (this.currentProject) {
             nameEl.textContent = this.currentProject.name;
-            nameEl.title = this.currentProject.path; // 显示完整路径作为tooltip
+            nameEl.title = '点击查看项目信息';
         } else {
             nameEl.textContent = '未加载项目';
             nameEl.title = '';
@@ -1385,6 +1385,14 @@ class PaperReviewerApp {
                 e.preventDefault();
                 e.stopPropagation();
                 this.toggleProjectInfoPanel();
+            });
+        }
+        const projectNameBtn = document.getElementById('currentProjectName');
+        if (projectNameBtn) {
+            projectNameBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                this.showProjectDetailsPanel();
             });
         }
         const shortcutsInfoBtn = document.getElementById('shortcutsInfoBtn');
@@ -2825,9 +2833,17 @@ class PaperReviewerApp {
             if (typeof f !== 'object') return;
             const rawName = f.name || f.path || '';
             const isMd = (rawName || '').toLowerCase().endsWith('.md');
-            const kind = f.kind || (isMd ? 'md' : 'json');
+            const isPdf = (rawName || '').toLowerCase().endsWith('.pdf');
+            const kind = f.kind || (isMd ? 'md' : isPdf ? 'pdf' : 'json');
             const pathVal = f.path || f.name || '';
-            const category = f.category || (isMd ? 'md' : 'json.root');
+            const category = f.category || (isMd ? 'md' : isPdf ? 'pdf' : 'json.root');
+            
+            // 存储在 fileMetaByPath（所有文件都存储）
+            this.fileMetaByPath[pathVal] = { name: rawName, path: pathVal, kind, category };
+            
+            // 只处理 JSON 和 MD 文件，不处理 PDF
+            if (isPdf) return;
+            
             const base = rawName.split('/').pop()?.replace(/\.(json|md)$/i, '') || rawName;
             if (!base) return;
             if (!this.fileMetaByBase[base]) {
@@ -2842,7 +2858,6 @@ class PaperReviewerApp {
             } else {
                 this.fileMetaByBase[base].legacyJson = pathVal;
             }
-            this.fileMetaByPath[pathVal] = { name: rawName, path: pathVal, kind, category };
         });
         const bases = Object.keys(this.fileMetaByBase).sort();
         const views = Array.from(viewSet).sort();
@@ -6278,6 +6293,166 @@ class PaperReviewerApp {
             this.applyPromptPanelPos();
         }
         panel.classList.toggle('visible', nextState);
+    }
+
+    showProjectDetailsPanel() {
+        if (!this.currentProject) {
+            this.showNotification('未加载项目', 'error');
+            return;
+        }
+        
+        const panel = document.getElementById('projectInfoPanel');
+        const body = document.getElementById('projectInfoBody');
+        if (!panel || !body) return;
+
+        // 收集项目信息
+        const projectPath = this.currentProject.path || '';
+        const projectName = this.currentProject.name || '未知项目';
+        
+        console.log(`📂 当前项目信息 - 名称: ${projectName}, 路径: ${projectPath}`);
+        
+        // 统计文件数量 - 直接从 fileMetaByBase 统计
+        let jsonCount = 0;
+        let mdCount = 0;
+        let pdfCount = 0;
+
+        // 方法1: 从 fileMetaByBase 统计 JSON 和 MD
+        if (this.fileMetaByBase && typeof this.fileMetaByBase === 'object') {
+            Object.values(this.fileMetaByBase).forEach(meta => {
+                // JSON: 只要有 views 或 legacyJson 就计数
+                if ((meta.views && Object.keys(meta.views).length > 0) || meta.legacyJson) {
+                    jsonCount++;
+                }
+                // MD: 只要有 mdPath 就计数
+                if (meta.mdPath) {
+                    mdCount++;
+                }
+            });
+        }
+        
+        // 方法2: 从 fileMetaByPath 统计 PDF
+        if (this.fileMetaByPath && typeof this.fileMetaByPath === 'object') {
+            console.log('🔍 fileMetaByPath 内容:', Object.entries(this.fileMetaByPath).map(([path, meta]) => ({ path, kind: meta?.kind })));
+            Object.values(this.fileMetaByPath).forEach(meta => {
+                if (meta && meta.kind === 'pdf') {
+                    console.log(`✓ 计数PDF: ${meta.path}`);
+                    pdfCount++;
+                }
+            });
+        }
+        console.log(`📊 统计结果 - JSON: ${jsonCount}, MD: ${mdCount}, PDF: ${pdfCount}`);
+
+        // 构建HTML内容
+        const html = `
+            <div class="project-details">
+                <div class="detail-section">
+                    <h3><i class="fas fa-folder"></i> 项目信息</h3>
+                    <div class="detail-item">
+                        <label>项目名称：</label>
+                        <span class="detail-value">${this.escapeHtml(projectName)}</span>
+                    </div>
+                    <div class="detail-item">
+                        <label>项目路径：</label>
+                        <span class="detail-value detail-path" title="${this.escapeAttr(projectPath)}">${this.escapeHtml(projectPath)}</span>
+                    </div>
+                </div>
+                
+                <div class="detail-section">
+                    <h3><i class="fas fa-chart-pie"></i> 文件统计</h3>
+                    <div class="detail-stats">
+                        <div class="stat-item">
+                            <span class="stat-label">JSON 文件</span>
+                            <span class="stat-value">${jsonCount}</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-label">Markdown 文件</span>
+                            <span class="stat-value">${mdCount}</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-label">PDF 文件</span>
+                            <span class="stat-value">${pdfCount}</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="detail-section">
+                    <h3><i class="fas fa-cog"></i> 操作</h3>
+                    <div class="detail-actions">
+                        <button class="detail-action-btn" onclick="window.paperReviewerApp.copyProjectPathToClipboard()">
+                            <i class="fas fa-copy"></i> 复制项目路径
+                        </button>
+                        <button class="detail-action-btn" onclick="window.paperReviewerApp.openCreateProjectDialog()">
+                            <i class="fas fa-plus-circle"></i> 创建项目
+                        </button>
+                        <button class="detail-action-btn" onclick="window.paperReviewerApp.openProjectSelector()">
+                            <i class="fas fa-exchange-alt"></i> 切换项目
+                        </button>
+                        <button class="detail-action-btn detail-action-btn-danger" onclick="window.paperReviewerApp.exitProject()">
+                            <i class="fas fa-sign-out-alt"></i> 退出项目
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        body.innerHTML = html;
+        this.projectInfoVisible = true;
+        panel.classList.add('visible');
+        this.closeHeaderMenus('info');
+    }
+
+    copyProjectPathToClipboard() {
+        if (!this.currentProject || !this.currentProject.path) {
+            this.showNotification('项目路径不可用', 'error');
+            return;
+        }
+        this.writeTextToClipboard(this.currentProject.path)
+            .then(() => this.showNotification('项目路径已复制到剪贴板', 'success'))
+            .catch(err => this.showNotification(`复制失败: ${err.message}`, 'error'));
+    }
+
+    openProjectSelector() {
+        document.getElementById('projectSelectorModal')?.classList.add('active');
+        this.projectInfoVisible = false;
+        document.getElementById('projectInfoPanel')?.classList.remove('visible');
+    }
+
+    openCreateProjectDialog() {
+        document.getElementById('projectSelectorModal')?.classList.add('active');
+        this.projectInfoVisible = false;
+        document.getElementById('projectInfoPanel')?.classList.remove('visible');
+        document.getElementById('createProjectBtn')?.click();
+    }
+
+    exitProject() {
+        if (!this.currentProject) return;
+        const confirmed = confirm(`确定要退出项目 "${this.currentProject.name}" 吗？`);
+        if (!confirmed) return;
+        
+        this.currentProject = null;
+        this.currentFile = null;
+        this.currentData = null;
+        this.currentFileList = [];
+        this.fileMetaByBase = {};
+        this.fileMetaByPath = {};
+        
+        // 清除UI
+        document.getElementById('fileList').innerHTML = '<div class="empty-state"><p>请先加载项目</p></div>';
+        document.getElementById('middleContent').innerHTML = '';
+        document.getElementById('rightPanel').innerHTML = '';
+        
+        // 保存配置
+        this.saveProjectConfig();
+        
+        // 隐藏项目信息面板
+        this.projectInfoVisible = false;
+        document.getElementById('projectInfoPanel')?.classList.remove('visible');
+        
+        // 显示提示
+        this.showNotification('已退出项目', 'success');
+        
+        // 更新显示
+        this.updateProjectDisplay();
     }
 
     async toggleProjectInfoPanel(forceVisible, opts = {}) {

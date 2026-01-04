@@ -874,6 +874,9 @@ const server = http.createServer((req, res) => {
                 const { projectPath = 'user' } = data;
                 
                 const { projectKey, fullPath } = normalizeProjectPath(projectPath);
+                console.log(`\n📥 /list-json-files 请求 - 项目路径: ${projectPath}`);
+                console.log(`   ➜ fullPath: ${fullPath}`);
+                console.log(`   ➜ projectKey: ${projectKey}`);
                 ensureProjectStructure(fullPath);
 
                 const files = [];
@@ -907,6 +910,28 @@ const server = http.createServer((req, res) => {
 
                 // md/
                 files.push(...collectFiles(path.join(fullPath, 'md'), 'md', 'md'));
+
+                // pdf/ - 添加 PDF 文件列表
+                const pdfDir = path.join(fullPath, 'pdf');
+                console.log(`   📂 PDF目录路径: ${pdfDir}`);
+                if (fs.existsSync(pdfDir)) {
+                    console.log(`   ✓ PDF目录存在`);
+                    const pdfEntries = fs.readdirSync(pdfDir, { withFileTypes: true });
+                    const pdfFiles = pdfEntries.filter(ent => ent.isFile() && /\.pdf$/i.test(ent.name));
+                    console.log(`   ✓ 找到 ${pdfFiles.length} 个PDF文件`);
+                    pdfFiles.forEach(ent => {
+                        const pdfPath = path.relative(fullPath, path.join(pdfDir, ent.name)).split(path.sep).join('/');
+                        console.log(`      - ${ent.name}`);
+                        files.push({
+                            name: ent.name,
+                            path: pdfPath,
+                            kind: 'pdf',
+                            category: 'pdf'
+                        });
+                    });
+                } else {
+                    console.log(`   ✗ PDF目录不存在`);
+                }
 
                 res.writeHead(200, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify({

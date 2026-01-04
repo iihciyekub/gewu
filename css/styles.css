@@ -188,6 +188,29 @@ body {
     flex-shrink: 0;
 }
 
+.project-name-btn {
+    font-weight: 500;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    flex: 1;
+    min-width: 0;
+    background: transparent;
+    border: none;
+    padding: 0;
+    margin: 0;
+    cursor: pointer;
+    color: inherit;
+    font-family: inherit;
+    font-size: inherit;
+    transition: color 0.2s ease;
+    text-align: left;
+}
+
+.project-name-btn:hover {
+    color: var(--wos-blue-light);
+}
+
 .panel-header-actions {
     display: flex;
     align-items: center;
@@ -3091,7 +3114,7 @@ ol.json-array {
 
 .info-body {
     padding: 10px 12px;
-    max-height: 420px;
+    max-height: 70vh;
     overflow: auto;
     font-size: 12px;
     line-height: 1.5;
@@ -3123,6 +3146,134 @@ ol.json-array {
 
 .info-body p {
     margin: 6px 0;
+}
+
+/* 项目详情面板样式 */
+.project-details {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.detail-section {
+    border-bottom: 1px solid var(--wos-border);
+    padding-bottom: 12px;
+}
+
+.detail-section:last-child {
+    border-bottom: none;
+}
+
+.detail-section h3 {
+    margin: 0 0 10px 0;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--wos-blue);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.detail-section h3 i {
+    font-size: 12px;
+}
+
+.detail-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    margin-bottom: 8px;
+    font-size: 12px;
+    line-height: 1.5;
+}
+
+.detail-item label {
+    font-weight: 600;
+    color: var(--wos-text);
+    min-width: 80px;
+    flex-shrink: 0;
+}
+
+.detail-value {
+    color: var(--wos-text-light);
+    word-break: break-all;
+    flex: 1;
+}
+
+.detail-path {
+    font-family: 'Courier New', monospace;
+    font-size: 11px;
+    background: var(--wos-active);
+    padding: 4px 6px;
+    border-radius: 3px;
+}
+
+.detail-stats {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+}
+
+.stat-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 10px;
+    background: linear-gradient(135deg, #f8fbff, #f5f7fa);
+    border: 1px solid var(--wos-border);
+    border-radius: 6px;
+}
+
+.stat-label {
+    font-size: 11px;
+    color: var(--wos-text-light);
+    margin-bottom: 4px;
+}
+
+.stat-value {
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--wos-blue);
+}
+
+.detail-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.detail-action-btn {
+    padding: 8px 12px;
+    background: var(--wos-blue);
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    transition: all 0.2s ease;
+}
+
+.detail-action-btn:hover {
+    background: var(--wos-blue-light);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 8px rgba(0, 62, 116, 0.2);
+}
+
+.detail-action-btn:active {
+    transform: translateY(0);
+}
+
+.detail-action-btn-danger {
+    background: #d32f2f;
+}
+
+.detail-action-btn-danger:hover {
+    background: #c62828;
 }
 
 .prompt-quick-header {
