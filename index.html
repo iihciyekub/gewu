@@ -213,6 +213,8 @@
     <script src="js/core/markdown-it-container.min.js"></script>
     <script src="js/core/markdown-it-github-alerts.js"></script>
     <script src="js/core/citation.js"></script>
+    <script src="js/core/special-syntax-manager.js"></script>
+    <script src="js/core/project-storage-manager.js"></script>
     <link rel="stylesheet" href="js/core/highlight/styles/github.min.css">
     <script src="js/core/highlight/highlight.min.js"></script>
     <script src="js/core/jsonrepair.min.js"></script>
@@ -525,16 +527,16 @@
                                 <i class="fas fa-pen"></i><span>MD 源码</span>
                             </button>
                             <button class="header-dropdown-item" id="mdCiteRenderItem" type="button" role="menuitem"
-                                title="渲染引文与参考文献">
-                                <i class="fas fa-quote-right"></i><span>生成引用/参考文献</span>
+                                title="Render citations and references">
+                                <i class="fas fa-quote-right"></i><span>Generate References</span>
                             </button>
                             <button class="header-dropdown-item" id="mdClearCiteCacheCurrentItem" type="button"
-                                role="menuitem" title="清除当前文档引文缓存">
-                                <i class="fas fa-eraser"></i><span>清除当前文档缓存</span>
+                                role="menuitem" title="Clear citation cache for current document">
+                                <i class="fas fa-eraser"></i><span>Clear Current Doc Cache</span>
                             </button>
                             <button class="header-dropdown-item" id="mdClearCiteCacheItem" type="button" role="menuitem"
-                                title="清除全部引文缓存">
-                                <i class="fas fa-broom"></i><span>清除全部引文缓存</span>
+                                title="Clear all citation cache in project">
+                                <i class="fas fa-broom"></i><span>Clear All Project Cache</span>
                             </button>
                             <button class="header-dropdown-item" id="mdSaveItem" type="button" role="menuitem"
                                 title="保存 Markdown">

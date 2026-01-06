@@ -115,6 +115,10 @@ class PaperReviewerApp {
         this.lastGotoAttemptText = '';
         this.completeGroupsForCurrentProject = null; // 存储完整的、未被view过滤的分组结构
 
+        // 初始化管理器
+        this.specialSyntaxManager = null; // 延迟初始化
+        this.projectStorage = null; // 延迟初始化
+
         this.init();
     }
 
@@ -876,6 +880,10 @@ class PaperReviewerApp {
     }
 
     async init() {
+        // 初始化管理器
+        this.specialSyntaxManager = new SpecialSyntaxManager(this);
+        this.projectStorage = new ProjectStorageManager(this);
+        
         // 先加载项目配置
             this.loadProjectConfig();
         
@@ -902,6 +910,24 @@ class PaperReviewerApp {
     async initializeProject() {
         // 更新UI显示当前项目
         this.updateProjectDisplay();
+        
+        // 尝试迁移数据到项目存储
+        if (this.projectStorage && this.currentProject) {
+            try {
+                const citationMeta = await this.projectStorage.load('citation-meta');
+                if (!citationMeta) {
+                    // 首次加载项目，进行迁移
+                    await this.projectStorage.migrateFromLocalStorage();
+                    this.showNotification('已迁移数据到项目目录', 'success');
+                }
+                
+                // 加载 citation 元数据到内存
+                const meta = await this.loadCitationMetaAsync();
+                Object.assign(this.citationMetaCache, meta);
+            } catch (error) {
+                console.warn('Failed to migrate or load project data:', error);
+            }
+        }
         
         // 加载文件列表
         await this.loadFileList();
@@ -1097,16 +1123,16 @@ class PaperReviewerApp {
             });
         }
         if (mdClearCiteCacheItem) {
-            mdClearCiteCacheItem.addEventListener('click', (e) => {
+            mdClearCiteCacheItem.addEventListener('click', async (e) => {
                 e.preventDefault();
-                        const targetFilename = `${targetPath.replace(/\/+$/, '')}/${file.name}`.replace(/\/+/g, '/');
+                await this.clearAllProjectCitationCache();
                 this.toggleMdMenu(false);
             });
         }
         if (mdClearCiteCacheCurrentItem) {
-            mdClearCiteCacheCurrentItem.addEventListener('click', (e) => {
+            mdClearCiteCacheCurrentItem.addEventListener('click', async (e) => {
                 e.preventDefault();
-                this.clearCurrentMarkdownCitationCache();
+                await this.clearCurrentMarkdownCitationCache();
                 this.toggleMdMenu(false);
             });
         }
@@ -4652,8 +4678,14 @@ class PaperReviewerApp {
         const container = document.getElementById('structuredContent') || document.getElementById('structuredView');
         container.innerHTML = '';
 
-        // Iterate through top-level sections with collapsible support
-        for (const [sectionKey, sectionValue] of Object.entries(this.currentData)) {
+        // Iterate through top-level sections with collapsible support (meta_info always first)
+        const topEntries = Object.entries(this.currentData);
+        const orderedEntries = [
+            ...topEntries.filter(([k]) => k === 'meta_info'),
+            ...topEntries.filter(([k]) => k !== 'meta_info')
+        ];
+
+        for (const [sectionKey, sectionValue] of orderedEntries) {
             // Skip aux fields that should not render in table
             if (sectionKey.endsWith('_loc') || sectionKey === 'schema_version' || sectionKey === 'lastupdate') continue;
             
@@ -4948,15 +4980,20 @@ class PaperReviewerApp {
         // 特殊处理: DOI 字段，添加 Web of Science 链接和复制按钮
         if (keyLower === 'doi' && typeof value === 'string' && value.trim()) {
             const wosUrl = this.generateWosUrl(value.trim());
+            const doiUrl = this.normalizeDoiUrl(value.trim());
             const escapedDoi = this.escapeHtml(displayValue);
             const copyBtnId = `doi-copy-btn-${Math.random().toString(36).substr(2, 9)}`;
             return `<span class="doi-with-copy">
-                <a href="${wosUrl}" target="_blank" class="doi-link" title="View on Web of Science">
-                    <i class="fas fa-external-link-alt"></i> ${escapedDoi}
-                </a>
+                <span class="doi-text">${escapedDoi}</span>
                 <button class="doi-copy-btn" id="${copyBtnId}" data-doi="${this.escapeAttr(value.trim())}" title="Copy DOI">
                     <i class="fas fa-copy"></i>
                 </button>
+                <a href="${wosUrl}" target="_blank" class="doi-link" title="View on Web of Science">
+                    <i class="fas fa-external-link-alt"></i>
+                </a>
+                <a href="${doiUrl}" target="_blank" class="doi-link doi-url-link" title="Open DOI URL">
+                    <i class="fas fa-link"></i>
+                </a>
             </span>`;
         }
         // 特殊处理: pdf_path 字段，增加复制/删除按钮
@@ -5223,6 +5260,13 @@ class PaperReviewerApp {
         const fileName = parts.length ? parts[parts.length - 1] : cleaned;
         const relPath = parts.length > 1 ? cleaned : '';
         return { relPath, fileName };
+    }
+
+    normalizeDoiUrl(doi = '') {
+        const clean = String(doi || '').trim();
+        if (!clean) return '';
+        if (/^https?:\/\//i.test(clean)) return clean;
+        return `https://doi.org/${encodeURIComponent(clean)}`;
     }
 
     isPdfFile(file) {
@@ -7145,7 +7189,7 @@ class PaperReviewerApp {
                     return out;
                 };
                 const hasMath = (s = '') => /\\\(|\\\[|\$\$|\$(?!\s)/.test(s);
-                const citeRe = /(citep?\{[^}]+\})/g;
+                const citeRe = /(citep?\{[^}]+\}|bib\{[^}]+\})/g;
                 const renderCitations = (txt = '') => {
                     let out = '';
                     let last = 0;
@@ -7155,11 +7199,22 @@ class PaperReviewerApp {
                             out += renderMathText(txt.slice(last, m.index));
                         }
                         const raw = m[0];
-                        const isP = raw.startsWith('citep');
-                        const inside = raw.slice(raw.indexOf('{') + 1, -1);
-                        const dois = inside.split(/[,，;]+/).map(d => d.trim()).filter(Boolean);
                         const app = window.paperReviewerApp;
-                        out += app?.renderCitationPlaceholder(dois, isP ? 'citep' : 'cite') || md.utils.escapeHtml(raw);
+                        if (raw.startsWith('bib{')) {
+                            // 处理 bib{}
+                            const inside = raw.slice(4, -1);
+                            const dois = inside.split(/[,，;]+/).map(d => d.trim()).filter(Boolean);
+                            const normalized = dois.map(d => app?.normalizeDoiString(d)).filter(Boolean);
+                            const escDois = app?.escapeHtml(normalized.join(',')) || '';
+                            const escLabel = app?.escapeHtml(normalized.join('; ')) || '';
+                            out += `<span class="bibliography-inline" data-bib-dois="${escDois}">[${escLabel}]</span>`;
+                        } else {
+                            // 处理 cite/citep
+                            const isP = raw.startsWith('citep');
+                            const inside = raw.slice(raw.indexOf('{') + 1, -1);
+                            const dois = inside.split(/[,，;]+/).map(d => d.trim()).filter(Boolean);
+                            out += app?.renderCitationPlaceholder(dois, isP ? 'citep' : 'cite') || md.utils.escapeHtml(raw);
+                        }
                         last = citeRe.lastIndex;
                     }
                     if (last < txt.length) {
@@ -7171,7 +7226,7 @@ class PaperReviewerApp {
                     const token = tokens[idx];
                     const content = token.content || '';
                     const containsGoto = content.includes('goto{');
-                    const containsCitation = /citep?\{/.test(content);
+                    const containsCitation = /citep?\{|bib\{/.test(content);
                     const containsMath = hasMath(content);
                     if (!containsGoto && !containsMath && !containsCitation) return defaultText(tokens, idx, options, env, self);
                     const segments = containsGoto ? content.split(/(goto\{[^}]+\})/g).filter(Boolean) : [content];
@@ -7736,6 +7791,7 @@ class PaperReviewerApp {
         this.renderMath(render);
         this.highlightCodeBlocks(render);
         this.applyCitationRendering(render);
+        this.applyBibliographyRendering(render);
         this.adjustReferenceFont(render);
         this.updateMarkdownUndoButtonState();
         this.applyEditLockState();
@@ -7771,6 +7827,124 @@ class PaperReviewerApp {
         }));
     }
 
+    async applyBibliographyRendering(renderRoot) {
+        if (!renderRoot) return;
+        const spans = Array.from(renderRoot.querySelectorAll('.bibliography-inline'));
+        if (!spans.length) return;
+        
+        spans.forEach((span) => {
+            const dois = (span.dataset.bibDois || '').split(',').map(d => d.trim()).filter(Boolean);
+            if (!dois.length) return;
+            
+            // 检查是否已经渲染过
+            if (span.classList.contains('bib-rendered')) return;
+            
+            // 渲染为按钮
+            const doiLabel = dois.length === 1 ? dois[0] : `${dois.length} items`;
+            const btn = document.createElement('button');
+            btn.className = 'bib-fetch-btn';
+            btn.dataset.bibDois = dois.join(',');
+            btn.innerHTML = `<i class="fas fa-book"></i><span>获取 BibTeX (${this.escapeHtml(doiLabel)})</span>`;
+            btn.title = '点击查询并显示 BibTeX 格式引用';
+            
+            span.innerHTML = '';
+            span.appendChild(btn);
+            span.classList.add('bib-rendered');
+        });
+        
+        // 绑定点击事件
+        this.bindBibFetchButtons(renderRoot);
+    }
+    
+    bindBibFetchButtons(renderRoot) {
+        if (!renderRoot) return;
+        const buttons = renderRoot.querySelectorAll('.bib-fetch-btn');
+        buttons.forEach(btn => {
+            if (btn.dataset.bound === '1') return;
+            btn.dataset.bound = '1';
+            
+            btn.addEventListener('click', async (e) => {
+                e.preventDefault();
+                const target = e.currentTarget;
+                const dois = (target.dataset.bibDois || '').split(',').map(d => d.trim()).filter(Boolean);
+                if (!dois.length) return;
+                
+                // 禁用按钮
+                target.disabled = true;
+                target.innerHTML = '<i class="fas fa-spinner fa-spin"></i><span>查询中...</span>';
+                
+                try {
+                    // 先检查缓存
+                    const bibtex = await this.formatBibliography(dois);
+                    
+                    // 替换按钮为结果
+                    const container = target.parentElement;
+                    if (container) {
+                        const escaped = this.escapeHtml(bibtex);
+                        const resultDiv = document.createElement('div');
+                        resultDiv.className = 'bib-result';
+                        resultDiv.innerHTML = `
+                            <div class="bib-actions">
+                                <button class="bib-copy-btn" title="复制到剪贴板"><i class="fas fa-copy"></i></button>
+                                <button class="bib-collapse-btn" title="折叠"><i class="fas fa-chevron-up"></i></button>
+                            </div>
+                            <pre><code class="language-bibtex">${escaped}</code></pre>
+                        `;
+                        container.innerHTML = '';
+                        container.appendChild(resultDiv);
+                        
+                        // 绑定复制和折叠按钮
+                        this.bindBibResultActions(resultDiv, bibtex);
+                        
+                        // 语法高亮
+                        this.highlightCodeBlocks(resultDiv);
+                    }
+                } catch (err) {
+                    console.error('获取 BibTeX 失败:', err);
+                    target.disabled = false;
+                    target.innerHTML = `<i class="fas fa-exclamation-triangle"></i><span>查询失败，点击重试</span>`;
+                    target.title = `错误: ${err.message}`;
+                }
+            });
+        });
+    }
+    
+    bindBibResultActions(resultDiv, bibtex) {
+        const copyBtn = resultDiv.querySelector('.bib-copy-btn');
+        const collapseBtn = resultDiv.querySelector('.bib-collapse-btn');
+        const pre = resultDiv.querySelector('pre');
+        
+        if (copyBtn) {
+            copyBtn.addEventListener('click', async () => {
+                try {
+                    await navigator.clipboard.writeText(bibtex);
+                    const icon = copyBtn.querySelector('i');
+                    icon.className = 'fas fa-check';
+                    setTimeout(() => {
+                        icon.className = 'fas fa-copy';
+                    }, 2000);
+                } catch (err) {
+                    console.error('复制失败:', err);
+                    this.showNotification('复制失败', 'error');
+                }
+            });
+        }
+        
+        if (collapseBtn && pre) {
+            collapseBtn.addEventListener('click', () => {
+                pre.classList.toggle('collapsed');
+                const icon = collapseBtn.querySelector('i');
+                if (pre.classList.contains('collapsed')) {
+                    icon.className = 'fas fa-chevron-down';
+                    collapseBtn.title = '展开';
+                } else {
+                    icon.className = 'fas fa-chevron-up';
+                    collapseBtn.title = '折叠';
+                }
+            });
+        }
+    }
+
     normalizeDoiString(raw = '') {
         return (raw || '')
             .trim()
@@ -7796,7 +7970,15 @@ class PaperReviewerApp {
     async formatCitation(dois = [], mode = 'citep') {
         const clean = (dois || []).map(d => this.normalizeDoiString(d)).filter(Boolean);
         const key = `${mode}:${clean.slice().sort().join(',')}`;
-        const storedMeta = this.loadCitationMetaFromStorage();
+        
+        // 优先从项目存储加载元数据
+        let storedMeta = {};
+        if (this.projectStorage && this.currentProject) {
+            storedMeta = await this.loadCitationMetaAsync() || {};
+        } else {
+            storedMeta = this.loadCitationMetaFromStorage();
+        }
+        
         const hasMeta = clean.every(d => this.hasUsefulMeta(this.citationMetaCache[d] || storedMeta[d]));
         if (this.citationCache[key]) {
             const entry = this.citationCache[key];
@@ -7879,16 +8061,28 @@ class PaperReviewerApp {
 
     extractDoisFromMarkdown(text = '') {
         const dois = new Set();
+        
+        // 提取 cite{} 和 citep{} 中的 DOI
         const citeRe = /citep?\{([^}]+)\}/g;
         let m;
         while ((m = citeRe.exec(text)) !== null) {
             const inside = m[1] || '';
             inside.split(/[,，;]+/).map(d => d.trim()).filter(Boolean).forEach(d => dois.add(this.normalizeDoiString(d)));
         }
+        
+        // 提取 bib{} 中的 DOI
+        const bibRe = /bib\{([^}]+)\}/g;
+        while ((m = bibRe.exec(text)) !== null) {
+            const inside = m[1] || '';
+            inside.split(/[,，;]+/).map(d => d.trim()).filter(Boolean).forEach(d => dois.add(this.normalizeDoiString(d)));
+        }
+        
+        // 提取裸 DOI
         const doiRe = /10\.\d{4,9}[^\s"'\)>\]},;]+/gi;
         while ((m = doiRe.exec(text)) !== null) {
             dois.add(this.normalizeDoiString(m[0]));
         }
+        
         return Array.from(dois).filter(Boolean);
     }
 
@@ -7923,12 +8117,22 @@ class PaperReviewerApp {
         const clean = (dois || []).map(d => this.normalizeDoiString(d)).filter(Boolean);
         const Cite = await this.ensureCiteLib();
         const items = [];
-        const stored = this.loadCitationMetaFromStorage();
+        
+        // 优先从项目存储加载
+        let stored = {};
+        if (this.projectStorage && this.currentProject) {
+            stored = await this.loadCitationMetaAsync() || {};
+        } else {
+            stored = this.loadCitationMetaFromStorage();
+        }
+        
         for (const doi of clean) {
+            // 检查内存缓存
             if (this.hasUsefulMeta(this.citationMetaCache[doi])) {
                 items.push(this.citationMetaCache[doi]);
                 continue;
             }
+            // 检查存储缓存
             if (this.hasUsefulMeta(stored[doi])) {
                 this.citationMetaCache[doi] = stored[doi];
                 items.push(stored[doi]);
@@ -7979,6 +8183,13 @@ class PaperReviewerApp {
     }
 
     loadCitationMetaFromStorage() {
+        // 优先使用项目存储
+        if (this.projectStorage && this.currentProject) {
+            // 返回 Promise 但这个方法应该是同步的，暂时返回空对象，异步加载
+            return {};
+        }
+        
+        // 回退到 localStorage
         try {
             const raw = localStorage.getItem(this.citationMetaStoreKey);
             if (!raw) return {};
@@ -8000,7 +8211,27 @@ class PaperReviewerApp {
         }
     }
 
+    async loadCitationMetaAsync() {
+        if (this.projectStorage && this.currentProject) {
+            try {
+                const data = await this.projectStorage.load('citation-meta');
+                return data || {};
+            } catch (error) {
+                console.warn('Failed to load citation meta from project storage:', error);
+                return this.loadCitationMetaFromStorage();
+            }
+        }
+        return this.loadCitationMetaFromStorage();
+    }
+
     saveCitationMetaToStorage(data = {}) {
+        // 优先保存到项目存储
+        if (this.projectStorage && this.currentProject) {
+            this.projectStorage.update('citation-meta', data);
+            return;
+        }
+        
+        // 回退到 localStorage
         try {
             localStorage.setItem(this.citationMetaStoreKey, JSON.stringify(data));
         } catch (_e) {
@@ -8018,34 +8249,47 @@ class PaperReviewerApp {
         return hasAuthor || hasTitle || hasDate;
     }
 
-    clearCitationCache(showToast = true) {
+    async clearCitationCache(showToast = true) {
         this.citationCache = {};
         this.citationMetaCache = {};
+        
+        // 清除项目存储
+        if (this.projectStorage && this.currentProject) {
+            try {
+                await this.projectStorage.delete('citation-meta');
+            } catch (error) {
+                console.warn('Failed to clear project citation cache:', error);
+            }
+        }
+        
+        // 清除 localStorage
         try {
             localStorage.removeItem(this.citationMetaStoreKey);
         } catch (_e) {
             // ignore
         }
+        
         if (showToast) {
             this.showNotification('已清除引文缓存与本地元数据', 'success');
         }
     }
 
-    clearCurrentMarkdownCitationCache() {
+    async clearCurrentMarkdownCitationCache() {
         const source = this.isMarkdownEditing
             ? (document.getElementById('markdownTextarea')?.value || '')
             : (this.currentMarkdownText || '');
         if (!source) {
-            this.showNotification('当前无 Markdown 内容可清除', 'info');
+            this.showNotification('No Markdown content to clear', 'info');
             return;
         }
         const dois = this.extractDoisFromMarkdown(source);
         if (!dois.length) {
-            this.showNotification('当前 Markdown 未找到 DOI', 'info');
+            this.showNotification('No DOI found in current document', 'info');
             return;
         }
         const set = new Set(dois.map(d => this.normalizeDoiString(d)));
-        // 清 citationCache
+        
+        // 清除内存缓存
         Object.keys(this.citationCache || {}).forEach((k) => {
             const parts = k.split(':')[1] || '';
             const list = (parts.split(',') || []).map(x => x.trim());
@@ -8053,21 +8297,153 @@ class PaperReviewerApp {
                 delete this.citationCache[k];
             }
         });
-        // 清内存 meta cache
         Object.keys(this.citationMetaCache || {}).forEach((doi) => {
             if (set.has(doi)) delete this.citationMetaCache[doi];
         });
-        // 清 localStorage meta
-        const stored = this.loadCitationMetaFromStorage();
-        let touched = false;
-        Object.keys(stored).forEach((doi) => {
-            if (set.has(doi)) {
-                delete stored[doi];
-                touched = true;
+        
+        // 清除项目存储
+        if (this.projectStorage && this.currentProject) {
+            try {
+                const stored = await this.projectStorage.load('citation-meta') || {};
+                let touched = false;
+                Object.keys(stored).forEach((doi) => {
+                    if (set.has(doi)) {
+                        delete stored[doi];
+                        touched = true;
+                    }
+                });
+                if (touched) {
+                    await this.projectStorage.save('citation-meta', stored);
+                }
+            } catch (error) {
+                console.warn('Failed to clear project storage:', error);
             }
-        });
-        if (touched) this.saveCitationMetaToStorage(stored);
-        this.showNotification(`已清除当前文档 ${dois.length} 条 DOI 缓存`, 'success');
+        } else {
+            // 回退到 localStorage
+            const stored = this.loadCitationMetaFromStorage();
+            let touched = false;
+            Object.keys(stored).forEach((doi) => {
+                if (set.has(doi)) {
+                    delete stored[doi];
+                    touched = true;
+                }
+            });
+            if (touched) this.saveCitationMetaToStorage(stored);
+        }
+        
+        this.showNotification(`Cleared ${dois.length} DOI cache from current document`, 'success');
+        
+        // 强制重新渲染当前 Markdown 以触发 cite{}/citep{} 重新查询
+        if (this.currentView === 'markdown' && this.currentMarkdownText) {
+            await this.renderMarkdownView(this.currentMarkdownText);
+        }
+    }
+
+    async clearAllProjectCitationCache() {
+        if (!this.currentProject) {
+            this.showNotification('No project loaded', 'info');
+            return;
+        }
+        
+        try {
+            // 获取项目下所有 md 文件
+            const response = await fetch('/list-files', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ 
+                    projectPath: this.currentProject.path,
+                    subDir: 'md'
+                })
+            });
+            
+            if (!response.ok) {
+                throw new Error('Failed to list files');
+            }
+            
+            const result = await response.json();
+            const mdFiles = (result.files || []).filter(f => f.toLowerCase().endsWith('.md'));
+            
+            if (!mdFiles.length) {
+                this.showNotification('No Markdown files found in project', 'info');
+                return;
+            }
+            
+            // 收集所有 md 文件中的 DOI
+            const allDois = new Set();
+            for (const file of mdFiles) {
+                try {
+                    const filePath = `${this.currentProject.path}/md/${file}`;
+                    const fileResponse = await fetch('/read-file', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ 
+                            projectPath: this.currentProject.path,
+                            filePath: `md/${file}`
+                        })
+                    });
+                    
+                    if (fileResponse.ok) {
+                        const content = await fileResponse.text();
+                        const dois = this.extractDoisFromMarkdown(content);
+                        dois.forEach(doi => allDois.add(this.normalizeDoiString(doi)));
+                    }
+                } catch (error) {
+                    console.warn(`Failed to read ${file}:`, error);
+                }
+            }
+            
+            if (!allDois.size) {
+                this.showNotification('No DOI found in project Markdown files', 'info');
+                return;
+            }
+            
+            // 清除缓存
+            Object.keys(this.citationCache || {}).forEach((k) => {
+                const parts = k.split(':')[1] || '';
+                const list = (parts.split(',') || []).map(x => x.trim());
+                if (list.some(d => allDois.has(d))) {
+                    delete this.citationCache[k];
+                }
+            });
+            Object.keys(this.citationMetaCache || {}).forEach((doi) => {
+                if (allDois.has(doi)) delete this.citationMetaCache[doi];
+            });
+            
+            // 清除项目存储
+            if (this.projectStorage) {
+                const stored = await this.projectStorage.load('citation-meta') || {};
+                let touched = false;
+                Object.keys(stored).forEach((doi) => {
+                    if (allDois.has(doi)) {
+                        delete stored[doi];
+                        touched = true;
+                    }
+                });
+                if (touched) {
+                    await this.projectStorage.save('citation-meta', stored);
+                }
+            } else {
+                const stored = this.loadCitationMetaFromStorage();
+                let touched = false;
+                Object.keys(stored).forEach((doi) => {
+                    if (allDois.has(doi)) {
+                        delete stored[doi];
+                        touched = true;
+                    }
+                });
+                if (touched) this.saveCitationMetaToStorage(stored);
+            }
+            
+            this.showNotification(`Cleared ${allDois.size} DOI cache from ${mdFiles.length} files`, 'success');
+            
+            // 强制重新渲染当前 Markdown 以触发 cite{}/citep{} 重新查询
+            if (this.currentView === 'markdown' && this.currentMarkdownText) {
+                await this.renderMarkdownView(this.currentMarkdownText);
+            }
+        } catch (error) {
+            console.error('Failed to clear all project cache:', error);
+            this.showNotification(`Failed to clear cache: ${error.message}`, 'error');
+        }
     }
 
     adjustReferenceFont(renderRoot) {
@@ -8104,6 +8480,77 @@ class PaperReviewerApp {
         if (!list.length) return mode === 'cite' ? '' : '()';
         const joined = list.join('; ');
         return mode === 'cite' ? joined : `(${joined})`;
+    }
+
+    async formatBibliography(dois = []) {
+        const clean = (dois || []).map(d => this.normalizeDoiString(d)).filter(Boolean);
+        if (!clean.length) return '';
+        
+        try {
+            const Cite = await this.ensureCiteLib();
+            if (!Cite) throw new Error('citation-js 未加载');
+            
+            // 使用 Promise.all 并行处理多个 DOI
+            const bibtexResults = await Promise.all(
+                clean.map(async (doi) => {
+                    try {
+                        const cite = await Cite.async(doi);
+                        const bibtex = cite.format('bibtex', {
+                            format: 'text',
+                            lang: 'en-US'
+                        });
+                        return bibtex;
+                    } catch (error) {
+                        console.warn(`Failed to fetch BibTeX for ${doi}:`, error);
+                        return this.formatSingleBibFallback(doi);
+                    }
+                })
+            );
+            
+            // 合并所有 BibTeX 条目
+            const text = bibtexResults.filter(Boolean).join('\n\n');
+            
+            // 保存到项目存储
+            if (this.projectStorage && text) {
+                await this.saveBibliographyCache(clean, text);
+            }
+            
+            return text || this.formatBibliographyFallback(clean);
+        } catch (err) {
+            console.warn('Bibliography render fallback:', err);
+            return this.formatBibliographyFallback(clean);
+        }
+    }
+
+    formatBibliographyFallback(dois = []) {
+        const list = (dois || []).map(d => this.normalizeDoiString(d)).filter(Boolean);
+        if (!list.length) return '';
+        return list.map(doi => this.formatSingleBibFallback(doi)).join('\n\n');
+    }
+
+    formatSingleBibFallback(doi) {
+        const normalized = this.normalizeDoiString(doi);
+        const key = normalized.replace(/[^a-zA-Z0-9]/g, '_');
+        const href = `https://doi.org/${encodeURIComponent(normalized)}`;
+        return `@article{${key},\n  doi = {${normalized}},\n  url = {${href}}\n}`;
+    }
+
+    async saveBibliographyCache(dois, text) {
+        if (!this.projectStorage) return;
+        
+        try {
+            const cacheData = await this.projectStorage.load('citation-meta') || {};
+            dois.forEach(doi => {
+                if (!cacheData[doi]) {
+                    cacheData[doi] = {};
+                }
+                cacheData[doi]._bibCache = text;
+                cacheData[doi]._bibTimestamp = Date.now();
+            });
+            await this.projectStorage.save('citation-meta', cacheData);
+        } catch (error) {
+            console.warn('Failed to save bibliography cache:', error);
+        }
     }
 
     appendAutoReferenceSection(text = '', refMd = '') {

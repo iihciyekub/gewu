@@ -695,6 +695,186 @@ const server = http.createServer((req, res) => {
         return;
     }
 
+    // 处理 ensure-dir 请求（确保目录存在）
+    if (req.method === 'POST' && pathname === '/ensure-dir') {
+        let body = '';
+        
+        req.on('data', chunk => {
+            body += chunk.toString();
+        });
+        
+        req.on('end', () => {
+            try {
+                const data = JSON.parse(body);
+                const { path: dirPath } = data;
+                
+                if (!dirPath) {
+                    res.writeHead(400, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ success: false, error: 'Missing path' }));
+                    return;
+                }
+                
+                // 解析路径
+                const absolutePath = path.isAbsolute(dirPath) ? dirPath : path.resolve(ROOT_DIR, dirPath);
+                
+                // 创建目录
+                fs.mkdirSync(absolutePath, { recursive: true });
+                
+                console.log(`✓ Ensured directory: ${absolutePath}`);
+                
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({
+                    success: true,
+                    path: absolutePath
+                }));
+                
+            } catch (error) {
+                console.error('✗ Error ensuring directory:', error);
+                res.writeHead(500, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ 
+                    success: false, 
+                    error: error.message 
+                }));
+            }
+        });
+        
+        return;
+    }
+
+    // 处理 read-json 请求（读取 JSON 文件）
+    if (req.method === 'GET' && pathname === '/read-json') {
+        try {
+            const parsedUrl = url.parse(req.url, true);
+            const filePath = parsedUrl.query.file;
+            
+            if (!filePath) {
+                res.writeHead(400, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: 'Missing file parameter' }));
+                return;
+            }
+            
+            const absolutePath = path.isAbsolute(filePath) ? filePath : path.resolve(ROOT_DIR, filePath);
+            
+            if (!fs.existsSync(absolutePath)) {
+                res.writeHead(404, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: 'File not found' }));
+                return;
+            }
+            
+            const content = fs.readFileSync(absolutePath, 'utf-8');
+            const data = JSON.parse(content);
+            
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify(data));
+            
+        } catch (error) {
+            console.error('✗ Error reading JSON:', error);
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: error.message }));
+        }
+        
+        return;
+    }
+
+    // 处理 save-json API（保存 JSON 到指定路径）
+    if (req.method === 'POST' && pathname === '/save-json-api') {
+        let body = '';
+        
+        req.on('data', chunk => {
+            body += chunk.toString();
+        });
+        
+        req.on('end', () => {
+            try {
+                const payload = JSON.parse(body);
+                const { file: filePath, data: jsonData } = payload;
+                
+                if (!filePath || typeof jsonData === 'undefined') {
+                    res.writeHead(400, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ success: false, error: 'Missing file or data' }));
+                    return;
+                }
+                
+                const absolutePath = path.isAbsolute(filePath) ? filePath : path.resolve(ROOT_DIR, filePath);
+                
+                // 确保目录存在
+                fs.mkdirSync(path.dirname(absolutePath), { recursive: true });
+                
+                // 写入文件
+                const content = JSON.stringify(jsonData, null, 2);
+                fs.writeFileSync(absolutePath, content, 'utf-8');
+                
+                console.log(`✓ Saved JSON to: ${absolutePath}`);
+                
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({
+                    success: true,
+                    path: absolutePath
+                }));
+                
+            } catch (error) {
+                console.error('✗ Error saving JSON:', error);
+                res.writeHead(500, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ 
+                    success: false, 
+                    error: error.message 
+                }));
+            }
+        });
+        
+        return;
+    }
+
+    // 处理 delete-file 请求（删除文件）
+    if (req.method === 'POST' && pathname === '/delete-file') {
+        let body = '';
+        
+        req.on('data', chunk => {
+            body += chunk.toString();
+        });
+        
+        req.on('end', () => {
+            try {
+                const data = JSON.parse(body);
+                const { file: filePath } = data;
+                
+                if (!filePath) {
+                    res.writeHead(400, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ success: false, error: 'Missing file' }));
+                    return;
+                }
+                
+                const absolutePath = path.isAbsolute(filePath) ? filePath : path.resolve(ROOT_DIR, filePath);
+                
+                if (!fs.existsSync(absolutePath)) {
+                    res.writeHead(404, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ success: false, error: 'File not found' }));
+                    return;
+                }
+                
+                fs.unlinkSync(absolutePath);
+                
+                console.log(`✓ Deleted file: ${absolutePath}`);
+                
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({
+                    success: true,
+                    path: absolutePath
+                }));
+                
+            } catch (error) {
+                console.error('✗ Error deleting file:', error);
+                res.writeHead(500, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ 
+                    success: false, 
+                    error: error.message 
+                }));
+            }
+        });
+        
+        return;
+    }
+
     // 处理获取PDF文件请求（支持任意项目路径）
     if (req.method === 'GET' && pathname === '/get-pdf') {
         try {
@@ -1120,6 +1300,41 @@ const server = http.createServer((req, res) => {
             res.writeHead(500, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify({ success: false, error: error.message }));
         }
+        return;
+    }
+
+    // 列出项目目录下的文件（支持目录过滤）
+    if (req.method === 'POST' && pathname === '/list-files') {
+        let body = '';
+        req.on('data', chunk => { body += chunk.toString(); });
+        req.on('end', () => {
+            try {
+                const data = body ? JSON.parse(body) : {};
+                const projectPath = data.projectPath || 'user';
+                const subDir = data.subDir || ''; // 可选：指定子目录如 'md'
+                const { fullPath } = normalizeProjectPath(projectPath);
+                
+                const targetDir = subDir ? path.join(fullPath, subDir) : fullPath;
+                
+                if (!fs.existsSync(targetDir)) {
+                    res.writeHead(404, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ success: false, error: 'Directory not found' }));
+                    return;
+                }
+                
+                const entries = fs.readdirSync(targetDir, { withFileTypes: true });
+                const files = entries
+                    .filter(entry => entry.isFile())
+                    .map(entry => entry.name);
+                
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ success: true, files }));
+            } catch (error) {
+                console.error('✗ Error listing files:', error);
+                res.writeHead(500, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ success: false, error: error.message }));
+            }
+        });
         return;
     }
 
