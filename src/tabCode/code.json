@@ -1,0 +1,109 @@
+{
+  "commands": [
+    {
+      "trigger": "\\cite",
+      "label": "\\cite{doi}",
+      "insertText": "\\cite{$1}",
+      "detail": "Narrative citation",
+      "documentation": "Insert narrative citation (e.g., Smith et al. (2020))"
+    },
+    {
+      "trigger": "\\citep",
+      "label": "\\citep{doi}",
+      "insertText": "\\citep{$1}",
+      "detail": "Parenthetical citation",
+      "documentation": "Insert parenthetical citation (e.g., (Smith et al., 2020))"
+    },
+    {
+      "trigger": "\\bib",
+      "label": "\\bib{doi}",
+      "insertText": "\\bib{$1}",
+      "detail": "BibTeX entry (on-demand)",
+      "documentation": "Insert BibTeX bibliography entry button"
+    },
+    {
+      "trigger": "\\goto",
+      "label": "\\goto{text}",
+      "insertText": "\\goto{$1}",
+      "detail": "PDF jump link",
+      "documentation": "Create a link to jump to specific text in PDF"
+    },
+    {
+      "trigger": "\\section",
+      "label": "\\section{title}",
+      "insertText": "\\section{$1}",
+      "detail": "Section heading",
+      "documentation": "Insert a section heading"
+    },
+    {
+      "trigger": "\\subsection",
+      "label": "\\subsection{title}",
+      "insertText": "\\subsection{$1}",
+      "detail": "Subsection heading",
+      "documentation": "Insert a subsection heading"
+    },
+    {
+      "trigger": "\\textbf",
+      "label": "\\textbf{text}",
+      "insertText": "\\textbf{$1}",
+      "detail": "Bold text",
+      "documentation": "Make text bold"
+    },
+    {
+      "trigger": "\\textit",
+      "label": "\\textit{text}",
+      "insertText": "\\textit{$1}",
+      "detail": "Italic text",
+      "documentation": "Make text italic"
+    },
+    {
+      "trigger": "\\emph",
+      "label": "\\emph{text}",
+      "insertText": "\\emph{$1}",
+      "detail": "Emphasized text",
+      "documentation": "Emphasize text"
+    },
+    {
+      "trigger": "\\ref",
+      "label": "\\ref{label}",
+      "insertText": "\\ref{$1}",
+      "detail": "Cross reference",
+      "documentation": "Reference to a label"
+    },
+    {
+      "trigger": "\\label",
+      "label": "\\label{name}",
+      "insertText": "\\label{$1}",
+      "detail": "Label for reference",
+      "documentation": "Create a label for cross-referencing"
+    },
+    {
+      "trigger": "\\url",
+      "label": "\\url{link}",
+      "insertText": "\\url{$1}",
+      "detail": "URL link",
+      "documentation": "Insert a URL link"
+    },
+    {
+      "trigger": "\\href",
+      "label": "\\href{url}{text}",
+      "insertText": "\\href{$1}{$2}",
+      "detail": "Hyperlink",
+      "documentation": "Insert a hyperlink with custom text"
+    },
+    {
+      "trigger": "\\begin",
+      "label": "\\begin{environment}",
+      "insertText": "\\begin{$1}\n\t$2\n\\end{$1}",
+      "detail": "Environment block",
+      "documentation": "Begin an environment block"
+    },
+    {
+      "trigger": "\\item",
+      "label": "\\item ",
+      "insertText": "\\item $1",
+      "detail": "List item",
+      "documentation": "Insert a list item"
+    }
+  ]
+}

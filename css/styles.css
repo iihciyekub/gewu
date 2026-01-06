@@ -3692,6 +3692,77 @@ body.theme-vscode .header-dropdown-item:hover {
     background: #2d2d2d;
 }
 
+/* Autocomplete Dropdown Styles - VSCode Compact Style */
+.autocomplete-dropdown {
+    position: fixed;
+    background: var(--wos-bg);
+    border: 1px solid var(--wos-border);
+    border-radius: 4px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+    max-height: 250px;
+    overflow-y: auto;
+    overflow-x: hidden;
+    z-index: 10000;
+    min-width: 200px;
+    max-width: 350px;
+    padding: 2px;
+    font-size: 12px;
+}
+
+.autocomplete-item {
+    padding: 4px 8px;
+    cursor: pointer;
+    border-radius: 2px;
+    transition: background 0.1s ease;
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    white-space: nowrap;
+}
+
+.autocomplete-item:hover,
+.autocomplete-item.selected {
+    background: var(--wos-hover);
+}
+
+.autocomplete-label {
+    font-family: 'Monaco', 'Menlo', 'Consolas', 'Courier New', monospace;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--wos-blue);
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.autocomplete-detail {
+    font-size: 10px;
+    color: var(--wos-text-light);
+    opacity: 0.75;
+    flex-shrink: 0;
+}
+
+body.theme-vscode .autocomplete-dropdown {
+    background: #252526;
+    border-color: #454545;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.36);
+}
+
+body.theme-vscode .autocomplete-item:hover,
+body.theme-vscode .autocomplete-item.selected {
+    background: #094771;
+}
+
+body.theme-vscode .autocomplete-label {
+    color: #4EC9B0;
+}
+
+body.theme-vscode .autocomplete-detail {
+    color: #858585;
+}
+
 /* Mode Selection Dialog Styles */
 .mode-selector-content {
     max-width: 520px;

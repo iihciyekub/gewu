@@ -1146,6 +1146,16 @@ class PaperReviewerApp {
         const mdTextarea = document.getElementById('markdownTextarea');
         if (mdTextarea) {
             mdTextarea.addEventListener('input', () => this.onMarkdownEditorInput());
+            
+            // 初始化自动补全功能
+            if (typeof AutocompleteManager !== 'undefined') {
+                this.autocompleteManager = new AutocompleteManager(mdTextarea, {
+                    triggerChar: '\\',
+                    minChars: 1,
+                    maxSuggestions: 10
+                });
+                console.log('✓ Autocomplete initialized for markdown editor');
+            }
         }
         const jsonViewSelect = document.getElementById('jsonViewSelect');
         if (jsonViewSelect) {
@@ -7189,7 +7199,7 @@ class PaperReviewerApp {
                     return out;
                 };
                 const hasMath = (s = '') => /\\\(|\\\[|\$\$|\$(?!\s)/.test(s);
-                const citeRe = /(citep?\{[^}]+\}|bib\{[^}]+\})/g;
+                const citeRe = /(\\citep?\{[^}]+\}|\\bib\{[^}]+\})/g;
                 const renderCitations = (txt = '') => {
                     let out = '';
                     let last = 0;
@@ -7200,17 +7210,17 @@ class PaperReviewerApp {
                         }
                         const raw = m[0];
                         const app = window.paperReviewerApp;
-                        if (raw.startsWith('bib{')) {
-                            // 处理 bib{}
-                            const inside = raw.slice(4, -1);
+                        if (raw.startsWith('\\bib{')) {
+                            // 处理 \bib{}
+                            const inside = raw.slice(5, -1);
                             const dois = inside.split(/[,，;]+/).map(d => d.trim()).filter(Boolean);
                             const normalized = dois.map(d => app?.normalizeDoiString(d)).filter(Boolean);
                             const escDois = app?.escapeHtml(normalized.join(',')) || '';
                             const escLabel = app?.escapeHtml(normalized.join('; ')) || '';
                             out += `<span class="bibliography-inline" data-bib-dois="${escDois}">[${escLabel}]</span>`;
                         } else {
-                            // 处理 cite/citep
-                            const isP = raw.startsWith('citep');
+                            // 处理 \cite/\citep
+                            const isP = raw.startsWith('\\citep');
                             const inside = raw.slice(raw.indexOf('{') + 1, -1);
                             const dois = inside.split(/[,，;]+/).map(d => d.trim()).filter(Boolean);
                             out += app?.renderCitationPlaceholder(dois, isP ? 'citep' : 'cite') || md.utils.escapeHtml(raw);
@@ -7225,13 +7235,13 @@ class PaperReviewerApp {
                 mdInstance.renderer.rules.text = (tokens, idx, options, env, self) => {
                     const token = tokens[idx];
                     const content = token.content || '';
-                    const containsGoto = content.includes('goto{');
-                    const containsCitation = /citep?\{|bib\{/.test(content);
+                    const containsGoto = content.includes('\\goto{');
+                    const containsCitation = /\\citep?\{|\\bib\{/.test(content);
                     const containsMath = hasMath(content);
                     if (!containsGoto && !containsMath && !containsCitation) return defaultText(tokens, idx, options, env, self);
-                    const segments = containsGoto ? content.split(/(goto\{[^}]+\})/g).filter(Boolean) : [content];
+                    const segments = containsGoto ? content.split(/(\\goto\{[^}]+\})/g).filter(Boolean) : [content];
                     const rendered = segments.map(seg => {
-                        const match = seg.match(/^goto\{([^}]+)\}$/);
+                        const match = seg.match(/^\\goto\{([^}]+)\}$/);
                         if (match) {
                             const q = match[1].trim();
                             if (!q) return md.utils.escapeHtml(seg);
@@ -8062,16 +8072,16 @@ class PaperReviewerApp {
     extractDoisFromMarkdown(text = '') {
         const dois = new Set();
         
-        // 提取 cite{} 和 citep{} 中的 DOI
-        const citeRe = /citep?\{([^}]+)\}/g;
+        // 提取 \cite{} 和 \citep{} 中的 DOI (仅支持 LaTeX 格式)
+        const citeRe = /\\citep?\{([^}]+)\}/g;
         let m;
         while ((m = citeRe.exec(text)) !== null) {
             const inside = m[1] || '';
             inside.split(/[,，;]+/).map(d => d.trim()).filter(Boolean).forEach(d => dois.add(this.normalizeDoiString(d)));
         }
         
-        // 提取 bib{} 中的 DOI
-        const bibRe = /bib\{([^}]+)\}/g;
+        // 提取 \bib{} 中的 DOI (仅支持 LaTeX 格式)
+        const bibRe = /\\bib\{([^}]+)\}/g;
         while ((m = bibRe.exec(text)) !== null) {
             const inside = m[1] || '';
             inside.split(/[,，;]+/).map(d => d.trim()).filter(Boolean).forEach(d => dois.add(this.normalizeDoiString(d)));
