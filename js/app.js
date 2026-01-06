@@ -1157,6 +1157,33 @@ class PaperReviewerApp {
                 console.log('✓ Autocomplete initialized for markdown editor');
             }
         }
+        
+        // 绑定 WOS 查询链接点击事件
+        document.addEventListener('click', async (e) => {
+            const link = e.target.closest('.wos-query-link');
+            if (link) {
+                e.preventDefault();
+                const wosids = JSON.parse(link.dataset.wosids || '[]');
+                const dois = JSON.parse(link.dataset.dois || '[]');
+                
+                if (typeof wos !== 'undefined' && typeof wos.query_wosid_or_doi_url === 'function') {
+                    try {
+                        // 调用 WOS 查询获取 URL
+                        const queryUrl = await wos.query_wosid_or_doi_url(wosids, dois);
+                        
+                        // 直接在新窗口打开 WOS 查询 URL
+                        window.open(queryUrl, '_blank');
+                        this.showNotification(`WOS query opened: ${wosids.length} WOSIDs, ${dois.length} DOIs`, 'success');
+                    } catch (error) {
+                        console.error('WOS query failed:', error);
+                        this.showNotification(`WOS query failed: ${error.message}`, 'error');
+                    }
+                } else {
+                    this.showNotification('WOS API not loaded', 'error');
+                }
+            }
+        });
+        
         const jsonViewSelect = document.getElementById('jsonViewSelect');
         if (jsonViewSelect) {
             // 始终回到表格视图，即便选择当前项
@@ -7254,6 +7281,118 @@ class PaperReviewerApp {
                 };
             };
             md.use(gotoPlugin);
+            
+            // 添加 \doi{} 和 \wos.query{} 的 inline 规则处理
+            const specialLinkPlugin = (mdInstance) => {
+                // 在 block 解析之前预处理多行 \wos.query{}
+                const wosQueryCache = new Map();
+                let wosQueryCounter = 0;
+                
+                mdInstance.core.ruler.before('normalize', 'preprocess-wos-query', (state) => {
+                    wosQueryCache.clear();
+                    wosQueryCounter = 0;
+                    
+                    // 处理多行的 \wos.query{...}
+                    state.src = state.src.replace(/\\wos\.query\{([\s\S]*?)\}/g, (match, query) => {
+                        const id = `__WOS_QUERY_${wosQueryCounter++}__`;
+                        wosQueryCache.set(id, query.trim());
+                        return id;
+                    });
+                });
+                
+                // 定义 inline rule 来识别 \doi{}
+                const doiRule = (state, silent) => {
+                    const max = state.posMax;
+                    const start = state.pos;
+                    
+                    // 检查是否以 \doi{ 开始
+                    if (state.src.charCodeAt(start) !== 0x5C /* \ */) return false;
+                    if (state.src.slice(start, start + 5) !== '\\doi{') return false;
+                    
+                    // 找到匹配的 }
+                    let pos = start + 5;
+                    while (pos < max && state.src.charCodeAt(pos) !== 0x7D /* } */) {
+                        pos++;
+                    }
+                    if (pos >= max) return false;
+                    
+                    const doi = state.src.slice(start + 5, pos).trim();
+                    if (!doi) return false;
+                    
+                    if (!silent) {
+                        const token = state.push('doi_link', '', 0);
+                        token.content = doi;
+                    }
+                    
+                    state.pos = pos + 1;
+                    return true;
+                };
+                
+                // 定义 inline rule 来识别 WOS query 占位符
+                const wosQueryRule = (state, silent) => {
+                    const max = state.posMax;
+                    const start = state.pos;
+                    
+                    // 检查是否以 __WOS_QUERY_ 开始
+                    if (state.src.slice(start, start + 12) !== '__WOS_QUERY_') return false;
+                    
+                    // 找到匹配的 __
+                    let pos = start + 12;
+                    while (pos < max && state.src.slice(pos, pos + 2) !== '__') {
+                        pos++;
+                    }
+                    if (pos >= max) return false;
+                    pos += 2;
+                    
+                    const placeholder = state.src.slice(start, pos);
+                    const query = wosQueryCache.get(placeholder);
+                    if (!query) return false;
+                    
+                    if (!silent) {
+                        const token = state.push('wos_query_link', '', 0);
+                        token.content = query;
+                    }
+                    
+                    state.pos = pos;
+                    return true;
+                };
+                
+                // 注册 inline rules
+                mdInstance.inline.ruler.before('escape', 'doi_link', doiRule);
+                mdInstance.inline.ruler.before('text', 'wos_query_link', wosQueryRule);
+                
+                // 添加 renderers
+                mdInstance.renderer.rules.doi_link = (tokens, idx) => {
+                    const doi = tokens[idx].content;
+                    const escDoi = md.utils.escapeHtml(doi);
+                    const doiUrl = `https://doi.org/${encodeURIComponent(doi)}`;
+                    return `<a href="${doiUrl}" target="_blank" class="doi-link" title="Open DOI: ${escDoi}"><i class="fa-solid fa-external-link-alt"></i> DOI</a>`;
+                };
+                
+                mdInstance.renderer.rules.wos_query_link = (tokens, idx) => {
+                    const query = tokens[idx].content;
+                    const items = query.split(/[\n,，]+/).map(s => s.trim()).filter(Boolean);
+                    const wosids = [];
+                    const dois = [];
+                    const wosidPattern = /^WOS:[A-Z0-9]+$/i;
+                    const doiPattern = /^10\.\d{4,9}\/[^\s]+$/i;
+                    
+                    items.forEach(item => {
+                        if (wosidPattern.test(item)) {
+                            wosids.push(item);
+                        } else if (doiPattern.test(item)) {
+                            dois.push(item);
+                        }
+                    });
+                    
+                    const escQuery = md.utils.escapeHtml(query);
+                    const dataWosids = md.utils.escapeHtml(JSON.stringify(wosids));
+                    const dataDois = md.utils.escapeHtml(JSON.stringify(dois));
+                    return `<a href="#" class="wos-query-link" data-wosids="${dataWosids}" data-dois="${dataDois}" title="WOS Query: ${escQuery}"><i class="fa-solid fa-search"></i> WOS Query</a>`;
+                };
+            };
+            md.use(specialLinkPlugin);
+            
             // contentReference inline渲染
             const contentRefPlugin = (mdInstance) => {
                 mdInstance.core.ruler.after('inline', 'content-ref', (state) => {

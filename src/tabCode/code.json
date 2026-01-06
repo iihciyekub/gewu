@@ -29,6 +29,20 @@
       "documentation": "Create a link to jump to specific text in PDF"
     },
     {
+      "trigger": "\\doi",
+      "label": "\\doi{doi}",
+      "insertText": "\\doi{$1}",
+      "detail": "DOI link",
+      "documentation": "Create a link to open DOI in publisher website"
+    },
+    {
+      "trigger": "\\wos.query",
+      "label": "\\wos.query{wosids,dois}",
+      "insertText": "\\wos.query{$1}",
+      "detail": "WOS query",
+      "documentation": "Query Web of Science with WOSIDs and DOIs"
+    },
+    {
       "trigger": "\\section",
       "label": "\\section{title}",
       "insertText": "\\section{$1}",

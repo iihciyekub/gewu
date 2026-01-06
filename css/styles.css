@@ -1325,54 +1325,7 @@ body.theme-vscode .nested-index-cell {
 }
 
 /* DOI Link - Web of Science */
-.doi-link {
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-    color: #ffffff;
-    text-decoration: none;
-    padding: 2px 6px;
-    border-radius: 3px;
-    background: #2d4459;
-    transition: all 0.2s ease;
-    font-family: 'Courier New', monospace;
-    font-size: 10px;
-}
-
-.doi-link:hover {
-    background: #0a3b66;
-    color: #f7fbff;
-    transform: translateY(-1px);
-    box-shadow: 0 2px 6px rgba(10, 59, 102, 0.35);
-}
-
-.doi-link i {
-    font-size: 9px;
-    opacity: 0.9;
-}
-
-.doi-link:hover i {
-    opacity: 1;
-}
-
-.keyword-links .doi-link {
-    background: transparent;
-    padding: 0;
-    gap: 0;
-    color: var(--wos-blue);
-    box-shadow: none;
-}
-
-.keyword-links .doi-link:hover {
-    background: transparent;
-    color: var(--wos-blue-dark);
-    transform: none;
-    box-shadow: none;
-}
-
-.keyword-links .doi-link i {
-    font-size: 11px;
-}
+/* 旧的 doi-link 样式已移除，使用下方统一的样式 */
 
 .keyword-links .keyword-sep {
     margin: 0 2px;
@@ -1386,10 +1339,6 @@ body.theme-vscode .nested-index-cell {
 
 .doi-text {
     font-weight: 600;
-}
-
-.doi-link.doi-url-link i {
-    font-size: 11px;
 }
 
 .doi-copy-btn {
@@ -3761,6 +3710,45 @@ body.theme-vscode .autocomplete-label {
 
 body.theme-vscode .autocomplete-detail {
     color: #858585;
+}
+
+/* DOI and WOS Query Link Styles */
+.doi-link,
+.wos-query-link {
+    color: var(--wos-blue);
+    text-decoration: none;
+    padding: 2px 6px;
+    border-radius: 4px;
+    transition: all 0.2s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 12px;
+    font-weight: 500;
+    border: 1px solid transparent;
+}
+
+.doi-link:hover,
+.wos-query-link:hover {
+    background: var(--wos-hover);
+    border-color: var(--wos-blue-light);
+    text-decoration: none;
+}
+
+.doi-link i,
+.wos-query-link i {
+    font-size: 11px;
+}
+
+body.theme-vscode .doi-link,
+body.theme-vscode .wos-query-link {
+    color: #4EC9B0;
+}
+
+body.theme-vscode .doi-link:hover,
+body.theme-vscode .wos-query-link:hover {
+    background: #094771;
+    border-color: #4EC9B0;
 }
 
 /* Mode Selection Dialog Styles */
