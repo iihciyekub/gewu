@@ -2859,40 +2859,9 @@ ol.json-array {
     text-decoration: underline;
 }
 
-/* Bibliography inline */
+/* Bibliography inline container - 只作为容器，实际样式在 .bib-fetch-btn */
 .bibliography-inline {
-    display: block;
-    margin: 16px 0;
-}
-
-.bib-fetch-btn {
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    padding: 8px 16px;
-    background: var(--wos-blue);
-    color: white;
-    border: none;
-    border-radius: 6px;
-    font-size: 13px;
-    font-weight: 500;
-    cursor: pointer;
-    transition: all 0.2s;
-}
-
-.bib-fetch-btn:hover:not(:disabled) {
-    background: var(--wos-blue-light);
-    transform: translateY(-1px);
-    box-shadow: 0 2px 8px rgba(0, 62, 116, 0.3);
-}
-
-.bib-fetch-btn:disabled {
-    opacity: 0.6;
-    cursor: not-allowed;
-}
-
-.bib-fetch-btn i {
-    font-size: 14px;
+    display: inline;
 }
 
 .bib-result {
@@ -2957,11 +2926,7 @@ ol.json-array {
     font-family: inherit;
 }
 
-/* Dark theme support */
-body.theme-vscode .bib-fetch-btn {
-    background: var(--wos-blue-light);
-}
-
+/* Dark theme support for bib result components */
 body.theme-vscode .bib-result pre {
     background: #1e1e1e;
     border-color: #3e3e3e;
@@ -2983,10 +2948,6 @@ body.theme-vscode .bib-collapse-btn:hover {
     background: #2d2d2d;
     border-color: var(--wos-blue-light);
     color: var(--wos-blue-light);
-}
-
-body.theme-dark .bib-fetch-btn {
-    background: var(--wos-blue-light);
 }
 
 body.theme-dark .bib-result pre {
@@ -3713,9 +3674,12 @@ body.theme-vscode .autocomplete-detail {
 }
 
 /* DOI and WOS Query Link Styles */
+/* 统一的特殊链接样式 */
 .doi-link,
-.wos-query-link {
+.wos-query-link,
+.bib-fetch-btn {
     color: var(--wos-blue);
+    background: transparent;
     text-decoration: none;
     padding: 2px 6px;
     border-radius: 4px;
@@ -3726,27 +3690,46 @@ body.theme-vscode .autocomplete-detail {
     font-size: 12px;
     font-weight: 500;
     border: 1px solid transparent;
+    cursor: pointer;
+    outline: none; /* 移除浏览器默认 outline */
 }
 
 .doi-link:hover,
-.wos-query-link:hover {
+.wos-query-link:hover,
+.bib-fetch-btn:hover:not(:disabled) {
     background: var(--wos-hover);
     border-color: var(--wos-blue-light);
     text-decoration: none;
 }
 
+.doi-link:focus,
+.wos-query-link:focus,
+.bib-fetch-btn:focus {
+    outline: none; /* 移除焦点时的 outline */
+    border-color: var(--wos-blue-light);
+}
+
 .doi-link i,
-.wos-query-link i {
+.wos-query-link i,
+.bib-fetch-btn i {
     font-size: 11px;
 }
 
+.bib-fetch-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
 body.theme-vscode .doi-link,
-body.theme-vscode .wos-query-link {
+body.theme-vscode .wos-query-link,
+body.theme-vscode .bib-fetch-btn {
     color: #4EC9B0;
+    background: transparent;
 }
 
 body.theme-vscode .doi-link:hover,
-body.theme-vscode .wos-query-link:hover {
+body.theme-vscode .wos-query-link:hover,
+body.theme-vscode .bib-fetch-btn:hover:not(:disabled) {
     background: #094771;
     border-color: #4EC9B0;
 }

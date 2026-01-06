@@ -3159,6 +3159,10 @@ class PaperReviewerApp {
                 if (ev.target.closest('.file-group-title')) return;
                 this.toggleGroupCollapse(group.id);
             });
+            header.addEventListener('contextmenu', (e) => {
+                e.preventDefault();
+                this.showGroupContextMenu(e, group);
+            });
             header.addEventListener('dragover', (e) => this.handleGroupDragOver(e, group.id));
             header.addEventListener('drop', (e) => this.handleGroupDrop(e, group.id));
             header.addEventListener('dragleave', () => this.clearAllFileDragHighlights());
@@ -3792,6 +3796,105 @@ class PaperReviewerApp {
                 document.removeEventListener('click', closeMenu);
             });
         }, 0);
+    }
+
+    showGroupContextMenu(e, group) {
+        // 移除旧菜单
+        const oldMenu = document.querySelector('.context-menu');
+        if (oldMenu) oldMenu.remove();
+
+        // 创建菜单
+        const menu = document.createElement('div');
+        menu.className = 'context-menu';
+        menu.style.left = `${e.pageX}px`;
+        menu.style.top = `${e.pageY}px`;
+        menu.innerHTML = `
+            <div class="context-menu-item" data-action="copyGroupDois">
+                <i class="fas fa-copy"></i> 复制分组所有 DOI
+            </div>
+        `;
+
+        document.body.appendChild(menu);
+
+        // 约束菜单不超出可视区域
+        const margin = 8;
+        const rect = menu.getBoundingClientRect();
+        const maxLeft = window.innerWidth - rect.width - margin;
+        const maxTop = window.innerHeight - rect.height - margin;
+        const nextLeft = Math.max(margin, Math.min(e.pageX, maxLeft));
+        const nextTop = Math.max(margin, Math.min(e.pageY, maxTop));
+        menu.style.left = `${nextLeft}px`;
+        menu.style.top = `${nextTop}px`;
+
+        // 菜单项点击事件
+        menu.querySelectorAll('.context-menu-item').forEach(item => {
+            item.addEventListener('click', async () => {
+                const action = item.dataset.action;
+                menu.remove();
+
+                if (action === 'copyGroupDois') {
+                    await this.copyGroupDois(group);
+                }
+            });
+        });
+
+        // 点击其他地方关闭菜单
+        setTimeout(() => {
+            document.addEventListener('click', function closeMenu() {
+                menu.remove();
+                document.removeEventListener('click', closeMenu);
+            });
+        }, 0);
+    }
+
+    async copyGroupDois(group) {
+        try {
+            const dois = [];
+            const files = group.files || [];
+            
+            for (const filename of files) {
+                try {
+                    // 获取文件路径
+                    const base = filename;
+                    const paths = this.getPathsForBase(base);
+                    const jsonPath = paths?.json || base;
+                    
+                    // 读取文件数据
+                    const data = await this.readProjectFile(jsonPath);
+                    
+                    if (data) {
+                        // 优先从 meta_info.doi 获取
+                        let doi = (data.meta_info && data.meta_info.doi) ||
+                                 this.findFirstDoiInData(data);
+                        
+                        if (doi) {
+                            // 清理 DOI 格式
+                            doi = String(doi).trim();
+                            if (doi) {
+                                dois.push(doi);
+                            }
+                        }
+                    }
+                } catch (err) {
+                    console.warn(`读取文件 ${filename} 失败:`, err);
+                }
+            }
+
+            if (dois.length === 0) {
+                this.showNotification('该分组没有找到 DOI', 'warning');
+                return;
+            }
+
+            // 去重
+            const uniqueDois = [...new Set(dois)];
+            const doisText = uniqueDois.join('\n');
+            
+            await this.writeTextToClipboard(doisText);
+            this.showNotification(`已复制 ${uniqueDois.length} 个 DOI`, 'success');
+        } catch (err) {
+            console.error('复制分组 DOI 失败:', err);
+            this.showNotification(`复制失败: ${err.message}`, 'error');
+        }
     }
 
     async copyPdfNameToClipboard(jsonFilename) {
@@ -7238,13 +7341,12 @@ class PaperReviewerApp {
                         const raw = m[0];
                         const app = window.paperReviewerApp;
                         if (raw.startsWith('\\bib{')) {
-                            // 处理 \bib{}
+                            // 处理 \bib{} - 只创建容器，实际渲染由 applyBibliographyRendering 完成
                             const inside = raw.slice(5, -1);
                             const dois = inside.split(/[,，;]+/).map(d => d.trim()).filter(Boolean);
                             const normalized = dois.map(d => app?.normalizeDoiString(d)).filter(Boolean);
                             const escDois = app?.escapeHtml(normalized.join(',')) || '';
-                            const escLabel = app?.escapeHtml(normalized.join('; ')) || '';
-                            out += `<span class="bibliography-inline" data-bib-dois="${escDois}">[${escLabel}]</span>`;
+                            out += `<span class="bibliography-inline" data-bib-dois="${escDois}"></span>`;
                         } else {
                             // 处理 \cite/\citep
                             const isP = raw.startsWith('\\citep');
@@ -7371,24 +7473,47 @@ class PaperReviewerApp {
                 
                 mdInstance.renderer.rules.wos_query_link = (tokens, idx) => {
                     const query = tokens[idx].content;
-                    const items = query.split(/[\n,，]+/).map(s => s.trim()).filter(Boolean);
+                    // 支持换行符和逗号分割（包括混合使用和末尾多余的分隔符）
+                    const items = query.split(/[\n,，\s]+/)
+                        .map(s => s.trim())
+                        .filter(s => s.length > 0);
+                    
                     const wosids = [];
                     const dois = [];
+                    // WOSID 格式：WOS: 开头 + 字母数字
                     const wosidPattern = /^WOS:[A-Z0-9]+$/i;
-                    const doiPattern = /^10\.\d{4,9}\/[^\s]+$/i;
+                    // DOI 标准格式：10. + 数字(4+位) + / + 任意非空白字符
+                    // 示例：10.1234/abc, 10.12345/def.ghi-123, 10.1287/mnsc.2018.3223
+                    const doiExtractPattern = /^10\.\d{4,}\/[^\s,，]+$/i;
                     
                     items.forEach(item => {
+                        // 先检查是否是 WOSID（严格匹配）
                         if (wosidPattern.test(item)) {
                             wosids.push(item);
-                        } else if (doiPattern.test(item)) {
+                        } 
+                        // 再检查是否是 DOI（严格匹配完整格式）
+                        else if (doiExtractPattern.test(item)) {
                             dois.push(item);
+                        } 
+                        // 如果不是完整格式，尝试提取 DOI
+                        else {
+                            const doiMatch = item.match(/10\.\d{4,}\/[^\s,，]+/i);
+                            if (doiMatch) {
+                                dois.push(doiMatch[0]);
+                            } else if (item) {
+                                // 记录不匹配的项目，方便调试
+                                console.warn(`WOS Query: 无法识别的项目 "${item}"`);
+                            }
                         }
                     });
                     
                     const escQuery = md.utils.escapeHtml(query);
                     const dataWosids = md.utils.escapeHtml(JSON.stringify(wosids));
                     const dataDois = md.utils.escapeHtml(JSON.stringify(dois));
-                    return `<a href="#" class="wos-query-link" data-wosids="${dataWosids}" data-dois="${dataDois}" title="WOS Query: ${escQuery}"><i class="fa-solid fa-search"></i> WOS Query</a>`;
+                    
+                    // 显示识别到的数量
+                    const countText = `${wosids.length + dois.length} 项 (${wosids.length} WOSID, ${dois.length} DOI)`;
+                    return `<a href="#" class="wos-query-link" data-wosids="${dataWosids}" data-dois="${dataDois}" title="WOS Query: ${countText}"><i class="fa-solid fa-search"></i> WOS Query</a>`;
                 };
             };
             md.use(specialLinkPlugin);
