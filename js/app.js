@@ -5125,17 +5125,19 @@ class PaperReviewerApp {
             const doiUrl = this.normalizeDoiUrl(value.trim());
             const escapedDoi = this.escapeHtml(displayValue);
             const copyBtnId = `doi-copy-btn-${Math.random().toString(36).substr(2, 9)}`;
+            const wosBtnId = `wos-btn-${Math.random().toString(36).substr(2, 9)}`;
+            const doiUrlBtnId = `doi-url-btn-${Math.random().toString(36).substr(2, 9)}`;
             return `<span class="doi-with-copy">
                 <span class="doi-text">${escapedDoi}</span>
                 <button class="doi-copy-btn" id="${copyBtnId}" data-doi="${this.escapeAttr(value.trim())}" title="Copy DOI">
                     <i class="fas fa-copy"></i>
                 </button>
-                <a href="${wosUrl}" target="_blank" class="doi-link" title="View on Web of Science">
-                    <i class="fas fa-external-link-alt"></i>
-                </a>
-                <a href="${doiUrl}" target="_blank" class="doi-link doi-url-link" title="Open DOI URL">
-                    <i class="fas fa-link"></i>
-                </a>
+                <button class="apa-fetch-btn" id="${wosBtnId}" data-wos-url="${this.escapeAttr(wosUrl)}" title="View on Web of Science">
+                    <i class="fas fa-external-link-alt"></i><span>view WoS</span>
+                </button>
+                <button class="apa-fetch-btn" id="${doiUrlBtnId}" data-doi-url="${this.escapeAttr(doiUrl)}" title="Open DOI URL">
+                    <i class="fas fa-link"></i><span>view DOI</span>
+                </button>
             </span>`;
         }
         // 特殊处理: pdf_path 字段，增加复制/删除按钮
@@ -5145,8 +5147,8 @@ class PaperReviewerApp {
             const deleteId = `pdf-delete-btn-${Math.random().toString(36).substr(2, 9)}`;
             return `<span class="pdf-path-with-actions">
                 <span class="pdf-path-text">${this.escapeHtml(clean)}</span>
-                <button class="pdf-path-copy-btn" id="${copyId}" data-pdf="${this.escapeAttr(clean)}" title="复制 PDF 文件">
-                    <i class="fas fa-copy"></i>
+                <button class="apa-fetch-btn" id="${copyId}" data-pdf="${this.escapeAttr(clean)}" title="Copy PDF file">
+                    <i class="fas fa-copy"></i><span>copy pdf file</span>
                 </button>
                 <button class="pdf-path-delete-btn" id="${deleteId}" data-pdf="${this.escapeAttr(clean)}" title="删除 PDF 文件">
                     <i class="fas fa-trash"></i>
@@ -11773,10 +11775,52 @@ class PaperReviewerApp {
             this.hideApaTooltip();
         };
         this._doiCopyBtnHandler = async (e) => {
-            const btn = e.target.closest('.doi-copy-btn');
+            // 检查是否是 WoS 或 DOI URL 按钮（使用 apa-fetch-btn 样式）
+            let btn = e.target.closest('.apa-fetch-btn');
+            if (btn) {
+                e.preventDefault();
+                e.stopPropagation();
+                
+                const wosUrl = btn.dataset.wosUrl || '';
+                if (wosUrl) {
+                    window.open(wosUrl, '_blank');
+                    return;
+                }
+                
+                const doiUrl = btn.dataset.doiUrl || '';
+                if (doiUrl) {
+                    window.open(doiUrl, '_blank');
+                    return;
+                }
+                
+                // 检查是否是 PDF 复制按钮
+                const pdf = btn.dataset.pdf || '';
+                if (pdf) {
+                    if (btn.dataset.busy === '1') return;
+                    btn.dataset.busy = '1';
+                    btn.classList.add('copy-guard-shake');
+                    btn.disabled = true;
+                    try {
+                        await this.copyPdfFileByName(pdf);
+                    } catch (err) {
+                        console.error('复制 PDF 失败:', err);
+                        this.showNotification(`复制 PDF 失败: ${err.message}`, 'error');
+                    } finally {
+                        setTimeout(() => {
+                            btn.dataset.busy = '0';
+                            btn.classList.remove('copy-guard-shake');
+                            btn.disabled = false;
+                        }, 600);
+                    }
+                    return;
+                }
+            }
+            
+            btn = e.target.closest('.doi-copy-btn');
             if (!btn) return;
             e.preventDefault();
             e.stopPropagation();
+            
             const doi = btn.dataset.doi || '';
             if (!doi.trim()) {
                 this.showNotification('DOI 不能为空', 'error');
