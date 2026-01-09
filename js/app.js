@@ -1003,7 +1003,8 @@ class PaperReviewerApp {
                     this.switchToView('markdown');
                 }
                 if (!this.currentMarkdownExists) {
-                    this.showNotification('No markdown file. Create it first.', 'info');
+                    // 文件不存在时创建文件
+                    this.createMarkdownFile();
                     return;
                 }
                 const newState = !this.isMarkdownEditing;
@@ -1142,6 +1143,14 @@ class PaperReviewerApp {
             mdSaveItem.addEventListener('click', async (e) => {
                 e.preventDefault();
                 await this.saveMarkdownFromEditor();
+                this.toggleMdMenu(false);
+            });
+        }
+        const mdDeleteItem = document.getElementById('mdDeleteItem');
+        if (mdDeleteItem) {
+            mdDeleteItem.addEventListener('click', async (e) => {
+                e.preventDefault();
+                await this.deleteCurrentMarkdownFile();
                 this.toggleMdMenu(false);
             });
         }
@@ -7932,12 +7941,34 @@ class PaperReviewerApp {
 
     buildDefaultMarkdown() {
         const base = this.currentFile ? this.currentFile.replace(/\.json$/i, '') : 'notes';
-        return `# ${base}\n\n> 自动创建的 Markdown 笔记文件。\n\n- 可添加章节、要点、引用等。\n- 与 JSON 同名，便于版本记录。\n`;
+        // 从文件名提取DOI（将_转换为/）
+        const doi = base.replace(/_/g, '/');
+        // 获取当前日期时间（精确到秒）
+        const now = new Date();
+        const year = now.getFullYear();
+        const month = String(now.getMonth() + 1).padStart(2, '0');
+        const day = String(now.getDate()).padStart(2, '0');
+        const hours = String(now.getHours()).padStart(2, '0');
+        const minutes = String(now.getMinutes()).padStart(2, '0');
+        const seconds = String(now.getSeconds()).padStart(2, '0');
+        const date = `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+        return `---\ndoi: ${doi}\ndate: ${date}\n---\n\n`;
     }
 
     buildDefaultMarkdownForFilename(jsonFilename) {
         const base = jsonFilename ? jsonFilename.replace(/\.json$/i, '') : 'notes';
-        return `# ${base}\n\n> 自动创建的 Markdown 笔记文件。\n\n- 可添加章节、要点、引用等。\n- 与 JSON 同名，便于版本记录。\n`;
+        // 从文件名提取DOI（将_转换为/）
+        const doi = base.replace(/_/g, '/');
+        // 获取当前日期时间（精确到秒）
+        const now = new Date();
+        const year = now.getFullYear();
+        const month = String(now.getMonth() + 1).padStart(2, '0');
+        const day = String(now.getDate()).padStart(2, '0');
+        const hours = String(now.getHours()).padStart(2, '0');
+        const minutes = String(now.getMinutes()).padStart(2, '0');
+        const seconds = String(now.getSeconds()).padStart(2, '0');
+        const date = `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+        return `---\ndoi: ${doi}\ndate: ${date}\n---\n\n`;
     }
 
     async ensureMarkdownExistsForFile(jsonFilename) {
@@ -9283,6 +9314,54 @@ class PaperReviewerApp {
         } catch (err) {
             console.error('创建 Markdown 失败:', err);
             this.showNotification(`创建 Markdown 失败: ${err.message}`, 'error');
+        }
+    }
+
+    async deleteCurrentMarkdownFile() {
+        if (!this.currentFile || !this.currentMarkdownExists) {
+            this.showNotification('No markdown file to delete', 'info');
+            return;
+        }
+        
+        const mdFilename = this.getMarkdownFilename(this.currentFile);
+        const confirmed = window.confirm(`Delete markdown file "${mdFilename}"?\nThis action cannot be undone.`);
+        if (!confirmed) return;
+        
+        const projectPath = this.currentProject ? this.currentProject.path : 'user';
+        try {
+            const resp = await fetch('/delete-json', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    projectPath,
+                    filename: mdFilename
+                })
+            });
+            
+            if (!resp.ok) {
+                const text = await resp.text();
+                throw new Error(text || 'Delete failed');
+            }
+            
+            // 清空状态
+            this.currentMarkdownExists = false;
+            this.currentMarkdownFile = null;
+            this.currentMarkdownText = '';
+            this.currentMarkdownBaselineText = '';
+            this.isMarkdownEditing = false;
+            this.hasUnsavedMarkdownChanges = false;
+            
+            // 清空显示
+            this.renderMarkdownView('');
+            const textarea = document.getElementById('markdownTextarea');
+            if (textarea) textarea.value = '';
+            
+            this.updateMarkdownToolbar();
+            this.updateMarkdownDirtyUI();
+            this.showNotification(`Deleted: ${mdFilename}`, 'success');
+        } catch (err) {
+            console.error('删除 Markdown 失败:', err);
+            this.showNotification(`Failed to delete: ${err.message}`, 'error');
         }
     }
 

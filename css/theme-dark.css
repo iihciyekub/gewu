@@ -657,6 +657,30 @@ body.theme-dark .markdown-body code {
     color: #b31d28;
 }
 
+body.theme-dark .markdown-body table th {
+    background: #2d3748;
+    color: #e2e8f0;
+    border-color: #4a5568;
+}
+
+body.theme-dark .markdown-body table td {
+    background: #1e2530;
+    border-color: #374151;
+}
+
+body.theme-dark .markdown-body table td:first-child {
+    background: #252d3d;
+    color: #cbd5e0;
+}
+
+body.theme-dark .markdown-body table tbody tr:hover td {
+    background: #2a3344;
+}
+
+body.theme-dark .markdown-body table tbody tr:hover td:first-child {
+    background: #2f3b4f;
+}
+
 /* 项目详情面板 - 深色主题 */
 body.theme-dark .detail-section h3 {
     color: #569cd6;
