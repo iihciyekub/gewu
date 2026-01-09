@@ -8,6 +8,7 @@
 - 🗂️ **文件组织**: 自动管理 JSON 数据、Markdown 笔记和 PDF 文献
 - 📊 **结构化编辑**: 支持 JSON 的可视化编辑和验证
 - 📝 **Markdown 编辑**: 内置 Markdown 编辑器，支持实时预览
+- 🏷️ **Front Matter 支持**: 在 Markdown 中添加结构化元数据（NEW!）
 - 📖 **PDF 查看**: 集成 PDF 查看器
 - 💾 **自动保存**: 实时保存，不丢失工作进度
 
@@ -62,9 +63,17 @@ ref_251207_reviewer/
 
 ## 📖 文档
 
+### 基础文档
 - [快速开始](QUICK_START.md) - 30 秒快速上手
 - [项目创建指南](PROJECT_CREATION_GUIDE.md) - 详细的项目创建和管理文档
 - [快捷键](shortcuts.md) - 快捷键速查表
+
+### Markdown Front Matter 功能 🏷️ NEW!
+- [功能说明](METADATA_FEATURE.md) - 完整功能介绍和使用指南
+- [快速参考](FRONTMATTER_QUICKREF.md) - Front Matter 语法快速参考
+- [使用指南](FRONTMATTER_GUIDE.md) - 详细使用文档
+- [示例文档](EXAMPLE_WITH_METADATA.md) - 完整示例
+- [独立测试](test_frontmatter.html) - 打开浏览器测试解析功能
 
 ## 🎨 新项目目录结构
 
@@ -92,7 +101,7 @@ json/
 
 ### md/ 目录
 
-存放 Markdown 格式的笔记和评论：
+存放 Markdown 格式的笔记和评论。支持 YAML Front Matter 元数据：
 
 ```
 md/
@@ -100,6 +109,23 @@ md/
 ├── paper2.md
 └── notes.md               # 总体笔记
 ```
+
+**Markdown Front Matter 示例**：
+```markdown
+---
+title: 论文标题
+author: 作者名
+date: 2026-01-09
+tags: [AI, 深度学习]
+status: 审核中
+---
+
+# 笔记内容
+
+这里是正文...
+```
+
+元数据会自动解析并显示在文档顶部。详见 [Front Matter 功能说明](METADATA_FEATURE.md)。
 
 ### pdf/ 目录
 

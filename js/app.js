@@ -24,6 +24,8 @@ class PaperReviewerApp {
         this.currentMarkdownFile = '';
         this.currentMarkdownBaselineText = '';
         this.markdownParser = null;
+        this.frontMatterParser = null;
+        this.currentMarkdownMetadata = {}; // 存储当前 Markdown 的 metadata
         this.currentMarkdownExists = false;
         this.isMarkdownEditing = false;
         this.hasUnsavedMarkdownChanges = false;
@@ -8049,6 +8051,26 @@ class PaperReviewerApp {
             this.applyEditLockState();
             return;
         }
+        
+        // 解析 front matter
+        if (!this.frontMatterParser && window.FrontMatterParser) {
+            this.frontMatterParser = new window.FrontMatterParser();
+        }
+        
+        let contentToRender = sourceText;
+        let metadata = {};
+        
+        if (this.frontMatterParser) {
+            const parsed = this.frontMatterParser.parse(sourceText);
+            metadata = parsed.metadata;
+            contentToRender = parsed.content;
+            this.currentMarkdownMetadata = metadata;
+            
+            if (this.debugEnabled && parsed.hasFrontMatter) {
+                console.log('Parsed Markdown metadata:', metadata);
+            }
+        }
+        
         const normalizeMath = (src = '') => {
             // 将 \( \) 与 \[ \] 转换为 $...$ 与 $$...$$，便于 MathJax 识别
             let out = src;
@@ -8056,12 +8078,20 @@ class PaperReviewerApp {
             out = out.replace(/\\\(\s*([\s\S]*?)\s*\\\)/g, (m, inner) => `$${inner}$`);
             return out;
         };
-        const html = md.render(normalizeMath(sourceText));
-        render.innerHTML = `<article class="markdown-body">${html}</article>`;
+        const html = md.render(normalizeMath(contentToRender));
+        
+        // 如果有 metadata，在内容前显示
+        let metadataHtml = '';
+        if (Object.keys(metadata).length > 0) {
+            metadataHtml = this.renderMetadataSection(metadata);
+        }
+        
+        render.innerHTML = `<article class="markdown-body">${metadataHtml}${html}</article>`;
         this.bindQaTitles(render);
         this.applyPendingQaTitle(render);
         this.applyQaCollapsedState(render);
         this.bindQaCollapsibles(render);
+        this.bindMetadataCollapse(render);
         this.renderMath(render);
         this.highlightCodeBlocks(render);
         this.applyCitationRendering(render);
@@ -8069,6 +8099,64 @@ class PaperReviewerApp {
         this.adjustReferenceFont(render);
         this.updateMarkdownUndoButtonState();
         this.applyEditLockState();
+    }
+
+    renderMetadataSection(metadata) {
+        if (!metadata || Object.keys(metadata).length === 0) {
+            return '';
+        }
+        
+        const entries = Object.entries(metadata).map(([key, value]) => {
+            let displayValue = value;
+            
+            // 格式化值的显示
+            if (Array.isArray(value)) {
+                displayValue = value.join(', ');
+            } else if (typeof value === 'object' && value !== null) {
+                displayValue = JSON.stringify(value, null, 2);
+            } else if (typeof value === 'boolean') {
+                displayValue = value ? 'true' : 'false';
+            } else if (value === null) {
+                displayValue = 'null';
+            }
+            
+            const escKey = this.escapeHtml(String(key));
+            const escValue = this.escapeHtml(String(displayValue));
+            
+            return `<tr><td class="meta-key">${escKey}</td><td class="meta-value">${escValue}</td></tr>`;
+        }).join('');
+        
+        return `
+            <div class="markdown-metadata">
+                <div class="metadata-header">
+                    <i class="fas fa-chevron-down"></i>
+                    <span>Metadata</span>
+                </div>
+                <table class="metadata-table">
+                    <tbody>${entries}</tbody>
+                </table>
+            </div>
+        `;
+    }
+
+    bindMetadataCollapse(renderRoot) {
+        if (!renderRoot) return;
+        const metadataEl = renderRoot.querySelector('.markdown-metadata');
+        const headerEl = renderRoot.querySelector('.metadata-header');
+        if (!metadataEl || !headerEl) return;
+        
+        // 读取折叠状态
+        const storageKey = `metadataCollapsed_${this.currentMarkdownFile}`;
+        const isCollapsed = localStorage.getItem(storageKey) === 'true';
+        if (isCollapsed) {
+            metadataEl.classList.add('collapsed');
+        }
+        
+        // 绑定点击事件
+        headerEl.addEventListener('click', () => {
+            const collapsed = metadataEl.classList.toggle('collapsed');
+            localStorage.setItem(storageKey, collapsed);
+        });
     }
 
     renderCitationPlaceholder(dois = [], type = 'citep') {

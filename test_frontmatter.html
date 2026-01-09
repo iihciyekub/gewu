@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Front Matter Parser 测试</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #2563eb;
+            border-bottom: 3px solid #2563eb;
+            padding-bottom: 10px;
+        }
+        h2 {
+            color: #3b82f6;
+            margin-top: 30px;
+        }
+        .test-section {
+            margin: 20px 0;
+            padding: 20px;
+            background: #f8fafc;
+            border-radius: 8px;
+            border-left: 4px solid #3b82f6;
+        }
+        textarea {
+            width: 100%;
+            height: 200px;
+            padding: 10px;
+            border: 2px solid #cbd5e1;
+            border-radius: 6px;
+            font-family: 'Monaco', 'Courier New', monospace;
+            font-size: 13px;
+            margin: 10px 0;
+        }
+        button {
+            background: #3b82f6;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            transition: background 0.3s;
+        }
+        button:hover {
+            background: #2563eb;
+        }
+        .result {
+            margin: 15px 0;
+            padding: 15px;
+            background: white;
+            border: 2px solid #e2e8f0;
+            border-radius: 6px;
+        }
+        .result h3 {
+            margin-top: 0;
+            color: #475569;
+        }
+        pre {
+            background: #1e293b;
+            color: #e2e8f0;
+            padding: 15px;
+            border-radius: 6px;
+            overflow-x: auto;
+            font-size: 13px;
+        }
+        .metadata-display {
+            background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
+            border: 2px solid #0284c7;
+            border-radius: 12px;
+            padding: 16px;
+            margin: 15px 0;
+        }
+        .metadata-display h4 {
+            color: #0369a1;
+            margin-top: 0;
+        }
+        table {
+            width: 100%;
+            border-collapse: separate;
+            border-spacing: 0 4px;
+        }
+        td {
+            padding: 8px 12px;
+            background: white;
+            border: 1px solid #bae6fd;
+        }
+        td:first-child {
+            font-weight: 600;
+            color: #0369a1;
+            width: 30%;
+        }
+        .success {
+            color: #16a34a;
+            font-weight: 600;
+        }
+        .error {
+            color: #dc2626;
+            font-weight: 600;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔍 Front Matter Parser 测试工具</h1>
+        
+        <div class="test-section">
+            <h2>📝 测试解析功能</h2>
+            <p>在下面输入包含 front matter 的 Markdown 文本：</p>
+            <textarea id="inputText">---
+title: 测试文档
+author: 测试作者
+date: 2026-01-09
+tags: [test, markdown, yaml]
+version: 1.0
+published: true
+count: 42
+price: 19.99
+---
+
+# 这是文档内容
+
+这是一段测试文本。
+
+## 章节 1
+
+内容...</textarea>
+            <button onclick="testParse()">🚀 解析</button>
+            
+            <div id="parseResult"></div>
+        </div>
+
+        <div class="test-section">
+            <h2>🔄 测试序列化功能</h2>
+            <p>输入 JSON 格式的 metadata：</p>
+            <textarea id="metadataInput">{
+  "title": "新文档",
+  "author": "作者名",
+  "tags": ["tag1", "tag2"],
+  "version": 2.0,
+  "published": false
+}</textarea>
+            <button onclick="testStringify()">🔄 序列化为 YAML</button>
+            
+            <div id="stringifyResult"></div>
+        </div>
+
+        <div class="test-section">
+            <h2>✏️ 测试更新功能</h2>
+            <p>测试更新现有文档的 metadata：</p>
+            <button onclick="testUpdate()">✏️ 更新 Metadata</button>
+            
+            <div id="updateResult"></div>
+        </div>
+    </div>
+
+    <script src="js/core/frontmatter-parser.js"></script>
+    <script>
+        const parser = new FrontMatterParser();
+
+        function testParse() {
+            const input = document.getElementById('inputText').value;
+            const resultDiv = document.getElementById('parseResult');
+            
+            try {
+                const result = parser.parse(input);
+                
+                let metadataHtml = '';
+                if (Object.keys(result.metadata).length > 0) {
+                    const rows = Object.entries(result.metadata).map(([key, value]) => {
+                        let displayValue = value;
+                        if (Array.isArray(value)) {
+                            displayValue = value.join(', ');
+                        } else if (typeof value === 'object' && value !== null) {
+                            displayValue = JSON.stringify(value);
+                        }
+                        return `<tr><td>${escapeHtml(key)}</td><td>${escapeHtml(String(displayValue))}</td></tr>`;
+                    }).join('');
+                    
+                    metadataHtml = `
+                        <div class="metadata-display">
+                            <h4>📋 解析的 Metadata</h4>
+                            <table>${rows}</table>
+                        </div>
+                    `;
+                }
+                
+                resultDiv.innerHTML = `
+                    <div class="result">
+                        <h3 class="success">✅ 解析成功</h3>
+                        <p><strong>是否包含 Front Matter:</strong> ${result.hasFrontMatter ? '是' : '否'}</p>
+                        ${metadataHtml}
+                        <h4>📄 文档内容</h4>
+                        <pre>${escapeHtml(result.content.substring(0, 500))}${result.content.length > 500 ? '...' : ''}</pre>
+                        <h4>🔍 完整解析结果（JSON）</h4>
+                        <pre>${JSON.stringify(result, null, 2)}</pre>
+                    </div>
+                `;
+            } catch (error) {
+                resultDiv.innerHTML = `
+                    <div class="result">
+                        <h3 class="error">❌ 解析失败</h3>
+                        <p>${escapeHtml(error.message)}</p>
+                    </div>
+                `;
+            }
+        }
+
+        function testStringify() {
+            const input = document.getElementById('metadataInput').value;
+            const resultDiv = document.getElementById('stringifyResult');
+            
+            try {
+                const metadata = JSON.parse(input);
+                const yaml = parser.stringify(metadata);
+                
+                resultDiv.innerHTML = `
+                    <div class="result">
+                        <h3 class="success">✅ 序列化成功</h3>
+                        <h4>📝 生成的 YAML Front Matter</h4>
+                        <pre>${escapeHtml(yaml)}</pre>
+                        <h4>📋 完整 Markdown（带 front matter）</h4>
+                        <pre>${escapeHtml(yaml + '\n# 文档标题\n\n这是文档内容...')}</pre>
+                    </div>
+                `;
+            } catch (error) {
+                resultDiv.innerHTML = `
+                    <div class="result">
+                        <h3 class="error">❌ 序列化失败</h3>
+                        <p>${escapeHtml(error.message)}</p>
+                    </div>
+                `;
+            }
+        }
+
+        function testUpdate() {
+            const resultDiv = document.getElementById('updateResult');
+            
+            const originalText = `---
+title: 原始标题
+version: 1.0
+---
+
+# 文档内容
+
+这是原始内容。`;
+
+            const updates = {
+                title: '更新后的标题',
+                version: 2.0,
+                lastModified: '2026-01-09',
+                status: '已审核'
+            };
+
+            try {
+                const updated = parser.updateMetadata(originalText, updates, true);
+                const parsed = parser.parse(updated);
+                
+                resultDiv.innerHTML = `
+                    <div class="result">
+                        <h3 class="success">✅ 更新成功</h3>
+                        <h4>📝 原始文档</h4>
+                        <pre>${escapeHtml(originalText)}</pre>
+                        <h4>🔄 更新的字段</h4>
+                        <pre>${JSON.stringify(updates, null, 2)}</pre>
+                        <h4>✨ 更新后的文档</h4>
+                        <pre>${escapeHtml(updated)}</pre>
+                        <h4>📋 更新后的 Metadata</h4>
+                        <pre>${JSON.stringify(parsed.metadata, null, 2)}</pre>
+                    </div>
+                `;
+            } catch (error) {
+                resultDiv.innerHTML = `
+                    <div class="result">
+                        <h3 class="error">❌ 更新失败</h3>
+                        <p>${escapeHtml(error.message)}</p>
+                    </div>
+                `;
+            }
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        // 页面加载时自动运行第一个测试
+        window.addEventListener('load', () => {
+            testParse();
+        });
+    </script>
+</body>
+</html>
