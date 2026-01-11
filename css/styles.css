@@ -1968,6 +1968,36 @@ body.theme-vscode .qa-bubble {
     font-size: 16px;
 }
 
+/* PDF Popup Window Button */
+.btn-pdf-popup {
+    position: absolute;
+    bottom: 16px;
+    right: 125px;
+    width: 42px;
+    height: 42px;
+    background: var(--wos-blue-light);
+    color: #fff;
+    border: none;
+    border-radius: 50%;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 6px 16px rgba(0, 102, 204, 0.35);
+    transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+    z-index: 10;
+}
+
+.btn-pdf-popup:hover {
+    background: var(--wos-blue);
+    transform: translateY(-2px) scale(1.03);
+    box-shadow: 0 8px 18px rgba(0, 62, 116, 0.45);
+}
+
+.btn-pdf-popup i {
+    font-size: 16px;
+}
+
 .pdf-placeholder {
     position: absolute;
     inset: 0;

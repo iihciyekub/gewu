@@ -93,6 +93,8 @@ class PaperReviewerApp {
         this.pdfPlaceholderEl = null;
         this.settingsMenuVisible = false;
         this.autoLoadPdf = false;
+        this.pdfPopupWindow = null;
+        this.isPdfPopupMode = false;
         this.metaDefaultsPatched = false;
         this.addSectionShowTimer = null;
         this.addSectionHoverCleanup = null;
@@ -1655,6 +1657,12 @@ class PaperReviewerApp {
                 await this.ensurePdfLoaded();
                 this.downloadCurrentPdf();
             });
+        }
+
+        // PDF 独立窗口按钮
+        const btnPdfPopup = document.getElementById('btnPdfPopup');
+        if (btnPdfPopup) {
+            btnPdfPopup.addEventListener('click', () => this.togglePdfPopup());
         }
 
         const rightPanel = document.querySelector('.right-panel');
@@ -6570,19 +6578,17 @@ class PaperReviewerApp {
 
     async toggleJsonMdSource() {
         const view = this.currentView || 'structured';
-        if (view === 'flat') {
-            await this.goToMarkdownSource();
+        // 根据当前视图进入对应的源码编辑模式
+        if (view === 'flat' || view === 'structured') {
+            // JSON 视图：进入 JSON 源码编辑
+            await this.goToJsonSource();
             return;
         }
         if (view === 'markdown') {
-            if (this.isMarkdownEditing) {
-                await this.goToJsonSource();
-            } else {
-                await this.goToMarkdownSource();
-            }
+            // Markdown 视图：进入 Markdown 源码编辑
+            await this.goToMarkdownSource();
             return;
         }
-        await this.goToJsonSource();
     }
 
     toggleMdMenu(forceVisible) {
@@ -9909,19 +9915,146 @@ class PaperReviewerApp {
     }
 
     // PDF Functions - 使用iframe加载完整的PDF.js viewer
+    togglePdfPopup() {
+        // 检查是否在独立窗口模式
+        if (this.isPdfPopupMode) {
+            // 关闭独立窗口，回到嵌入模式
+            if (this.pdfPopupWindow && !this.pdfPopupWindow.closed) {
+                this.pdfPopupWindow.close();
+            }
+            // 保存当前PDF URL
+            const urlToRestore = this.currentPdfUrl;
+            // 立即设置状态为false，防止重复点击
+            this.isPdfPopupMode = false;
+            this.pdfPopupWindow = null;
+            // 清除lastPdfLoadedUrl以强制重新加载
+            this.lastPdfLoadedUrl = '';
+            
+            // 确保iframe已准备好
+            const pdfViewer = document.getElementById('pdfViewer');
+            if (pdfViewer) {
+                pdfViewer.classList.remove('pdf-loaded');
+            }
+            
+            // 立即同步加载PDF到iframe，不使用延迟
+            if (urlToRestore) {
+                this.loadPDF(urlToRestore);
+            }
+        } else {
+            // 打开独立窗口
+            this.openPdfInPopup();
+        }
+    }
+
+    openPdfInPopup() {
+        if (!this.currentPdfUrl) {
+            this.showNotification('No PDF loaded', 'info');
+            return;
+        }
+        
+        // 保存URL用于恢复
+        const savedPdfUrl = this.currentPdfUrl;
+        
+        // 创建独立窗口
+        const absoluteUrl = window.location.origin + this.currentPdfUrl;
+        const viewerUrl = `js/pdfjs/web/viewer.html?file=${encodeURIComponent(absoluteUrl)}&theme=${this.theme === 'dark' ? 'dark' : 'light'}#zoom=80`;
+        
+        const width = 1000;
+        const height = 800;
+        const left = (screen.width - width) / 2;
+        const top = (screen.height - height) / 2;
+        
+        this.pdfPopupWindow = window.open(
+            viewerUrl,
+            'PDFViewer',
+            `width=${width},height=${height},left=${left},top=${top},resizable=yes,scrollbars=yes`
+        );
+        
+        if (this.pdfPopupWindow) {
+            // 使用 requestAnimationFrame 确保窗口完全打开后再处理
+            requestAnimationFrame(() => {
+                requestAnimationFrame(() => {
+                    // 检查窗口是否真的打开了
+                    if (!this.pdfPopupWindow || this.pdfPopupWindow.closed) {
+                        // 窗口立即关闭或打开失败，保持内嵌模式
+                        this.isPdfPopupMode = false;
+                        this.pdfPopupWindow = null;
+                        return;
+                    }
+                    
+                    // 窗口成功打开，现在可以设置状态并清空iframe
+                    this.isPdfPopupMode = true;
+                    
+                    // 清空内嵌iframe
+                    const pdfViewer = document.getElementById('pdfViewer');
+                    if (pdfViewer) {
+                        pdfViewer.removeAttribute('src');
+                        pdfViewer.classList.remove('pdf-loaded');
+                    }
+                    
+                    // 监听窗口关闭
+                    const checkClosed = setInterval(() => {
+                        if (this.pdfPopupWindow && this.pdfPopupWindow.closed) {
+                            clearInterval(checkClosed);
+                            // 保存URL用于恢复
+                            const urlToRestore = this.currentPdfUrl || savedPdfUrl;
+                            // 重置状态
+                            this.isPdfPopupMode = false;
+                            this.pdfPopupWindow = null;
+                            this.lastPdfLoadedUrl = '';
+                            
+                            // 确保iframe准备好
+                            const pdfViewer = document.getElementById('pdfViewer');
+                            if (pdfViewer) {
+                                pdfViewer.classList.remove('pdf-loaded');
+                            }
+                            
+                            // 立即加载PDF到iframe
+                            if (urlToRestore) {
+                                this.loadPDF(urlToRestore);
+                            }
+                        }
+                    }, 500);
+                });
+            });
+        } else {
+            // 窗口打开失败（可能被浏览器拦截）
+            this.isPdfPopupMode = false;
+            this.showNotification('Failed to open popup window. Please allow popups for this site.', 'error');
+        }
+    }
+
+    resetPdfViewerFrame() {
+        const pdfViewer = document.getElementById('pdfViewer');
+        if (!pdfViewer) return;
+        pdfViewer.onload = null;
+        pdfViewer.removeAttribute('src');
+        pdfViewer.classList.remove('pdf-loaded');
+        delete pdfViewer.dataset.pdfSig;
+    }
+
     async loadPDF(url) {
         const loadToken = ++this.currentPdfLoadToken;
         try {
-            const pdfViewer = document.getElementById('pdfViewer');
             this.currentPdfUrl = url;
             this.pendingPdfUrl = url;
+            
+            // 如果在独立窗口模式，更新独立窗口的PDF
+            if (this.isPdfPopupMode && this.pdfPopupWindow && !this.pdfPopupWindow.closed) {
+                const absoluteUrl = window.location.origin + url;
+                const viewerUrl = `js/pdfjs/web/viewer.html?file=${encodeURIComponent(absoluteUrl)}&theme=${this.theme === 'dark' ? 'dark' : 'light'}#zoom=80`;
+                this.pdfPopupWindow.location.href = viewerUrl;
+                return;
+            }
+            
+            const pdfViewer = document.getElementById('pdfViewer');
             this.setPdfSidebarPrefClosed();
             if (pdfViewer) {
                 pdfViewer.classList.remove('pdf-loaded');
             }
 
-            // 同一路径已加载，直接复用现有渲染
-            if (this.lastPdfLoadedUrl === url) {
+            // 同一路径已加载，且iframe有src属性，直接复用现有渲染
+            if (this.lastPdfLoadedUrl === url && pdfViewer && pdfViewer.src) {
                 if (pdfViewer) {
                     pdfViewer.classList.add('pdf-loaded');
                 }
