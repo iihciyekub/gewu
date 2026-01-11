@@ -54,7 +54,7 @@
             }
         });
         
-        // 在iframe内部也监听键盘事件
+        // 在iframe内部也监听键盘事件和下载事件
         window.addEventListener('load', () => {
             const iframe = document.getElementById('pdfFrame');
             if (iframe && iframe.contentWindow) {
@@ -78,8 +78,135 @@
                     // 跨域限制时忽略
                     console.log('Cannot access iframe content due to CORS');
                 }
+                
+                // 监听PDF.js的下载事件并拦截，使用带标注的保存逻辑
+                setupPdfDownloadInterceptor();
             }
         });
+        
+        // 设置PDF下载拦截器，调用主窗口的保存方法
+        function setupPdfDownloadInterceptor() {
+            const iframe = document.getElementById('pdfFrame');
+            if (!iframe || !iframe.contentWindow) return;
+            
+            try {
+                const iframeWindow = iframe.contentWindow;
+                
+                // 等待PDFViewerApplication加载完成
+                const waitForPdfApp = setInterval(() => {
+                    const pdfApp = iframeWindow.PDFViewerApplication;
+                    if (!pdfApp || !pdfApp.eventBus) return;
+                    
+                    clearInterval(waitForPdfApp);
+                    
+                    console.log('✅ PDF.js已加载，设置下载拦截器');
+                    
+                    // 监听download事件
+                    pdfApp.eventBus.on('download', async (evt) => {
+                        console.log('📥 拦截PDF下载事件，调用主窗口保存方法');
+                        
+                        // 阻止默认下载行为
+                        if (evt && evt.preventDefault) {
+                            evt.preventDefault();
+                        }
+                        
+                        try {
+                            // 调用主窗口（opener）的下载方法
+                            if (window.opener && window.opener.app && typeof window.opener.app.downloadCurrentPdf === 'function') {
+                                console.log('✅ 调用主窗口的downloadCurrentPdf方法');
+                                await window.opener.app.downloadCurrentPdf();
+                            } else {
+                                console.warn('⚠️ 无法访问主窗口的保存方法，使用本地保存');
+                                await downloadPdfWithAnnotations(pdfApp);
+                            }
+                        } catch (error) {
+                            console.error('❌ 保存PDF失败:', error);
+                            // 如果失败，回退到本地下载
+                            await downloadPdfWithAnnotations(pdfApp);
+                        }
+                    });
+                    
+                    console.log('✅ 下载拦截器已设置');
+                }, 100);
+                
+                // 10秒后清除定时器
+                setTimeout(() => clearInterval(waitForPdfApp), 10000);
+                
+            } catch (error) {
+                console.error('❌ 设置下载拦截器失败:', error);
+            }
+        }
+        
+        // 下载包含标注的PDF（回退方案）
+        async function downloadPdfWithAnnotations(pdfApp) {
+            try {
+                const pdfDocument = pdfApp.pdfDocument;
+                if (!pdfDocument) {
+                    console.warn('⚠️ PDF文档未加载');
+                    performDefaultDownload(pdfApp);
+                    return;
+                }
+                
+                // 尝试使用saveDocument方法（包含标注）
+                let pdfData = null;
+                if (typeof pdfDocument.saveDocument === 'function') {
+                    console.log('📝 使用saveDocument保存（包含标注）');
+                    pdfData = await pdfDocument.saveDocument();
+                } else if (typeof pdfDocument.getData === 'function') {
+                    console.log('📝 使用getData保存（可能不含标注）');
+                    pdfData = await pdfDocument.getData();
+                } else {
+                    console.warn('⚠️ 无可用的保存方法');
+                    performDefaultDownload(pdfApp);
+                    return;
+                }
+                
+                if (!pdfData) {
+                    console.warn('⚠️ 未能获取PDF数据');
+                    performDefaultDownload(pdfApp);
+                    return;
+                }
+                
+                // 创建Blob并触发下载
+                const blob = new Blob([pdfData], { type: 'application/pdf' });
+                
+                // 获取文件名
+                let filename = 'document.pdf';
+                if (pdfApp.url) {
+                    try {
+                        const urlObj = new URL(pdfApp.url);
+                        const pathParts = urlObj.pathname.split('/');
+                        filename = pathParts[pathParts.length - 1] || 'document.pdf';
+                    } catch (e) {
+                        console.warn('解析文件名失败:', e);
+                    }
+                }
+                
+                // 触发下载到浏览器默认下载位置
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = filename;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+                
+                console.log('✅ 带标注的PDF下载成功（浏览器默认位置）:', filename);
+                
+            } catch (error) {
+                console.error('❌ 下载带标注的PDF失败:', error);
+                throw error;
+            }
+        }
+        
+        // 执行默认下载（回退方案）
+        function performDefaultDownload(pdfApp) {
+            console.log('⚠️ 回退到默认下载方式');
+            if (pdfApp && pdfApp.download) {
+                pdfApp.download();
+            }
+        }
     </script>
 </body>
 </html>
