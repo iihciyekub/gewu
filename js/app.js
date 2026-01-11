@@ -241,7 +241,8 @@ class PaperReviewerApp {
             // ignore
         }
         // 重新加载已打开的 PDF，使其采用对应主题
-        if (this.currentPdfUrl) {
+        // 只有在autoLoadPdf开启或PDF已经显示时才重新加载
+        if (this.currentPdfUrl && (this.autoLoadPdf || this.lastPdfLoadedUrl)) {
             this.lastPdfLoadedUrl = '';
             this.ensurePdfLoaded();
         }
@@ -1288,9 +1289,11 @@ class PaperReviewerApp {
         }
         const gotoCancelBtn = document.getElementById('gotoEditCancel');
         const gotoSaveBtn = document.getElementById('gotoEditSave');
+        const gotoTestBtn = document.getElementById('gotoEditTest');
         const gotoModal = document.getElementById('gotoEditModal');
         if (gotoCancelBtn) gotoCancelBtn.addEventListener('click', () => this.closeGotoEditModal(false));
         if (gotoSaveBtn) gotoSaveBtn.addEventListener('click', () => this.closeGotoEditModal(true));
+        if (gotoTestBtn) gotoTestBtn.addEventListener('click', () => this.testGotoSearch());
         if (gotoModal) {
             gotoModal.addEventListener('click', (e) => {
                 if (e.target === gotoModal) this.closeGotoEditModal(false);
@@ -6946,7 +6949,8 @@ class PaperReviewerApp {
 
     showProjectDetailsPanel() {
         if (!this.currentProject) {
-            this.showNotification('未加载项目', 'error');
+            // 未加载项目时，打开项目选择器
+            this.showProjectSelector();
             return;
         }
         
@@ -11901,6 +11905,77 @@ class PaperReviewerApp {
             const val = commit && textarea ? textarea.value : null;
             this.gotoEditResolver(val);
             this.gotoEditResolver = null;
+        }
+    }
+
+    async testGotoSearch() {
+        // 测试编辑框中的文本能否在PDF中找到
+        const textarea = document.getElementById('gotoEditTextarea');
+        if (!textarea) return;
+        
+        const searchText = textarea.value.trim();
+        if (!searchText) {
+            this.showNotification('请输入要测试的文本', 'info');
+            return;
+        }
+        
+        // 获取PDFViewerApplication
+        let pdfApp = null;
+        if (this.isPdfPopupMode && this.pdfPopupWindow && !this.pdfPopupWindow.closed) {
+            const popupIframe = this.pdfPopupWindow.document.getElementById('pdfFrame');
+            if (popupIframe && popupIframe.contentWindow) {
+                pdfApp = popupIframe.contentWindow.PDFViewerApplication;
+            }
+        } else {
+            const iframe = document.getElementById('pdfViewer');
+            if (iframe && iframe.contentWindow) {
+                pdfApp = iframe.contentWindow.PDFViewerApplication;
+            }
+        }
+        
+        if (!pdfApp || !pdfApp.pdfDocument) {
+            this.showNotification('PDF未加载，无法测试搜索', 'error');
+            return;
+        }
+        
+        this.showNotification('正在测试搜索...', 'info');
+        
+        // 执行搜索测试
+        try {
+            const result = await this.runPdfSearch(pdfApp, searchText);
+            
+            if (result.total > 0) {
+                this.showNotification(`✓ 找到 ${result.total} 个匹配项`, 'success');
+                
+                // 可选：滚动到第一个匹配位置
+                setTimeout(() => this.scrollToCurrentMatch(pdfApp), 200);
+            } else {
+                // 尝试变体搜索
+                this.showNotification('未找到完全匹配，尝试变体搜索...', 'info');
+                const variants = this.buildSearchVariants(searchText);
+                
+                let foundVariant = null;
+                let foundCount = 0;
+                
+                for (let i = 1; i < variants.length && i < 5; i++) {
+                    const variantResult = await this.runPdfSearch(pdfApp, variants[i]);
+                    if (variantResult.total > 0) {
+                        foundVariant = variants[i];
+                        foundCount = variantResult.total;
+                        break;
+                    }
+                }
+                
+                if (foundVariant) {
+                    this.showNotification(`✓ 找到变体匹配: "${foundVariant}" (${foundCount}个)`, 'success');
+                    setTimeout(() => this.scrollToCurrentMatch(pdfApp), 200);
+                } else {
+                    this.showNotification('✗ 未找到匹配，建议修改文本', 'error');
+                }
+            }
+        } catch (error) {
+            console.error('搜索测试失败:', error);
+            this.showNotification('搜索测试失败', 'error');
         }
     }
 

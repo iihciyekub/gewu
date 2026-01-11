@@ -2433,10 +2433,14 @@ body.theme-vscode .qa-bubble {
 .modal-footer {
     padding: 8px 12px;
     display: flex;
-    justify-content: flex-end;
+    justify-content: space-between;
     gap: 6px;
     background: var(--gray-50);
     border-top: 1px solid var(--gray-300);
+}
+
+.modal-footer > .btn-secondary {
+    margin-right: auto;
 }
 
 .doi-actions {
