@@ -10205,12 +10205,12 @@ class PaperReviewerApp {
                     const win = pdfViewer.contentWindow;
                     if (win) {
                         const pdfDoc = win.document;
-                        // 缩小 PDF.js 整体 UI / 预览尺寸
+                        // 添加自定义样式：保持0.8缩放但修正标注层坐标
                         const styleId = 'paperReviewerPdfScaleStyle';
                         if (!pdfDoc.getElementById(styleId)) {
                             const styleEl = pdfDoc.createElement('style');
                             styleEl.id = styleId;
-                            // 统一将 PDF.js 的主容器缩放到 80%，并强制高亮颜色可见
+                            // 缩放容器到80%，并修正标注编辑层的坐标系统
                             styleEl.textContent = `
                                 :root { --pr-pdf-scale: 0.8; }
                                 #outerContainer {
@@ -10218,6 +10218,13 @@ class PaperReviewerApp {
                                     transform-origin: top left;
                                     width: calc(100% / var(--pr-pdf-scale));
                                     height: calc(100% / var(--pr-pdf-scale));
+                                }
+                                /* 修正标注编辑层的坐标系统 */
+                                .annotationEditorLayer {
+                                    transform: scale(calc(1 / var(--pr-pdf-scale))) !important;
+                                    transform-origin: top left !important;
+                                    width: calc(100% * var(--pr-pdf-scale)) !important;
+                                    height: calc(100% * var(--pr-pdf-scale)) !important;
                                 }
                                 .textLayer .highlight {
                                     background-color: rgba(255, 230, 90, 0.45) !important;
