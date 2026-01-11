@@ -96,6 +96,7 @@ class PaperReviewerApp {
         this.pdfPopupWindow = null;
         this.isPdfPopupMode = false;
         this.pdfPopupFocusInterval = null;
+        this.pdfViewModeRestored = false; // 标记是否已经恢复过PDF窗口模式
         this.metaDefaultsPatched = false;
         this.addSectionShowTimer = null;
         this.addSectionHoverCleanup = null;
@@ -119,6 +120,9 @@ class PaperReviewerApp {
         this.lastGotoLink = null;
         this.lastGotoAttemptText = '';
         this.completeGroupsForCurrentProject = null; // 存储完整的、未被view过滤的分组结构
+        
+        // 跟踪鼠标是否在pdfViewer上（用于ESC键判断）
+        this._isMouseOverPdfViewer = false;
 
         // 初始化管理器
         this.specialSyntaxManager = null; // 延迟初始化
@@ -987,6 +991,23 @@ class PaperReviewerApp {
     }
 
     setupEventListeners() {
+        // 跟踪鼠标是否悬停在pdfViewer上（用于ESC键判断）
+        const setupPdfViewerHover = () => {
+            const pdfViewer = document.getElementById('pdfViewer');
+            if (pdfViewer) {
+                pdfViewer.addEventListener('mouseenter', () => {
+                    this._isMouseOverPdfViewer = true;
+                });
+                pdfViewer.addEventListener('mouseleave', () => {
+                    this._isMouseOverPdfViewer = false;
+                });
+            }
+        };
+        // 立即尝试设置
+        setupPdfViewerHover();
+        // 延迟再次尝试（防止元素还未加载）
+        setTimeout(setupPdfViewerHover, 500);
+        
         // Tab switching
         document.querySelectorAll('.tab-btn').forEach(btn => {
             btn.addEventListener('click', (e) => this.switchView(e.target.closest('.tab-btn')));
@@ -1360,8 +1381,8 @@ class PaperReviewerApp {
                 return;
             }
             if (key === 'escape') {
-                // 如果PDF在独立窗口模式，切换回内嵌模式
-                if (this.isPdfPopupMode) {
+                // 如果PDF在独立窗口模式，只有当鼠标悬停在pdfViewer上才切换回内嵌模式
+                if (this.isPdfPopupMode && this._isMouseOverPdfViewer) {
                     e.preventDefault();
                     this.togglePdfPopup();
                     return;
@@ -9939,6 +9960,10 @@ class PaperReviewerApp {
             // 立即设置状态为false，防止重复点击
             this.isPdfPopupMode = false;
             this.pdfPopupWindow = null;
+            // 标记用户已手动切换，禁止自动恢复
+            this.pdfViewModeRestored = true;
+            // 保存状态到localStorage
+            this.savePdfViewMode();
             // 清除lastPdfLoadedUrl以强制重新加载
             this.lastPdfLoadedUrl = '';
             
@@ -10001,6 +10026,8 @@ class PaperReviewerApp {
                     
                     // 窗口成功打开，现在可以设置状态并清空iframe
                     this.isPdfPopupMode = true;
+                    // 保存状态到localStorage
+                    this.savePdfViewMode();
                     
                     // 清空内嵌iframe
                     const pdfViewer = document.getElementById('pdfViewer');
@@ -10067,6 +10094,53 @@ class PaperReviewerApp {
         pdfViewer.removeAttribute('src');
         pdfViewer.classList.remove('pdf-loaded');
         delete pdfViewer.dataset.pdfSig;
+    }
+
+    // 保存PDF窗口模式到localStorage
+    savePdfViewMode() {
+        try {
+            if (!this.currentProject) return;
+            const key = `pdfViewMode_${this.currentProject}`;
+            localStorage.setItem(key, this.isPdfPopupMode ? 'popup' : 'embedded');
+        } catch (e) {
+            console.warn('Failed to save PDF view mode:', e);
+        }
+    }
+
+    // 从 localStorage 加载PDF窗口模式
+    loadPdfViewMode() {
+        try {
+            if (!this.currentProject) return 'embedded';
+            const key = `pdfViewMode_${this.currentProject}`;
+            return localStorage.getItem(key) || 'embedded';
+        } catch (e) {
+            console.warn('Failed to load PDF view mode:', e);
+            return 'embedded';
+        }
+    }
+
+    // 恢复PDF窗口状态
+    restorePdfViewMode() {
+        // 如果已经恢复过或用户已手动切换，则不再自动恢复
+        if (this.pdfViewModeRestored) {
+            return;
+        }
+        
+        const savedMode = this.loadPdfViewMode();
+        // 如果上次是独立窗口模式且当前有PDF加载，则重新打开独立窗口
+        if (savedMode === 'popup' && this.currentPdfUrl && !this.isPdfPopupMode) {
+            // 标记已经执行过恢复
+            this.pdfViewModeRestored = true;
+            // 延迟打开，确保PDF已加载
+            setTimeout(() => {
+                if (this.currentPdfUrl && !this.isPdfPopupMode) {
+                    this.openPdfInPopup();
+                }
+            }, 500);
+        } else {
+            // 内嵌模式也标记已恢复，避免后续被触发
+            this.pdfViewModeRestored = true;
+        }
     }
 
     async loadPDF(url) {
@@ -10158,6 +10232,8 @@ class PaperReviewerApp {
                             this.lastPdfLoadedUrl = url;
                             this.pendingPdfUrl = url;
                             this.updatePdfPlaceholder('loaded');
+                            // 恢复PDF窗口模式
+                            this.restorePdfViewMode();
                         });
                     }
                 } catch (err) {
@@ -10539,27 +10615,39 @@ class PaperReviewerApp {
 
     // 跳转到指定页面并搜索（简化版：直接搜索全文，滚动到第一个结果）
     jumpToPage(page, searchText = '', valuePath = null) {
-        if (!this.currentPdfUrl) return;
-        
         try {
             const cleanText = searchText ? searchText.trim() : '';
             this.lastGotoAttemptText = cleanText;
             
-            // 高亮右侧面板
-            const rightPanel = document.querySelector('.right-panel');
-            if (rightPanel) {
-                rightPanel.classList.remove('panel-highlight');
-                void rightPanel.offsetWidth;
-                rightPanel.classList.add('panel-highlight');
-                setTimeout(() => rightPanel.classList.remove('panel-highlight'), 800);
-            }
-            
             // 检查是否在独立窗口模式
             if (this.isPdfPopupMode && this.pdfPopupWindow && !this.pdfPopupWindow.closed) {
-                // 在独立窗口中执行搜索
+                // 在独立窗口中执行搜索（不依赖内嵌iframe的状态）
                 try {
+                    // 高亮右侧面板（如果存在）
+                    const rightPanel = document.querySelector('.right-panel');
+                    if (rightPanel) {
+                        rightPanel.classList.remove('panel-highlight');
+                        void rightPanel.offsetWidth;
+                        rightPanel.classList.add('panel-highlight');
+                        setTimeout(() => rightPanel.classList.remove('panel-highlight'), 800);
+                    }
+                    
                     // 等待独立窗口中的PDF.js加载完成
+                    let checkAttempts = 0;
+                    const maxAttempts = 50; // 最多等待5秒
                     const checkAndSearch = () => {
+                        checkAttempts++;
+                        if (checkAttempts > maxAttempts) {
+                            console.error('独立窗口PDF.js加载超时');
+                            this.showNotification('PDF viewer not ready', 'error');
+                            return;
+                        }
+                        
+                        if (!this.pdfPopupWindow || this.pdfPopupWindow.closed) {
+                            console.log('独立窗口已关闭');
+                            return;
+                        }
+                        
                         const popupDoc = this.pdfPopupWindow.document;
                         const popupIframe = popupDoc.querySelector('#pdfFrame');
                         if (!popupIframe || !popupIframe.contentWindow) {
@@ -10572,6 +10660,26 @@ class PaperReviewerApp {
                             return;
                         }
                         const pdfApp = pdfJsWindow.PDFViewerApplication;
+                        
+                        // 检查PDF是否已完全加载
+                        if (!pdfApp.pdfDocument || !pdfApp.pdfViewer) {
+                            setTimeout(checkAndSearch, 100);
+                            return;
+                        }
+                        
+                        // 等待eventBus准备就绪
+                        if (!pdfApp.eventBus) {
+                            setTimeout(checkAndSearch, 100);
+                            return;
+                        }
+                        
+                        // 确保PDF已渲染至少一页
+                        const viewerContainer = pdfJsWindow.document.querySelector('#viewerContainer');
+                        if (!viewerContainer || viewerContainer.children.length === 0) {
+                            setTimeout(checkAndSearch, 100);
+                            return;
+                        }
+                        
                         // 执行搜索或跳转
                         if (cleanText) {
                             this.executeSearchAndScroll(pdfApp, cleanText, valuePath);
@@ -10590,9 +10698,27 @@ class PaperReviewerApp {
                 }
             }
             
-            // 内嵌模式：使用主窗口的iframe
+            // 内嵌模式：需要检查PDF是否已加载
+            if (!this.currentPdfUrl) {
+                this.showNotification('No PDF loaded', 'info');
+                return;
+            }
+            
+            // 高亮右侧面板
+            const rightPanel = document.querySelector('.right-panel');
+            if (rightPanel) {
+                rightPanel.classList.remove('panel-highlight');
+                void rightPanel.offsetWidth;
+                rightPanel.classList.add('panel-highlight');
+                setTimeout(() => rightPanel.classList.remove('panel-highlight'), 800);
+            }
+            
+            // 使用主窗口的iframe
             const pdfViewer = document.getElementById('pdfViewer');
-            if (!pdfViewer) return;
+            if (!pdfViewer) {
+                this.showNotification('PDF viewer not found', 'warning');
+                return;
+            }
             
             const pdfWindow = pdfViewer.contentWindow;
             if (!pdfWindow || !pdfWindow.PDFViewerApplication) {
