@@ -36,6 +36,50 @@
         } else {
             document.body.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;font-family:sans-serif;color:#666;">No PDF specified</div>';
         }
+        
+        // 添加键盘事件监听
+        document.addEventListener('keydown', (e) => {
+            // ESC键：关闭独立窗口，回到内嵌模式
+            if (e.key === 'Escape') {
+                e.preventDefault();
+                window.close();
+                return;
+            }
+            
+            // 屏蔽 Cmd/Ctrl+S 保存动作
+            if ((e.metaKey || e.ctrlKey) && e.key === 's') {
+                e.preventDefault();
+                e.stopPropagation();
+                return false;
+            }
+        });
+        
+        // 在iframe内部也监听键盘事件
+        window.addEventListener('load', () => {
+            const iframe = document.getElementById('pdfFrame');
+            if (iframe && iframe.contentWindow) {
+                try {
+                    iframe.contentWindow.document.addEventListener('keydown', (e) => {
+                        // ESC键：关闭独立窗口
+                        if (e.key === 'Escape') {
+                            e.preventDefault();
+                            window.close();
+                            return;
+                        }
+                        
+                        // 屏蔽 Cmd/Ctrl+S
+                        if ((e.metaKey || e.ctrlKey) && e.key === 's') {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            return false;
+                        }
+                    }, true);
+                } catch (err) {
+                    // 跨域限制时忽略
+                    console.log('Cannot access iframe content due to CORS');
+                }
+            }
+        });
     </script>
 </body>
 </html>
