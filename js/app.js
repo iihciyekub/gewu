@@ -121,6 +121,15 @@ class PaperReviewerApp {
         this.lastGotoAttemptText = '';
         this.completeGroupsForCurrentProject = null; // 存储完整的、未被view过滤的分组结构
         
+        // 搜索防抖和互斥控制
+        this._isSearching = false;
+        this._lastClickedLink = null;
+        this._lastClickTime = 0;
+        this._currentSearchAbortController = null;
+        
+        // PDF标注数据缓存
+        this._pdfAnnotationsCache = {};
+        
         // 跟踪鼠标是否在pdfViewer上（用于ESC键判断）
         this._isMouseOverPdfViewer = false;
 
@@ -1384,7 +1393,7 @@ class PaperReviewerApp {
                 // 如果PDF在独立窗口模式，只有当鼠标悬停在pdfViewer上才切换回内嵌模式
                 if (this.isPdfPopupMode && this._isMouseOverPdfViewer) {
                     e.preventDefault();
-                    this.togglePdfPopup();
+                    this.togglePdfPopup().catch(err => console.error('Toggle PDF popup failed:', err));
                     return;
                 }
                 this.closeQueryExportModal();
@@ -1690,7 +1699,7 @@ class PaperReviewerApp {
         // PDF 独立窗口按钮
         const btnPdfPopup = document.getElementById('btnPdfPopup');
         if (btnPdfPopup) {
-            btnPdfPopup.addEventListener('click', () => this.togglePdfPopup());
+            btnPdfPopup.addEventListener('click', async () => await this.togglePdfPopup());
         }
 
         const rightPanel = document.querySelector('.right-panel');
@@ -2757,6 +2766,9 @@ class PaperReviewerApp {
             this.currentMarkdownExists = false;
             this.isMarkdownEditing = false;
             this.hasUnsavedMarkdownChanges = false;
+            
+            // 重置PDF窗口状态恢复标志，允许新项目恢复其保存的状态
+            this.pdfViewModeRestored = false;
             
             // 清空UI
             const fileListEl = document.getElementById('fileList');
@@ -9943,9 +9955,12 @@ class PaperReviewerApp {
     }
 
     // PDF Functions - 使用iframe加载完整的PDF.js viewer
-    togglePdfPopup() {
+    async togglePdfPopup() {
         // 检查是否在独立窗口模式
         if (this.isPdfPopupMode) {
+            // 在关闭前保存PDF标注数据
+            await this.savePdfAnnotationsFromPopup();
+            
             // 关闭独立窗口，回到嵌入模式
             if (this.pdfPopupWindow && !this.pdfPopupWindow.closed) {
                 this.pdfPopupWindow.close();
@@ -10037,7 +10052,7 @@ class PaperReviewerApp {
                     }
                     
                     // 监听窗口关闭
-                    const checkClosed = setInterval(() => {
+                    const checkClosed = setInterval(async () => {
                         if (this.pdfPopupWindow && this.pdfPopupWindow.closed) {
                             clearInterval(checkClosed);
                             // 清除聚焦定时器
@@ -10051,6 +10066,8 @@ class PaperReviewerApp {
                             this.isPdfPopupMode = false;
                             this.pdfPopupWindow = null;
                             this.lastPdfLoadedUrl = '';
+                            // 保存状态到localStorage（窗口关闭=切换回嵌入模式）
+                            this.savePdfViewMode();
                             
                             // 确保iframe准备好
                             const pdfViewer = document.getElementById('pdfViewer');
@@ -10099,9 +10116,10 @@ class PaperReviewerApp {
     // 保存PDF窗口模式到localStorage
     savePdfViewMode() {
         try {
-            if (!this.currentProject) return;
-            const key = `pdfViewMode_${this.currentProject}`;
+            if (!this.currentProject || !this.currentProject.path) return;
+            const key = `pdfViewMode_${this.currentProject.path}`;
             localStorage.setItem(key, this.isPdfPopupMode ? 'popup' : 'embedded');
+            this.debugLog(`💾 保存PDF窗口模式: ${this.isPdfPopupMode ? 'popup' : 'embedded'} for project ${this.currentProject.name}`);
         } catch (e) {
             console.warn('Failed to save PDF view mode:', e);
         }
@@ -10110,9 +10128,11 @@ class PaperReviewerApp {
     // 从 localStorage 加载PDF窗口模式
     loadPdfViewMode() {
         try {
-            if (!this.currentProject) return 'embedded';
-            const key = `pdfViewMode_${this.currentProject}`;
-            return localStorage.getItem(key) || 'embedded';
+            if (!this.currentProject || !this.currentProject.path) return 'embedded';
+            const key = `pdfViewMode_${this.currentProject.path}`;
+            const mode = localStorage.getItem(key) || 'embedded';
+            this.debugLog(`📚 加载PDF窗口模式: ${mode} for project ${this.currentProject.name}`);
+            return mode;
         } catch (e) {
             console.warn('Failed to load PDF view mode:', e);
             return 'embedded';
@@ -10179,7 +10199,7 @@ class PaperReviewerApp {
             pdfViewer.src = viewerUrl;
             
             // 监听iframe加载完成（如需自定义滚动行为，可在此扩展）
-            pdfViewer.onload = () => {
+            pdfViewer.onload = async () => {
                 if (loadToken !== this.currentPdfLoadToken) return;
                 try {
                     const win = pdfViewer.contentWindow;
@@ -10226,12 +10246,16 @@ class PaperReviewerApp {
                         tryCloseSidebar();
                         setTimeout(tryCloseSidebar, 120);
 
-                        requestAnimationFrame(() => {
+                        requestAnimationFrame(async () => {
                             if (loadToken !== this.currentPdfLoadToken) return;
                             pdfViewer.classList.add('pdf-loaded');
                             this.lastPdfLoadedUrl = url;
                             this.pendingPdfUrl = url;
                             this.updatePdfPlaceholder('loaded');
+                            
+                            // 恢复PDF标注数据
+                            await this.restorePdfAnnotations(url);
+                            
                             // 恢复PDF窗口模式
                             this.restorePdfViewMode();
                         });
@@ -10388,11 +10412,34 @@ class PaperReviewerApp {
 
     enterPdfJsFullscreen() {
         try {
-            const iframe = document.getElementById('pdfViewer');
-            const pdfApp = iframe?.contentWindow?.PDFViewerApplication;
+            let pdfApp = null;
+            
+            // 检查是否在独立窗口模式
+            if (this.isPdfPopupMode && this.pdfPopupWindow && !this.pdfPopupWindow.closed) {
+                // 从独立窗口获取PDFViewerApplication
+                try {
+                    const popupIframe = this.pdfPopupWindow.document.getElementById('pdfFrame');
+                    if (popupIframe && popupIframe.contentWindow) {
+                        pdfApp = popupIframe.contentWindow.PDFViewerApplication;
+                        this.debugLog('✅ 从独立窗口获取PDFViewerApplication成功');
+                    } else {
+                        console.warn('❌ 独立窗口中找不到pdfFrame iframe');
+                    }
+                } catch (e) {
+                    console.warn('❌ 无法访问独立窗口的PDF:', e);
+                }
+            } else {
+                // 从内嵌iframe获取PDFViewerApplication
+                const iframe = document.getElementById('pdfViewer');
+                if (iframe && iframe.contentWindow) {
+                    pdfApp = iframe.contentWindow.PDFViewerApplication;
+                    this.debugLog('✅ 从内嵌iframe获取PDFViewerApplication成功');
+                }
+            }
 
             if (!pdfApp) {
                 this.showNotification('PDF 尚未加载完成', 'error');
+                console.error('❌ PDFViewerApplication未找到');
                 return;
             }
 
@@ -10416,31 +10463,96 @@ class PaperReviewerApp {
 
     async downloadCurrentPdf() {
         try {
-            const iframe = document.getElementById('pdfViewer');
-            const pdfApp = iframe?.contentWindow?.PDFViewerApplication;
+            let pdfApp = null;
+            
+            // 检查是否在独立窗口模式
+            if (this.isPdfPopupMode && this.pdfPopupWindow && !this.pdfPopupWindow.closed) {
+                // 从独立窗口获取PDFViewerApplication
+                try {
+                    const popupIframe = this.pdfPopupWindow.document.getElementById('pdfFrame');
+                    if (popupIframe && popupIframe.contentWindow) {
+                        pdfApp = popupIframe.contentWindow.PDFViewerApplication;
+                        this.debugLog('✅ 从独立窗口获取PDFViewerApplication成功（下载）');
+                    } else {
+                        console.warn('❌ 独立窗口中找不到pdfFrame iframe');
+                    }
+                } catch (e) {
+                    console.warn('❌ 无法访问独立窗口的PDF:', e);
+                }
+            } else {
+                // 从内嵌iframe获取PDFViewerApplication
+                const iframe = document.getElementById('pdfViewer');
+                if (iframe && iframe.contentWindow) {
+                    pdfApp = iframe.contentWindow.PDFViewerApplication;
+                    this.debugLog('✅ 从内嵌iframe获取PDFViewerApplication成功（下载）');
+                }
+            }
+            
             const pdfUrl = this.currentPdfUrl;
 
             if (!pdfApp) {
                 this.showNotification('PDF 尚未加载完成', 'error');
+                console.error('❌ PDFViewerApplication未找到');
                 return;
             }
 
-            // 解析文件名，缺失时兜底
-            const filename = this.getPdfFilename(pdfUrl);
+            // 从URL中获取当前PDF的原始文件名（与pdf目录下的文件同名）
+            let filename = this.getPdfFilename(pdfUrl);
+            
+            // 尝试从URL参数中获取更准确的文件名
+            try {
+                const urlObj = new URL(pdfUrl, window.location.href);
+                const params = new URLSearchParams(urlObj.search);
+                const fileParam = params.get('file');
+                if (fileParam) {
+                    // 提取文件名（去除路径）
+                    const parts = fileParam.split(/[\\/]/);
+                    const originalFilename = parts[parts.length - 1];
+                    if (originalFilename) {
+                        filename = originalFilename;
+                        this.debugLog('📄 使用原始PDF文件名:', filename);
+                    }
+                }
+            } catch (e) {
+                console.warn('解析PDF文件名失败，使用默认名称:', e);
+            }
 
             // 获取包含用户标注/高亮的PDF数据
             const annotatedBlob = await this.buildPdfBlobWithAnnotations(pdfApp);
 
-            // 优先使用本地文件保存选择器（允许用户自定义保存路径）
+            // 尝试直接保存到项目pdf目录（不弹出对话框）
+            if (annotatedBlob) {
+                try {
+                    const savedPath = await this.savePdfToProjectDirectory(pdfUrl, filename, annotatedBlob);
+                    if (savedPath) {
+                        this.showNotification(`✓ 已保存到: ${savedPath}`, 'success');
+                        return;
+                    }
+                } catch (saveError) {
+                    console.warn('直接保存失败，尝试其他方式:', saveError);
+                }
+            }
+
+            // 回退1: 使用文件保存选择器（让用户选择位置）
             if (window.showSaveFilePicker && annotatedBlob) {
                 try {
-                    const handle = await window.showSaveFilePicker({
+                    // 尝试获取PDF的实际文件路径作为默认保存目录
+                    const startIn = await this.getPdfDirectory(pdfUrl);
+                    
+                    const options = {
                         suggestedName: filename,
                         types: [{
                             description: 'PDF 文件',
                             accept: { 'application/pdf': ['.pdf'] }
                         }]
-                    });
+                    };
+                    
+                    // 如果获取到了目录句柄，设置为起始目录
+                    if (startIn) {
+                        options.startIn = startIn;
+                    }
+                    
+                    const handle = await window.showSaveFilePicker(options);
 
                     const writable = await handle.createWritable();
                     await writable.write(annotatedBlob);
@@ -10496,6 +10608,107 @@ class PaperReviewerApp {
         }
     }
 
+    async getPdfDirectory(pdfUrl) {
+        try {
+            if (!pdfUrl) return null;
+            
+            // 从URL中提取项目路径和文件路径
+            const urlObj = new URL(pdfUrl, window.location.href);
+            const params = new URLSearchParams(urlObj.search);
+            const projectPath = params.get('projectPath');
+            const file = params.get('file');
+            
+            if (!projectPath || !file) {
+                this.debugLog('无法从URL获取PDF路径信息');
+                return null;
+            }
+            
+            // 请求服务器获取PDF的实际文件系统路径
+            const response = await fetch('/get-pdf-dir', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ projectPath, file })
+            });
+            
+            if (!response.ok) {
+                console.warn('获取PDF目录失败:', response.statusText);
+                return null;
+            }
+            
+            const result = await response.json();
+            if (result.directory) {
+                this.debugLog('📁 PDF目录:', result.directory);
+                // 返回目录路径，作为 startIn 选项
+                // 注意：某些浏览器可能不支持字符串路径，需要DirectoryHandle
+                return result.directory;
+            }
+        } catch (error) {
+            console.warn('获取PDF目录失败:', error);
+        }
+        return null;
+    }
+
+    // 直接保存PDF到项目pdf目录（不弹出对话框）
+    async savePdfToProjectDirectory(pdfUrl, filename, blob) {
+        try {
+            if (!filename || !blob) {
+                return null;
+            }
+            
+            // 使用当前项目路径
+            const projectPath = this.getProjectKey();
+            if (!projectPath) {
+                console.warn('无法获取当前项目路径');
+                return null;
+            }
+            
+            this.debugLog('📝 尝试直接保存PDF到项目pdf目录...');
+            
+            // 将Blob转换为ArrayBuffer
+            const arrayBuffer = await blob.arrayBuffer();
+            const base64Data = this.arrayBufferToBase64(arrayBuffer);
+            
+            // 请求服务器直接写入文件到项目pdf目录
+            const response = await fetch('/save-pdf-to-project', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ 
+                    projectPath, 
+                    filename,
+                    data: base64Data
+                })
+            });
+            
+            if (!response.ok) {
+                const error = await response.text();
+                console.warn('服务器保存PDF失败:', error);
+                return null;
+            }
+            
+            const result = await response.json();
+            if (result.success && result.path) {
+                this.debugLog('✅ PDF已保存到项目pdf目录:', result.path);
+                return result.path;
+            }
+            
+            return null;
+        } catch (error) {
+            console.warn('直接保存PDF到项目目录失败:', error);
+            return null;
+        }
+    }
+
+    // ArrayBuffer转Base64
+    arrayBufferToBase64(buffer) {
+        let binary = '';
+        const bytes = new Uint8Array(buffer);
+        const len = bytes.byteLength;
+        for (let i = 0; i < len; i++) {
+            binary += String.fromCharCode(bytes[i]);
+        }
+        return btoa(binary);
+    }
+
     async buildPdfBlobWithAnnotations(pdfApp) {
         try {
             const pdfDocument = pdfApp?.pdfDocument;
@@ -10525,6 +10738,117 @@ class PaperReviewerApp {
         a.click();
         a.remove();
         URL.revokeObjectURL(url);
+    }
+
+    // 从独立窗口保存PDF标注数据
+    async savePdfAnnotationsFromPopup() {
+        try {
+            if (!this.isPdfPopupMode || !this.pdfPopupWindow || this.pdfPopupWindow.closed) {
+                return;
+            }
+            
+            // 从独立窗口获取PDFViewerApplication
+            const popupIframe = this.pdfPopupWindow.document.getElementById('pdfFrame');
+            if (!popupIframe || !popupIframe.contentWindow) {
+                console.warn('无法访问独立窗口的PDF iframe');
+                return;
+            }
+            
+            const pdfApp = popupIframe.contentWindow.PDFViewerApplication;
+            if (!pdfApp || !pdfApp.pdfDocument) {
+                console.warn('独立窗口中PDF未加载');
+                return;
+            }
+            
+            this.debugLog('🔄 正在从独立窗口保存PDF标注...');
+            
+            // 使用saveDocument保存带标注的PDF数据
+            let pdfData = null;
+            if (typeof pdfApp.pdfDocument.saveDocument === 'function') {
+                pdfData = await pdfApp.pdfDocument.saveDocument();
+            } else if (typeof pdfApp.pdfDocument.getData === 'function') {
+                pdfData = await pdfApp.pdfDocument.getData();
+            }
+            
+            if (pdfData && this.currentPdfUrl) {
+                // 保存到内存缓存
+                const key = `pdfAnnotations_${this.currentPdfUrl}`;
+                this._pdfAnnotationsCache = this._pdfAnnotationsCache || {};
+                this._pdfAnnotationsCache[key] = pdfData;
+                this.debugLog('✅ PDF标注数据已保存到缓存');
+            }
+        } catch (error) {
+            console.warn('保存PDF标注失败:', error);
+        }
+    }
+    
+    // 恢复PDF标注数据到内嵌iframe
+    async restorePdfAnnotations(pdfUrl) {
+        try {
+            if (!pdfUrl) return;
+            
+            const key = `pdfAnnotations_${pdfUrl}`;
+            this._pdfAnnotationsCache = this._pdfAnnotationsCache || {};
+            const cachedData = this._pdfAnnotationsCache[key];
+            
+            if (!cachedData) {
+                this.debugLog('ℹ️ 没有找到缓存的PDF标注数据');
+                return;
+            }
+            
+            this.debugLog('🔄 正在恢复PDF标注...');
+            
+            const pdfViewer = document.getElementById('pdfViewer');
+            if (!pdfViewer || !pdfViewer.contentWindow) {
+                console.warn('内嵌iframe未准备好');
+                return;
+            }
+            
+            // 等待PDFViewerApplication加载完成
+            let attempts = 0;
+            const maxAttempts = 50;
+            const waitForPdfApp = () => {
+                return new Promise((resolve) => {
+                    const check = () => {
+                        attempts++;
+                        if (attempts > maxAttempts) {
+                            resolve(null);
+                            return;
+                        }
+                        
+                        const pdfApp = pdfViewer.contentWindow.PDFViewerApplication;
+                        if (pdfApp && pdfApp.pdfDocument && pdfApp.pdfViewer) {
+                            resolve(pdfApp);
+                        } else {
+                            setTimeout(check, 100);
+                        }
+                    };
+                    check();
+                });
+            };
+            
+            const pdfApp = await waitForPdfApp();
+            if (!pdfApp) {
+                console.warn('等待PDF加载超时');
+                return;
+            }
+            
+            // 将缓存的PDF数据加载到viewer
+            // 注意：这需要重新加载PDF，因为标注是嵌入在PDF数据中的
+            const blob = new Blob([cachedData], { type: 'application/pdf' });
+            const objectUrl = URL.createObjectURL(blob);
+            
+            // 使用PDF.js的open方法加载带标注的PDF
+            if (typeof pdfApp.open === 'function') {
+                await pdfApp.open({ url: objectUrl });
+                this.debugLog('✅ PDF标注数据已恢复');
+                
+                // 清理URL对象
+                setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
+            }
+        } catch (error) {
+            console.warn('恢复PDF标注失败:', error);
+        }
     }
 
     // 获取当前PDF页码（用于调试）
@@ -10649,7 +10973,7 @@ class PaperReviewerApp {
                         }
                         
                         const popupDoc = this.pdfPopupWindow.document;
-                        const popupIframe = popupDoc.querySelector('#pdfFrame');
+                        const popupIframe = popupDoc.getElementById('pdfFrame');
                         if (!popupIframe || !popupIframe.contentWindow) {
                             setTimeout(checkAndSearch, 100);
                             return;
@@ -10824,11 +11148,15 @@ class PaperReviewerApp {
     executeSearchAndScroll(pdfApp, searchText, valuePath = null) {
         if (!pdfApp || !pdfApp.eventBus) {
             console.error('❌ EventBus不可用');
+            this._isSearching = false;
             return;
         }
 
         const firstVariant = searchText.trim();
-        if (!firstVariant) return;
+        if (!firstVariant) {
+            this._isSearching = false;
+            return;
+        }
 
         const isSameSearch = this.lastSearchText === firstVariant && this.lastSearchValuePath === valuePath;
         if (isSameSearch && this.searchMatchCount > 1) {
@@ -10842,78 +11170,111 @@ class PaperReviewerApp {
                 highlightAll: true,
                 findPrevious: false
             });
-            setTimeout(() => this.scrollToCurrentMatch(pdfApp), 300);
+            setTimeout(() => {
+                this.scrollToCurrentMatch(pdfApp);
+                this._isSearching = false;
+            }, 300);
             return;
         } else if (isSameSearch && this.searchMatchCount === 1) {
-            setTimeout(() => this.scrollToCurrentMatch(pdfApp), 100);
+            setTimeout(() => {
+                this.scrollToCurrentMatch(pdfApp);
+                this._isSearching = false;
+            }, 100);
             return;
         }
 
         const trySearch = async () => {
-            this.searchMatchCount = 0;
-            this.currentMatchIndex = 0;
-            let usedQuery = '';
-            let total = 0;
-            let matchedVariant = '';
-            
-            // 先尝试原始文本（快速匹配）
-            this.showNotification('Searching in PDF...', 'info');
-            const firstResult = await this.runPdfSearch(pdfApp, firstVariant, valuePath);
-            
-            if (firstResult.total > 0) {
-                // 首次匹配成功，无需深度检索
-                usedQuery = firstVariant;
-                total = firstResult.total;
-                matchedVariant = firstVariant;
-            } else {
-                // 首次未找到，开始深度检索
-                this.showNotification('Deep searching in PDF...', 'info');
-                const variants = this.buildSearchVariants(searchText);
-                
-                for (let i = 1; i < variants.length; i++) {
-                    const query = variants[i];
-                    const result = await this.runPdfSearch(pdfApp, query, valuePath);
-                    if (result.total > 0) {
-                        usedQuery = query;
-                        total = result.total;
-                        matchedVariant = query;
-                        break;
-                    }
-                }
-            }
-
-            if (total > 0) {
-                this.lastSearchText = usedQuery;
-                this.lastSearchValuePath = valuePath;
-                this.searchMatchCount = total;
-                this.currentMatchIndex = 0;
-                if (matchedVariant && matchedVariant !== (this.lastGotoAttemptText || variants[0])) {
-                    // 替换 goto 文本：链接自身 & 对应 markdown 源
-                    const link = this.lastGotoLink;
-                    if (link) {
-                        link.dataset.quoteText = matchedVariant;
-                        if (link.classList.contains('goto-link') && link.textContent) {
-                            link.textContent = matchedVariant;
-                        }
-                    }
-                    // 更新 markdown 源中的 goto{...} 文本
-                    const oldText = this.lastGotoAttemptText || variants[0];
-                    if (oldText) {
-                        await this.updateMarkdownGotoText(oldText, matchedVariant, 0, { replaceAllMatches: false, valuePath });
-                    }
-                    this.showNotification(`Adjusted goto text to: ${matchedVariant}`, 'success');
-                }
-                setTimeout(() => this.scrollToCurrentMatch(pdfApp), 200);
-            } else {
-                this.lastSearchText = variants[0];
-                this.lastSearchValuePath = valuePath;
+            try {
                 this.searchMatchCount = 0;
                 this.currentMatchIndex = 0;
-                this.showNotification('No match found in PDF after deep search', 'info');
+                let usedQuery = '';
+                let total = 0;
+                let matchedVariant = '';
+                
+                // 先尝试原始文本（快速匹配）
+                this.showNotification('Searching in PDF...', 'info');
+                const firstResult = await this.runPdfSearch(pdfApp, firstVariant, valuePath);
+                
+                if (firstResult.total > 0) {
+                    // 首次匹配成功，无需深度检索
+                    usedQuery = firstVariant;
+                    total = firstResult.total;
+                    matchedVariant = firstVariant;
+                } else {
+                    // 首次未找到，开始深度检索
+                    this.showNotification('Deep searching in PDF...', 'info');
+                    const variants = this.buildSearchVariants(searchText);
+                    
+                    for (let i = 1; i < variants.length; i++) {
+                        const query = variants[i];
+                        const result = await this.runPdfSearch(pdfApp, query, valuePath);
+                        if (result.total > 0) {
+                            usedQuery = query;
+                            total = result.total;
+                            matchedVariant = query;
+                            break;
+                        }
+                    }
+                }
+
+                if (total > 0) {
+                    this.lastSearchText = usedQuery;
+                    this.lastSearchValuePath = valuePath;
+                    this.searchMatchCount = total;
+                    this.currentMatchIndex = 0;
+                    if (matchedVariant && matchedVariant !== (this.lastGotoAttemptText || variants[0])) {
+                        // 替换 goto 文本：链接自身 & 对应 markdown 源
+                        const link = this.lastGotoLink;
+                        if (link) {
+                            link.dataset.quoteText = matchedVariant;
+                            if (link.classList.contains('goto-link') && link.textContent) {
+                                link.textContent = matchedVariant;
+                            }
+                        }
+                        // 更新 markdown 源中的 goto{...} 文本
+                        const oldText = this.lastGotoAttemptText || variants[0];
+                        if (oldText) {
+                            await this.updateMarkdownGotoText(oldText, matchedVariant, 0, { replaceAllMatches: false, valuePath });
+                        }
+                        this.showNotification(`Adjusted goto text to: ${matchedVariant}`, 'success');
+                    }
+                    setTimeout(() => this.scrollToCurrentMatch(pdfApp), 200);
+                } else {
+                    this.lastSearchText = variants[0];
+                    this.lastSearchValuePath = valuePath;
+                    this.searchMatchCount = 0;
+                    this.currentMatchIndex = 0;
+                    this.showNotification('No match found in PDF after deep search', 'info');
+                }
+            } finally {
+                // 无论成功或失败，都要重置搜索标志
+                this._isSearching = false;
             }
         };
 
         trySearch();
+    }
+    
+    // 终止当前搜索
+    abortCurrentSearch() {
+        if (!this._isSearching) return;
+        
+        this.debugLog('🛑 Aborting current search...');
+        
+        // 重置搜索标志
+        this._isSearching = false;
+        
+        // 如果使用了 AbortController，可以在这里取消请求
+        // if (this._currentSearchAbortController) {
+        //     this._currentSearchAbortController.abort();
+        //     this._currentSearchAbortController = null;
+        // }
+        
+        // 重置搜索状态
+        this.searchMatchCount = 0;
+        this.currentMatchIndex = 0;
+        
+        this.showNotification('Search aborted', 'info');
     }
 
     // 滚动到当前匹配结果的中央（丝滑动画）
@@ -10932,7 +11293,7 @@ class PaperReviewerApp {
             if (this.isPdfPopupMode && this.pdfPopupWindow && !this.pdfPopupWindow.closed) {
                 // 独立窗口模式：从独立窗口获取文档
                 try {
-                    const popupIframe = this.pdfPopupWindow.document.querySelector('#pdfFrame');
+                    const popupIframe = this.pdfPopupWindow.document.getElementById('pdfFrame');
                     if (popupIframe && popupIframe.contentWindow) {
                         pdfDoc = popupIframe.contentWindow.document;
                     }
@@ -11486,6 +11847,27 @@ class PaperReviewerApp {
     closeEditModal() {
         document.getElementById('editModal').classList.remove('active');
         this.editingPath = null;
+    }
+
+    async handleGotoLinkEdit(link) {
+        // 处理Cmd/Ctrl+点击goto链接进入编辑模式
+        const current = link.dataset.quoteText || (link.textContent || '').trim() || '';
+        const valuePath = link.dataset.valuePath || '';
+        const allGotoLinks = Array.from(document.querySelectorAll('.goto-link'));
+        const samePathLinks = allGotoLinks.filter(l => (l.dataset.valuePath || '') === valuePath);
+        const idxInPath = samePathLinks.indexOf(link);
+        const idx = idxInPath >= 0 ? idxInPath : (link.dataset.quoteIndex !== undefined ? parseInt(link.dataset.quoteIndex, 10) : 0);
+        
+        // 打开编辑对话框
+        const next = await this.openGotoEditModal(current);
+        if (next === null) return;
+        
+        // 更新文本（不触发搜索）
+        if (valuePath) {
+            await this.updateGotoText(valuePath, next, isNaN(idx) ? 0 : idx);
+        } else {
+            await this.updateMarkdownGotoText(current, next, isNaN(idx) ? 0 : idx);
+        }
     }
 
     openGotoEditModal(initialText = '') {
@@ -12128,6 +12510,36 @@ class PaperReviewerApp {
             
             if (link) {
                 e.preventDefault();
+                
+                // 检查是否按下Cmd/Ctrl键 - 如果是，则进入编辑模式（不受搜索限制）
+                if (e.metaKey || e.ctrlKey) {
+                    // 进入编辑模式，不触发搜索
+                    this.handleGotoLinkEdit(link);
+                    return;
+                }
+                
+                // 检查是否是同一个链接且在5秒内
+                const now = Date.now();
+                const isSameLink = this._lastClickedLink === link;
+                const timeSinceLastClick = now - this._lastClickTime;
+                
+                if (isSameLink && timeSinceLastClick < 5000) {
+                    // 5秒内重复点击同一个链接，忽略
+                    this.showNotification('Please wait 5 seconds before clicking again', 'info');
+                    return;
+                }
+                
+                // 如果正在搜索，先终止之前的搜索
+                if (this._isSearching) {
+                    this.abortCurrentSearch();
+                }
+                
+                // 记录当前点击
+                this._lastClickedLink = link;
+                this._lastClickTime = now;
+                this._isSearching = true;
+                
+                // 正常点击：执行跳转搜索
                 this.lastGotoLink = link;
                 const pageRaw = link.dataset.page || '';
                 const valuePath = link.dataset.valuePath;
@@ -12142,26 +12554,10 @@ class PaperReviewerApp {
                 this.jumpToPageWithQuote(targetPage, valuePath, isNaN(quoteIndex) ? null : quoteIndex, quoteText, openParams);
             }
         };
-        this._locationLinkDblHandler = async (e) => {
-            const target = e.target;
-            if (!target || typeof target.closest !== 'function') return;
-            const link = target.classList.contains('location-link') ? target : target.closest('.location-link');
-            if (!link) return;
-            e.preventDefault();
-            const current = link.dataset.quoteText || (link.textContent || '').trim() || '';
-            const valuePath = link.dataset.valuePath || '';
-            const allGotoLinks = Array.from(document.querySelectorAll('.goto-link'));
-            const samePathLinks = allGotoLinks.filter(l => (l.dataset.valuePath || '') === valuePath);
-            const idxInPath = samePathLinks.indexOf(link);
-            const idx = idxInPath >= 0 ? idxInPath : (link.dataset.quoteIndex !== undefined ? parseInt(link.dataset.quoteIndex, 10) : 0);
-            const next = await this.openGotoEditModal(current);
-            if (next === null) return;
-            if (valuePath) {
-                await this.updateGotoText(valuePath, next, isNaN(idx) ? 0 : idx);
-            } else {
-                await this.updateMarkdownGotoText(current, next, isNaN(idx) ? 0 : idx);
-            }
-        };
+        
+        // 不再需要双击处理器
+        this._locationLinkDblHandler = null;
+        
         this._apaBtnHandler = async (e) => {
             const btn = e.target.closest('.apa-fetch-btn');
             if (!btn) return;
@@ -12332,7 +12728,7 @@ class PaperReviewerApp {
         };
         
         document.addEventListener('click', this._locationLinkHandler);
-        document.addEventListener('dblclick', this._locationLinkDblHandler);
+        // 不再需要双击监听器 - 改为Cmd/Ctrl+点击
         document.addEventListener('click', this._apaBtnHandler);
         document.addEventListener('mouseover', this._apaBtnHoverHandler);
         document.addEventListener('mouseout', this._apaBtnLeaveHandler);

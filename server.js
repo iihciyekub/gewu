@@ -928,6 +928,99 @@ const server = http.createServer((req, res) => {
         return;
     }
 
+    // 获取PDF文件所在目录
+    if (req.method === 'POST' && pathname === '/get-pdf-dir') {
+        let body = '';
+        req.on('data', chunk => { body += chunk; });
+        req.on('end', () => {
+            try {
+                const { projectPath, file } = JSON.parse(body);
+                
+                console.log('📁 获取PDF目录:', { projectPath, file });
+                
+                const { projectKey, fullPath } = normalizeProjectPath(projectPath);
+                
+                // 构建PDF文件路径
+                let targetFile;
+                if (file.includes('/') || file.includes('\\')) {
+                    targetFile = path.join(fullPath, file);
+                } else {
+                    targetFile = path.join(fullPath, 'pdf', file);
+                }
+                
+                // 安全检查
+                const relativePath = path.relative(fullPath, targetFile);
+                if (relativePath.startsWith('..')) {
+                    throw new Error('访问被拒绝：文件必须在项目目录内');
+                }
+                
+                // 获取文件所在目录
+                const directory = path.dirname(targetFile);
+                
+                console.log('✅ PDF目录:', directory);
+                
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ directory }));
+                
+            } catch (error) {
+                console.error('✗ 获取PDF目录错误:', error);
+                res.writeHead(500, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: error.message }));
+            }
+        });
+        
+        return;
+    }
+
+    // 直接保存PDF到项目pdf目录
+    if (req.method === 'POST' && pathname === '/save-pdf-to-project') {
+        let body = '';
+        req.on('data', chunk => { body += chunk; });
+        req.on('end', () => {
+            try {
+                const { projectPath, filename, data } = JSON.parse(body);
+                
+                console.log('💾 保存PDF到项目pdf目录:', { projectPath, filename });
+                
+                const { projectKey, fullPath } = normalizeProjectPath(projectPath);
+                
+                // 始终保存到项目的pdf目录
+                const targetDir = path.join(fullPath, 'pdf');
+                
+                // 完整的保存路径
+                const savePath = path.join(targetDir, filename);
+                
+                // 安全检查
+                const relativePath = path.relative(fullPath, savePath);
+                if (relativePath.startsWith('..')) {
+                    throw new Error('访问被拒绝：文件必须在项目目录内');
+                }
+                
+                // 确保pdf目录存在
+                if (!fs.existsSync(targetDir)) {
+                    fs.mkdirSync(targetDir, { recursive: true });
+                    console.log('📁 创建pdf目录:', targetDir);
+                }
+                
+                // 将Base64解码并写入文件
+                const buffer = Buffer.from(data, 'base64');
+                fs.writeFileSync(savePath, buffer);
+                
+                console.log('✅ PDF已保存到项目pdf目录:', savePath);
+                
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ success: true, path: savePath }));
+                
+            } catch (error) {
+                console.error('✗ 保存PDF错误:', error);
+                res.writeHead(500, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ success: false, error: error.message }));
+            }
+        });
+        
+        return;
+    }
+
     // 上传 PDF 文件到项目 pdf 目录（防覆盖）
     if (req.method === 'POST' && pathname === '/upload-pdf') {
         let body = '';
