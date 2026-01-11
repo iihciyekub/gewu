@@ -9955,9 +9955,9 @@ class PaperReviewerApp {
         // 保存URL用于恢复
         const savedPdfUrl = this.currentPdfUrl;
         
-        // 创建独立窗口
+        // 创建独立窗口 - 使用简化的查看器页面，URL更简洁
         const absoluteUrl = window.location.origin + this.currentPdfUrl;
-        const viewerUrl = `js/pdfjs/web/viewer.html?file=${encodeURIComponent(absoluteUrl)}&theme=${this.theme === 'dark' ? 'dark' : 'light'}#zoom=80`;
+        const viewerUrl = `pdf-popup-viewer.html?file=${encodeURIComponent(absoluteUrl)}&theme=${this.theme === 'dark' ? 'dark' : 'light'}`;
         
         const width = 1000;
         const height = 800;
@@ -9967,7 +9967,7 @@ class PaperReviewerApp {
         this.pdfPopupWindow = window.open(
             viewerUrl,
             'PDFViewer',
-            `width=${width},height=${height},left=${left},top=${top},resizable=yes,scrollbars=yes`
+            `width=${width},height=${height},left=${left},top=${top},resizable=yes,scrollbars=yes,location=no,menubar=no,toolbar=no,status=no`
         );
         
         if (this.pdfPopupWindow) {
@@ -10503,8 +10503,7 @@ class PaperReviewerApp {
 
     // 跳转到指定页面并搜索（简化版：直接搜索全文，滚动到第一个结果）
     jumpToPage(page, searchText = '', valuePath = null) {
-        const pdfViewer = document.getElementById('pdfViewer');
-        if (!pdfViewer || !this.currentPdfUrl) return;
+        if (!this.currentPdfUrl) return;
         
         try {
             const cleanText = searchText ? searchText.trim() : '';
@@ -10519,7 +10518,46 @@ class PaperReviewerApp {
                 setTimeout(() => rightPanel.classList.remove('panel-highlight'), 800);
             }
             
-            // 直接在iframe中搜索全文档
+            // 检查是否在独立窗口模式
+            if (this.isPdfPopupMode && this.pdfPopupWindow && !this.pdfPopupWindow.closed) {
+                // 在独立窗口中执行搜索
+                try {
+                    // 等待独立窗口中的PDF.js加载完成
+                    const checkAndSearch = () => {
+                        const popupDoc = this.pdfPopupWindow.document;
+                        const popupIframe = popupDoc.querySelector('#pdfFrame');
+                        if (!popupIframe || !popupIframe.contentWindow) {
+                            setTimeout(checkAndSearch, 100);
+                            return;
+                        }
+                        const pdfJsWindow = popupIframe.contentWindow;
+                        if (!pdfJsWindow.PDFViewerApplication) {
+                            setTimeout(checkAndSearch, 100);
+                            return;
+                        }
+                        const pdfApp = pdfJsWindow.PDFViewerApplication;
+                        // 执行搜索或跳转
+                        if (cleanText) {
+                            this.executeSearchAndScroll(pdfApp, cleanText, valuePath);
+                        } else if (page) {
+                            this.smoothScrollToPage(pdfApp, parseInt(page));
+                        }
+                        // 聚焦独立窗口
+                        this.pdfPopupWindow.focus();
+                    };
+                    checkAndSearch();
+                    return;
+                } catch (error) {
+                    console.error('独立窗口搜索失败:', error);
+                    this.showNotification('独立窗口搜索失败', 'error');
+                    return;
+                }
+            }
+            
+            // 内嵌模式：使用主窗口的iframe
+            const pdfViewer = document.getElementById('pdfViewer');
+            if (!pdfViewer) return;
+            
             const pdfWindow = pdfViewer.contentWindow;
             if (!pdfWindow || !pdfWindow.PDFViewerApplication) {
                 console.error('❌ PDF.js未初始化');
