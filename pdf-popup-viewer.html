@@ -89,6 +89,9 @@
             const iframe = document.getElementById('pdfFrame');
             if (!iframe || !iframe.contentWindow) return;
             
+            // 保存状态锁
+            let isSaving = false;
+            
             try {
                 const iframeWindow = iframe.contentWindow;
                 
@@ -105,12 +108,26 @@
                     pdfApp.eventBus.on('download', async (evt) => {
                         console.log('📥 拦截PDF下载事件，调用主窗口保存方法');
                         
+                        // 防止重复保存
+                        if (isSaving) {
+                            console.log('⏳ 正在保存中，忽略重复请求');
+                            return;
+                        }
+                        
                         // 阻止默认下载行为
                         if (evt && evt.preventDefault) {
                             evt.preventDefault();
                         }
                         
                         try {
+                            isSaving = true;
+                            
+                            // 等待PDF完全加载
+                            if (!pdfApp.pdfDocument || !pdfApp.pdfDocument.numPages) {
+                                console.log('⏳ 等待PDF文档加载...');
+                                await waitForPdfDocumentReady(pdfApp);
+                            }
+                            
                             // 调用主窗口（opener）的下载方法
                             if (window.opener && window.opener.app && typeof window.opener.app.downloadCurrentPdf === 'function') {
                                 console.log('✅ 调用主窗口的downloadCurrentPdf方法');
@@ -122,7 +139,16 @@
                         } catch (error) {
                             console.error('❌ 保存PDF失败:', error);
                             // 如果失败，回退到本地下载
-                            await downloadPdfWithAnnotations(pdfApp);
+                            try {
+                                await downloadPdfWithAnnotations(pdfApp);
+                            } catch (fallbackError) {
+                                console.error('❌ 回退保存也失败:', fallbackError);
+                            }
+                        } finally {
+                            // 释放保存锁
+                            setTimeout(() => {
+                                isSaving = false;
+                            }, 1000);
                         }
                     });
                     
@@ -135,6 +161,27 @@
             } catch (error) {
                 console.error('❌ 设置下载拦截器失败:', error);
             }
+        }
+        
+        // 等待PDF文档完全加载
+        function waitForPdfDocumentReady(pdfApp, maxWaitTime = 10000) {
+            const startTime = Date.now();
+            return new Promise((resolve, reject) => {
+                const checkReady = () => {
+                    if (Date.now() - startTime > maxWaitTime) {
+                        reject(new Error('PDF加载超时'));
+                        return;
+                    }
+                    
+                    if (pdfApp.pdfDocument && pdfApp.pdfDocument.numPages && pdfApp.pdfViewer) {
+                        console.log('✅ PDF文档已完全加载');
+                        resolve();
+                    } else {
+                        setTimeout(checkReady, 100);
+                    }
+                };
+                checkReady();
+            });
         }
         
         // 下载包含标注的PDF（回退方案）

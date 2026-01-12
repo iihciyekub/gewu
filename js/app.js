@@ -930,6 +930,9 @@ class PaperReviewerApp {
         // 更新UI显示当前项目
         this.updateProjectDisplay();
         
+        // 关闭独立PDF窗口并重置为内嵌模式
+        this.forceEmbeddedPdfMode();
+        
         // 尝试迁移数据到项目存储
         if (this.projectStorage && this.currentProject) {
             try {
@@ -2770,8 +2773,8 @@ class PaperReviewerApp {
             this.isMarkdownEditing = false;
             this.hasUnsavedMarkdownChanges = false;
             
-            // 重置PDF窗口状态恢复标志，允许新项目恢复其保存的状态
-            this.pdfViewModeRestored = false;
+            // 关闭独立PDF窗口并强制使用内嵌模式
+            this.forceEmbeddedPdfMode();
             
             // 清空UI
             const fileListEl = document.getElementById('fileList');
@@ -10143,28 +10146,43 @@ class PaperReviewerApp {
         }
     }
 
-    // 恢复PDF窗口状态
+    // 强制切换到内嵌PDF模式
+    forceEmbeddedPdfMode() {
+        // 关闭独立PDF窗口
+        if (this.pdfPopupWindow && !this.pdfPopupWindow.closed) {
+            this.debugLog('🔄 关闭独立PDF窗口');
+            this.pdfPopupWindow.close();
+        }
+        
+        // 清除聚焦定时器
+        if (this.pdfPopupFocusInterval) {
+            clearInterval(this.pdfPopupFocusInterval);
+            this.pdfPopupFocusInterval = null;
+        }
+        
+        // 重置状态
+        this.isPdfPopupMode = false;
+        this.pdfPopupWindow = null;
+        this.pdfViewModeRestored = true; // 标记已处理，防止自动恢复
+        
+        // 清除保存的popup模式状态
+        if (this.currentProject && this.currentProject.path) {
+            const key = `pdfViewMode_${this.currentProject.path}`;
+            localStorage.setItem(key, 'embedded');
+            this.debugLog('✅ 已重置为内嵌PDF模式');
+        }
+    }
+
+    // 恢复PDF窗口状态（已禁用自动恢复popup模式）
     restorePdfViewMode() {
+        // 每次加载项目时都强制使用内嵌模式，不再自动恢复popup模式
         // 如果已经恢复过或用户已手动切换，则不再自动恢复
         if (this.pdfViewModeRestored) {
             return;
         }
         
-        const savedMode = this.loadPdfViewMode();
-        // 如果上次是独立窗口模式且当前有PDF加载，则重新打开独立窗口
-        if (savedMode === 'popup' && this.currentPdfUrl && !this.isPdfPopupMode) {
-            // 标记已经执行过恢复
-            this.pdfViewModeRestored = true;
-            // 延迟打开，确保PDF已加载
-            setTimeout(() => {
-                if (this.currentPdfUrl && !this.isPdfPopupMode) {
-                    this.openPdfInPopup();
-                }
-            }, 500);
-        } else {
-            // 内嵌模式也标记已恢复，避免后续被触发
-            this.pdfViewModeRestored = true;
-        }
+        // 内嵌模式标记已恢复，避免后续被触发
+        this.pdfViewModeRestored = true;
     }
 
     async loadPDF(url) {
@@ -10473,7 +10491,16 @@ class PaperReviewerApp {
     }
 
     async downloadCurrentPdf() {
+        // 防止重复点击保存
+        if (this._isSavingPdf) {
+            this.showNotification('⏳ 正在保存中，请稍候...', 'warning');
+            return;
+        }
+        
         try {
+            this._isSavingPdf = true;
+            this.showNotification('📝 开始保存PDF...', 'info');
+            
             let pdfApp = null;
             
             // 检查是否在独立窗口模式
@@ -10502,9 +10529,15 @@ class PaperReviewerApp {
             const pdfUrl = this.currentPdfUrl;
 
             if (!pdfApp) {
-                this.showNotification('PDF 尚未加载完成', 'error');
+                this.showNotification('❌ PDF 尚未加载完成', 'error');
                 console.error('❌ PDFViewerApplication未找到');
                 return;
+            }
+            
+            // 等待PDF文档完全加载
+            if (!pdfApp.pdfDocument || !pdfApp.pdfDocument.numPages) {
+                this.showNotification('⏳ 等待PDF文档加载...', 'warning');
+                await this.waitForPdfReady(pdfApp);
             }
 
             // 从URL中获取当前PDF的原始文件名（与pdf目录下的文件同名）
@@ -10602,7 +10635,10 @@ class PaperReviewerApp {
             this.showNotification('开始下载 PDF', 'success');
         } catch (error) {
             console.error('PDF 下载失败:', error);
-            this.showNotification(`下载失败: ${error.message}`, 'error');
+            this.showNotification(`❌ 保存失败: ${error.message}`, 'error');
+        } finally {
+            // 释放保存锁
+            this._isSavingPdf = false;
         }
     }
 
@@ -10660,24 +10696,34 @@ class PaperReviewerApp {
     }
 
     // 直接保存PDF到项目pdf目录（不弹出对话框）
-    async savePdfToProjectDirectory(pdfUrl, filename, blob) {
+    async savePdfToProjectDirectory(pdfUrl, filename, blob, retryCount = 0) {
+        const maxRetries = 2;
+        
         try {
             if (!filename || !blob) {
+                console.warn('⚠️ 缺少文件名或blob数据');
+                return null;
+            }
+            
+            if (blob.size === 0) {
+                console.warn('⚠️ Blob大小为0');
                 return null;
             }
             
             // 使用当前项目路径
             const projectPath = this.getProjectKey();
             if (!projectPath) {
-                console.warn('无法获取当前项目路径');
+                console.warn('⚠️ 无法获取当前项目路径');
                 return null;
             }
             
-            this.debugLog('📝 尝试直接保存PDF到项目pdf目录...');
+            this.debugLog(`📝 保存PDF到项目pdf目录 (${blob.size} bytes)...`);
             
             // 将Blob转换为ArrayBuffer
             const arrayBuffer = await blob.arrayBuffer();
             const base64Data = this.arrayBufferToBase64(arrayBuffer);
+            
+            this.debugLog(`🔄 发送保存请求到服务器...`);
             
             // 请求服务器直接写入文件到项目pdf目录
             const response = await fetch('/save-pdf-to-project', {
@@ -10692,7 +10738,15 @@ class PaperReviewerApp {
             
             if (!response.ok) {
                 const error = await response.text();
-                console.warn('服务器保存PDF失败:', error);
+                console.error('❌ 服务器保存PDF失败:', error);
+                
+                // 如果还有重试次数，等待后重试
+                if (retryCount < maxRetries) {
+                    console.log(`🔄 重试保存 (${retryCount + 1}/${maxRetries})...`);
+                    await new Promise(resolve => setTimeout(resolve, 1000));
+                    return await this.savePdfToProjectDirectory(pdfUrl, filename, blob, retryCount + 1);
+                }
+                
                 return null;
             }
             
@@ -10702,9 +10756,18 @@ class PaperReviewerApp {
                 return result.path;
             }
             
+            console.warn('⚠️ 服务器返回但未确认成功');
             return null;
         } catch (error) {
-            console.warn('直接保存PDF到项目目录失败:', error);
+            console.error('❌ 保存PDF到项目目录失败:', error);
+            
+            // 如果还有重试次数，等待后重试
+            if (retryCount < maxRetries) {
+                console.log(`🔄 重试保存 (${retryCount + 1}/${maxRetries})...`);
+                await new Promise(resolve => setTimeout(resolve, 1000));
+                return await this.savePdfToProjectDirectory(pdfUrl, filename, blob, retryCount + 1);
+            }
+            
             return null;
         }
     }
@@ -10720,22 +10783,62 @@ class PaperReviewerApp {
         return btoa(binary);
     }
 
+    // 等待PDF完全加载
+    async waitForPdfReady(pdfApp, maxWaitTime = 10000) {
+        const startTime = Date.now();
+        return new Promise((resolve, reject) => {
+            const checkReady = () => {
+                if (Date.now() - startTime > maxWaitTime) {
+                    reject(new Error('PDF加载超时'));
+                    return;
+                }
+                
+                if (pdfApp.pdfDocument && pdfApp.pdfDocument.numPages && pdfApp.pdfViewer) {
+                    this.debugLog('✅ PDF文档已完全加载');
+                    resolve();
+                } else {
+                    setTimeout(checkReady, 100);
+                }
+            };
+            checkReady();
+        });
+    }
+
     async buildPdfBlobWithAnnotations(pdfApp) {
         try {
             const pdfDocument = pdfApp?.pdfDocument;
-            if (!pdfDocument) return null;
-
+            if (!pdfDocument) {
+                console.warn('⚠️ pdfDocument不存在');
+                return null;
+            }
+            
+            // 优先使用saveDocument（包含标注）
             if (typeof pdfDocument.saveDocument === 'function') {
-                const data = await pdfDocument.saveDocument();
-                if (data) return new Blob([data], { type: 'application/pdf' });
+                this.debugLog('📝 使用saveDocument方法保存（包含标注）');
+                try {
+                    const data = await pdfDocument.saveDocument();
+                    if (data && data.byteLength > 0) {
+                        this.debugLog(`✅ 成功获取PDF数据: ${data.byteLength} bytes`);
+                        return new Blob([data], { type: 'application/pdf' });
+                    }
+                } catch (saveError) {
+                    console.warn('saveDocument失败，尝试getData:', saveError);
+                }
             }
 
+            // 回退到getData
             if (typeof pdfDocument.getData === 'function') {
+                this.debugLog('📝 使用getData方法保存（可能不含标注）');
                 const data = await pdfDocument.getData();
-                if (data) return new Blob([data], { type: 'application/pdf' });
+                if (data && data.byteLength > 0) {
+                    this.debugLog(`✅ 成功获取PDF数据: ${data.byteLength} bytes`);
+                    return new Blob([data], { type: 'application/pdf' });
+                }
             }
+            
+            console.warn('⚠️ 无法获取PDF数据');
         } catch (error) {
-            console.warn('构建带标注的PDF失败，回退到默认下载:', error);
+            console.error('❌ 构建带标注的PDF失败:', error);
         }
         return null;
     }
