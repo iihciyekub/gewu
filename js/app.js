@@ -1,4 +1,6 @@
 // Import PDF.js (不再需要，使用iframe加载viewer)
+// VERSION: 2026-01-12-15:30 - Fixed MD DOI generation (basename only)
+console.log('✅ app.js 已加载 - 版本: 2026-01-12-15:30 (MD DOI修复版)');
 
 class PaperReviewerApp {
     constructor() {
@@ -136,8 +138,52 @@ class PaperReviewerApp {
         // 初始化管理器
         this.specialSyntaxManager = null; // 延迟初始化
         this.projectStorage = null; // 延迟初始化
+        
+        // 🔑 立即清理可能遗留的独立PDF窗口
+        this.cleanupOrphanedPdfWindows();
 
         this.init();
+    }
+    
+    // 清理可能遗留的独立PDF窗口
+    cleanupOrphanedPdfWindows() {
+        try {
+            console.log('🔍 检查并清理遗留的PDF窗口...');
+            
+            // 方法1: 通过localStorage发送关闭信号
+            try {
+                // 检查是否有活动的PDF窗口标记
+                const hasActiveWindow = localStorage.getItem('pdfPopupWindowActive');
+                if (hasActiveWindow) {
+                    console.log('🔄 发现活动的PDF窗口标记，发送关闭信号');
+                    localStorage.setItem('closePdfPopupWindow', 'true');
+                    // 等待一小段时间让窗口接收信号
+                    setTimeout(() => {
+                        localStorage.removeItem('closePdfPopupWindow');
+                        localStorage.removeItem('pdfPopupWindowActive');
+                    }, 1000);
+                }
+            } catch (e) {
+                console.warn('⚠️ 无法使用localStorage发送关闭信号:', e);
+            }
+            
+            // 方法2: 检查是否有之前打开的窗口引用
+            if (this.pdfPopupWindow && !this.pdfPopupWindow.closed) {
+                console.log('🔄 关闭遗留的PDF窗口引用');
+                this.pdfPopupWindow.close();
+                this.pdfPopupWindow = null;
+            }
+            
+            // 注意：移除了 window.open('', 'PDFViewer') 的方法3
+            // 因为它会在每次页面重载时创建一个空白窗口，导致用户体验问题
+            // localStorage信号和窗口引用的方法已经足够处理大多数情况
+            
+            this.isPdfPopupMode = false;
+            console.log('✅ PDF窗口清理完成');
+        } catch (err) {
+            // 忽略清理错误
+            console.warn('⚠️ 清理遗留PDF窗口时出错:', err);
+        }
     }
 
     closeAllModals(exceptId = '') {
@@ -927,11 +973,11 @@ class PaperReviewerApp {
     }
 
     async initializeProject() {
+        // 🔑 优先关闭独立PDF窗口（如果存在）
+        this.forceEmbeddedPdfMode();
+        
         // 更新UI显示当前项目
         this.updateProjectDisplay();
-        
-        // 关闭独立PDF窗口并重置为内嵌模式
-        this.forceEmbeddedPdfMode();
         
         // 尝试迁移数据到项目存储
         if (this.projectStorage && this.currentProject) {
@@ -1655,6 +1701,7 @@ class PaperReviewerApp {
         const settingsDropdown = document.getElementById('settingsDropdown');
         const autoLoadOnItem = document.getElementById('autoLoadOnItem');
         const autoLoadOffItem = document.getElementById('autoLoadOffItem');
+        const fixAllMdDoisBtn = document.getElementById('fixAllMdDoisBtn');
         if (settingsToggleBtn && settingsMenu) {
             settingsToggleBtn.addEventListener('click', (e) => {
                 e.preventDefault();
@@ -1678,6 +1725,14 @@ class PaperReviewerApp {
             autoLoadOffItem.addEventListener('click', () => {
                 this.setAutoLoadPdf(false);
                 this.toggleSettingsMenu(false);
+            });
+        }
+        if (fixAllMdDoisBtn) {
+            fixAllMdDoisBtn.addEventListener('click', async () => {
+                this.toggleSettingsMenu(false);
+                if (confirm('确定要批量修复所有MD文件的DOI吗？\n\n这将把所有MD文件中frontmatter里的DOI字段修正为只包含文件名（去除路径部分）。')) {
+                    await this.fixAllMarkdownDois();
+                }
             });
         }
 
@@ -2707,6 +2762,19 @@ class PaperReviewerApp {
     
     async switchProject(project) {
         try {
+            // 🔑 切换项目前先保存标注并关闭独立PDF窗口
+            const hadPopupWindow = this.isPdfPopupMode && this.pdfPopupWindow && !this.pdfPopupWindow.closed;
+            
+            if (this.isPdfPopupMode) {
+                await this.savePdfAnnotationsFromPopup();
+            }
+            this.forceEmbeddedPdfMode();
+            
+            // 如果关闭了独立窗口，给予提示
+            if (hadPopupWindow) {
+                this.showNotification('🔄 已关闭独立PDF窗口', 'info');
+            }
+            
             // 验证项目结构
             console.log('🔍 验证项目路径:', project.path);
             const response = await fetch('/validate-project', {
@@ -5957,7 +6025,9 @@ class PaperReviewerApp {
                 const meta = (rawMeta && typeof rawMeta === 'object' && !Array.isArray(rawMeta)) ? rawMeta : {};
                 if (meta !== rawMeta) data.meta_info = meta; // keep existing meta fields, just add No
                 meta.No = null; // 重置，稍后按 DOI 排序重新赋值
-                const baseDoi = (base || '').replace(/_/g, '/');
+                // 只使用basename（去掉路径）来生成DOI
+                const baseName = (base || '').split('/').pop() || base;
+                const baseDoi = baseName.replace(/_/g, '/');
                 const doi = this.findFirstDoiInData(data) || (meta && meta.doi) || baseDoi || '';
                 if (!meta.doi && doi) meta.doi = doi; // backfill for missing meta.doi
                 items.push({
@@ -8065,9 +8135,15 @@ class PaperReviewerApp {
     }
 
     buildDefaultMarkdown() {
-        const base = this.currentFile ? this.currentFile.replace(/\.json$/i, '') : 'notes';
-        // 从文件名提取DOI（将_转换为/）
+        // 从文件名提取basename（去掉路径），再将_转换为/
+        let base = this.currentFile ? this.currentFile.replace(/\.json$/i, '') : 'notes';
+        console.log('🔍 buildDefaultMarkdown - 原始文件名:', this.currentFile);
+        console.log('🔍 buildDefaultMarkdown - 去除.json后:', base);
+        // 如果包含路径分隔符，只取最后的文件名部分
+        base = base.split('/').pop() || base;
+        console.log('🔍 buildDefaultMarkdown - 提取basename后:', base);
         const doi = base.replace(/_/g, '/');
+        console.log('🔍 buildDefaultMarkdown - 生成DOI:', doi);
         // 获取当前日期时间（精确到秒）
         const now = new Date();
         const year = now.getFullYear();
@@ -8081,9 +8157,15 @@ class PaperReviewerApp {
     }
 
     buildDefaultMarkdownForFilename(jsonFilename) {
-        const base = jsonFilename ? jsonFilename.replace(/\.json$/i, '') : 'notes';
-        // 从文件名提取DOI（将_转换为/）
+        // 从文件名提取basename（去掉路径），再将_转换为/
+        let base = jsonFilename ? jsonFilename.replace(/\.json$/i, '') : 'notes';
+        console.log('🔍 buildDefaultMarkdownForFilename - 原始文件名:', jsonFilename);
+        console.log('🔍 buildDefaultMarkdownForFilename - 去除.json后:', base);
+        // 如果包含路径分隔符，只取最后的文件名部分
+        base = base.split('/').pop() || base;
+        console.log('🔍 buildDefaultMarkdownForFilename - 提取basename后:', base);
         const doi = base.replace(/_/g, '/');
+        console.log('🔍 buildDefaultMarkdownForFilename - 生成DOI:', doi);
         // 获取当前日期时间（精确到秒）
         const now = new Date();
         const year = now.getFullYear();
@@ -8110,6 +8192,100 @@ class PaperReviewerApp {
             } catch (err2) {
                 console.warn('Failed to create markdown:', err2);
             }
+        }
+    }
+
+    // 修复MD文件中的DOI（去除路径部分）
+    async fixMarkdownDoi(mdFilename, jsonFilename) {
+        try {
+            // 读取MD文件内容
+            const content = await this.readProjectFile(mdFilename);
+            
+            // 解析frontmatter
+            const frontmatterRegex = /^---\n([\s\S]*?)\n---/;
+            const match = content.match(frontmatterRegex);
+            
+            if (!match) {
+                console.warn('未找到frontmatter:', mdFilename);
+                return false;
+            }
+            
+            const frontmatter = match[1];
+            const doiMatch = frontmatter.match(/^doi:\s*(.+)$/m);
+            
+            if (!doiMatch) {
+                console.warn('未找到doi字段:', mdFilename);
+                return false;
+            }
+            
+            const currentDoi = doiMatch[1].trim();
+            
+            // 从JSON文件名生成正确的DOI
+            let base = jsonFilename.replace(/\.json$/i, '');
+            base = base.split('/').pop() || base; // 只取basename
+            const correctDoi = base.replace(/_/g, '/');
+            
+            // 检查是否需要修复
+            if (currentDoi === correctDoi) {
+                console.log('DOI已正确，无需修复:', mdFilename);
+                return false;
+            }
+            
+            console.log(`修复DOI: ${currentDoi} -> ${correctDoi}`);
+            
+            // 替换DOI
+            const newFrontmatter = frontmatter.replace(
+                /^doi:\s*(.+)$/m,
+                `doi: ${correctDoi}`
+            );
+            const newContent = content.replace(frontmatterRegex, `---\n${newFrontmatter}\n---`);
+            
+            // 保存修复后的内容
+            await this.persistMarkdown(mdFilename, newContent);
+            
+            return true;
+        } catch (err) {
+            console.error('修复MD文件DOI失败:', mdFilename, err);
+            return false;
+        }
+    }
+    
+    // 批量修复所有MD文件的DOI
+    async fixAllMarkdownDois() {
+        if (!this.currentFileList || this.currentFileList.length === 0) {
+            this.showNotification('没有文件需要修复', 'info');
+            return;
+        }
+        
+        this.showNotification('⏳ 开始批量修复MD文件的DOI...', 'info');
+        
+        let fixed = 0;
+        let skipped = 0;
+        let errors = 0;
+        
+        for (const jsonFile of this.currentFileList) {
+            const mdFile = this.getMarkdownFilename(jsonFile);
+            
+            try {
+                const result = await this.fixMarkdownDoi(mdFile, jsonFile);
+                if (result) {
+                    fixed++;
+                } else {
+                    skipped++;
+                }
+            } catch (err) {
+                errors++;
+                console.error('处理失败:', jsonFile, err);
+            }
+        }
+        
+        const message = `✅ 修复完成！修复: ${fixed}, 跳过: ${skipped}, 错误: ${errors}`;
+        this.showNotification(message, fixed > 0 ? 'success' : 'info');
+        console.log(message);
+        
+        // 如果当前文件的MD被修复了，重新加载
+        if (fixed > 0 && this.currentFile) {
+            await this.loadMarkdownForCurrentFile();
         }
     }
 
@@ -10220,10 +10396,21 @@ class PaperReviewerApp {
 
     // 强制切换到内嵌PDF模式
     forceEmbeddedPdfMode() {
-        // 关闭独立PDF窗口
-        if (this.pdfPopupWindow && !this.pdfPopupWindow.closed) {
-            this.debugLog('🔄 关闭独立PDF窗口');
-            this.pdfPopupWindow.close();
+        this.debugLog('🔄 强制切换为内嵌PDF模式...');
+        
+        // 关闭独立PDF窗口（多次尝试确保关闭）
+        if (this.pdfPopupWindow) {
+            try {
+                if (!this.pdfPopupWindow.closed) {
+                    this.debugLog('📌 关闭独立PDF窗口');
+                    this.pdfPopupWindow.close();
+                }
+            } catch (err) {
+                console.warn('⚠️ 关闭PDF窗口时出错:', err);
+            }
+            
+            // 强制清空引用
+            this.pdfPopupWindow = null;
         }
         
         // 清除聚焦定时器
@@ -10234,15 +10421,19 @@ class PaperReviewerApp {
         
         // 重置状态
         this.isPdfPopupMode = false;
-        this.pdfPopupWindow = null;
         this.pdfViewModeRestored = true; // 标记已处理，防止自动恢复
         
         // 清除保存的popup模式状态
-        if (this.currentProject && this.currentProject.path) {
-            const key = `pdfViewMode_${this.currentProject.path}`;
-            localStorage.setItem(key, 'embedded');
-            this.debugLog('✅ 已重置为内嵌PDF模式');
+        try {
+            if (this.currentProject && this.currentProject.path) {
+                const key = `pdfViewMode_${this.currentProject.path}`;
+                localStorage.setItem(key, 'embedded');
+            }
+        } catch (err) {
+            console.warn('⚠️ 清除localStorage失败:', err);
         }
+        
+        this.debugLog('✅ 已重置为内嵌PDF模式');
     }
 
     // 恢复PDF窗口状态（已禁用自动恢复popup模式）
@@ -10611,6 +10802,10 @@ class PaperReviewerApp {
                 this.showNotification('⏳ 等待PDF文档加载...', 'warning');
                 await this.waitForPdfReady(pdfApp);
             }
+            
+            // 🔑 关键修复：在保存前确保所有标注已提交
+            this.showNotification('📝 正在准备标注数据...', 'info');
+            await this.ensureAnnotationsCommitted(pdfApp);
 
             // 从URL中获取当前PDF的原始文件名（与pdf目录下的文件同名）
             let filename = this.getPdfFilename(pdfUrl);
@@ -10778,7 +10973,7 @@ class PaperReviewerApp {
             }
             
             if (blob.size === 0) {
-                console.warn('⚠️ Blob大小为0');
+                console.warn('⚠️ Blob大小为0，可能标注未正确保存');
                 return null;
             }
             
@@ -10789,13 +10984,13 @@ class PaperReviewerApp {
                 return null;
             }
             
-            this.debugLog(`📝 保存PDF到项目pdf目录 (${blob.size} bytes)...`);
+            this.debugLog(`📝 保存PDF到项目pdf目录 (${blob.size} bytes, 尝试 ${retryCount + 1}/${maxRetries + 1})...`);
             
             // 将Blob转换为ArrayBuffer
             const arrayBuffer = await blob.arrayBuffer();
             const base64Data = this.arrayBufferToBase64(arrayBuffer);
             
-            this.debugLog(`🔄 发送保存请求到服务器...`);
+            this.debugLog(`🔄 发送保存请求到服务器 (${base64Data.length} chars base64)...`);
             
             // 请求服务器直接写入文件到项目pdf目录
             const response = await fetch('/save-pdf-to-project', {
@@ -10814,8 +11009,9 @@ class PaperReviewerApp {
                 
                 // 如果还有重试次数，等待后重试
                 if (retryCount < maxRetries) {
-                    console.log(`🔄 重试保存 (${retryCount + 1}/${maxRetries})...`);
-                    await new Promise(resolve => setTimeout(resolve, 1000));
+                    console.log(`🔄 服务器保存失败，重试 (${retryCount + 1}/${maxRetries})...`);
+                    this.showNotification(`⏳ 重试保存 (${retryCount + 1}/${maxRetries})...`, 'warning');
+                    await new Promise(resolve => setTimeout(resolve, 1000 * (retryCount + 1)));
                     return await this.savePdfToProjectDirectory(pdfUrl, filename, blob, retryCount + 1);
                 }
                 
@@ -10828,7 +11024,7 @@ class PaperReviewerApp {
                 return result.path;
             }
             
-            console.warn('⚠️ 服务器返回但未确认成功');
+            console.warn('⚠️ 服务器返回但未确认成功:', result);
             return null;
         } catch (error) {
             console.error('❌ 保存PDF到项目目录失败:', error);
@@ -10884,17 +11080,36 @@ class PaperReviewerApp {
                 return null;
             }
             
+            // 🔑 关键修复：确保所有标注已提交并准备就绪
+            await this.ensureAnnotationsCommitted(pdfApp);
+            
             // 优先使用saveDocument（包含标注）
             if (typeof pdfDocument.saveDocument === 'function') {
                 this.debugLog('📝 使用saveDocument方法保存（包含标注）');
-                try {
-                    const data = await pdfDocument.saveDocument();
-                    if (data && data.byteLength > 0) {
-                        this.debugLog(`✅ 成功获取PDF数据: ${data.byteLength} bytes`);
-                        return new Blob([data], { type: 'application/pdf' });
+                
+                // 添加重试机制
+                for (let attempt = 0; attempt < 3; attempt++) {
+                    try {
+                        // 每次尝试前都确保标注已提交
+                        if (attempt > 0) {
+                            this.debugLog(`🔄 重试保存 (${attempt + 1}/3)...`);
+                            await this.ensureAnnotationsCommitted(pdfApp);
+                            // 稍微等待一下
+                            await new Promise(resolve => setTimeout(resolve, 300 * (attempt + 1)));
+                        }
+                        
+                        const data = await pdfDocument.saveDocument();
+                        if (data && data.byteLength > 0) {
+                            this.debugLog(`✅ 成功获取PDF数据: ${data.byteLength} bytes (尝试 ${attempt + 1})`);
+                            return new Blob([data], { type: 'application/pdf' });
+                        }
+                    } catch (saveError) {
+                        console.warn(`saveDocument失败 (尝试 ${attempt + 1}/3):`, saveError);
+                        if (attempt === 2) {
+                            // 最后一次尝试失败，回退到getData
+                            throw saveError;
+                        }
                     }
-                } catch (saveError) {
-                    console.warn('saveDocument失败，尝试getData:', saveError);
                 }
             }
 
@@ -10913,6 +11128,74 @@ class PaperReviewerApp {
             console.error('❌ 构建带标注的PDF失败:', error);
         }
         return null;
+    }
+
+    // 🔑 确保所有标注已提交到annotationStorage
+    async ensureAnnotationsCommitted(pdfApp) {
+        try {
+            if (!pdfApp) return;
+            
+            this.debugLog('🔄 检查并提交标注...');
+            
+            // 1. 等待所有页面渲染完成
+            if (pdfApp.pdfViewer) {
+                const numPages = pdfApp.pdfDocument?.numPages || 0;
+                if (numPages > 0) {
+                    // 确保至少当前可见页面已渲染
+                    const currentPage = pdfApp.pdfViewer.currentPageNumber || 1;
+                    for (let i = Math.max(1, currentPage - 2); i <= Math.min(numPages, currentPage + 2); i++) {
+                        try {
+                            const pageView = pdfApp.pdfViewer.getPageView(i - 1);
+                            if (pageView && !pageView.renderingState) {
+                                await pageView.draw();
+                            }
+                        } catch (e) {
+                            // 忽略单个页面错误
+                        }
+                    }
+                }
+            }
+            
+            // 2. 触发标注编辑器的保存
+            if (pdfApp.pdfDocument?.annotationStorage) {
+                const storage = pdfApp.pdfDocument.annotationStorage;
+                
+                // 检查是否有未保存的标注
+                if (storage.size > 0) {
+                    this.debugLog(`📝 发现 ${storage.size} 个标注`);
+                }
+                
+                // 触发编辑器提交
+                if (pdfApp.annotationEditorUIManager) {
+                    // 如果有活动的编辑器，先取消选中以触发保存
+                    if (typeof pdfApp.annotationEditorUIManager.unselectAll === 'function') {
+                        pdfApp.annotationEditorUIManager.unselectAll();
+                    }
+                    
+                    // 确保所有编辑器都已提交
+                    if (typeof pdfApp.annotationEditorUIManager.commitAll === 'function') {
+                        await pdfApp.annotationEditorUIManager.commitAll();
+                    }
+                }
+            }
+            
+            // 3. 等待一小段时间确保提交完成
+            await new Promise(resolve => setTimeout(resolve, 200));
+            
+            // 4. 触发eventBus的annotationeditorstateschanged事件以确保同步
+            if (pdfApp.eventBus) {
+                pdfApp.eventBus.dispatch('annotationeditorstateschanged', {
+                    source: this,
+                    details: { hasChanged: true }
+                });
+            }
+            
+            this.debugLog('✅ 标注提交完成');
+            
+        } catch (error) {
+            console.warn('⚠️ 标注提交过程出现警告:', error);
+            // 不抛出错误，继续保存流程
+        }
     }
 
     triggerBlobDownload(blob, filename) {
@@ -10948,10 +11231,32 @@ class PaperReviewerApp {
             
             this.debugLog('🔄 正在从独立窗口保存PDF标注...');
             
-            // 使用saveDocument保存带标注的PDF数据
+            // 🔑 关键修复：确保标注已提交
+            await this.ensureAnnotationsCommitted(pdfApp);
+            
+            // 使用saveDocument保存带标注的PDF数据 - 带重试机制
             let pdfData = null;
             if (typeof pdfApp.pdfDocument.saveDocument === 'function') {
-                pdfData = await pdfApp.pdfDocument.saveDocument();
+                // 添加重试机制
+                for (let attempt = 0; attempt < 3; attempt++) {
+                    try {
+                        if (attempt > 0) {
+                            this.debugLog(`🔄 重试保存标注 (${attempt + 1}/3)...`);
+                            await this.ensureAnnotationsCommitted(pdfApp);
+                            await new Promise(resolve => setTimeout(resolve, 300 * (attempt + 1)));
+                        }
+                        pdfData = await pdfApp.pdfDocument.saveDocument();
+                        if (pdfData && pdfData.byteLength > 0) {
+                            this.debugLog(`✅ 标注数据保存成功 (${pdfData.byteLength} bytes)`);
+                            break;
+                        }
+                    } catch (err) {
+                        console.warn(`标注保存失败 (尝试 ${attempt + 1}/3):`, err);
+                        if (attempt === 2 && typeof pdfApp.pdfDocument.getData === 'function') {
+                            pdfData = await pdfApp.pdfDocument.getData();
+                        }
+                    }
+                }
             } else if (typeof pdfApp.pdfDocument.getData === 'function') {
                 pdfData = await pdfApp.pdfDocument.getData();
             }
@@ -13693,6 +13998,22 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // 页面关闭/刷新前提示保存
     window.addEventListener('beforeunload', (e) => {
+        // 通过localStorage发送关闭信号给独立PDF窗口
+        try {
+            localStorage.setItem('closePdfPopupWindow', 'true');
+        } catch (err) {
+            console.warn('无法发送关闭信号:', err);
+        }
+        
+        // 关闭独立PDF窗口
+        if (app.pdfPopupWindow && !app.pdfPopupWindow.closed) {
+            try {
+                app.pdfPopupWindow.close();
+            } catch (err) {
+                console.warn('关闭独立PDF窗口失败:', err);
+            }
+        }
+        
         if (app.hasUnsavedChanges || app.hasUnsavedMarkdownChanges) {
             e.preventDefault();
             e.returnValue = '您有未保存的修改（JSON/Markdown），确定要离开吗？';

@@ -37,6 +37,94 @@
             document.body.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;font-family:sans-serif;color:#666;">No PDF specified</div>';
         }
         
+        // 🔑 监听父窗口状态，如果父窗口刷新或关闭，则自动关闭此独立窗口
+        function monitorParentWindow() {
+            // 生成窗口会话ID，用于跟踪父窗口状态
+            const sessionId = Date.now() + '_' + Math.random();
+            
+            // 在localStorage中标记此窗口存在
+            try {
+                localStorage.setItem('pdfPopupWindowActive', sessionId);
+                console.log('✅ PDF窗口已标记为活动状态:', sessionId);
+            } catch (e) {
+                console.warn('无法设置localStorage标记');
+            }
+            
+            // 检查父窗口（opener）是否存在
+            if (!window.opener) {
+                console.log('⚠️ 没有父窗口引用，独立PDF窗口将关闭');
+                window.close();
+                return;
+            }
+            
+            // 定期检查父窗口是否还在
+            const checkInterval = setInterval(() => {
+                try {
+                    // 检查localStorage中的关闭信号
+                    const shouldClose = localStorage.getItem('closePdfPopupWindow');
+                    if (shouldClose === 'true') {
+                        console.log('🔄 收到关闭信号，独立PDF窗口将关闭');
+                        localStorage.removeItem('closePdfPopupWindow');
+                        localStorage.removeItem('pdfPopupWindowActive');
+                        clearInterval(checkInterval);
+                        window.close();
+                        return;
+                    }
+                    
+                    // 尝试访问父窗口，如果父窗口已关闭或刷新，会抛出错误
+                    if (!window.opener || window.opener.closed) {
+                        console.log('🔄 父窗口已关闭或刷新，独立PDF窗口将关闭');
+                        localStorage.removeItem('pdfPopupWindowActive');
+                        clearInterval(checkInterval);
+                        window.close();
+                        return;
+                    }
+                    
+                    // 检查父窗口是否还有我们的应用实例
+                    if (!window.opener.paperReviewerApp) {
+                        console.log('🔄 父窗口已重新加载，独立PDF窗口将关闭');
+                        localStorage.removeItem('pdfPopupWindowActive');
+                        clearInterval(checkInterval);
+                        window.close();
+                        return;
+                    }
+                } catch (err) {
+                    // 如果访问父窗口出错（跨域或已关闭），关闭此窗口
+                    console.log('🔄 无法访问父窗口，独立PDF窗口将关闭');
+                    localStorage.removeItem('pdfPopupWindowActive');
+                    clearInterval(checkInterval);
+                    window.close();
+                }
+            }, 500); // 每500ms检查一次
+            
+            // 监听父窗口的 beforeunload 事件
+            try {
+                if (window.opener && window.opener.addEventListener) {
+                    window.opener.addEventListener('beforeunload', () => {
+                        console.log('🔄 父窗口即将卸载，独立PDF窗口将关闭');
+                        localStorage.removeItem('pdfPopupWindowActive');
+                        clearInterval(checkInterval);
+                        window.close();
+                    });
+                }
+            } catch (err) {
+                // 跨域限制时忽略
+                console.log('无法监听父窗口 beforeunload 事件:', err);
+            }
+            
+            // 窗口关闭时清理标记
+            window.addEventListener('beforeunload', () => {
+                try {
+                    localStorage.removeItem('pdfPopupWindowActive');
+                } catch (e) {
+                    // 忽略错误
+                }
+            });
+        }
+        
+        // 立即开始监控父窗口
+        monitorParentWindow();
+        
         // 添加键盘事件监听
         document.addEventListener('keydown', (e) => {
             // ESC键：关闭独立窗口，回到内嵌模式
@@ -194,11 +282,32 @@
                     return;
                 }
                 
-                // 尝试使用saveDocument方法（包含标注）
+                // 🔑 关键修复：确保所有标注已提交
+                await ensureAnnotationsCommitted(pdfApp);
+                
+                // 尝试使用saveDocument方法（包含标注）- 带重试
                 let pdfData = null;
                 if (typeof pdfDocument.saveDocument === 'function') {
                     console.log('📝 使用saveDocument保存（包含标注）');
-                    pdfData = await pdfDocument.saveDocument();
+                    
+                    // 添加重试机制
+                    for (let attempt = 0; attempt < 3; attempt++) {
+                        try {
+                            if (attempt > 0) {
+                                console.log(`🔄 重试保存 (${attempt + 1}/3)...`);
+                                await ensureAnnotationsCommitted(pdfApp);
+                                await new Promise(resolve => setTimeout(resolve, 300 * (attempt + 1)));
+                            }
+                            pdfData = await pdfDocument.saveDocument();
+                            if (pdfData && pdfData.byteLength > 0) {
+                                console.log(`✅ 保存成功 (${pdfData.byteLength} bytes)`);
+                                break;
+                            }
+                        } catch (err) {
+                            console.warn(`保存失败 (尝试 ${attempt + 1}/3):`, err);
+                            if (attempt === 2) throw err;
+                        }
+                    }
                 } else if (typeof pdfDocument.getData === 'function') {
                     console.log('📝 使用getData保存（可能不含标注）');
                     pdfData = await pdfDocument.getData();
@@ -244,6 +353,67 @@
             } catch (error) {
                 console.error('❌ 下载带标注的PDF失败:', error);
                 throw error;
+            }
+        }
+        
+        // 🔑 确保所有标注已提交到annotationStorage
+        async function ensureAnnotationsCommitted(pdfApp) {
+            try {
+                if (!pdfApp) return;
+                
+                console.log('🔄 检查并提交标注...');
+                
+                // 1. 等待所有页面渲染完成
+                if (pdfApp.pdfViewer) {
+                    const numPages = pdfApp.pdfDocument?.numPages || 0;
+                    if (numPages > 0) {
+                        const currentPage = pdfApp.pdfViewer.currentPageNumber || 1;
+                        for (let i = Math.max(1, currentPage - 2); i <= Math.min(numPages, currentPage + 2); i++) {
+                            try {
+                                const pageView = pdfApp.pdfViewer.getPageView(i - 1);
+                                if (pageView && !pageView.renderingState) {
+                                    await pageView.draw();
+                                }
+                            } catch (e) {
+                                // 忽略单个页面错误
+                            }
+                        }
+                    }
+                }
+                
+                // 2. 触发标注编辑器的保存
+                if (pdfApp.pdfDocument?.annotationStorage) {
+                    const storage = pdfApp.pdfDocument.annotationStorage;
+                    if (storage.size > 0) {
+                        console.log(`📝 发现 ${storage.size} 个标注`);
+                    }
+                    
+                    // 触发编辑器提交
+                    if (pdfApp.annotationEditorUIManager) {
+                        if (typeof pdfApp.annotationEditorUIManager.unselectAll === 'function') {
+                            pdfApp.annotationEditorUIManager.unselectAll();
+                        }
+                        if (typeof pdfApp.annotationEditorUIManager.commitAll === 'function') {
+                            await pdfApp.annotationEditorUIManager.commitAll();
+                        }
+                    }
+                }
+                
+                // 3. 等待提交完成
+                await new Promise(resolve => setTimeout(resolve, 200));
+                
+                // 4. 触发同步事件
+                if (pdfApp.eventBus) {
+                    pdfApp.eventBus.dispatch('annotationeditorstateschanged', {
+                        source: this,
+                        details: { hasChanged: true }
+                    });
+                }
+                
+                console.log('✅ 标注提交完成');
+                
+            } catch (error) {
+                console.warn('⚠️ 标注提交过程出现警告:', error);
             }
         }
         
