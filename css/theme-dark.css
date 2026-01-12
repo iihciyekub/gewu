@@ -695,7 +695,10 @@ body.theme-dark .markdown-body table tbody tr:hover td:first-child {
 
 /* 项目详情面板 - 深色主题 */
 body.theme-dark .detail-section h3 {
-    color: #569cd6;
+    color: #dce6f5;
+    background: #1f2732;
+    border: 1px solid #334155;
+    box-shadow: inset 0 -1px 0 rgba(0, 0, 0, 0.35);
 }
 
 body.theme-dark .detail-item label {
