@@ -7563,7 +7563,7 @@ class PaperReviewerApp {
                     return out;
                 };
                 const hasMath = (s = '') => /\\\(|\\\[|\$\$|\$(?!\s)/.test(s);
-                const citeRe = /(\\citep?\{[^}]+\}|\\bib\{[^}]+\})/g;
+                const citeRe = /(\\citep?\{[\s\S]+?\}|\\bib\{[\s\S]+?\})/g;
                 const renderCitations = (txt = '') => {
                     let out = '';
                     let last = 0;
@@ -7577,15 +7577,14 @@ class PaperReviewerApp {
                         if (raw.startsWith('\\bib{')) {
                             // 处理 \bib{} - 只创建容器，实际渲染由 applyBibliographyRendering 完成
                             const inside = raw.slice(5, -1);
-                            const dois = inside.split(/[,，;]+/).map(d => d.trim()).filter(Boolean);
-                            const normalized = dois.map(d => app?.normalizeDoiString(d)).filter(Boolean);
+                            const normalized = app?.parseDoiListFromLatex?.(inside) || [];
                             const escDois = app?.escapeHtml(normalized.join(',')) || '';
                             out += `<span class="bibliography-inline" data-bib-dois="${escDois}"></span>`;
                         } else {
                             // 处理 \cite/\citep
                             const isP = raw.startsWith('\\citep');
                             const inside = raw.slice(raw.indexOf('{') + 1, -1);
-                            const dois = inside.split(/[,，;]+/).map(d => d.trim()).filter(Boolean);
+                            const dois = app?.parseDoiListFromLatex?.(inside) || [];
                             out += app?.renderCitationPlaceholder(dois, isP ? 'citep' : 'cite') || md.utils.escapeHtml(raw);
                         }
                         last = citeRe.lastIndex;
@@ -8436,7 +8435,16 @@ class PaperReviewerApp {
             out = out.replace(/\\\(\s*([\s\S]*?)\s*\\\)/g, (m, inner) => `$${inner}$`);
             return out;
         };
-        const html = md.render(normalizeMath(contentToRender));
+        const normalizeBibBlocks = (src = '') => {
+            return src.replace(/\\bib\{([\s\S]*?)\}/g, (m, inner) => {
+                const parts = inner
+                    .split(/[\s,，;；]+/)
+                    .map(d => d.trim())
+                    .filter(Boolean);
+                return `\\bib{${parts.join(',')}}`;
+            });
+        };
+        const html = md.render(normalizeMath(normalizeBibBlocks(contentToRender)));
 
         // 如果有 metadata，在内容前显示
         let metadataHtml = '';
@@ -8589,36 +8597,21 @@ class PaperReviewerApp {
                 const dois = (target.dataset.bibDois || '').split(',').map(d => d.trim()).filter(Boolean);
                 if (!dois.length) return;
 
-                // Disable button
                 target.disabled = true;
+                const originalLabel = target.innerHTML;
                 target.innerHTML = '<i class="fas fa-spinner fa-spin"></i><span>Fetching...</span>';
 
                 try {
-                    // Check cache first
                     const bibtex = await this.formatBibliography(dois);
-
-                    // Replace button with result
-                    const container = target.parentElement;
-                    if (container) {
-                        const escaped = this.escapeHtml(bibtex);
-                        const resultDiv = document.createElement('div');
-                        resultDiv.className = 'bib-result';
-                        resultDiv.innerHTML = `
-                            <div class="bib-actions">
-                                <button class="bib-copy-btn" title="Copy to clipboard"><i class="fas fa-copy"></i></button>
-                                <button class="bib-collapse-btn" title="Collapse"><i class="fas fa-chevron-up"></i></button>
-                            </div>
-                            <pre><code class="language-bibtex">${escaped}</code></pre>
-                        `;
-                        container.innerHTML = '';
-                        container.appendChild(resultDiv);
-
-                        // Bind copy and collapse buttons
-                        this.bindBibResultActions(resultDiv, bibtex);
-
-                        // Syntax highlighting
-                        this.highlightCodeBlocks(resultDiv);
-                    }
+                    const filename = dois.length === 1
+                        ? `${this.normalizeDoiString(dois[0]).replace(/[^a-zA-Z0-9._-]+/g, '_') || 'reference'}.bib`
+                        : `references_${Date.now()}.bib`;
+                    this.triggerBlobDownload(new Blob([bibtex], { type: 'text/plain' }), filename);
+                    target.innerHTML = '<i class="fas fa-check"></i><span>Downloaded</span>';
+                    setTimeout(() => {
+                        target.disabled = false;
+                        target.innerHTML = originalLabel;
+                    }, 1800);
                 } catch (err) {
                     console.error('Failed to fetch BibTeX:', err);
                     target.disabled = false;
@@ -8673,6 +8666,15 @@ class PaperReviewerApp {
             .replace(/^doi:/i, '')
             .replace(/^https?:\/\/(dx\.)?doi\.org\//i, '')
             .replace(/_/g, '/');
+    }
+
+    parseDoiListFromLatex(raw = '') {
+        return (raw || '')
+            .split(/[,，;；\s]+/)
+            .map(d => d.trim())
+            .filter(Boolean)
+            .map(d => this.normalizeDoiString(d))
+            .filter(Boolean);
     }
 
     buildCitationLinks(text, dois = []) {
@@ -8783,18 +8785,18 @@ class PaperReviewerApp {
         const dois = new Set();
 
         // 提取 \cite{} 和 \citep{} 中的 DOI (仅支持 LaTeX 格式)
-        const citeRe = /\\citep?\{([^}]+)\}/g;
+        const citeRe = /\\citep?\{([\s\S]+?)\}/g;
         let m;
         while ((m = citeRe.exec(text)) !== null) {
             const inside = m[1] || '';
-            inside.split(/[,，;]+/).map(d => d.trim()).filter(Boolean).forEach(d => dois.add(this.normalizeDoiString(d)));
+            this.parseDoiListFromLatex(inside).forEach(d => dois.add(d));
         }
 
         // 提取 \bib{} 中的 DOI (仅支持 LaTeX 格式)
-        const bibRe = /\\bib\{([^}]+)\}/g;
+        const bibRe = /\\bib\{([\s\S]+?)\}/g;
         while ((m = bibRe.exec(text)) !== null) {
             const inside = m[1] || '';
-            inside.split(/[,，;]+/).map(d => d.trim()).filter(Boolean).forEach(d => dois.add(this.normalizeDoiString(d)));
+            this.parseDoiListFromLatex(inside).forEach(d => dois.add(d));
         }
 
         // 提取裸 DOI
