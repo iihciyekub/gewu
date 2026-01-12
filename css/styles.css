@@ -551,6 +551,7 @@ body {
 .middle-header {
     padding: 6px 10px;
     background: var(--gray-100);
+    border-top: 2px solid #173D70;
     border-bottom: 1px solid var(--gray-300);
     display: flex;
     justify-content: space-between;
@@ -1988,10 +1989,20 @@ body.theme-vscode .qa-bubble {
     z-index: 10;
 }
 
+.btn-pdf-popup.is-popup {
+    background: var(--wos-orange);
+    box-shadow: 0 6px 16px rgba(255, 106, 0, 0.35);
+}
+
 .btn-pdf-popup:hover {
     background: var(--wos-blue);
     transform: translateY(-2px) scale(1.03);
     box-shadow: 0 8px 18px rgba(0, 62, 116, 0.45);
+}
+
+.btn-pdf-popup.is-popup:hover {
+    background: var(--wos-orange-light);
+    box-shadow: 0 8px 18px rgba(255, 106, 0, 0.4);
 }
 
 .btn-pdf-popup i {
@@ -2471,11 +2482,10 @@ body.theme-vscode .qa-bubble {
 }
 
 /* Resizable Panels - WoS Academic Style */
-
 .resizer {
-    width: 6px;
+    width: 4px;
     cursor: col-resize;
-    background: #e0e0e0;
+    background: #173D70;
     position: relative;
     flex-shrink: 0;
     transition: background 0.15s ease;
@@ -2515,11 +2525,11 @@ body.theme-vscode .qa-bubble {
 }
 
 .resizer:hover {
-    background: #316984;
+    background: #2a5e78;
 }
 
 .resizer:active {
-    background: #316984;
+    background: #2a5e78;
 }
 
 /* 扩大可点击区域 */

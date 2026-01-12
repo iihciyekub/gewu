@@ -226,25 +226,25 @@
 <body>
     <div class="prompt-quick-panel" id="promptQuickPanel">
         <div class="prompt-quick-header">
-            <span><i class="fas fa-magnet"></i> tools set (Cmd+Shift+G)</span>
-            <button class="prompt-close-btn" id="promptPanelClose" title="隐藏 (Cmd+Shift+G)">
+            <span><i class="fas fa-magnet"></i> Tools Set (Cmd+Shift+G)</span>
+            <button class="prompt-close-btn" id="promptPanelClose" title="Hide (Cmd+Shift+G)">
                 <i class="fas fa-times"></i>
             </button>
         </div>
         <div class="prompt-groups" id="promptGroupsContainer"></div>
     </div>
     <div class="info-panel" id="projectInfoPanel">
-        <div class="info-body" id="projectInfoBody">加载中...</div>
+        <div class="info-body" id="projectInfoBody">Loading...</div>
     </div>
     <div class="info-panel" id="shortcutsInfoPanel">
-        <div class="info-body" id="shortcutsInfoBody">加载中...</div>
+        <div class="info-body" id="shortcutsInfoBody">Loading...</div>
     </div>
 
     <!-- Project Selector Modal -->
     <div class="modal" id="projectSelectorModal">
         <div class="modal-content project-selector-content">
             <div class="modal-header">
-                <span>选择项目文件夹</span>
+                <span>Select Project Folder</span>
                 <button class="close-btn" onclick="window.paperReviewerApp.closeProjectSelector()">
                     <i class="fas fa-times"></i>
                 </button>
@@ -252,41 +252,41 @@
             <div class="modal-body">
                 <div class="project-selector-info">
                     <i class="fas fa-info-circle"></i>
-                    <p>请选择包含 <code>json/</code> <code>md/</code> <code>pdf/</code> 子文件夹的项目目录</p>
+                    <p>Please select a project directory containing <code>json/</code> <code>md/</code> <code>pdf/</code> subfolders</p>
                 </div>
 
                 <div style="margin-bottom: 20px; border-bottom: 1px solid #e0e0e0; padding-bottom: 20px; display: none;">
-                    <h4 style="margin-top: 0; margin-bottom: 12px; font-size: 14px; font-weight: 600;">创建新项目</h4>
+                    <h4 style="margin-top: 0; margin-bottom: 12px; font-size: 14px; font-weight: 600;">Create New Project</h4>
                     <p style="font-size: 12px; color: var(--gray-600); margin-bottom: 12px;">
-                        点击下方按钮，系统将引导您选择目录并输入项目名称
+                        Click the button below, the system will guide you to select a directory and enter a project name
                     </p>
                     <button class="btn btn-primary" id="createProjectBtn" style="width: 100%; padding: 8px;">
-                        <i class="fas fa-plus-circle"></i> 创建新项目
+                        <i class="fas fa-plus-circle"></i> Create New Project
                     </button>
                 </div>
 
                 <div class="form-group">
-                    <label for="projectPathInput">加载现有项目:</label>
+                    <label for="projectPathInput">Load Existing Project:</label>
                     <div class="path-input-group">
-                        <input type="text" id="projectPathInput" placeholder="输入完整路径，例如: /Users/yjli/Desktop/user_test">
-                        <button class="btn btn-browse" onclick="window.paperReviewerApp.browseAndFillPath()" title="浏览选择目录">
-                            <i class="fas fa-folder-open"></i> 浏览
+                        <input type="text" id="projectPathInput" placeholder="Enter full path, e.g.: /Users/yjli/Desktop/user_test">
+                        <button class="btn btn-browse" onclick="window.paperReviewerApp.browseAndFillPath()" title="Browse to select directory">
+                            <i class="fas fa-folder-open"></i> Browse
                         </button>
                     </div>
                     <input type="file" id="projectFolderBrowser" webkitdirectory directory style="display: none;">
-                    <small class="hint">💡 提示：点击"浏览"选择目录，或直接输入完整路径</small>
+                    <small class="hint">💡 Tip: Click "Browse" to select a directory, or directly enter the full path</small>
                 </div>
 
                 <div class="recent-projects" id="recentProjectsList" style="display: none;">
-                    <h4><i class="fas fa-history"></i> 最近的项目</h4>
+                    <h4><i class="fas fa-history"></i> Recent Projects</h4>
                     <div class="recent-projects-list" id="recentProjectsContent">
-                        <!-- 动态加载最近项目 -->
+                        <!-- Dynamically loaded recent projects -->
                     </div>
                 </div>
             </div>
             <div class="modal-footer">
-                <button class="btn btn-cancel" onclick="window.paperReviewerApp.closeProjectSelector()">取消</button>
-                <button class="btn btn-primary" id="loadProjectBtn" style="display: none;">加载项目</button>
+                <button class="btn btn-cancel" onclick="window.paperReviewerApp.closeProjectSelector()">Cancel</button>
+                <button class="btn btn-primary" id="loadProjectBtn" style="display: none;">Load Project</button>
             </div>
         </div>
     </div>
@@ -295,30 +295,30 @@
     <div class="modal" id="doiModal">
         <div class="modal-content small-modal">
             <div class="modal-header">
-                <span>DOI 列表处理</span>
+                <span>DOI List Processing</span>
                 <button class="close-btn" onclick="window.paperReviewerApp.closeDoiModal()">
                     <i class="fas fa-times"></i>
                 </button>
             </div>
             <div class="modal-body">
                 <p style="font-size: 12px; color: var(--gray-700); margin-top: 0;">
-                    粘贴包含 DOI 的文本，点击“提取/格式化”自动用正则提取并按行分隔。
+                    Paste text containing DOIs, click "Extract/Format" to automatically extract and separate by lines using regex.
                 </p>
                 <textarea id="doiInput" rows="8" placeholder="如：&#10;10.1145/1234567&#10;https://doi.org/10.1000/xyz123"></textarea>
                 <div class="doi-actions">
                     <button class="btn" id="doiExtractBtn">
-                        <i class="fas fa-magic"></i> 提取/格式化
+                        <i class="fas fa-magic"></i> Extract/Format
                     </button>
                     <button class="btn" id="doiAutonumBtn">
-                        <i class="fas fa-sort-numeric-down-alt"></i> 自动编号
+                        <i class="fas fa-sort-numeric-down-alt"></i> Auto Number
                     </button>
-                    <span class="doi-count" id="doiCountDisplay">0 个 DOI</span>
+                    <span class="doi-count" id="doiCountDisplay">0 DOIs</span>
                 </div>
             </div>
             <div class="modal-footer">
-                <button class="btn btn-cancel" onclick="window.paperReviewerApp.closeDoiModal()">取消</button>
+                <button class="btn btn-cancel" onclick="window.paperReviewerApp.closeDoiModal()">Cancel</button>
                 <button class="btn btn-primary" id="doiCreateBtn">
-                    <i class="fas fa-list"></i> 生成 DOI 列表文件
+                    <i class="fas fa-list"></i> Create DOI List Files
                 </button>
             </div>
         </div>
@@ -328,7 +328,7 @@
     <div class="modal" id="importModeModal">
         <div class="modal-content mode-selector-content">
             <div class="modal-header">
-                <span>选择导入模式</span>
+                <span>Select Import Mode</span>
                 <button class="close-btn" onclick="window.paperReviewerApp.closeImportModeDialog()">
                     <i class="fas fa-times"></i>
                 </button>
@@ -339,12 +339,12 @@
                         <i class="fas fa-link"></i>
                     </div>
                     <div class="mode-info">
-                        <h4>交集更新（Join）</h4>
-                        <p>仅处理当前视图里已存在的同名 JSON，对已有字段做交集更新，不新增文件和新字段。</p>
+                        <h4>Intersection Update (Join)</h4>
+                        <p>Only processes JSON files with the same name that already exist in the current view. Updates existing fields by intersection, without adding new files or fields.</p>
                     </div>
                     <div class="mode-action">
                         <button class="btn btn-primary" onclick="window.paperReviewerApp.selectImportMode('join')">
-                            选择
+                            Select
                         </button>
                     </div>
                 </div>
@@ -353,18 +353,18 @@
                         <i class="fas fa-object-group"></i>
                     </div>
                     <div class="mode-info">
-                        <h4>并集更新（Union）</h4>
-                        <p>合并同名文件并新增缺失字段，同时将不存在的文件导入到目标目录。</p>
+                        <h4>Union Update (Union)</h4>
+                        <p>Merges files with the same name and adds missing fields, while importing non-existent files to the target directory.</p>
                     </div>
                     <div class="mode-action">
                         <button class="btn btn-primary" onclick="window.paperReviewerApp.selectImportMode('union')">
-                            选择
+                            Select
                         </button>
                     </div>
                 </div>
             </div>
             <div class="modal-footer">
-                <button class="btn btn-cancel" onclick="window.paperReviewerApp.closeImportModeDialog()">取消</button>
+                <button class="btn btn-cancel" onclick="window.paperReviewerApp.closeImportModeDialog()">Cancel</button>
             </div>
         </div>
     </div>
@@ -373,7 +373,7 @@
     <div class="modal" id="jsonTargetModal">
         <div class="modal-content json-target-content">
             <div class="modal-header">
-                <span>选择导入的 JSON 子目录</span>
+                <span>Select JSON Import Subdirectory</span>
                 <button class="close-btn" onclick="window.paperReviewerApp.closeJsonTargetDialog()">
                     <i class="fas fa-times"></i>
                 </button>
@@ -381,20 +381,20 @@
             <div class="modal-body">
                 <div class="json-target-info">
                     <i class="fas fa-info-circle"></i>
-                    <p>请选择要将外部 JSON 导入到项目的哪个 <code>json/</code> 子目录中。若不存在子目录，将使用默认目录。</p>
+                    <p>Select which <code>json/</code> subdirectory to import external JSON files into. If no subdirectory exists, the default directory will be used.</p>
                 </div>
                 <div class="json-target-list" id="jsonTargetList">
-                    <!-- 动态填充子目录选项 -->
+                    <!-- Dynamically populated subdirectory options -->
                 </div>
                 <div class="form-group" style="margin-top: 12px;">
-                    <label for="jsonTargetInput">自定义子目录（可选）:</label>
-                    <input type="text" id="jsonTargetInput" placeholder="例如：json/imported 或 json/view1/new">
-                    <small class="hint">留空则使用上方选择；不需要以斜杠开头，系统会自动加上 <code>json/</code></small>
+                    <label for="jsonTargetInput">Custom subdirectory (optional):</label>
+                    <input type="text" id="jsonTargetInput" placeholder="e.g., json/imported or json/view1/new">
+                    <small class="hint">Leave empty to use selection above; no need for leading slash, system will automatically add <code>json/</code></small>
                 </div>
             </div>
             <div class="modal-footer">
-                <button class="btn btn-cancel" onclick="window.paperReviewerApp.closeJsonTargetDialog()">取消</button>
-                <button class="btn btn-primary" id="confirmJsonTargetBtn">确定</button>
+                <button class="btn btn-cancel" onclick="window.paperReviewerApp.closeJsonTargetDialog()">Cancel</button>
+                <button class="btn btn-primary" id="confirmJsonTargetBtn">Confirm</button>
             </div>
         </div>
     </div>
@@ -403,7 +403,7 @@
     <div class="modal" id="createGroupModal">
         <div class="modal-content create-group-content">
             <div class="modal-header">
-                <span>创建文件分组</span>
+                <span>Create File Group</span>
                 <button class="close-btn" onclick="window.paperReviewerApp.closeCreateGroupDialog()">
                     <i class="fas fa-times"></i>
                 </button>
@@ -411,27 +411,27 @@
             <div class="modal-body">
                 <div class="create-group-info">
                     <i class="fas fa-info-circle"></i>
-                    <p>支持批量创建多个分组，每行一个分组名称</p>
+                    <p>Support batch creation of multiple groups, one group name per line</p>
                 </div>
                 
                 <div class="form-group">
-                    <label for="groupNamesInput">分组名称:</label>
+                    <label for="groupNamesInput">Group Names:</label>
                     <textarea id="groupNamesInput" 
-                              placeholder="输入分组名称，支持批量创建（每行一个）&#10;例如：&#10;需要复审的论文&#10;已完成的论文&#10;待讨论的论文" 
+                              placeholder="Enter group names, support batch creation (one per line)&#10;Example:&#10;Papers to Review&#10;Completed Papers&#10;Papers for Discussion" 
                               rows="8"
                               style="font-family: inherit; font-size: 13px; line-height: 1.6;"></textarea>
-                    <small class="hint">💡 提示：每行输入一个分组名称，留空行将被忽略</small>
+                    <small class="hint">💡 Tip: Enter one group name per line, empty lines will be ignored</small>
                 </div>
                 
                 <div class="create-group-preview" id="groupPreview" style="display: none;">
-                    <h4><i class="fas fa-eye"></i> 预览</h4>
+                    <h4><i class="fas fa-eye"></i> Preview</h4>
                     <div class="group-preview-list" id="groupPreviewList"></div>
                 </div>
             </div>
             <div class="modal-footer">
-                <button class="btn btn-cancel" onclick="window.paperReviewerApp.closeCreateGroupDialog()">取消</button>
+                <button class="btn btn-cancel" onclick="window.paperReviewerApp.closeCreateGroupDialog()">Cancel</button>
                 <button class="btn btn-primary" id="confirmCreateGroupBtn">
-                    <i class="fas fa-check"></i> 创建分组
+                    <i class="fas fa-check"></i> Create Groups
                 </button>
             </div>
         </div>
@@ -444,19 +444,19 @@
             <div class="panel-header">
                 <div class="panel-header-left">
                     <i class="fas fa-folder-open"></i>
-                    <button class="project-name-btn" id="currentProjectName" title="点击查看项目信息">未加载项目</button>
+                    <button class="project-name-btn" id="currentProjectName" title="Click to view project info">No project loaded</button>
                 </div>
                 <div class="panel-header-actions">
-                    <button class="btn-switch-project" id="fileFilterToggleBtn" title="搜索/过滤文件">
+                    <button class="btn-switch-project" id="fileFilterToggleBtn" title="Search/filter files">
                         <i class="fas fa-search"></i>
                     </button>
-                    <button class="btn-switch-project" id="addGroupBtn" title="新建分组">
+                    <button class="btn-switch-project" id="addGroupBtn" title="Create new group">
                         <i class="fas fa-layer-group"></i>
                     </button>
-                    <button class="btn-switch-project" id="openDoiModalBtn" title="按 DOI 批量新建文件">
+                    <button class="btn-switch-project" id="openDoiModalBtn" title="Batch create files by DOI">
                         <i class="fas fa-link"></i>
                     </button>
-                    <button class="btn-sync-pdf btn-import-json" id="importJsonBtn" title="导入并合并目录中的 JSON（仅同名文件）">
+                    <button class="btn-sync-pdf btn-import-json" id="importJsonBtn" title="Import and merge JSON from directory (same name files only)">
                         <i class="fas fa-file-import"></i>
                     </button>
                 </div>
@@ -464,7 +464,7 @@
             <input type="file" id="importJsonFolderInput" webkitdirectory directory multiple style="display: none;">
             <div class="file-filter" id="fileFilterContainer">
                 <i class="fas fa-search"></i>
-                <input type="text" id="fileFilterInput" placeholder="过滤文件..." autocomplete="off">
+                <input type="text" id="fileFilterInput" placeholder="Filter files..." autocomplete="off">
             </div>
             <div class="file-list" id="fileList">
                 <div class="loading">
@@ -646,8 +646,8 @@
 
         <!-- Right Panel - PDF Viewer -->
         <div class="right-panel">
-            <button class="btn-pdf-popup" id="btnPdfPopup" title="Open PDF in separate window">
-                <i class="fas fa-external-link-alt"></i>
+            <button class="btn-pdf-popup" id="btnPdfPopup" title="切换 PDF 视图" aria-pressed="false">
+                <i class="fas fa-up-right-from-square"></i>
             </button>
             <iframe id="pdfViewer" style="width: 100%; height: 100%; border: none;"></iframe>
             <div id="pdfPlaceholder" class="pdf-placeholder" aria-live="polite">
@@ -679,48 +679,48 @@
                     <input type="text" id="editKeyInput" placeholder="Edit field name">
                 </div>
                 <div class="form-group">
-                    <label for="editTextarea">内容:</label>
+                    <label for="editTextarea">Content:</label>
                     <textarea id="editTextarea"></textarea>
                 </div>
 
-                <!-- 页码和引用编辑区 -->
+                <!-- Page number and quote editing section -->
                 <div class="location-edit-section" id="locationEditSection" style="display: none;">
                     <div class="section-divider"></div>
                     <h4><i class="fa-solid fa-location-dot"></i> PDF Location Information</h4>
 
                     <div class="form-group">
-                        <label for="editPageNumber">页码:</label>
-                        <input type="number" id="editPageNumber" placeholder="PDF页码" min="1">
+                        <label for="editPageNumber">Page number:</label>
+                        <input type="number" id="editPageNumber" placeholder="PDF page number" min="1">
                     </div>
 
                     <div class="form-group">
                         <div class="quotes-header">
-                            <label>引用文本:</label>
+                            <label>Quote text:</label>
                             <div class="quote-actions">
-                                <button type="button" class="btn-add-quote" id="btnAddQuote" title="添加引用">
-                                    <i class="fas fa-plus"></i> 添加引用
+                                <button type="button" class="btn-add-quote" id="btnAddQuote" title="Add quote">
+                                    <i class="fas fa-plus"></i> Add quote
                                 </button>
-                                <button type="button" class="btn-add-quote" id="btnFlattenQuote" title="整理粘贴文本为单行">
-                                    <i class="fas fa-magic"></i> 一键整理
+                                <button type="button" class="btn-add-quote" id="btnFlattenQuote" title="Format pasted text to single line">
+                                    <i class="fas fa-magic"></i> Format text
                                 </button>
-                                <button type="button" class="btn-add-quote" id="btnTestSearch" title="测试搜索并跳转PDF">
-                                    <i class="fas fa-search-location"></i> 测试搜索
+                                <button type="button" class="btn-add-quote" id="btnTestSearch" title="Test search and jump to PDF">
+                                    <i class="fas fa-search-location"></i> Test search
                                 </button>
                             </div>
                         </div>
 
-                        <!-- 标签页头部 -->
+                        <!-- Quote tabs header -->
                         <div class="quote-tabs" id="quoteTabs"></div>
 
-                        <!-- 标签页内容 -->
+                        <!-- Quote tab panels -->
                         <div class="quote-panels" id="quotePanels"></div>
                     </div>
                 </div>
             </div>
             <div class="modal-footer">
-                <button class="btn btn-danger" id="deleteEdit">删除字段</button>
-                <button class="btn btn-cancel" id="cancelEdit">取消</button>
-                <button class="btn btn-primary" id="saveEdit">保存</button>
+                <button class="btn btn-danger" id="deleteEdit">Delete field</button>
+                <button class="btn btn-cancel" id="cancelEdit">Cancel</button>
+                <button class="btn btn-primary" id="saveEdit">Save</button>
             </div>
         </div>
     </div>
@@ -728,14 +728,14 @@
     <!-- Goto Edit Modal -->
     <div class="modal" id="gotoEditModal">
         <div class="modal-content">
-            <div class="modal-header">Edit reference text</div>
+            <div class="modal-header">Edit Reference Text</div>
             <div class="modal-body">
                 <textarea id="gotoEditTextarea" placeholder="Edit goto{...} text here"></textarea>
             </div>
             <div class="modal-footer">
-                <button class="btn btn-secondary" id="gotoEditTest">测试搜索</button>
-                <button class="btn btn-primary" id="gotoEditCancel">取消</button>
-                <button class="btn btn-primary" id="gotoEditSave">保存</button>
+                <button class="btn btn-secondary" id="gotoEditTest">Test Search</button>
+                <button class="btn btn-primary" id="gotoEditCancel">Cancel</button>
+                <button class="btn btn-primary" id="gotoEditSave">Save</button>
             </div>
         </div>
     </div>
@@ -743,62 +743,62 @@
     <!-- Add Item Modal -->
     <div class="modal" id="addItemModal">
         <div class="modal-content">
-            <div class="modal-header">添加新条目</div>
+            <div class="modal-header">Add New Item</div>
             <div class="modal-body">
                 <div class="form-group">
-                    <label for="itemCategory">选择分类:</label>
+                    <label for="itemCategory">Select Category:</label>
                     <select id="itemCategory">
-                        <option value="">-- 选择分类 --</option>
-                        <option value="contributions">Contributions (贡献)</option>
-                        <option value="limitations">Limitations (局限)</option>
-                        <option value="methods">Methods (方法)</option>
-                        <option value="findings">Findings (发现)</option>
-                        <option value="future_work">Future Work (未来工作)</option>
-                        <option value="notes">Notes (笔记)</option>
-                        <option value="questions">Questions (问题)</option>
-                        <option value="custom">Custom (自定义)</option>
+                        <option value="">-- Select Category --</option>
+                        <option value="contributions">Contributions</option>
+                        <option value="limitations">Limitations</option>
+                        <option value="methods">Methods</option>
+                        <option value="findings">Findings</option>
+                        <option value="future_work">Future Work</option>
+                        <option value="notes">Notes</option>
+                        <option value="questions">Questions</option>
+                        <option value="custom">Custom</option>
                     </select>
                 </div>
 
                 <div class="form-group" id="customKeyGroup" style="display: none;">
-                    <label for="customKey">自定义键名:</label>
-                    <input type="text" id="customKey" placeholder="例如: related_work">
+                    <label for="customKey">Custom Key Name:</label>
+                    <input type="text" id="customKey" placeholder="e.g., related_work">
                 </div>
 
                 <div class="form-group">
-                    <label for="itemContent">内容:</label>
-                    <textarea id="itemContent" rows="4" placeholder="输入条目内容"></textarea>
+                    <label for="itemContent">Content:</label>
+                    <textarea id="itemContent" rows="4" placeholder="Enter item content"></textarea>
                 </div>
 
-                <!-- PDF 位置信息 -->
+                <!-- PDF Location Information -->
                 <div class="location-edit-section">
                     <div class="section-divider"></div>
-                    <h4><i class="fa-solid fa-location-dot"></i> PDF 位置信息 (可选)</h4>
+                    <h4><i class="fa-solid fa-location-dot"></i> PDF Location Information (Optional)</h4>
 
                     <div class="form-group">
-                        <label for="itemPageNumber">页码:</label>
-                        <input type="number" id="itemPageNumber" placeholder="PDF页码" min="1">
+                        <label for="itemPageNumber">Page Number:</label>
+                        <input type="number" id="itemPageNumber" placeholder="PDF page number" min="1">
                     </div>
 
                     <div class="form-group">
                         <div class="quotes-header">
-                            <label>引用文本:</label>
-                            <button type="button" class="btn-add-quote" id="btnAddQuoteItem" title="添加引用">
-                                <i class="fas fa-plus"></i> 添加引用
+                            <label>Quote Text:</label>
+                            <button type="button" class="btn-add-quote" id="btnAddQuoteItem" title="Add quote">
+                                <i class="fas fa-plus"></i> Add Quote
                             </button>
                         </div>
 
-                        <!-- 标签页头部 -->
+                        <!-- Quote tabs -->
                         <div class="quote-tabs" id="quoteTabsItem"></div>
 
-                        <!-- 标签页内容 -->
+                        <!-- Quote panels -->
                         <div class="quote-panels" id="quotePanelsItem"></div>
                     </div>
                 </div>
             </div>
             <div class="modal-footer">
-                <button class="btn btn-cancel" id="cancelAddItem">取消</button>
-                <button class="btn btn-primary" id="saveAddItem">添加</button>
+                <button class="btn btn-cancel" id="cancelAddItem">Cancel</button>
+                <button class="btn btn-primary" id="saveAddItem">Add</button>
             </div>
         </div>
     </div>
@@ -845,14 +845,13 @@
                 </div>
                 <div class="form-group">
                     <label for="queryDoiOrderInput">Export DOIs in order (optional, line-separated)</label>
-                    <textarea id="queryDoiOrderInput" rows="4" placeholder="输入 DOI，换行分隔。为空则按左侧文件顺序导出。"></textarea>
+                    <textarea id="queryDoiOrderInput" rows="4" placeholder="Enter DOIs, one per line. Leave empty to export all DOIs in current file list order."></textarea>
                     <div class="query-actions" style="margin-top:8px;">
-                        <button class="btn btn-secondary" id="queryUpdateNoBtn" type="button">添加/更新 meta_info.No
-                            序号</button>
+                        <button class="btn btn-secondary" id="queryUpdateNoBtn" type="button">Add/Update meta_info.No sequence</button>
                         <div id="queryDoiStats" style="margin-top:6px;font-size:12px;color:#6b7280;">0 unique | 0
                             duplicates</div>
                     </div>
-                    <p class="help-text">留空：按当前文件列表顺序导出全部 DOI；填写后：仅导出匹配的 DOI，按输入顺序输出，未匹配的忽略。</p>
+                    <p class="help-text">Leave empty: export all DOIs in current file list order; Fill in: only export matched DOIs in input order, unmatched DOIs will be ignored.</p>
                 </div>
             </div>
             <div class="modal-footer">

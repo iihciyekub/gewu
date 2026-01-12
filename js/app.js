@@ -179,6 +179,8 @@ class PaperReviewerApp {
             // localStorage信号和窗口引用的方法已经足够处理大多数情况
             
             this.isPdfPopupMode = false;
+            this.updatePdfPopupButtonState();
+            this.clearPdfPopupCloseSignal();
             console.log('✅ PDF窗口清理完成');
         } catch (err) {
             // 忽略清理错误
@@ -1042,9 +1044,9 @@ class PaperReviewerApp {
         
         if (this.currentProject) {
             nameEl.textContent = this.currentProject.name;
-            nameEl.title = '点击查看项目信息';
+            nameEl.title = 'Click to view project info';
         } else {
-            nameEl.textContent = '未加载项目';
+            nameEl.textContent = 'No project loaded';
             nameEl.title = '';
         }
     }
@@ -1761,6 +1763,7 @@ class PaperReviewerApp {
         const btnPdfPopup = document.getElementById('btnPdfPopup');
         if (btnPdfPopup) {
             btnPdfPopup.addEventListener('click', async () => await this.togglePdfPopup());
+            this.updatePdfPopupButtonState();
         }
 
         const rightPanel = document.querySelector('.right-panel');
@@ -2223,7 +2226,7 @@ class PaperReviewerApp {
 
     async startImportJsonFlow(importJsonFolderInput) {
         if (!this.currentProject) {
-            this.showNotification('请先加载项目后再导入 JSON', 'error');
+            this.showNotification('Please load a project before importing JSON', 'error');
             return;
         }
 
@@ -2379,7 +2382,7 @@ class PaperReviewerApp {
             container.innerHTML = `
                 <div class="empty-recent-projects">
                     <i class="fas fa-folder-open"></i>
-                    <p>暂无最近使用的项目</p>
+                    <p>No recent projects</p>
                 </div>
             `;
             return;
@@ -2391,12 +2394,12 @@ class PaperReviewerApp {
             item.className = 'recent-project-item';
             item.innerHTML = `
                 <i class="fas fa-folder"></i>
-                <a class="recent-project-path" href="file://${this.escapeHtml(project.path)}" target="_blank" title="打开项目目录（本机）">
+                <a class="recent-project-path" href="file://${this.escapeHtml(project.path)}" target="_blank" title="Open project folder (local)">
                     ${this.escapeHtml(project.path)}
                 </a>
             `;
             item.addEventListener('click', () => {
-                if (confirm(`切换到项目: ${project.path} ?`)) {
+                if (confirm(`Switch to project: ${project.path}?`)) {
                     this.switchProject(project);
                 }
             });
@@ -2452,7 +2455,7 @@ class PaperReviewerApp {
         const projectPath = pathInput.value.trim();
         
         if (!projectPath) {
-            this.showNotification('✗ 请选择项目文件夹', 'error');
+            this.showNotification('✗ Please choose a project folder', 'error');
             return;
         }
         
@@ -2491,13 +2494,13 @@ class PaperReviewerApp {
 
         // 智能提示：让用户确认或修改路径
         const userPath = prompt(
-            `检测到目录：${folderName}\n\n请输入该目录的完整路径：\n（浏览器无法自动获取绝对路径，需要您手动输入）`,
+            `Detected folder: ${folderName}\n\nPlease enter the full path.\n(Browsers cannot auto-read absolute paths; please type it manually)`,
             `/Users/yjli/Desktop/${folderName}`
         );
 
         if (userPath && userPath.trim()) {
             document.getElementById('projectPathInput').value = userPath.trim();
-            this.showNotification(`✓ 路径已设置，正在加载项目...`, 'success');
+            this.showNotification(`✓ Path set, loading project...`, 'success');
             // 直接加载项目，减少一次点击
             this.loadSelectedProject();
         }
@@ -2508,14 +2511,13 @@ class PaperReviewerApp {
 
     openDoiModal() {
         if (!this.currentProject) {
-            this.showNotification('请先加载项目', 'error');
+            this.showNotification('Please load a project first', 'error');
             return;
         }
         const modal = document.getElementById('doiModal');
         const textarea = document.getElementById('doiInput');
-        if (textarea && !textarea.value.trim()) {
-            const doi = this.currentData?.meta_info?.doi || '';
-            if (doi) textarea.value = doi;
+        if (textarea) {
+            textarea.value = '';
         }
         this.doiAutoNumberStart = null;
         if (modal) modal.classList.add('active');
@@ -2563,12 +2565,13 @@ class PaperReviewerApp {
         const display = document.getElementById('doiCountDisplay');
         if (!textarea || !display) return;
         const dois = this.extractDoisFromText(textarea.value);
-        display.textContent = `${dois.length} 个 DOI`;
+        const count = dois.length;
+        display.textContent = `${count} ${count === 1 ? 'DOI' : 'DOIs'}`;
     }
 
     async applyDoiAutoNumberFromInput() {
         if (!this.currentProject) {
-            this.showNotification('请先加载项目', 'error');
+            this.showNotification('Please load a project first', 'error');
             return;
         }
         const textarea = document.getElementById('doiInput');
@@ -2674,7 +2677,7 @@ class PaperReviewerApp {
 
     async createJsonFromDoiList() {
         if (!this.currentProject) {
-            this.showNotification('请先加载项目', 'error');
+            this.showNotification('Please load a project first', 'error');
             return;
         }
         let nextNo = Number.isFinite(this.doiAutoNumberStart) ? this.doiAutoNumberStart : null;
@@ -2772,7 +2775,7 @@ class PaperReviewerApp {
             
             // 如果关闭了独立窗口，给予提示
             if (hadPopupWindow) {
-                this.showNotification('🔄 已关闭独立PDF窗口', 'info');
+                this.showNotification('🔄 Closed detached PDF window', 'info');
             }
             
             // 验证项目结构
@@ -2788,7 +2791,7 @@ class PaperReviewerApp {
             if (!response.ok) {
                 const errorText = await response.text();
                 console.error('❌ 响应错误:', errorText);
-                throw new Error('项目验证失败');
+                throw new Error('Project validation failed');
             }
             
             const result = await response.json();
@@ -2796,7 +2799,7 @@ class PaperReviewerApp {
             
             if (!result.valid) {
                 console.error('❌ 项目无效:', result.message);
-                this.showNotification(`✗ 无效的项目结构: ${result.message}`, 'error');
+                this.showNotification(`✗ Invalid project structure: ${result.message}`, 'error');
                 return;
             }
             
@@ -2847,17 +2850,17 @@ class PaperReviewerApp {
             // 清空UI
             const fileListEl = document.getElementById('fileList');
             if (fileListEl) {
-                fileListEl.innerHTML = '<div class="loading"><div class="spinner"></div>加载中...</div>';
+                fileListEl.innerHTML = '<div class="loading"><div class="spinner"></div>Loading...</div>';
             }
             this.resetMainPanelsForProject();
             
             // 重新加载文件列表
             await this.loadFileList();
             
-            this.showNotification(`✓ 已加载项目: ${project.name}`, 'success');
+            this.showNotification(`✓ Project loaded: ${project.name}`, 'success');
         } catch (error) {
             console.error('Error switching project:', error);
-            this.showNotification(`✗ 加载项目失败: ${error.message}`, 'error');
+            this.showNotification(`✗ Failed to load project: ${error.message}`, 'error');
         }
     }
     
@@ -2908,24 +2911,24 @@ class PaperReviewerApp {
 
         // 第二步：让用户输入父目录路径
         const parentPath = prompt(
-            '请输入要创建项目的父目录路径：\n\n例如：\n/Users/yjli/Desktop\n/Users/yjli/Documents',
+            'Enter the parent directory where the project should be created:\n\nExamples:\n/Users/yjli/Desktop\n/Users/yjli/Documents',
             '/Users/yjli/Desktop'
         );
 
         if (!parentPath || !parentPath.trim()) {
-            this.showNotification('✗ 已取消创建项目', 'info');
+            this.showNotification('✗ Project creation cancelled', 'info');
             e.target.value = '';
             return;
         }
 
         // 第三步：让用户输入项目名称
         const projectName = prompt(
-            '请输入新项目的名称：\n\n（将在选定目录下创建此项目文件夹）',
+            'Enter the new project name:\n\n(A folder with this name will be created in the selected directory)',
             'my_project'
         );
 
         if (!projectName || !projectName.trim()) {
-            this.showNotification('✗ 项目名称不能为空', 'error');
+            this.showNotification('✗ Project name is required', 'error');
             e.target.value = '';
             return;
         }
@@ -2943,7 +2946,7 @@ class PaperReviewerApp {
             const result = await response.json();
             
             if (!result.success) {
-                this.showNotification(`✗ 创建项目失败: ${result.error}`, 'error');
+                this.showNotification(`✗ Failed to create project: ${result.error}`, 'error');
                 e.target.value = '';
                 return;
             }
@@ -2994,7 +2997,7 @@ class PaperReviewerApp {
             // 清空UI
             const fileListEl = document.getElementById('fileList');
             if (fileListEl) {
-                fileListEl.innerHTML = '<div class="loading"><div class="spinner"></div>加载中...</div>';
+                fileListEl.innerHTML = '<div class="loading"><div class="spinner"></div>Loading...</div>';
             }
             const middleContentEl = document.getElementById('middleContent');
             if (middleContentEl) {
@@ -3019,10 +3022,10 @@ class PaperReviewerApp {
             // 重新加载文件列表
             await this.loadFileList();
             
-            this.showNotification(`✓ 项目 "${projectName.trim()}" 创建成功！路径：${fullPath}`, 'success');
+            this.showNotification(`✓ Project "${projectName.trim()}" created at: ${fullPath}`, 'success');
         } catch (error) {
             console.error('Error creating project:', error);
-            this.showNotification(`✗ 创建项目出错: ${error.message}`, 'error');
+            this.showNotification(`✗ Project creation failed: ${error.message}`, 'error');
         }
 
         // 清空input，允许重复创建
@@ -3035,7 +3038,7 @@ class PaperReviewerApp {
         
         // 检查是否有当前项目
         if (!this.currentProject) {
-            fileListEl.innerHTML = '<div class="empty-state"><p>请先加载项目</p></div>';
+            fileListEl.innerHTML = '<div class="empty-state"><p>Please load a project first</p></div>';
             return;
         }
 
@@ -6240,7 +6243,7 @@ class PaperReviewerApp {
         if (input) input.value = '';
         if (!files.length) return;
         if (!this.currentProject) {
-            this.showNotification('请先加载项目后再导入 JSON', 'error');
+            this.showNotification('Please load a project before importing JSON', 'error');
             return;
         }
         if (this.hasUnsavedChanges || this.hasUnsavedMarkdownChanges) {
@@ -7105,9 +7108,9 @@ class PaperReviewerApp {
 
         // 收集项目信息
         const projectPath = this.currentProject.path || '';
-        const projectName = this.currentProject.name || '未知项目';
+        const projectName = this.currentProject.name || 'Unknown Project';
         
-        console.log(`📂 当前项目信息 - 名称: ${projectName}, 路径: ${projectPath}`);
+        console.log(`📂 Current Project Info - Name: ${projectName}, Path: ${projectPath}`);
         
         // 统计文件数量 - 直接从 fileMetaByBase 统计
         let jsonCount = 0;
@@ -7128,68 +7131,68 @@ class PaperReviewerApp {
             });
         }
         
-        // 方法2: 从 fileMetaByPath 统计 PDF
+        // Method 2: Count PDF files from fileMetaByPath
         if (this.fileMetaByPath && typeof this.fileMetaByPath === 'object') {
-            console.log('🔍 fileMetaByPath 内容:', Object.entries(this.fileMetaByPath).map(([path, meta]) => ({ path, kind: meta?.kind })));
+            console.log('🔍 fileMetaByPath content:', Object.entries(this.fileMetaByPath).map(([path, meta]) => ({ path, kind: meta?.kind })));
             Object.values(this.fileMetaByPath).forEach(meta => {
-                if (meta && meta.kind === 'pdf') {
-                    console.log(`✓ 计数PDF: ${meta.path}`);
-                    pdfCount++;
-                }
+            if (meta && meta.kind === 'pdf') {
+                console.log(`✓ Counting PDF: ${meta.path}`);
+                pdfCount++;
+            }
             });
         }
-        console.log(`📊 统计结果 - JSON: ${jsonCount}, MD: ${mdCount}, PDF: ${pdfCount}`);
+        console.log(`📊 Statistics - JSON: ${jsonCount}, MD: ${mdCount}, PDF: ${pdfCount}`);
 
         // 构建HTML内容
         const html = `
             <div class="project-details">
-                <div class="detail-section">
-                    <h3><i class="fas fa-folder"></i> 项目信息</h3>
-                    <div class="detail-item">
-                        <label>项目名称：</label>
-                        <span class="detail-value">${this.escapeHtml(projectName)}</span>
-                    </div>
-                    <div class="detail-item">
-                        <label>项目路径：</label>
-                        <span class="detail-value detail-path" title="${this.escapeAttr(projectPath)}">${this.escapeHtml(projectPath)}</span>
-                    </div>
+            <div class="detail-section">
+                <h3><i class="fas fa-folder"></i> Project Information</h3>
+                <div class="detail-item">
+                <label>Project Name:</label>
+                <span class="detail-value">${this.escapeHtml(projectName)}</span>
                 </div>
-                
-                <div class="detail-section">
-                    <h3><i class="fas fa-chart-pie"></i> 文件统计</h3>
-                    <div class="detail-stats">
-                        <div class="stat-item">
-                            <span class="stat-label">JSON 文件</span>
-                            <span class="stat-value">${jsonCount}</span>
-                        </div>
-                        <div class="stat-item">
-                            <span class="stat-label">Markdown 文件</span>
-                            <span class="stat-value">${mdCount}</span>
-                        </div>
-                        <div class="stat-item">
-                            <span class="stat-label">PDF 文件</span>
-                            <span class="stat-value">${pdfCount}</span>
-                        </div>
-                    </div>
+                <div class="detail-item">
+                <label>Project Path:</label>
+                <span class="detail-value detail-path" title="${this.escapeAttr(projectPath)}">${this.escapeHtml(projectPath)}</span>
                 </div>
+            </div>
+            
+            <div class="detail-section">
+                <h3><i class="fas fa-chart-pie"></i> File Statistics</h3>
+                <div class="detail-stats">
+                <div class="stat-item">
+                    <span class="stat-label">JSON Files</span>
+                    <span class="stat-value">${jsonCount}</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-label">Markdown Files</span>
+                    <span class="stat-value">${mdCount}</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-label">PDF Files</span>
+                    <span class="stat-value">${pdfCount}</span>
+                </div>
+                </div>
+            </div>
 
-                <div class="detail-section">
-                    <h3><i class="fas fa-cog"></i> 操作</h3>
-                    <div class="detail-actions">
-                        <button class="detail-action-btn" onclick="window.paperReviewerApp.copyProjectPathToClipboard()">
-                            <i class="fas fa-copy"></i> 复制项目路径
-                        </button>
-                        <button class="detail-action-btn" onclick="window.paperReviewerApp.openCreateProjectDialog()">
-                            <i class="fas fa-plus-circle"></i> 创建项目
-                        </button>
-                        <button class="detail-action-btn" onclick="window.paperReviewerApp.openProjectSelector()">
-                            <i class="fas fa-exchange-alt"></i> 切换项目
-                        </button>
-                        <button class="detail-action-btn detail-action-btn-danger" onclick="window.paperReviewerApp.exitProject()">
-                            <i class="fas fa-sign-out-alt"></i> 退出项目
-                        </button>
-                    </div>
+            <div class="detail-section">
+                <h3><i class="fas fa-cog"></i> Actions</h3>
+                <div class="detail-actions">
+                <button class="detail-action-btn" onclick="window.paperReviewerApp.copyProjectPathToClipboard()">
+                    <i class="fas fa-copy"></i> Copy Project Path
+                </button>
+                <button class="detail-action-btn" onclick="window.paperReviewerApp.openCreateProjectDialog()">
+                    <i class="fas fa-plus-circle"></i> Create Project
+                </button>
+                <button class="detail-action-btn" onclick="window.paperReviewerApp.openProjectSelector()">
+                    <i class="fas fa-exchange-alt"></i> Switch Project
+                </button>
+                <button class="detail-action-btn detail-action-btn-danger" onclick="window.paperReviewerApp.exitProject()">
+                    <i class="fas fa-sign-out-alt"></i> Exit Project
+                </button>
                 </div>
+            </div>
             </div>
         `;
 
@@ -7256,7 +7259,7 @@ class PaperReviewerApp {
         // 清除UI - 文件列表
         const fileListEl = document.getElementById('fileList');
         if (fileListEl) {
-            fileListEl.innerHTML = '<div class="empty-state"><p>请先加载项目</p></div>';
+            fileListEl.innerHTML = '<div class="empty-state"><p>Please load a project first</p></div>';
         }
         
         // 清除UI - 主面板
@@ -7285,7 +7288,7 @@ class PaperReviewerApp {
         this.projectInfoVisible = next;
         panel.classList.toggle('visible', next);
         if (next && !this.projectInfoLoaded) {
-            body.textContent = '加载中...';
+            body.textContent = 'Loading...';
             try {
                 const res = await fetch('/js-info.md');
                 if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -7295,8 +7298,8 @@ class PaperReviewerApp {
                 this.applyProjectInfoIcons(body);
                 this.projectInfoLoaded = true;
             } catch (err) {
-                console.error('加载项目说明失败', err);
-                body.textContent = `加载失败: ${err.message}`;
+                console.error('Failed to load project info', err);
+                body.textContent = `Load failed: ${err.message}`;
             }
         }
     }
@@ -7310,7 +7313,7 @@ class PaperReviewerApp {
         this.shortcutsVisible = next;
         panel.classList.toggle('visible', next);
         if (next && !this.shortcutsLoaded) {
-            body.textContent = '加载中...';
+            body.textContent = 'Loading...';
             try {
                 const res = await fetch('/shortcuts.md');
                 if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -7319,8 +7322,8 @@ class PaperReviewerApp {
                 body.innerHTML = parser ? parser.render(text) : text;
                 this.shortcutsLoaded = true;
             } catch (err) {
-                console.error('加载快捷键说明失败', err);
-                body.textContent = `加载失败: ${err.message}`;
+                console.error('Failed to load shortcuts info', err);
+                body.textContent = `Load failed: ${err.message}`;
             }
         }
     }
@@ -10209,6 +10212,27 @@ class PaperReviewerApp {
         delete pdfViewer.dataset.pdfSig;
     }
 
+    updatePdfPopupButtonState() {
+        const btn = document.getElementById('btnPdfPopup');
+        if (!btn) return;
+        const icon = btn.querySelector('i');
+        const isPopup = !!this.isPdfPopupMode;
+        btn.classList.toggle('is-popup', isPopup);
+        btn.setAttribute('aria-pressed', isPopup ? 'true' : 'false');
+        btn.title = isPopup ? '切回内嵌 PDF 视图' : '弹出 PDF 到独立窗口';
+        if (icon) {
+            icon.className = isPopup ? 'fas fa-window-restore' : 'fas fa-up-right-from-square';
+        }
+    }
+
+    clearPdfPopupCloseSignal() {
+        try {
+            localStorage.removeItem('closePdfPopupWindow');
+        } catch (err) {
+            console.warn('清理 PDF 关闭信号失败:', err);
+        }
+    }
+
     // PDF Functions - 使用iframe加载完整的PDF.js viewer
     async togglePdfPopup() {
         // 检查是否在独立窗口模式
@@ -10230,6 +10254,7 @@ class PaperReviewerApp {
             // 立即设置状态为false，防止重复点击
             this.isPdfPopupMode = false;
             this.pdfPopupWindow = null;
+            this.updatePdfPopupButtonState();
             // 标记用户已手动切换，禁止自动恢复
             this.pdfViewModeRestored = true;
             // 保存状态到localStorage
@@ -10258,6 +10283,9 @@ class PaperReviewerApp {
             this.showNotification('No PDF loaded', 'info');
             return;
         }
+
+        // 确保没有残留的关闭信号导致新窗口被立即关闭
+        this.clearPdfPopupCloseSignal();
         
         // 保存URL用于恢复
         const savedPdfUrl = this.currentPdfUrl;
@@ -10284,20 +10312,22 @@ class PaperReviewerApp {
         
         if (this.pdfPopupWindow) {
             // 使用 requestAnimationFrame 确保窗口完全打开后再处理
-            requestAnimationFrame(() => {
-                requestAnimationFrame(() => {
-                    // 检查窗口是否真的打开了
-                    if (!this.pdfPopupWindow || this.pdfPopupWindow.closed) {
-                        // 窗口立即关闭或打开失败，保持内嵌模式
-                        this.isPdfPopupMode = false;
-                        this.pdfPopupWindow = null;
-                        return;
-                    }
-                    
-                    // 窗口成功打开，现在可以设置状态并清空iframe
-                    this.isPdfPopupMode = true;
-                    // 保存状态到localStorage
-                    this.savePdfViewMode();
+                    requestAnimationFrame(() => {
+                        requestAnimationFrame(() => {
+                            // 检查窗口是否真的打开了
+                            if (!this.pdfPopupWindow || this.pdfPopupWindow.closed) {
+                                // 窗口立即关闭或打开失败，保持内嵌模式
+                                this.isPdfPopupMode = false;
+                                this.pdfPopupWindow = null;
+                                this.updatePdfPopupButtonState();
+                                return;
+                            }
+                            
+                            // 窗口成功打开，现在可以设置状态并清空iframe
+                            this.isPdfPopupMode = true;
+                            this.updatePdfPopupButtonState();
+                            // 保存状态到localStorage
+                            this.savePdfViewMode();
                     
                     // 清空内嵌iframe
                     const pdfViewer = document.getElementById('pdfViewer');
@@ -10321,6 +10351,7 @@ class PaperReviewerApp {
                             this.isPdfPopupMode = false;
                             this.pdfPopupWindow = null;
                             this.lastPdfLoadedUrl = '';
+                            this.updatePdfPopupButtonState();
                             // 保存状态到localStorage（窗口关闭=切换回嵌入模式）
                             this.savePdfViewMode();
                             
@@ -10352,12 +10383,13 @@ class PaperReviewerApp {
                     }, 3000);
                 });
             });
-        } else {
-            // 窗口打开失败（可能被浏览器拦截）
-            this.isPdfPopupMode = false;
-            this.showNotification('Failed to open popup window. Please allow popups for this site.', 'error');
+            } else {
+                // 窗口打开失败（可能被浏览器拦截）
+                this.isPdfPopupMode = false;
+                this.updatePdfPopupButtonState();
+                this.showNotification('Failed to open popup window. Please allow popups for this site.', 'error');
+            }
         }
-    }
 
     resetPdfViewerFrame() {
         const pdfViewer = document.getElementById('pdfViewer');
@@ -10422,6 +10454,7 @@ class PaperReviewerApp {
         // 重置状态
         this.isPdfPopupMode = false;
         this.pdfViewModeRestored = true; // 标记已处理，防止自动恢复
+        this.updatePdfPopupButtonState();
         
         // 清除保存的popup模式状态
         try {
@@ -12580,7 +12613,7 @@ class PaperReviewerApp {
         this.closeEditModal();
         
         // 提示已暂存
-        this.showNotification('✓ 修改已暂存（未保存到文件）', 'info');
+        this.showNotification('修改已暂存（未保存到文件）', 'info');
 
         // 如果更新了 meta_info.pdf_path，则立即按新路径加载 PDF
         if (shouldReloadPdf && nextPdfFile) {
