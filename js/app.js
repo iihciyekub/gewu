@@ -3791,7 +3791,9 @@ class PaperReviewerApp {
         // 初始位置
         menu.style.left = `${e.pageX}px`;
         menu.style.top = `${e.pageY}px`;
-        menu.innerHTML = `
+        
+        const selectedCount = this.selectedFiles.size;
+        let menuHtml = `
             <div class="context-menu-item" data-action="rename">
                 <i class="fas fa-edit"></i> 重命名
             </div>
@@ -3805,6 +3807,18 @@ class PaperReviewerApp {
                 <i class="fas fa-copy"></i> 复制 PDF 文件
             </div>
         `;
+        
+        // 当多选文件时添加复制DOI菜单项
+        if (selectedCount > 1) {
+            menuHtml += `
+            <div class="context-menu-divider"></div>
+            <div class="context-menu-item" data-action="copySelectedFilesDois">
+                <i class="fas fa-link"></i> 复制选中文件的 DOI <span class="context-menu-hint">(${selectedCount} 文件)</span>
+            </div>
+            `;
+        }
+        
+        menu.innerHTML = menuHtml;
 
         const groups = this.getCurrentGroups();
         if (groups && groups.length) {
@@ -3847,6 +3861,8 @@ class PaperReviewerApp {
                     this.deleteFile(filename, fileItem, true);
                 } else if (action === 'copyPdfFile') {
                     this.copyPdfFileToClipboard(filename);
+                } else if (action === 'copySelectedFilesDois') {
+                    this.copySelectedFilesDois();
                 } else if (action === 'moveToGroup') {
                     const gid = item.dataset.groupId;
                     if (gid) this.moveSelectedFilesToGroup(gid);
@@ -3958,6 +3974,62 @@ class PaperReviewerApp {
             this.showNotification(`已复制 ${uniqueDois.length} 个 DOI`, 'success');
         } catch (err) {
             console.error('复制分组 DOI 失败:', err);
+            this.showNotification(`复制失败: ${err.message}`, 'error');
+        }
+    }
+
+    async copySelectedFilesDois() {
+        try {
+            const selectedFiles = this.getSelectedFilesArray();
+            
+            if (selectedFiles.length === 0) {
+                this.showNotification('未选择文件', 'warning');
+                return;
+            }
+            
+            const dois = [];
+            
+            for (const filename of selectedFiles) {
+                try {
+                    // 获取文件路径
+                    const base = filename;
+                    const paths = this.getPathsForBase(base);
+                    const jsonPath = paths?.json || base;
+                    
+                    // 读取文件数据
+                    const data = await this.readProjectFile(jsonPath);
+                    
+                    if (data) {
+                        // 优先从 meta_info.doi 获取
+                        let doi = (data.meta_info && data.meta_info.doi) ||
+                                 this.findFirstDoiInData(data);
+                        
+                        if (doi) {
+                            // 清理 DOI 格式
+                            doi = String(doi).trim();
+                            if (doi) {
+                                dois.push(doi);
+                            }
+                        }
+                    }
+                } catch (err) {
+                    console.warn(`读取文件 ${filename} 失败:`, err);
+                }
+            }
+
+            if (dois.length === 0) {
+                this.showNotification('选中的文件中没有找到 DOI', 'warning');
+                return;
+            }
+
+            // 去重
+            const uniqueDois = [...new Set(dois)];
+            const doisText = uniqueDois.join('\n');
+            
+            await this.writeTextToClipboard(doisText);
+            this.showNotification(`已复制 ${uniqueDois.length} 个 DOI (共 ${selectedFiles.length} 个文件)`, 'success');
+        } catch (err) {
+            console.error('复制选中文件 DOI 失败:', err);
             this.showNotification(`复制失败: ${err.message}`, 'error');
         }
     }
@@ -12746,6 +12818,12 @@ class PaperReviewerApp {
         this._apaBtnHandler = async (e) => {
             const btn = e.target.closest('.apa-fetch-btn');
             if (!btn) return;
+            
+            // 如果是 PDF、WoS 或 DOI URL 按钮，不处理 APA 生成
+            if (btn.dataset.pdf || btn.dataset.wosUrl || btn.dataset.doiUrl) {
+                return;
+            }
+            
             e.preventDefault();
             if (btn.dataset.disabled === '1') {
                 this.showNotification('未找到 DOI，无法生成 APA', 'error');
