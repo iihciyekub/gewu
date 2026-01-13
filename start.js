@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Paper Reviewer System - Node.js launcher
+ * EnlightenKey - Node.js launcher
  * Cross-platform replacement for start.sh
  */
 
@@ -9,7 +9,7 @@ const path = require('path');
 
 function logHeader() {
   console.log('=========================================');
-  console.log('  Paper Reviewer System - Starting...');
+  console.log('        EnlightenKey - Starting...');
   console.log('=========================================');
   console.log('');
 }
