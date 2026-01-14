@@ -226,6 +226,17 @@ function ensureProjectStructure(fullPath) {
     return { jsonDir, mdDir, pdfDir };
 }
 
+function ensureProjectMarker(fullPath) {
+    const projectMarker = path.join(fullPath, '.project');
+    if (fs.existsSync(projectMarker)) return false;
+    fs.writeFileSync(projectMarker, JSON.stringify({
+        name: path.basename(fullPath),
+        created: new Date().toISOString(),
+        version: '1.0'
+    }, null, 2), 'utf8');
+    return true;
+}
+
 function getJsonTargetPath(fullPath, filename) {
     const safeName = String(filename || '').replace(/^[/\\]+/, '');
     if (!safeName) throw new Error('Missing filename');
@@ -349,12 +360,7 @@ const server = http.createServer((req, res) => {
                 const { jsonDir, mdDir, pdfDir } = ensureProjectStructure(fullPath);
                 
                 // 创建一个 .project 标记文件（可选，用于识别项目根目录）
-                const projectMarker = path.join(fullPath, '.project');
-                fs.writeFileSync(projectMarker, JSON.stringify({
-                    name: path.basename(fullPath),
-                    created: new Date().toISOString(),
-                    version: '1.0'
-                }, null, 2), 'utf8');
+                ensureProjectMarker(fullPath);
                 
                 res.writeHead(200, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify({
@@ -398,24 +404,39 @@ const server = http.createServer((req, res) => {
                 
                 const { projectKey, fullPath } = normalizeProjectPath(projectPath);
 
+                let created = false;
+                let markerCreated = false;
+                let dirsInitialized = false;
+
                 if (!fs.existsSync(fullPath)) {
+                    fs.mkdirSync(fullPath, { recursive: true });
+                    created = true;
+                } else if (!fs.statSync(fullPath).isDirectory()) {
                     res.writeHead(200, { 'Content-Type': 'application/json' });
                     res.end(JSON.stringify({
                         valid: false,
-                        message: '项目路径不存在'
+                        message: '项目路径不是文件夹'
                     }));
                     return;
                 }
 
+                const hasJson = fs.existsSync(path.join(fullPath, 'json'));
+                const hasMd = fs.existsSync(path.join(fullPath, 'md'));
+                const hasPdf = fs.existsSync(path.join(fullPath, 'pdf'));
+                if (!hasJson || !hasMd || !hasPdf) dirsInitialized = true;
+
                 // 确保必须的目录存在（json/view1、md、pdf）
                 const dirs = ensureProjectStructure(fullPath);
+                markerCreated = ensureProjectMarker(fullPath);
 
                 res.writeHead(200, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify({
                     valid: true,
-                    message: '项目结构有效',
+                    message: (created || dirsInitialized) ? '已初始化空项目结构' : '项目结构有效',
                     dirs,
-                    projectKey
+                    projectKey,
+                    created,
+                    markerCreated
                 }));
                 
             } catch (error) {

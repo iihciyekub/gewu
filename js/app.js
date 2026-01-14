@@ -1565,6 +1565,9 @@ class PaperReviewerApp {
         document.getElementById('loadProjectBtn').addEventListener('click', () => {
             this.loadSelectedProject();
         });
+        document.getElementById('initProjectBtn')?.addEventListener('click', () => {
+            this.initProjectFromPath();
+        });
 
         // 创建新项目按钮
         document.getElementById('createProjectBtn').addEventListener('click', () => {
@@ -2477,6 +2480,22 @@ class PaperReviewerApp {
         await this.switchProject(project);
     }
 
+    async initProjectFromPath() {
+        const pathInput = document.getElementById('projectPathInput');
+        const projectPath = pathInput ? pathInput.value.trim() : '';
+        if (!projectPath) {
+            this.showNotification('Please choose a project folder', 'error');
+            return;
+        }
+        const pathParts = projectPath.replace(/\\/g, '/').split('/').filter(p => p);
+        const projectName = pathParts[pathParts.length - 1] || 'project';
+        const project = {
+            name: projectName,
+            path: this.normalizeProjectPathString(projectPath)
+        };
+        await this.switchProject(project);
+    }
+
     // 触发浏览对话框
     browseAndFillPath() {
         const browser = document.getElementById('projectFolderBrowser');
@@ -2486,29 +2505,34 @@ class PaperReviewerApp {
     }
 
     // 处理浏览器目录选择
-    handleBrowserSelection(e) {
+    async handleBrowserSelection(e) {
         const files = e.target.files;
         if (!files || files.length === 0) return;
 
         const firstFile = files[0];
         const relativePath = firstFile.webkitRelativePath;
+        const absolutePath = firstFile.path || '';
+        const folderName = relativePath ? relativePath.split('/')[0] : '';
 
-        if (!relativePath) return;
+        let detectedPath = absolutePath
+            ? absolutePath.replace(/\\/g, '/').replace(/\/[^/]+$/, '')
+            : '';
 
-        // 提取目录名
-        const folderName = relativePath.split('/')[0];
+        if (!detectedPath) {
+            await this.loadEnvInfo();
+            const suggested = this.buildSuggestedPath(folderName || 'my_project');
+            const userPath = prompt(
+                'Please enter the absolute path to the selected folder:',
+                suggested || ''
+            );
+            detectedPath = (userPath || '').trim();
+        }
 
-        // 智能提示：让用户确认或修改路径
-        const userPath = prompt(
-            `Detected folder: ${folderName}\n\nPlease enter the full path.\n(Browsers cannot auto-read absolute paths; please type it manually)`,
-            this.buildSuggestedPath(folderName)
-        );
-
-        if (userPath && userPath.trim()) {
-            document.getElementById('projectPathInput').value = userPath.trim();
-            this.showNotification(`✓ Path set, loading project...`, 'success');
-            // 直接加载项目，减少一次点击
-            this.loadSelectedProject();
+        if (detectedPath) {
+            document.getElementById('projectPathInput').value = detectedPath;
+            this.showNotification('Path set', 'success');
+        } else {
+            this.showNotification('✗ Path not set', 'error');
         }
 
         // 清空input，允许重复选择
@@ -5609,6 +5633,8 @@ class PaperReviewerApp {
             this.applyProjectPathPlaceholder(this.defaultProjectPathExample);
         } catch (err) {
             console.warn('Failed to load env info:', err);
+            this.envInfo = { homeDir: '', desktopDir: '', rootDir: '', platform: '' };
+            this.defaultProjectPathExample = '/path/to/project';
             this.applyProjectPathPlaceholder(this.defaultProjectPathExample);
         }
     }
@@ -7187,8 +7213,10 @@ class PaperReviewerApp {
             <button type="button" class="info-panel-close" title="Close panel" aria-label="Close project info">
                 <i class="fas fa-times"></i>
             </button>
+            <div class="detail-titlebar">
+                <h3 class="detail-title">Project Info</h3>
+            </div>
             <div class="detail-section">
-                <h3><i class="fas fa-folder"></i> Project Information</h3>
                 <div class="detail-item">
                 <label>Project Name:</label>
                 <span class="detail-value">${this.escapeHtml(projectName)}</span>
@@ -7200,7 +7228,6 @@ class PaperReviewerApp {
             </div>
             
             <div class="detail-section">
-                <h3><i class="fas fa-chart-pie"></i> File Statistics</h3>
                 <div class="detail-stats">
                 <div class="stat-item">
                     <span class="stat-label">JSON Files</span>
@@ -7218,16 +7245,12 @@ class PaperReviewerApp {
             </div>
 
             <div class="detail-section">
-                <h3><i class="fas fa-cog"></i> Actions</h3>
                 <div class="detail-actions">
                 <button class="detail-action-btn" onclick="window.paperReviewerApp.copyProjectPathToClipboard()">
                     <i class="fas fa-copy"></i> Copy Project Path
                 </button>
-                <button class="detail-action-btn" onclick="window.paperReviewerApp.openCreateProjectDialog()">
-                    <i class="fas fa-plus-circle"></i> Create Project
-                </button>
-                <button class="detail-action-btn" onclick="window.paperReviewerApp.openProjectSelector()">
-                    <i class="fas fa-exchange-alt"></i> Switch Project
+                <button class="detail-action-btn" onclick="window.paperReviewerApp.openProjectModal()">
+                    <i class="fas fa-exchange-alt"></i> Create or Switch Project
                 </button>
                 <button class="detail-action-btn detail-action-btn-danger" onclick="window.paperReviewerApp.exitProject()">
                     <i class="fas fa-sign-out-alt"></i> Exit Project
@@ -7269,17 +7292,21 @@ class PaperReviewerApp {
             .catch(err => this.showNotification(`Copy failed: ${err.message}`, 'error'));
     }
 
-    openProjectSelector() {
+    openProjectModal({ openCreate = false } = {}) {
         document.getElementById('projectSelectorModal')?.classList.add('active');
         this.projectInfoVisible = false;
         document.getElementById('projectInfoPanel')?.classList.remove('visible');
+        if (openCreate) {
+            document.getElementById('createProjectBtn')?.click();
+        }
+    }
+
+    openProjectSelector() {
+        this.openProjectModal();
     }
 
     openCreateProjectDialog() {
-        document.getElementById('projectSelectorModal')?.classList.add('active');
-        this.projectInfoVisible = false;
-        document.getElementById('projectInfoPanel')?.classList.remove('visible');
-        document.getElementById('createProjectBtn')?.click();
+        this.openProjectModal({ openCreate: true });
     }
 
     exitProject() {
