@@ -39,7 +39,7 @@ function main() {
   console.log('');
   console.log(`📂 Project directory: ${rootDir}`);
   console.log(`🌐 Access the application at: http://localhost:${port}`);
-  console.log('💾 Default project layout: json/view1/, md/, pdf/');
+  console.log('💾 Default project layout: json/view1/, md/, pdf/, DRAFT.md (project root)');
   console.log('');
   console.log('Press Ctrl+C to stop the server');
   console.log('=========================================');

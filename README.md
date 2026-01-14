@@ -34,6 +34,27 @@ node server.js
 
 访问: **http://localhost:8000**
 
+### Docker 启动
+
+```bash
+docker build -t enlightenkey .
+
+# 将本地项目目录映射到容器 /data
+docker run -p 8000:8000 \
+  -e HOST=0.0.0.0 \
+  -e ALLOWED_ROOTS=/data \
+  -v /path/to/projects:/data \
+  enlightenkey
+```
+
+在应用内创建/选择项目时，使用绝对路径，例如：`/data/my_research`。
+
+使用 docker-compose：
+
+```bash
+docker compose up --build
+```
+
 ### 创建第一个项目
 
 1. 打开应用
@@ -57,6 +78,7 @@ ref_251207_reviewer/
 ├── user/               # 用户项目目录
 │   ├── json/           # JSON 数据
 │   ├── md/             # Markdown 笔记
+│   ├── DRAFT.md         # 草稿（项目根目录）
 │   └── pdf/            # PDF 文献
 └── docs/               # 文档
 ```
@@ -86,6 +108,8 @@ ref_251207_reviewer/
 └── pdf/      # PDF 文献和资料
 ```
 
+此外，草稿文件 `DRAFT.md` 放在项目根目录。
+
 ### json/ 目录
 
 存放 JSON 格式的结构化数据，支持多个视图：
@@ -109,6 +133,8 @@ md/
 ├── paper2.md
 └── notes.md               # 总体笔记
 ```
+
+**特殊草稿文件**：`DRAFT.md` 位于项目根目录（不在 `md/` 内）。
 
 **Markdown Front Matter 示例**：
 ```markdown
@@ -195,6 +221,18 @@ Content-Type: application/json
   "projectPath": "user/my_research",
   "filename": "md/paper1.md",
   "content": "# Paper 1\n..."
+}
+```
+
+保存草稿：
+```http
+POST /save-md
+Content-Type: application/json
+
+{
+  "projectPath": "user/my_research",
+  "filename": "DRAFT.md",
+  "content": "# Draft\n..."
 }
 ```
 

@@ -3838,7 +3838,7 @@ class PaperReviewerApp {
             .filter(line => line.length > 0);
 
         if (names.length === 0) {
-            this.showNotification('✗ Please enter at least one group name', 'error');
+            this.showNotification('Please enter at least one group name', 'error');
             return;
         }
 

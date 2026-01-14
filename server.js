@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * Simple HTTP Server with JSON/MD/PDF support (new layout only)
- * Layout: json/<view>/*, md/*, pdf/*
+ * Layout: json/<view>/*, md/*, pdf/*, DRAFT.md (project root)
  */
 
 const http = require('http');
@@ -12,6 +12,7 @@ const os = require('os');
 const { execFileSync } = require('child_process');
 
 const PORT = process.env.PORT ? Number(process.env.PORT) : 8000;
+const HOST = process.env.HOST || '127.0.0.1';
 const ROOT_DIR = path.resolve(__dirname);
 const PROMPT_ROOT = path.join(ROOT_DIR, 'src', 'prompts');
 const TOOLS_ROOTS = [
@@ -1606,8 +1607,9 @@ server.on('error', (err) => {
     process.exit(1);
 });
 
-server.listen(PORT, '127.0.0.1', () => {
-    console.log('🚀 Server running at http://localhost:' + PORT + '/');
+server.listen(PORT, HOST, () => {
+    const hostLabel = HOST === '0.0.0.0' ? 'localhost' : HOST;
+    console.log('🚀 Server running at http://' + hostLabel + ':' + PORT + '/');
     console.log('📁 Serving files from: ' + __dirname);
     console.log('💾 Project operations:');
     console.log('   - POST /create-project (create new project with json/md/pdf dirs)');
