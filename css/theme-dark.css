@@ -743,6 +743,17 @@ body.theme-dark .detail-section h3 {
     color: #569cd6;
 }
 
+body.theme-dark .detail-copy-btn {
+    background: #1e2736;
+    border-color: rgba(86, 156, 214, 0.35);
+    color: #8ec2ff;
+}
+
+body.theme-dark .detail-copy-btn:hover {
+    background: #28344a;
+    border-color: rgba(86, 156, 214, 0.6);
+}
+
 /* DOI 复制按钮 - 深色主题 */
 body.theme-dark .doi-copy-btn {
     color: #569cd6;

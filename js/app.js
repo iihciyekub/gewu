@@ -32,6 +32,8 @@ class PaperReviewerApp {
         this.isMarkdownEditing = false;
         this.hasUnsavedMarkdownChanges = false;
         this.isDraftViewActive = false;
+        this.isSwitchingView = false;
+        this.pendingViewSwitch = null;
         this.fileMarkdownState = null;
         this.draftMarkdownState = null;
         this.saveMdEndpoint = '/save-md';
@@ -93,6 +95,7 @@ class PaperReviewerApp {
         this.rawJsonParseError = '';
         this.rawJsonParseTimer = null;
         this.currentLoadToken = 0;
+        this._eventListenersBound = false;
         this.sectionExpandedStateByProject = this.loadSectionExpandedState();
         this.lastSelectedFileByProject = this.loadLastSelectedFileByProject();
 
@@ -319,30 +322,6 @@ class PaperReviewerApp {
         const icon = btn.querySelector('i');
         btn.title = isDark ? 'Switch to light mode' : 'Switch to dark mode';
         if (icon) icon.className = isDark ? 'fas fa-sun' : 'fas fa-moon';
-    }
-
-    updateViewSwitchButton() {
-        const btn = document.getElementById('viewSwitchBtn');
-        if (!btn) return;
-        const icon = btn.querySelector('i');
-
-        const view = this.currentView || 'structured';
-        if (view === 'markdown') {
-            btn.title = 'Switch to JSON view';
-            if (icon) icon.className = 'fas fa-table';
-        } else {
-            btn.title = 'Switch to Markdown view';
-            if (icon) icon.className = 'fa-brands fa-markdown';
-        }
-    }
-
-    renderJsonViewSelector() {
-        const sel = document.getElementById('jsonViewSelect');
-        if (!sel) return;
-        const views = this.availableJsonViews || [];
-        const current = this.currentJsonView || (views[0] || '');
-        sel.innerHTML = views.map(v => `<option value="${this.escapeAttr(v)}"${v === current ? ' selected' : ''}>${this.escapeHtml(v)}</option>`).join('') || '<option value="">(no views)</option>';
-        this.currentJsonView = current;
     }
 
     updateViewSwitchButton() {
@@ -1074,16 +1053,19 @@ class PaperReviewerApp {
     }
 
     setupEventListeners() {
+        if (this._eventListenersBound) return;
+        this._eventListenersBound = true;
         // 跟踪鼠标是否悬停在pdfViewer上（用于ESC键判断）
         const setupPdfViewerHover = () => {
             const pdfViewer = document.getElementById('pdfViewer');
-            if (pdfViewer) {
+            if (pdfViewer && !pdfViewer.dataset.hoverBound) {
                 pdfViewer.addEventListener('mouseenter', () => {
                     this._isMouseOverPdfViewer = true;
                 });
                 pdfViewer.addEventListener('mouseleave', () => {
                     this._isMouseOverPdfViewer = false;
                 });
+                pdfViewer.dataset.hoverBound = '1';
             }
         };
         // 立即尝试设置
@@ -5012,7 +4994,7 @@ class PaperReviewerApp {
                 this.lastPdfLoadedUrl = '';
                 this.lastPdfLoadedKey = '';
             }
-            this.applyCurrentView();
+            await this.applyCurrentView();
         } catch (error) {
             console.error('Error loading file:', error);
             const spaceHint = /\s/.test(filename) ? ' (提示: 文件名包含空格，请去掉空格后重试)' : '';
@@ -6439,7 +6421,7 @@ class PaperReviewerApp {
                     this.renderStructuredView();
                     this.renderFlatView();
                     this.setupEditableListeners();
-                    this.applyCurrentView();
+                    await this.applyCurrentView();
                 }
             } catch (err) {
                 console.error('Failed to merge JSON:', file.name, err);
@@ -7262,6 +7244,9 @@ class PaperReviewerApp {
                 <div class="detail-item">
                 <label>Project Path:</label>
                 <span class="detail-value detail-path" title="${this.escapeAttr(projectPath)}">${this.escapeHtml(projectPath)}</span>
+                <button class="detail-copy-btn" type="button" title="Copy Project Path" aria-label="Copy Project Path" onclick="window.paperReviewerApp.copyProjectPathToClipboard()">
+                    <i class="fas fa-copy"></i>
+                </button>
                 </div>
             </div>
             
@@ -7284,9 +7269,6 @@ class PaperReviewerApp {
 
             <div class="detail-section">
                 <div class="detail-actions">
-                <button class="detail-action-btn" onclick="window.paperReviewerApp.copyProjectPathToClipboard()">
-                    <i class="fas fa-copy"></i> Copy Project Path
-                </button>
                 <button class="detail-action-btn" onclick="window.paperReviewerApp.openProjectModal()">
                     <i class="fas fa-exchange-alt"></i> Create or Switch Project
                 </button>
@@ -10047,10 +10029,17 @@ class PaperReviewerApp {
     async setView(nextView, btn = null) {
         const requestedView = String(nextView || '').trim();
         if (!requestedView) return;
-        const isDraftRequested = requestedView === 'draft';
-        const viewName = isDraftRequested ? 'markdown' : requestedView;
-        const prevView = this.currentView || 'structured';
-        const wasDraft = this.isDraftViewActive;
+        if (this.isSwitchingView) {
+            this.pendingViewSwitch = { view: requestedView, btn };
+            return;
+        }
+        this.isSwitchingView = true;
+        let switchError = null;
+        try {
+            const isDraftRequested = requestedView === 'draft';
+            const viewName = isDraftRequested ? 'markdown' : requestedView;
+            const prevView = this.currentView || 'structured';
+            const wasDraft = this.isDraftViewActive;
         const shouldPromptDraft = wasDraft && !isDraftRequested;
         const shouldPromptFileMd = !wasDraft && isDraftRequested;
         // 离开 Markdown 视图时：若有未保存修改，提示保存；并退出编辑态，避免 UI/按钮残留
@@ -10176,17 +10165,28 @@ class PaperReviewerApp {
             this.updateMarkdownToolbar();
             this.updateMarkdownDirtyUI();
         }
-        this.updateViewTabs();
-        this.applyEditLockState();
+            this.updateViewTabs();
+            this.applyEditLockState();
+        } catch (err) {
+            switchError = err;
+        } finally {
+            this.isSwitchingView = false;
+        }
+        const pending = this.pendingViewSwitch;
+        this.pendingViewSwitch = null;
+        if (pending && pending.view && pending.view !== requestedView) {
+            await this.setView(pending.view, pending.btn);
+        }
+        if (switchError) throw switchError;
     }
 
-    applyCurrentView() {
+    async applyCurrentView() {
         const view = this.currentView || 'structured';
         if (view === 'markdown' && this.isDraftViewActive) {
-            this.switchToView('draft');
+            await this.switchToView('draft');
             return;
         }
-        this.switchToView(view);
+        await this.switchToView(view);
     }
 
     toggleTableMarkdownView() {
@@ -10697,15 +10697,6 @@ class PaperReviewerApp {
             this.updatePdfPopupButtonState();
             this.showNotification('Failed to open popup window. Please allow popups for this site.', 'error');
         }
-    }
-
-    resetPdfViewerFrame() {
-        const pdfViewer = document.getElementById('pdfViewer');
-        if (!pdfViewer) return;
-        pdfViewer.onload = null;
-        pdfViewer.removeAttribute('src');
-        pdfViewer.classList.remove('pdf-loaded');
-        delete pdfViewer.dataset.pdfSig;
     }
 
     // 保存PDF窗口模式到localStorage
@@ -14379,7 +14370,10 @@ document.addEventListener('DOMContentLoaded', () => {
 document.addEventListener('click', (e) => {
     if (e.target.classList.contains('tab-btn')) {
         setTimeout(() => {
-            window.paperReviewerApp.setupEditableListeners();
+            const app = window.paperReviewerApp;
+            if (app && typeof app.setupEditableListeners === 'function') {
+                app.setupEditableListeners();
+            }
         }, 100);
     }
 });

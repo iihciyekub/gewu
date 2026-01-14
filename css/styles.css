@@ -3429,13 +3429,37 @@ body.theme-dark .bib-collapse-btn:hover {
 .project-details {
     display: flex;
     flex-direction: column;
-    gap: 16px;
+    gap: 2px;
 }
 
 .detail-section {
     border-bottom: 1px solid var(--wos-border);
     padding-bottom: 12px;
     padding-top: 12px;
+}
+
+.detail-copy-btn {
+    margin-left: 8px;
+    width: 24px;
+    height: 24px;
+    border: 1px solid rgba(0, 62, 116, 0.2);
+    border-radius: 6px;
+    background: #f5f8ff;
+    color: var(--wos-blue);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.12s ease;
+}
+
+.detail-copy-btn:hover {
+    background: #e9f0ff;
+    border-color: rgba(0, 62, 116, 0.4);
+}
+
+.detail-copy-btn:active {
+    transform: translateY(1px);
 }
 
 .detail-section:first-child {
