@@ -58,6 +58,8 @@ class PaperReviewerApp {
         this.promptGroups = {};
         this.promptPanelPos = this.loadPromptPanelPos();
         this.promptSelectedByGroup = this.loadPromptSelectedByGroup();
+        this.envInfo = { homeDir: '', desktopDir: '', rootDir: '', platform: '' };
+        this.defaultProjectPathExample = '/path/to/project';
         this.isEditLocked = this.loadEditLockState();
         this.citationCache = {}; // 缓存 cite/citep 渲染结果 {text, fallback}
         this.citationMetaCache = {}; // 缓存 DOI -> CSL
@@ -948,6 +950,9 @@ class PaperReviewerApp {
         // 初始化管理器
         this.specialSyntaxManager = new SpecialSyntaxManager(this);
         this.projectStorage = new ProjectStorageManager(this);
+
+        // 加载环境信息（用于占位符和默认路径），不阻塞主流程
+        this.loadEnvInfo();
 
         // 先加载项目配置
         this.loadProjectConfig();
@@ -2496,7 +2501,7 @@ class PaperReviewerApp {
         // 智能提示：让用户确认或修改路径
         const userPath = prompt(
             `Detected folder: ${folderName}\n\nPlease enter the full path.\n(Browsers cannot auto-read absolute paths; please type it manually)`,
-            `/Users/yjli/Desktop/${folderName}`
+            this.buildSuggestedPath(folderName)
         );
 
         if (userPath && userPath.trim()) {
@@ -2912,9 +2917,10 @@ class PaperReviewerApp {
         if (!files || files.length === 0) return;
 
         // 第二步：让用户输入父目录路径
+        const exampleBase = this.buildSuggestedPath();
         const parentPath = prompt(
-            'Enter the parent directory where the project should be created:\n\nExamples:\n/Users/yjli/Desktop\n/Users/yjli/Documents',
-            '/Users/yjli/Desktop'
+            `Enter the parent directory where the project should be created:\n\nExample:\n${exampleBase}`,
+            this.getDefaultParentDir() || '/path/to'
         );
 
         if (!parentPath || !parentPath.trim()) {
@@ -5591,6 +5597,39 @@ class PaperReviewerApp {
     normalizeProjectPathString(pathStr) {
         if (!pathStr) return '';
         return pathStr.replace(/\\/g, '/').replace(/\/+$/, '');
+    }
+
+    async loadEnvInfo() {
+        try {
+            const res = await fetch('/env-info');
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            const data = await res.json();
+            this.envInfo = data || {};
+            this.defaultProjectPathExample = this.buildSuggestedPath('my_project');
+            this.applyProjectPathPlaceholder(this.defaultProjectPathExample);
+        } catch (err) {
+            console.warn('Failed to load env info:', err);
+            this.applyProjectPathPlaceholder(this.defaultProjectPathExample);
+        }
+    }
+
+    applyProjectPathPlaceholder(examplePath) {
+        const input = document.getElementById('projectPathInput');
+        if (input && examplePath) {
+            input.placeholder = `Enter full path, e.g.: ${examplePath}`;
+        }
+    }
+
+    getDefaultParentDir() {
+        const env = this.envInfo || {};
+        return env.desktopDir || env.homeDir || '';
+    }
+
+    buildSuggestedPath(folderName = '') {
+        const base = this.getDefaultParentDir() || '/path/to';
+        const cleanBase = base.replace(/[\\/]+$/, '');
+        const suffix = folderName ? `/${folderName}` : '/my_project';
+        return `${cleanBase}${suffix}`;
     }
 
     normalizePdfPathValue(pathStr) {

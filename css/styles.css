@@ -2502,6 +2502,7 @@ body.theme-vscode .qa-bubble {
     top: 50%;
     transform: translate(-50%, -50%);
     background: #fff;
+    border: 1px solid #ddd;
     border-radius: 50%;
     box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
     width: 22px;

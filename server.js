@@ -303,6 +303,22 @@ const server = http.createServer((req, res) => {
         return;
     }
 
+    // 提供环境信息（用于前端路径占位符和默认值）
+    if (req.method === 'GET' && pathname === '/env-info') {
+        const homeDir = os.homedir();
+        const desktopCandidate = path.join(homeDir, 'Desktop');
+        const desktopDir = fs.existsSync(desktopCandidate) ? desktopCandidate : '';
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({
+            homeDir,
+            desktopDir,
+            rootDir: ROOT_DIR,
+            allowedRoots: ALLOWED_ROOTS,
+            platform: process.platform
+        }));
+        return;
+    }
+
     // 创建新项目
     if (req.method === 'POST' && pathname === '/create-project') {
         let body = '';

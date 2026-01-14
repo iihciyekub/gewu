@@ -1,0 +1,62 @@
+/* jQuery JSON Viewer Styles */
+.json-document {
+    padding: 1em 2em;
+}
+
+ul.json-dict, ol.json-array {
+    list-style-type: none;
+    margin: 0 0 0 1px;
+    border-left: 1px dotted #ccc;
+    padding-left: 2em;
+}
+
+.json-string {
+    color: #0B7500;
+}
+
+.json-literal {
+    color: #1A01CC;
+    font-weight: bold;
+}
+
+.json-number {
+    color: #1A01CC;
+}
+
+.json-property {
+    color: #C41A16;
+    font-weight: bold;
+}
+
+.json-item {
+    margin-left: 1em;
+}
+
+.json-toggle {
+    cursor: pointer;
+    color: #888;
+    margin-left: -1em;
+    margin-right: 0.5em;
+}
+
+.json-toggle:before {
+    content: "▼ ";
+}
+
+.json-toggle.collapsed:before {
+    content: "▶ ";
+}
+
+.json-placeholder {
+    color: #aaa;
+    padding: 0 1em;
+}
+
+.json-dict > li > a, .json-array > li > a {
+    text-decoration: none;
+    color: #888;
+}
+
+.json-dict > li > a:hover, .json-array > li > a:hover {
+    text-decoration: underline;
+}

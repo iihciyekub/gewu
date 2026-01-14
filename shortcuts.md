@@ -1,3 +1,4 @@
+- Cmd/Ctrl + / — Markdown 源码
 - Cmd/Ctrl + E — 切换 JSON 表格 / Markdown 视图
 - Cmd/Ctrl + Shift  + E — 切换 JSON 源码 / Markdown 源码
 - Cmd/Ctrl + Shift + G — 打开工具面板

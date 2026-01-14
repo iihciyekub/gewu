@@ -1,0 +1,158 @@
+/* PDF.js 暗色主题覆盖样式 */
+
+body.dark-theme {
+    /* 主要背景色 */
+    --main-color: #D4D4D4;
+    --body-bg-color: #1E1E1E;
+    --sidebar-bg-color: #252526;
+    --toolbar-bg-color: #2D2D30;
+    --toolbar-border-color: #3E3E42;
+    --button-hover-color: #2A3F2F;
+    --button-active-color: #1E2F1E;
+    --field-bg-color: #252526;
+    --field-border-color: #3E3E42;
+    --doorhanger-bg-color: #2D2D30;
+    --doorhanger-border-color: #3E3E42;
+    
+    /* 文字颜色 */
+    --text-primary-color: #D4D4D4;
+    --text-secondary-color: #9CA3AF;
+    --toolbar-icon-color: #D4D4D4;
+    
+    /* PDF 页面 */
+    --page-border-color: #3E3E42;
+    --scrollbar-color: #505050;
+    --scrollbar-bg-color: #252526;
+    
+    /* 注释和高亮 */
+    --highlight-bg-color: rgba(25, 163, 9, 0.3);
+    --highlight-selected-bg-color: rgba(25, 163, 9, 0.5);
+}
+
+/* 覆盖工具栏背景 */
+body.dark-theme #toolbarContainer {
+    background-color: #2D2D30 !important;
+    border-bottom: 1px solid #3E3E42 !important;
+}
+
+body.dark-theme #toolbarViewer {
+    background-color: #2D2D30 !important;
+}
+
+/* 覆盖侧边栏 */
+body.dark-theme #sidebarContainer {
+    background-color: #252526 !important;
+    border-right: 1px solid #3E3E42 !important;
+}
+
+/* 覆盖主视图区域 */
+body.dark-theme #viewerContainer {
+    background-color: #1E1E1E !important;
+}
+
+/* 覆盖按钮样式 */
+body.dark-theme .toolbarButton {
+    color: #D4D4D4 !important;
+}
+
+body.dark-theme .toolbarButton:hover {
+    background-color: #2A3F2F !important;
+}
+
+/* 覆盖输入框 */
+body.dark-theme input,
+body.dark-theme select,
+body.dark-theme textarea {
+    background-color: #252526 !important;
+    color: #D4D4D4 !important;
+    border-color: #3E3E42 !important;
+}
+
+/* 覆盖下拉菜单 */
+body.dark-theme .dropdownToolbarButton select {
+    background-color: #252526 !important;
+    color: #D4D4D4 !important;
+}
+
+/* 页面缩略图 */
+body.dark-theme .thumbnail {
+    background-color: #2D2D30 !important;
+    border: 1px solid #3E3E42 !important;
+}
+
+body.dark-theme .thumbnail.selected {
+    border-color: #19A309 !important;
+}
+
+/* 搜索高亮 */
+body.dark-theme .highlight {
+    background-color: rgba(25, 163, 9, 0.3) !important;
+}
+
+body.dark-theme .highlight.selected {
+    background-color: rgba(25, 163, 9, 0.5) !important;
+}
+
+/* 文本层 */
+body.dark-theme .textLayer {
+    opacity: 1 !important;
+}
+
+/* 注释编辑器 */
+body.dark-theme .annotationEditorLayer {
+    background: transparent !important;
+}
+
+/* 滚动条 */
+body.dark-theme ::-webkit-scrollbar {
+    width: 12px;
+    height: 12px;
+}
+
+body.dark-theme ::-webkit-scrollbar-track {
+    background: #252526;
+}
+
+body.dark-theme ::-webkit-scrollbar-thumb {
+    background: #505050;
+    border-radius: 6px;
+}
+
+body.dark-theme ::-webkit-scrollbar-thumb:hover {
+    background: #606060;
+}
+
+/* 对话框 */
+body.dark-theme .dialog {
+    background-color: #2D2D30 !important;
+    border: 1px solid #3E3E42 !important;
+    color: #D4D4D4 !important;
+}
+
+body.dark-theme .dialog .row label {
+    color: #D4D4D4 !important;
+}
+
+/* 查找栏 */
+body.dark-theme #findbar {
+    background-color: #2D2D30 !important;
+    border-top: 1px solid #3E3E42 !important;
+}
+
+body.dark-theme #findInput {
+    background-color: #252526 !important;
+    color: #D4D4D4 !important;
+    border-color: #3E3E42 !important;
+}
+
+/* 页码显示 */
+body.dark-theme #pageNumber {
+    background-color: #252526 !important;
+    color: #D4D4D4 !important;
+    border-color: #3E3E42 !important;
+}
+
+/* 分隔符 */
+body.dark-theme .verticalToolbarSeparator {
+    background-color: #3E3E42 !important;
+}
