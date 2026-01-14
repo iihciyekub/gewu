@@ -247,6 +247,8 @@ function getJsonTargetPath(fullPath, filename) {
 function getMdTargetPath(fullPath, filename) {
     const safeName = String(filename || '').replace(/^[/\\]+/, '');
     if (!safeName) throw new Error('Missing filename');
+    const lower = safeName.toLowerCase();
+    if (lower === 'draft.md') return path.join(fullPath, safeName);
     if (safeName.startsWith('md/')) return path.join(fullPath, safeName);
     return path.join(fullPath, 'md', safeName);
 }
@@ -1317,6 +1319,16 @@ const server = http.createServer((req, res) => {
 
                 // md/
                 files.push(...collectFiles(path.join(fullPath, 'md'), 'md', 'md'));
+                // root DRAFT.md (special)
+                const draftPath = path.join(fullPath, 'DRAFT.md');
+                if (fs.existsSync(draftPath)) {
+                    files.push({
+                        name: 'DRAFT.md',
+                        path: 'DRAFT.md',
+                        kind: 'md',
+                        category: 'md'
+                    });
+                }
 
                 // pdf/ - 添加 PDF 文件列表
                 const pdfDir = path.join(fullPath, 'pdf');

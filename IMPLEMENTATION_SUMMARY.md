@@ -34,8 +34,10 @@
   ```
   项目名/
   ├── json/                 # JSON 数据目录
+  
   ├── md/                   # Markdown 笔记目录
   ├── pdf/                  # PDF 文献目录
+  ├── DRAFT.MD              # 全文唯一草稿文件    
   └── .project              # 项目元数据文件
   ```
 

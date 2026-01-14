@@ -31,6 +31,9 @@ class PaperReviewerApp {
         this.currentMarkdownExists = false;
         this.isMarkdownEditing = false;
         this.hasUnsavedMarkdownChanges = false;
+        this.isDraftViewActive = false;
+        this.fileMarkdownState = null;
+        this.draftMarkdownState = null;
         this.saveMdEndpoint = '/save-md';
         this.blankDragImage = null;
         this.keywordTooltipEl = null;
@@ -40,7 +43,23 @@ class PaperReviewerApp {
         this.fileFilterVisible = false;
         this.debugEnabled = this.loadDebugEnabled();
         try {
-            this.currentView = localStorage.getItem('lastViewMode') || 'structured';
+            const storedView = localStorage.getItem('lastViewMode');
+            if (storedView) {
+                if (storedView === 'draft') {
+                    this.currentView = 'markdown';
+                    this.isDraftViewActive = true;
+                } else {
+                    this.currentView = storedView;
+                }
+            } else {
+                const defaultView = document.querySelector('.tab-btn.active')?.dataset?.view;
+                if (defaultView === 'draft') {
+                    this.currentView = 'markdown';
+                    this.isDraftViewActive = true;
+                } else {
+                    this.currentView = defaultView || 'structured';
+                }
+            }
         } catch (_e) {
             this.currentView = 'structured';
         }
@@ -1192,10 +1211,15 @@ class PaperReviewerApp {
         if (mdRenderItem) {
             mdRenderItem.addEventListener('click', async (e) => {
                 e.preventDefault();
-                await this.switchToView('markdown');
-                if (this.isMarkdownEditing) this.toggleMarkdownEdit(false, { skipConfirm: true });
-                // 确保渲染刷新
-                this.renderMarkdownView(this.currentMarkdownText || '');
+                if (this.isDraftViewActive) {
+                    if (this.isMarkdownEditing) this.toggleMarkdownEdit(false, { skipConfirm: true });
+                    this.renderMarkdownView(this.currentMarkdownText || '');
+                } else {
+                    await this.switchToView('markdown');
+                    if (this.isMarkdownEditing) this.toggleMarkdownEdit(false, { skipConfirm: true });
+                    // 确保渲染刷新
+                    this.renderMarkdownView(this.currentMarkdownText || '');
+                }
                 this.toggleMdMenu(false);
             });
         }
@@ -4892,8 +4916,8 @@ class PaperReviewerApp {
                 this.setSelectedFiles([base], base);
             }
             // 如果当前 Markdown 有未保存修改，提示用户
-            if (this.hasUnsavedMarkdownChanges && this.currentFile && this.currentMarkdownExists) {
-                const mdFilename = this.getMarkdownFilename(this.currentFile);
+            if (this.hasUnsavedMarkdownChanges && this.currentMarkdownExists) {
+                const mdFilename = this.getActiveMarkdownFilename();
                 const shouldSave = confirm(`Markdown "${mdFilename}" 有未保存的修改，是否保存？`);
                 if (shouldSave) {
                     await this.saveCurrentMarkdownSilently();
@@ -6812,6 +6836,15 @@ class PaperReviewerApp {
     }
 
     async goToMarkdownSource() {
+        if (this.isDraftViewActive) {
+            if (!this.currentMarkdownExists) {
+                await this.loadDraftMarkdownFile();
+            }
+            this.toggleMarkdownEdit(true);
+            const mdTextarea = document.getElementById('markdownTextarea');
+            if (mdTextarea) mdTextarea.focus();
+            return;
+        }
         await this.switchToView('markdown');
         if (!this.currentFile) {
             this.showNotification('Please select a file to view Markdown source', 'info');
@@ -7020,7 +7053,7 @@ class PaperReviewerApp {
         const saveItem = document.getElementById('mdSaveItem');
         if (!dropdown || !renderItem || !sourceItem || !saveItem) return;
 
-        const hasFile = !!this.currentFile;
+        const hasFile = this.isDraftViewActive ? true : !!this.currentFile;
         dropdown.style.display = 'inline-flex';
         if (!hasFile && this.mdMenuVisible) this.toggleMdMenu(false);
 
@@ -8139,6 +8172,54 @@ class PaperReviewerApp {
         return `md/${base}.md`;
     }
 
+    getDraftFilename() {
+        return 'DRAFT.md';
+    }
+
+    getActiveMarkdownFilename(isDraftOverride = null) {
+        const isDraft = typeof isDraftOverride === 'boolean' ? isDraftOverride : this.isDraftViewActive;
+        if (isDraft) return this.getDraftFilename();
+        if (this.currentFile) return this.getMarkdownFilename(this.currentFile);
+        return this.currentMarkdownFile || 'Markdown';
+    }
+
+    cacheFileMarkdownState() {
+        this.fileMarkdownState = {
+            exists: this.currentMarkdownExists,
+            file: this.currentMarkdownFile,
+            text: this.currentMarkdownText,
+            baseline: this.currentMarkdownBaselineText,
+            isEditing: this.isMarkdownEditing,
+            hasUnsaved: this.hasUnsavedMarkdownChanges
+        };
+    }
+
+    cacheDraftMarkdownState() {
+        this.draftMarkdownState = {
+            exists: this.currentMarkdownExists,
+            file: this.currentMarkdownFile || this.getDraftFilename(),
+            text: this.currentMarkdownText,
+            baseline: this.currentMarkdownBaselineText,
+            isEditing: this.isMarkdownEditing,
+            hasUnsaved: this.hasUnsavedMarkdownChanges
+        };
+    }
+
+    applyMarkdownState(state, { render = false } = {}) {
+        if (!state) return;
+        this.currentMarkdownExists = !!state.exists;
+        this.currentMarkdownFile = state.file || '';
+        this.currentMarkdownText = state.text || '';
+        this.currentMarkdownBaselineText = state.baseline || '';
+        this.isMarkdownEditing = !!state.isEditing;
+        this.hasUnsavedMarkdownChanges = !!state.hasUnsaved;
+        if (render) {
+            this.renderMarkdownView(this.currentMarkdownText || '');
+        }
+        this.updateMarkdownToolbar();
+        this.updateMarkdownDirtyUI();
+    }
+
     getDataUrl(filename) {
         const projectPath = this.getProjectKey();
         const safe = (filename || '').replace(/^\/+/, '');
@@ -8407,7 +8488,83 @@ class PaperReviewerApp {
         this.updateViewTabs();
     }
 
+    async loadDraftMarkdownFile() {
+        const mdFilename = this.getDraftFilename();
+        const render = document.getElementById('markdownRender');
+        if (render) {
+            render.innerHTML = '<div class="loading"><div class="spinner"></div>Loading draft...</div>';
+        }
+        try {
+            let text = '';
+            try {
+                text = await this.readProjectFile(mdFilename);
+                this.currentMarkdownExists = true;
+            } catch (err) {
+                try {
+                    await this.persistMarkdown(mdFilename, '');
+                    this.currentMarkdownExists = true;
+                    text = '';
+                } catch (errCreate) {
+                    console.warn('自动创建草稿失败:', errCreate);
+                    this.currentMarkdownExists = false;
+                    text = '';
+                }
+            }
+            this.currentMarkdownFile = mdFilename;
+            this.currentMarkdownText = text;
+            this.currentMarkdownBaselineText = text;
+            this.isMarkdownEditing = true;
+            this.hasUnsavedMarkdownChanges = false;
+            const textarea = document.getElementById('markdownTextarea');
+            if (textarea) {
+                textarea.value = text;
+            }
+            this.renderMarkdownView(text);
+        } catch (err) {
+            console.warn('Draft load error:', err);
+            if (render) {
+                render.innerHTML = `<div class="empty-state"><i class="fas fa-exclamation-triangle"></i><h3>Draft load failed</h3><p>${err.message}</p></div>`;
+            }
+        } finally {
+            this.updateMarkdownToolbar();
+            this.updateMarkdownDirtyUI();
+        }
+    }
+
     async loadMarkdownForCurrentFile() {
+        if (this.isDraftViewActive) {
+            if (!this.currentFile) return;
+            const mdFilename = this.getMarkdownFilename(this.currentFile);
+            try {
+                let text = '';
+                let exists = false;
+                try {
+                    text = await this.readProjectFile(mdFilename);
+                    exists = true;
+                } catch (err) {
+                    try {
+                        await this.persistMarkdown(mdFilename, '');
+                        exists = true;
+                        text = '';
+                    } catch (errCreate) {
+                        console.warn('自动创建空 Markdown 失败:', errCreate);
+                        exists = false;
+                        text = '';
+                    }
+                }
+                this.fileMarkdownState = {
+                    exists,
+                    file: mdFilename,
+                    text,
+                    baseline: text,
+                    isEditing: false,
+                    hasUnsaved: false
+                };
+            } catch (err) {
+                console.warn('Markdown load error (draft mode):', err);
+            }
+            return;
+        }
         if (!this.currentFile) {
             this.currentMarkdownExists = false;
             this.currentMarkdownText = '';
@@ -8462,7 +8619,10 @@ class PaperReviewerApp {
         const render = document.getElementById('markdownRender');
         const textarea = document.getElementById('markdownTextarea');
         const sourceText = this.isMarkdownEditing && textarea ? (textarea.value || text) : text;
-        if (textarea) textarea.value = sourceText || this.buildDefaultMarkdown();
+        if (textarea) {
+            const fallback = this.isDraftViewActive ? '' : this.buildDefaultMarkdown();
+            textarea.value = sourceText || fallback;
+        }
         if (!render) return;
         if (!sourceText) {
             render.innerHTML = '<div class="empty-state"><i class="fas fa-file-alt"></i><h3>No Markdown</h3><p>No matching Markdown found, click the button above to create one</p></div>';
@@ -9161,7 +9321,6 @@ class PaperReviewerApp {
             const allDois = new Set();
             for (const file of mdFiles) {
                 try {
-                    const filePath = `${this.currentProject.path}/md/${file}`;
                     const fileResponse = await fetch('/read-file', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
@@ -9636,7 +9795,7 @@ class PaperReviewerApp {
         if (!statusEl) return;
         if (this.hasUnsavedMarkdownChanges && this.currentMarkdownExists) {
             statusEl.style.display = 'inline';
-            const mdFilename = this.currentFile ? this.getMarkdownFilename(this.currentFile) : (this.currentMarkdownFile || 'Markdown');
+            const mdFilename = this.getActiveMarkdownFilename();
             statusEl.innerHTML = ` | ${mdFilename} <i class="fas fa-exclamation-triangle unsaved-icon" title="Markdown 未保存"></i>`;
         } else {
             statusEl.style.display = 'none';
@@ -9664,10 +9823,10 @@ class PaperReviewerApp {
     }
 
     async saveCurrentMarkdownSilently() {
-        if (!this.currentFile || !this.currentMarkdownExists) return;
+        if (!this.currentMarkdownExists) return;
         const textarea = document.getElementById('markdownTextarea');
         const content = (this.isMarkdownEditing && textarea) ? textarea.value : (this.currentMarkdownText || '');
-        const mdFilename = this.getMarkdownFilename(this.currentFile);
+        const mdFilename = this.getActiveMarkdownFilename();
         await this.persistMarkdown(mdFilename, content);
         this.currentMarkdownText = content;
         this.currentMarkdownBaselineText = content;
@@ -9690,6 +9849,10 @@ class PaperReviewerApp {
     }
 
     async createMarkdownFile() {
+        if (this.isDraftViewActive) {
+            await this.loadDraftMarkdownFile();
+            return;
+        }
         if (!this.currentFile) return;
         const mdFilename = this.getMarkdownFilename(this.currentFile);
         const projectPath = this.currentProject ? this.currentProject.path : 'user';
@@ -9712,12 +9875,12 @@ class PaperReviewerApp {
     }
 
     async deleteCurrentMarkdownFile() {
-        if (!this.currentFile || !this.currentMarkdownExists) {
+        if (!this.currentMarkdownExists) {
             this.showNotification('No markdown file to delete', 'info');
             return;
         }
 
-        const mdFilename = this.getMarkdownFilename(this.currentFile);
+        const mdFilename = this.getActiveMarkdownFilename();
         const confirmed = window.confirm(`Delete markdown file "${mdFilename}"?\nThis action cannot be undone.`);
         if (!confirmed) return;
 
@@ -9767,7 +9930,7 @@ class PaperReviewerApp {
         const skipConfirm = !!opts.skipConfirm;
         // 退出编辑时，如有未保存修改，给出提示
         if (!skipConfirm && !editing && this.isMarkdownEditing && this.hasUnsavedMarkdownChanges) {
-            const mdFilename = this.currentFile ? this.getMarkdownFilename(this.currentFile) : (this.currentMarkdownFile || 'Markdown');
+            const mdFilename = this.getActiveMarkdownFilename();
             const shouldSave = confirm(`Markdown "${mdFilename}" 有未保存的修改，是否保存？`);
             if (shouldSave) {
                 this.saveMarkdownFromEditor();
@@ -9778,7 +9941,8 @@ class PaperReviewerApp {
         const textarea = document.getElementById('markdownTextarea');
         if (textarea) {
             if (editing) {
-                textarea.value = this.currentMarkdownText || this.buildDefaultMarkdown();
+                const fallback = this.isDraftViewActive ? '' : this.buildDefaultMarkdown();
+                textarea.value = this.currentMarkdownText || fallback;
                 this.onMarkdownEditorInput();
             } else {
                 // 退出编辑时同步当前文本到内存，便于渲染新内容
@@ -9790,11 +9954,11 @@ class PaperReviewerApp {
     }
 
     async saveMarkdownFromEditor() {
-        if (!this.currentFile || !this.currentMarkdownExists) return;
+        if (!this.currentMarkdownExists) return;
         const textarea = document.getElementById('markdownTextarea');
         if (!textarea) return;
         const content = textarea.value;
-        const mdFilename = this.getMarkdownFilename(this.currentFile);
+        const mdFilename = this.getActiveMarkdownFilename();
         try {
             await this.persistMarkdown(mdFilename, content);
             this.currentMarkdownText = content;
@@ -9881,10 +10045,13 @@ class PaperReviewerApp {
         const isDraftRequested = requestedView === 'draft';
         const viewName = isDraftRequested ? 'markdown' : requestedView;
         const prevView = this.currentView || 'structured';
+        const wasDraft = this.isDraftViewActive;
+        const shouldPromptDraft = wasDraft && !isDraftRequested;
+        const shouldPromptFileMd = !wasDraft && isDraftRequested;
         // 离开 Markdown 视图时：若有未保存修改，提示保存；并退出编辑态，避免 UI/按钮残留
         if (prevView === 'markdown' && viewName !== 'markdown') {
-            if (this.hasUnsavedMarkdownChanges && this.currentFile && this.currentMarkdownExists) {
-                const mdFilename = this.getMarkdownFilename(this.currentFile);
+            if (this.hasUnsavedMarkdownChanges && this.currentMarkdownExists) {
+                const mdFilename = this.getActiveMarkdownFilename(wasDraft);
                 const shouldSave = confirm(`Markdown "${mdFilename}" 有未保存的修改，是否保存？`);
                 try {
                     if (shouldSave) {
@@ -9901,9 +10068,37 @@ class PaperReviewerApp {
                 this.updateMarkdownToolbar();
             }
         }
+        if (prevView === 'markdown' && viewName === 'markdown' && shouldPromptFileMd && this.hasUnsavedMarkdownChanges && this.currentMarkdownExists) {
+            const mdFilename = this.getActiveMarkdownFilename(false);
+            const shouldSave = confirm(`Markdown "${mdFilename}" 有未保存的修改，是否保存？`);
+            try {
+                if (shouldSave) {
+                    await this.saveCurrentMarkdownSilently();
+                } else {
+                    this.discardCurrentMarkdownChanges();
+                }
+            } catch (err) {
+                console.error('切换到草稿时保存 Markdown 失败:', err);
+                this.showNotification(`保存 Markdown 失败: ${err.message}`, 'error');
+            }
+        }
+        if (prevView === 'markdown' && viewName === 'markdown' && shouldPromptDraft && this.hasUnsavedMarkdownChanges && this.currentMarkdownExists) {
+            const mdFilename = this.getActiveMarkdownFilename(true);
+            const shouldSave = confirm(`Markdown "${mdFilename}" 有未保存的修改，是否保存？`);
+            try {
+                if (shouldSave) {
+                    await this.saveCurrentMarkdownSilently();
+                } else {
+                    this.discardCurrentMarkdownChanges();
+                }
+            } catch (err) {
+                console.error('切换到 Markdown 时保存草稿失败:', err);
+                this.showNotification(`保存 Markdown 失败: ${err.message}`, 'error');
+            }
+        }
 
         // 在 Markdown 视图内再次点击 Markdown tab：强制从编辑态切回渲染态并渲染最新内容
-        if (prevView === 'markdown' && viewName === 'markdown' && !isDraftRequested) {
+        if (prevView === 'markdown' && viewName === 'markdown' && !isDraftRequested && !wasDraft) {
             if (this.currentMarkdownExists) {
                 const textarea = document.getElementById('markdownTextarea');
                 const content = (this.isMarkdownEditing && textarea) ? textarea.value : (this.currentMarkdownText || '');
@@ -9920,7 +10115,7 @@ class PaperReviewerApp {
         const view = viewName;
         this.currentView = view;
         try {
-            localStorage.setItem('lastViewMode', view);
+            localStorage.setItem('lastViewMode', isDraftRequested ? 'draft' : view);
         } catch (_e) { }
         const structured = document.getElementById('structuredView');
         const markdown = document.getElementById('markdownView');
@@ -9944,7 +10139,27 @@ class PaperReviewerApp {
         this.updateMarkdownMenuState();
 
         // 切换到 Markdown 视图时，确保渲染区域为最新内容（尤其是从编辑态进入）
-        if (view === 'markdown' && this.currentMarkdownExists) {
+        if (isDraftRequested) {
+            if (!wasDraft) {
+                this.cacheFileMarkdownState();
+            } else {
+                this.cacheDraftMarkdownState();
+            }
+            this.isDraftViewActive = true;
+            await this.loadDraftMarkdownFile();
+        } else if (wasDraft) {
+            this.cacheDraftMarkdownState();
+            this.isDraftViewActive = false;
+            if (this.fileMarkdownState) {
+                this.applyMarkdownState(this.fileMarkdownState, { render: view === 'markdown' });
+            } else if (view === 'markdown') {
+                await this.loadMarkdownForCurrentFile();
+            }
+        } else {
+            this.isDraftViewActive = false;
+        }
+
+        if (view === 'markdown' && this.currentMarkdownExists && !isDraftRequested) {
             const textarea = document.getElementById('markdownTextarea');
             const content = (this.isMarkdownEditing && textarea) ? textarea.value : (this.currentMarkdownText || '');
             if (this.isMarkdownEditing) {
@@ -9956,19 +10171,16 @@ class PaperReviewerApp {
             this.updateMarkdownToolbar();
             this.updateMarkdownDirtyUI();
         }
-        if (isDraftRequested) {
-            if (!this.currentMarkdownExists) {
-                await this.createMarkdownFile();
-            } else if (!this.isMarkdownEditing) {
-                this.toggleMarkdownEdit(true, { skipConfirm: true });
-            }
-        }
         this.updateViewTabs();
         this.applyEditLockState();
     }
 
     applyCurrentView() {
         const view = this.currentView || 'structured';
+        if (view === 'markdown' && this.isDraftViewActive) {
+            this.switchToView('draft');
+            return;
+        }
         this.switchToView(view);
     }
 
@@ -10139,7 +10351,7 @@ class PaperReviewerApp {
         }
         this.isMarkdownEditing = false;
         try {
-            const mdFilename = this.getMarkdownFilename(this.currentFile);
+            const mdFilename = this.getActiveMarkdownFilename();
             await this.persistMarkdown(mdFilename, this.currentMarkdownText);
             this.showNotification('Markdown 引用已更新并保存', 'success');
         } catch (err) {
@@ -12763,7 +12975,7 @@ class PaperReviewerApp {
         tabs.forEach(b => b.classList.remove('active'));
         let target = 'structured';
         if ((this.currentView || 'structured') === 'markdown') {
-            target = this.isMarkdownEditing ? 'draft' : 'markdown';
+            target = this.isDraftViewActive ? 'draft' : 'markdown';
         }
         const active = document.querySelector(`.tab-btn[data-view="${target}"]`);
         if (active) active.classList.add('active');
