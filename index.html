@@ -478,12 +478,10 @@
         <!-- Middle Panel - JSON Editor -->
         <div class="middle-panel">
             <div class="middle-header">
-                <div class="file-meta">
-                    <div class="file-sub">
-                        <i class="fas fa-clock"></i>
-                        <span id="lastUpdateDisplay">Last update: -</span>
-                        <span class="markdown-status" id="markdownStatus"></span>
-                    </div>
+                <div class="view-tabs" id="middleViewTabs" role="tablist" aria-label="Middle panel view tabs">
+                    <button class="tab-btn active" data-view="structured" type="button" title="JSON Table">JSON</button>
+                    <button class="tab-btn" data-view="markdown" type="button" title="Markdown Render">MD</button>
+                    <button class="tab-btn" data-view="draft" type="button" title="Markdown Draft">Draft</button>
                 </div>
                 <div class="header-actions">
                     <div class="header-dropdown" id="jsonMenuDropdown">

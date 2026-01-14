@@ -8404,6 +8404,7 @@ class PaperReviewerApp {
         }
 
         this.updateMarkdownMenuState();
+        this.updateViewTabs();
     }
 
     async loadMarkdownForCurrentFile() {
@@ -9875,8 +9876,10 @@ class PaperReviewerApp {
     }
 
     async setView(nextView, btn = null) {
-        const viewName = String(nextView || '').trim();
-        if (!viewName) return;
+        const requestedView = String(nextView || '').trim();
+        if (!requestedView) return;
+        const isDraftRequested = requestedView === 'draft';
+        const viewName = isDraftRequested ? 'markdown' : requestedView;
         const prevView = this.currentView || 'structured';
         // 离开 Markdown 视图时：若有未保存修改，提示保存；并退出编辑态，避免 UI/按钮残留
         if (prevView === 'markdown' && viewName !== 'markdown') {
@@ -9900,7 +9903,7 @@ class PaperReviewerApp {
         }
 
         // 在 Markdown 视图内再次点击 Markdown tab：强制从编辑态切回渲染态并渲染最新内容
-        if (prevView === 'markdown' && viewName === 'markdown') {
+        if (prevView === 'markdown' && viewName === 'markdown' && !isDraftRequested) {
             if (this.currentMarkdownExists) {
                 const textarea = document.getElementById('markdownTextarea');
                 const content = (this.isMarkdownEditing && textarea) ? textarea.value : (this.currentMarkdownText || '');
@@ -9911,15 +9914,6 @@ class PaperReviewerApp {
                 }
                 this.renderMarkdownView(content);
             }
-        }
-
-        // Update tab buttons
-        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-        if (btn) {
-            btn.classList.add('active');
-        } else {
-            const match = document.querySelector(`.tab-btn[data-view="${viewName}"]`);
-            if (match) match.classList.add('active');
         }
 
         // Switch views
@@ -9962,6 +9956,14 @@ class PaperReviewerApp {
             this.updateMarkdownToolbar();
             this.updateMarkdownDirtyUI();
         }
+        if (isDraftRequested) {
+            if (!this.currentMarkdownExists) {
+                await this.createMarkdownFile();
+            } else if (!this.isMarkdownEditing) {
+                this.toggleMarkdownEdit(true, { skipConfirm: true });
+            }
+        }
+        this.updateViewTabs();
         this.applyEditLockState();
     }
 
@@ -12753,6 +12755,18 @@ class PaperReviewerApp {
     updateHeaderControls() {
         this.updateJsonMenuState();
         this.updateMarkdownMenuState();
+    }
+
+    updateViewTabs() {
+        const tabs = document.querySelectorAll('.tab-btn');
+        if (!tabs.length) return;
+        tabs.forEach(b => b.classList.remove('active'));
+        let target = 'structured';
+        if ((this.currentView || 'structured') === 'markdown') {
+            target = this.isMarkdownEditing ? 'draft' : 'markdown';
+        }
+        const active = document.querySelector(`.tab-btn[data-view="${target}"]`);
+        if (active) active.classList.add('active');
     }
 
     updateSaveButtonState() {
