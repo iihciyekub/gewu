@@ -806,8 +806,40 @@ body.theme-vscode .tab-btn {
     color: var(--wos-text);
 }
 
+body.theme-vscode .view-tabs {
+    background: #1f1f1f;
+    border-color: rgba(255, 255, 255, 0.08);
+}
+
 body.theme-vscode .tab-btn:hover:not(.active) {
     background: #2d2d2d;
+    color: #e6e6e6;
+}
+
+body.theme-vscode .tab-btn.active {
+    background: #2f72ff;
+    color: #ffffff;
+    box-shadow: 0 0 0 1px rgba(47, 114, 255, 0.25);
+}
+
+body.theme-dark .view-tabs {
+    background: #1b1f28;
+    border-color: rgba(108, 125, 155, 0.35);
+}
+
+body.theme-dark .tab-btn {
+    color: #cfd6e6;
+}
+
+body.theme-dark .tab-btn:hover:not(.active) {
+    background: rgba(93, 112, 140, 0.25);
+    color: #f0f4ff;
+}
+
+body.theme-dark .tab-btn.active {
+    background: #4c7eff;
+    color: #ffffff;
+    box-shadow: 0 0 0 1px rgba(76, 126, 255, 0.25);
 }
 
 .editor-container {

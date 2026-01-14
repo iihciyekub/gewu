@@ -4434,6 +4434,10 @@ class PaperReviewerApp {
             if (pdfInMeta) {
                 pdfPath = pdfInMeta[0];
                 targets.push({ path: pdfPath, type: 'pdf' });
+            } else {
+                // Fallback: delete pdf/<base>.pdf even if metadata is missing
+                const fallbackPdf = `pdf/${base}.pdf`;
+                targets.push({ path: fallbackPdf, type: 'pdf' });
             }
 
             const jsonCount = targets.filter(t => t.type === 'json').length;
@@ -4468,7 +4472,8 @@ class PaperReviewerApp {
         try {
             for (const t of targets) {
                 try {
-                    const resp = await fetch('/delete-json', {
+                    const endpoint = t.type === 'pdf' ? '/delete-pdf' : '/delete-json';
+                    const resp = await fetch(endpoint, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
