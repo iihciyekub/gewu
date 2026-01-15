@@ -1594,6 +1594,9 @@ class PaperReviewerApp {
             projectInfoBtn.addEventListener('click', (e) => {
                 e.preventDefault();
                 e.stopPropagation();
+                if (this.settingsMenuVisible) {
+                    this.toggleSettingsMenu(false);
+                }
                 this.toggleProjectInfoPanel();
             });
         }
@@ -1610,6 +1613,9 @@ class PaperReviewerApp {
             shortcutsInfoBtn.addEventListener('click', (e) => {
                 e.preventDefault();
                 e.stopPropagation();
+                if (this.settingsMenuVisible) {
+                    this.toggleSettingsMenu(false);
+                }
                 this.toggleShortcutsPanel();
             });
         }

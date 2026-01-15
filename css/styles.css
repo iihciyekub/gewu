@@ -226,7 +226,7 @@ body {
 
 .btn-switch-project {
     background: transparent;
-    border: none;
+    border: 1px solid transparent;
     color: white;
     cursor: pointer;
     padding: 4px 6px;
@@ -876,7 +876,7 @@ body.theme-dark .tab-btn.active {
     display: inline-flex;
     align-items: center;
     gap: 6px;
-    box-shadow: 0 2px 6px rgba(0,62,116,0.25);
+    box-shadow: 0 2px 6px rgba(0, 62, 116, 0.25);
     opacity: 0;
     pointer-events: none;
     transition: opacity 0.18s ease;
@@ -1119,7 +1119,7 @@ body.theme-vscode .nested-index-cell {
     outline: 1px dashed var(--wos-blue);
 }
 
-.collapsible-section.section-selected > .collapsible-header {
+.collapsible-section.section-selected>.collapsible-header {
     background: var(--gray-100);
     box-shadow: none;
 }
@@ -1452,12 +1452,29 @@ body.theme-vscode .nested-index-cell {
 }
 
 @keyframes copy-shake {
-    0% { transform: translateX(0); }
-    20% { transform: translateX(-2px); }
-    40% { transform: translateX(2px); }
-    60% { transform: translateX(-2px); }
-    80% { transform: translateX(2px); }
-    100% { transform: translateX(0); }
+    0% {
+        transform: translateX(0);
+    }
+
+    20% {
+        transform: translateX(-2px);
+    }
+
+    40% {
+        transform: translateX(2px);
+    }
+
+    60% {
+        transform: translateX(-2px);
+    }
+
+    80% {
+        transform: translateX(2px);
+    }
+
+    100% {
+        transform: translateX(0);
+    }
 }
 
 .copy-guard-shake {
@@ -1530,9 +1547,15 @@ body.theme-vscode .nested-index-cell {
     box-sizing: border-box;
 }
 
+#markdownRender {
+    border: 1px solid var(--wos-border);
+    border-radius: 4px;
+}
+
 .markdown-body {
     font-family: 'Georgia', 'Times New Roman', serif;
     font-size: 13px;
+    padding: 12px;
     line-height: 1.6;
     color: var(--wos-text);
     flex: 1;
@@ -1882,7 +1905,7 @@ body.theme-vscode .qa-bubble {
     top: 6px;
     right: 6px;
     border: none;
-    background: rgba(0,0,0,0.55);
+    background: rgba(0, 0, 0, 0.55);
     color: #fff;
     border-radius: 4px;
     padding: 2px 6px;
@@ -2278,7 +2301,7 @@ body.theme-vscode .qa-bubble {
     border: 1px solid #ddd;
     border-radius: 6px;
     padding: 10px 12px;
-    box-shadow: 0 4px 20px rgba(0,0,0,0.18);
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.18);
     max-width: 90vw;
     color: #222;
     display: none;
@@ -2487,7 +2510,7 @@ body.theme-vscode .qa-bubble {
     border-top: 1px solid var(--gray-300);
 }
 
-.modal-footer > .btn-secondary {
+.modal-footer>.btn-secondary {
     margin-right: auto;
 }
 
@@ -2972,6 +2995,7 @@ ol.json-array {
 .citation-link {
     text-decoration: none;
 }
+
 .citation-link:hover {
     text-decoration: underline;
 }
@@ -3353,8 +3377,8 @@ body.theme-dark .bib-collapse-btn:hover {
     background: var(--wos-bg);
     border: 1px solid var(--wos-border);
     border-radius: 8px;
-    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15), 
-                0 0 0 1px rgba(0, 0, 0, 0.05);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15),
+        0 0 0 1px rgba(0, 0, 0, 0.05);
     z-index: 3200;
     display: none;
     flex-direction: column;
@@ -3862,7 +3886,8 @@ body.theme-vscode .autocomplete-detail {
     font-weight: 500;
     border: 1px solid transparent;
     cursor: pointer;
-    outline: none; /* 移除浏览器默认 outline */
+    outline: none;
+    /* 移除浏览器默认 outline */
 }
 
 .doi-link:hover,
@@ -3876,7 +3901,8 @@ body.theme-vscode .autocomplete-detail {
 .doi-link:focus,
 .wos-query-link:focus,
 .bib-fetch-btn:focus {
-    outline: none; /* 移除焦点时的 outline */
+    outline: none;
+    /* 移除焦点时的 outline */
     border-color: var(--wos-blue-light);
 }
 

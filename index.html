@@ -579,20 +579,23 @@
                                 <i class="fas fa-wrench"></i>
                                 <span>修复所有MD的DOI</span>
                             </button>
+                            <div class="header-dropdown-divider"></div>
+                            <button class="header-dropdown-item" id="projectInfoBtn" type="button" role="menuitem"
+                                title="项目说明">
+                                <i class="fas fa-info-circle"></i>
+                                <span>项目说明</span>
+                            </button>
+                            <button class="header-dropdown-item" id="shortcutsInfoBtn" type="button" role="menuitem"
+                                title="快捷键说明">
+                                <i class="fas fa-keyboard"></i>
+                                <span>快捷键说明</span>
+                            </button>
                         </div>
                     </div>
                     <div class="header-divider"></div>
                     <button id="aideCopyToggleBtn" class="btn header-icon-only" type="button"
                         title="打开工具面板 (Cmd+Shift+G)" aria-label="打开工具面板">
                         <i class="fas fa-code-branch"></i>
-                    </button>
-                    <button id="projectInfoBtn" class="btn header-icon-only" type="button" title="项目说明"
-                        aria-label="项目说明">
-                        <i class="fas fa-info-circle"></i>
-                    </button>
-                    <button id="shortcutsInfoBtn" class="btn header-icon-only" type="button" title="快捷键说明"
-                        aria-label="快捷键说明">
-                        <i class="fas fa-keyboard"></i>
                     </button>
                 </div>
             </div>
@@ -666,7 +669,12 @@
     <!-- Edit Modal -->
     <div class="modal" id="editModal">
         <div class="modal-content">
-            <div class="modal-header" id="modalTitle">Edit Value</div>
+            <div class="modal-header">
+                <span id="modalTitle">Edit Value</span>
+                <button class="close-btn" onclick="window.paperReviewerApp.closeEditModal()">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
             <div class="modal-body">
                 <div class="form-group">
                     <label for="editKeyInput">Field key:</label>
@@ -722,7 +730,12 @@
     <!-- Goto Edit Modal -->
     <div class="modal" id="gotoEditModal">
         <div class="modal-content">
-            <div class="modal-header">Edit Reference Text</div>
+            <div class="modal-header">
+                <span>Edit Reference Text</span>
+                <button class="close-btn" onclick="window.paperReviewerApp.closeGotoEditModal(false)">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
             <div class="modal-body">
                 <textarea id="gotoEditTextarea" placeholder="Edit goto{...} text here"></textarea>
             </div>
@@ -737,7 +750,12 @@
     <!-- Add Item Modal -->
     <div class="modal" id="addItemModal">
         <div class="modal-content">
-            <div class="modal-header">Add New Item</div>
+            <div class="modal-header">
+                <span>Add New Item</span>
+                <button class="close-btn" onclick="window.paperReviewerApp.closeAddItemModal()">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
             <div class="modal-body">
                 <div class="form-group">
                     <label for="itemCategory">Select Category:</label>
@@ -802,6 +820,9 @@
         <div class="modal-content" style="max-width: 960px; width: 90%;">
             <div class="modal-header">
                 <span>Query & Export (DOI keyed)</span>
+                <button class="close-btn" onclick="window.paperReviewerApp.closeQueryExportModal()">
+                    <i class="fas fa-times"></i>
+                </button>
             </div>
             <div class="modal-body">
                 <div class="form-group">
