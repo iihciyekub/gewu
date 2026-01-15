@@ -1203,10 +1203,10 @@ class PaperReviewerApp {
 
         if (this.currentProject) {
             nameEl.textContent = this.currentProject.name;
-            nameEl.title = '点击查看项目信息';
+            nameEl.title = 'Click to view project info';
         } else {
-            nameEl.textContent = '点击创建或切换项目';
-            nameEl.title = '点击创建或切换项目';
+            nameEl.textContent = 'Click to create or switch project';
+            nameEl.title = 'Click to create or switch project';
         }
     }
 
@@ -1761,6 +1761,10 @@ class PaperReviewerApp {
             projectNameBtn.addEventListener('click', (e) => {
                 e.preventDefault();
                 e.stopPropagation();
+                if (this.projectInfoVisible) {
+                    this.toggleProjectInfoPanel(false, { skipClose: true });
+                    return;
+                }
                 this.showProjectDetailsPanel();
             });
         }
@@ -3473,18 +3477,6 @@ class PaperReviewerApp {
                 }
             });
 
-            const deleteBtn = document.createElement('button');
-            deleteBtn.className = 'file-group-delete';
-            deleteBtn.title = group.id === 'init' ? 'Default group, cannot be deleted' : 'Delete group';
-            deleteBtn.innerHTML = '<i class="fas fa-trash"></i>';
-            deleteBtn.disabled = group.id === 'init';
-            if (group.id !== 'init') {
-                deleteBtn.addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    this.deleteGroup(group.id);
-                });
-            }
-
             const sortBtn = document.createElement('button');
             sortBtn.className = 'file-group-sort';
             sortBtn.title = 'Sort by meta_info.No (ascending)';
@@ -3503,7 +3495,6 @@ class PaperReviewerApp {
             header.appendChild(title);
             header.appendChild(count);
             header.appendChild(sortBtn);
-            header.appendChild(deleteBtn);
             groupEl.appendChild(header);
 
             const body = document.createElement('div');
@@ -4111,10 +4102,20 @@ class PaperReviewerApp {
         menu.className = 'context-menu';
         menu.style.left = `${e.pageX}px`;
         menu.style.top = `${e.pageY}px`;
+        const canEdit = group && group.id !== 'init';
         menu.innerHTML = `
             <div class="context-menu-item" data-action="copyGroupDois">
                 <i class="fas fa-copy"></i> Copy All DOIs from Group
             </div>
+            ${canEdit ? '<div class="context-menu-divider"></div>' : ''}
+            ${canEdit ? `
+            <div class="context-menu-item" data-action="renameGroup">
+                <i class="fas fa-i-cursor"></i> Rename Group
+            </div>
+            <div class="context-menu-item" data-action="deleteGroup">
+                <i class="fas fa-trash"></i> Delete Group
+            </div>
+            ` : ''}
         `;
 
         document.body.appendChild(menu);
@@ -4137,6 +4138,10 @@ class PaperReviewerApp {
 
                 if (action === 'copyGroupDois') {
                     await this.copyGroupDois(group);
+                } else if (action === 'renameGroup') {
+                    this.renameGroup(group.id);
+                } else if (action === 'deleteGroup') {
+                    this.deleteGroup(group.id);
                 }
             });
         });

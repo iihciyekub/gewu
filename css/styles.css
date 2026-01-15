@@ -755,7 +755,7 @@ body {
     background: transparent;
     border: none;
     color: inherit;
-    padding: 0px 4px;
+    padding: 0px 5px;
     cursor: pointer;
     line-height: 1;
 }
@@ -765,7 +765,7 @@ body {
 }
 
 .status-btn i {
-    font-size: 9px;
+    font-size: 10.5px;
 }
 
 .status-bar .header-dropdown-menu {
