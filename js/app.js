@@ -4172,6 +4172,9 @@ class PaperReviewerApp {
             <div class="context-menu-item" data-action="copyGroupDois">
                 <i class="fas fa-copy"></i> Copy All DOIs from Group
             </div>
+            <div class="context-menu-item" data-action="downloadGroupBib">
+                <i class="fas fa-book"></i> Export Group DOIs to BibTeX
+            </div>
             ${canEdit ? '<div class="context-menu-divider"></div>' : ''}
             ${canEdit ? `
             <div class="context-menu-item" data-action="renameGroup">
@@ -4203,6 +4206,8 @@ class PaperReviewerApp {
 
                 if (action === 'copyGroupDois') {
                     await this.copyGroupDois(group);
+                } else if (action === 'downloadGroupBib') {
+                    await this.downloadGroupBib(group);
                 } else if (action === 'renameGroup') {
                     this.renameGroup(group.id);
                 } else if (action === 'deleteGroup') {
@@ -4222,52 +4227,68 @@ class PaperReviewerApp {
 
     async copyGroupDois(group) {
         try {
-            const dois = [];
-            const files = group.files || [];
-
-            for (const filename of files) {
-                try {
-                    // Get file path
-                    const base = filename;
-                    const paths = this.getPathsForBase(base);
-                    const jsonPath = paths?.json || base;
-
-                    // Read file data
-                    const data = await this.readProjectFile(jsonPath);
-
-                    if (data) {
-                        // Get DOI from meta_info.doi first
-                        let doi = (data.meta_info && data.meta_info.doi) ||
-                            this.findFirstDoiInData(data);
-
-                        if (doi) {
-                            // Clean DOI format
-                            doi = String(doi).trim();
-                            if (doi) {
-                                dois.push(doi);
-                            }
-                        }
-                    }
-                } catch (err) {
-                    console.warn(`Failed to read file ${filename}:`, err);
-                }
-            }
-
-            if (dois.length === 0) {
+            const uniqueDois = await this.collectGroupDois(group);
+            if (uniqueDois.length === 0) {
                 this.showNotification('No DOI found in this group', 'warning');
                 return;
             }
-
-            // Remove duplicates
-            const uniqueDois = [...new Set(dois)];
             const doisText = uniqueDois.join('\n');
-
             await this.writeTextToClipboard(doisText);
             this.showNotification(`Copied ${uniqueDois.length} DOIs`, 'success');
         } catch (err) {
             console.error('Failed to copy group DOIs:', err);
             this.showNotification(`Copy failed: ${err.message}`, 'error');
         }
+    }
+
+    async downloadGroupBib(group) {
+        try {
+            const files = group?.files || [];
+            if (files.length === 0) {
+                this.showNotification('No files in this group', 'warning');
+                return;
+            }
+            const uniqueDois = await this.collectGroupDois(group);
+            if (uniqueDois.length === 0) {
+                this.showNotification('No DOI found in this group', 'warning');
+                return;
+            }
+            const bibtex = await this.formatBibliography(uniqueDois);
+            const groupName = String(group?.name || 'group').trim();
+            const safeGroup = groupName.replace(/[^a-zA-Z0-9._-]+/g, '_') || 'group';
+            const filename = `${safeGroup}_${Date.now()}.bib`;
+            this.triggerBlobDownload(new Blob([bibtex], { type: 'text/plain' }), filename);
+            this.showNotification(`Downloaded BibTeX (${uniqueDois.length} DOIs)`, 'success');
+        } catch (err) {
+            console.error('Failed to download BibTeX for group:', err);
+            this.showNotification(`Download failed: ${err.message}`, 'error');
+        }
+    }
+
+    async collectGroupDois(group) {
+        const dois = [];
+        const files = group?.files || [];
+        for (const filename of files) {
+            try {
+                const base = filename;
+                const paths = this.getPathsForBase(base);
+                const jsonPath = paths?.json || base;
+                const data = await this.readProjectFile(jsonPath);
+                if (data) {
+                    let doi = (data.meta_info && data.meta_info.doi) ||
+                        this.findFirstDoiInData(data);
+                    if (doi) {
+                        doi = String(doi).trim();
+                        if (doi) {
+                            dois.push(doi);
+                        }
+                    }
+                }
+            } catch (err) {
+                console.warn(`Failed to read file ${filename}:`, err);
+            }
+        }
+        return [...new Set(dois)];
     }
 
     async copySelectedFilesDois() {
