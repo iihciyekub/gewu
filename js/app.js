@@ -4035,6 +4035,9 @@ class PaperReviewerApp {
             <div class="context-menu-item" data-action="copySelectedFilesDois">
             <i class="fas fa-link"></i> Copy DOIs of Selected Files <span class="context-menu-hint">(${selectedCount} files)</span>
             </div>
+            <div class="context-menu-item" data-action="downloadSelectedFilesBib">
+            <i class="fas fa-book"></i> Download BibTeX from DOIs <span class="context-menu-hint">(${selectedCount} files)</span>
+            </div>
             `;
         }
 
@@ -4083,6 +4086,8 @@ class PaperReviewerApp {
                     this.copyPdfFileToClipboard(filename);
                 } else if (action === 'copySelectedFilesDois') {
                     this.copySelectedFilesDois();
+                } else if (action === 'downloadSelectedFilesBib') {
+                    this.downloadSelectedFilesBib();
                 } else if (action === 'moveToGroup') {
                     const gid = item.dataset.groupId;
                     if (gid) this.moveSelectedFilesToGroup(gid);
@@ -4214,41 +4219,11 @@ class PaperReviewerApp {
 
     async copySelectedFilesDois() {
         try {
-            const selectedFiles = this.getSelectedFilesArray();
+            const { dois, selectedFiles } = await this.getSelectedFilesDois();
 
             if (selectedFiles.length === 0) {
                 this.showNotification('No files selected', 'warning');
                 return;
-            }
-
-            const dois = [];
-
-            for (const filename of selectedFiles) {
-                try {
-                    // Get file path
-                    const base = filename;
-                    const paths = this.getPathsForBase(base);
-                    const jsonPath = paths?.json || base;
-
-                    // Read file data
-                    const data = await this.readProjectFile(jsonPath);
-
-                    if (data) {
-                        // Get DOI from meta_info.doi first
-                        let doi = (data.meta_info && data.meta_info.doi) ||
-                            this.findFirstDoiInData(data);
-
-                        if (doi) {
-                            // Clean DOI format
-                            doi = String(doi).trim();
-                            if (doi) {
-                                dois.push(doi);
-                            }
-                        }
-                    }
-                } catch (err) {
-                    console.warn(`Failed to read file ${filename}:`, err);
-                }
             }
 
             if (dois.length === 0) {
@@ -4265,6 +4240,59 @@ class PaperReviewerApp {
         } catch (err) {
             console.error('Failed to copy DOIs from selected files:', err);
             this.showNotification(`Copy failed: ${err.message}`, 'error');
+        }
+    }
+
+    async getSelectedFilesDois() {
+        const selectedFiles = this.getSelectedFilesArray();
+        const dois = [];
+        if (selectedFiles.length === 0) {
+            return { dois, selectedFiles };
+        }
+        for (const filename of selectedFiles) {
+            try {
+                const base = filename;
+                const paths = this.getPathsForBase(base);
+                const jsonPath = paths?.json || base;
+                const data = await this.readProjectFile(jsonPath);
+                if (data) {
+                    let doi = (data.meta_info && data.meta_info.doi) ||
+                        this.findFirstDoiInData(data);
+                    if (doi) {
+                        doi = String(doi).trim();
+                        if (doi) {
+                            dois.push(doi);
+                        }
+                    }
+                }
+            } catch (err) {
+                console.warn(`Failed to read file ${filename}:`, err);
+            }
+        }
+        return { dois, selectedFiles };
+    }
+
+    async downloadSelectedFilesBib() {
+        try {
+            const { dois, selectedFiles } = await this.getSelectedFilesDois();
+            if (selectedFiles.length === 0) {
+                this.showNotification('No files selected', 'warning');
+                return;
+            }
+            if (dois.length === 0) {
+                this.showNotification('No DOI found in selected files', 'warning');
+                return;
+            }
+            const uniqueDois = [...new Set(dois)];
+            const bibtex = await this.formatBibliography(uniqueDois);
+            const filename = uniqueDois.length === 1
+                ? `${this.normalizeDoiString(uniqueDois[0]).replace(/[^a-zA-Z0-9._-]+/g, '_') || 'reference'}.bib`
+                : `references_${Date.now()}.bib`;
+            this.triggerBlobDownload(new Blob([bibtex], { type: 'text/plain' }), filename);
+            this.showNotification(`Downloaded BibTeX (${uniqueDois.length} DOIs)`, 'success');
+        } catch (err) {
+            console.error('Failed to download BibTeX for selected files:', err);
+            this.showNotification(`Download failed: ${err.message}`, 'error');
         }
     }
 
@@ -9553,6 +9581,7 @@ class PaperReviewerApp {
         return mode === 'cite' ? joined : `(${joined})`;
     }
 
+    
     async formatBibliography(dois = []) {
         const clean = (dois || []).map(d => this.normalizeDoiString(d)).filter(Boolean);
         if (!clean.length) return '';
