@@ -41,6 +41,7 @@ class PaperReviewerApp {
         this.keywordTooltipEl = null;
         this.selectedItem = null; // { type: 'row' | 'section', path: string[], key: string }
         this.isMiddleActive = false; // 鼠标是否在中间栏，用于键盘上下移动的激活判定
+        this.isLeftActive = false; // 鼠标是否在左侧栏，用于键盘左右移动文件顺序
         this.fileFilter = '';
         this.fileFilterVisible = false;
         this.debugEnabled = this.loadDebugEnabled();
@@ -1527,6 +1528,11 @@ class PaperReviewerApp {
             middlePanel.addEventListener('mouseenter', () => { this.isMiddleActive = true; });
             middlePanel.addEventListener('mouseleave', () => { this.isMiddleActive = false; });
         }
+        const leftPanel = document.querySelector('.left-panel');
+        if (leftPanel) {
+            leftPanel.addEventListener('mouseenter', () => { this.isLeftActive = true; });
+            leftPanel.addEventListener('mouseleave', () => { this.isLeftActive = false; });
+        }
 
         // Modal controls
         document.getElementById('cancelEdit').addEventListener('click', () => this.closeEditModal());
@@ -1672,6 +1678,17 @@ class PaperReviewerApp {
                     this.isCollapseAll ? 'All collapsed' : 'All expanded'
                 ].join(' | ');
                 this.showNotification(msg, 'info');
+                return;
+            }
+            if (this.isLeftActive && !mod && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) {
+                if (['INPUT', 'TEXTAREA'].includes(e.target.tagName) || e.target.isContentEditable) return;
+                if (this.groupMenuState) return;
+                const selected = this.getSelectedFilesArray();
+                if (!selected.length) return;
+                e.preventDefault();
+                const offset = e.key === 'ArrowLeft' ? -1 : 1;
+                const target = selected[selected.length - 1];
+                this.reorderFileItem(target, offset);
                 return;
             }
             if (this.isReorderMode && this.reorderSelected && middleActive && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
@@ -3414,7 +3431,8 @@ class PaperReviewerApp {
 
         // Handle empty state only when the project truly has no files for this view
         const hasAnyFile = allFilesInView.length > 0;
-        if (flatVisible.length === 0 && !hasAnyFile) {
+        const hasAnyGroup = groupsView.length > 0;
+        if (flatVisible.length === 0 && !hasAnyFile && !hasAnyGroup) {
             this.visibleFileOrder = [];
             this.selectedFiles = new Set();
             const msg = `No files in current view "${this.currentJsonView}"`;
@@ -3439,12 +3457,12 @@ class PaperReviewerApp {
         // Create new file list structure
         const newFileListEl = document.createElement('div');
 
-        let visibleCounter = 0;
         const autoLoadTarget = (!this.currentFile || !flatVisible.includes(this.currentFile)) && nextSelection.length
             ? nextSelection[0]
             : null;
 
         groupsView.forEach((group, gIndex) => {
+            let visibleCounter = 0;
             const groupEl = document.createElement('div');
             groupEl.className = 'file-group';
             groupEl.dataset.groupId = group.id;

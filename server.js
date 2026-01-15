@@ -351,17 +351,27 @@ const server = http.createServer((req, res) => {
                 // 规范化路径
                 const { projectKey, fullPath } = normalizeProjectPath(projectPath);
                 
-                // 检查项目是否已存在
+                let created = false;
+                let dirsInitialized = false;
                 if (fs.existsSync(fullPath)) {
-                    res.writeHead(400, { 'Content-Type': 'application/json' });
-                    res.end(JSON.stringify({ success: false, error: '项目目录已存在' }));
-                    return;
+                    if (!fs.statSync(fullPath).isDirectory()) {
+                        res.writeHead(400, { 'Content-Type': 'application/json' });
+                        res.end(JSON.stringify({ success: false, error: '项目路径不是文件夹' }));
+                        return;
+                    }
+                } else {
+                    fs.mkdirSync(fullPath, { recursive: true });
+                    created = true;
                 }
-                
+
+                const hasJson = fs.existsSync(path.join(fullPath, 'json'));
+                const hasMd = fs.existsSync(path.join(fullPath, 'md'));
+                const hasPdf = fs.existsSync(path.join(fullPath, 'pdf'));
+                if (!hasJson || !hasMd || !hasPdf) dirsInitialized = true;
+
                 // 创建项目根目录和三个必须的子目录
-                fs.mkdirSync(fullPath, { recursive: true });
                 const { jsonDir, mdDir, pdfDir } = ensureProjectStructure(fullPath);
-                
+
                 // 创建一个 .project 标记文件（可选，用于识别项目根目录）
                 ensureProjectMarker(fullPath);
                 
@@ -370,12 +380,16 @@ const server = http.createServer((req, res) => {
                     success: true,
                     projectKey,
                     projectPath: fullPath,
-                    message: `项目 "${path.basename(fullPath)}" 创建成功`,
+                    message: (created || dirsInitialized)
+                        ? `项目 "${path.basename(fullPath)}" 创建成功`
+                        : `项目 "${path.basename(fullPath)}" 已存在`,
                     dirs: {
                         json: path.relative(ROOT_DIR, jsonDir),
                         md: path.relative(ROOT_DIR, mdDir),
                         pdf: path.relative(ROOT_DIR, pdfDir)
-                    }
+                    },
+                    created,
+                    dirsInitialized
                 }));
             } catch (error) {
                 console.error('✗ Error creating project:', error);
