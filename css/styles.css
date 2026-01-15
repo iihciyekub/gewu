@@ -702,6 +702,53 @@ body {
     color: #0f3a73;
 }
 
+/* Bottom Status Bar (VS Code style, compact) */
+.status-bar {
+    position: relative;
+    height: 18px;
+    padding: 0 8px;
+    background: var(--wos-blue);
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 8px;
+    font-family: 'Segoe UI', 'Arial', sans-serif;
+    border-top: 1px solid var(--wos-blue-dark);
+}
+
+.status-left,
+.status-right {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+}
+
+.status-left {
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+}
+
+.status-btn {
+    background: transparent;
+    border: none;
+    color: inherit;
+    padding: 2px 4px;
+    border-radius: 2px;
+    cursor: pointer;
+    line-height: 1;
+}
+
+.status-btn:hover {
+    background: rgba(255, 255, 255, 0.15);
+}
+
+.status-btn i {
+    font-size: 10px;
+}
+
 .middle-header .header-actions .btn,
 .middle-header .header-actions .btn-save {
     width: 30px;

@@ -1239,6 +1239,22 @@ class PaperReviewerApp {
         if (middleSaveBtn) {
             middleSaveBtn.addEventListener('click', () => this.handleSaveShortcut());
         }
+        const statusSaveBtn = document.getElementById('statusSaveBtn');
+        if (statusSaveBtn) {
+            statusSaveBtn.addEventListener('click', () => this.handleSaveShortcut());
+        }
+        const statusToggleSourceBtn = document.getElementById('statusToggleSourceBtn');
+        if (statusToggleSourceBtn) {
+            statusToggleSourceBtn.addEventListener('click', () => this.toggleJsonMdSource());
+        }
+        const statusSettingsBtn = document.getElementById('statusSettingsBtn');
+        if (statusSettingsBtn) {
+            statusSettingsBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                this.toggleSettingsMenu();
+            });
+        }
         // 快捷键：Cmd/Ctrl + E 切换表格/Markdown
         document.addEventListener('keydown', (e) => {
             const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;

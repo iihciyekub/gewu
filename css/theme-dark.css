@@ -806,3 +806,8 @@ body.theme-dark .doi-copy-btn {
 body.theme-dark .doi-copy-btn:hover {
     color: #9fcbff;
 }
+
+body.theme-dark .status-bar {
+    background: #007acc;
+    color: #fff;
+}
