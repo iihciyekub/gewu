@@ -7174,11 +7174,25 @@ class PaperReviewerApp {
         const saveItem = document.getElementById('mdSaveItem');
         if (!dropdown || !renderItem || !sourceItem || !saveItem) return;
 
+        const view = this.currentView || 'structured';
+        const inMarkdownView = view === 'markdown';
+        const isSourceMode = (view === 'flat') || (inMarkdownView && this.isMarkdownEditing);
+        const setMdToggleIcon = (btnId) => {
+            const toggleBtn = document.getElementById(btnId);
+            if (!toggleBtn) return;
+            const icon = toggleBtn.querySelector('i');
+            if (!icon) return;
+            icon.className = isSourceMode
+                ? 'fa-solid fa-pen-to-square'
+                : 'fa-solid fa-person-chalkboard';
+        };
+        setMdToggleIcon('mdMenuToggleBtn');
+        setMdToggleIcon('statusToggleSourceBtn');
+
         const hasFile = this.isDraftViewActive ? true : !!this.currentFile;
         dropdown.style.display = 'inline-flex';
         if (!hasFile && this.mdMenuVisible) this.toggleMdMenu(false);
 
-        const inMarkdownView = (this.currentView || 'structured') === 'markdown';
         renderItem.disabled = !hasFile || (inMarkdownView && !this.isMarkdownEditing);
         sourceItem.disabled = !hasFile || (inMarkdownView && this.isMarkdownEditing) || !this.currentMarkdownExists;
         saveItem.disabled = !hasFile || !inMarkdownView || !this.currentMarkdownExists || !this.hasUnsavedMarkdownChanges;

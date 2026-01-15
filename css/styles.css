@@ -587,6 +587,13 @@ body {
     flex-shrink: 0;
 }
 
+.middle-tabs-left {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+}
+
 .file-meta {
     display: flex;
     flex-direction: column;
@@ -789,8 +796,12 @@ body {
     background: rgba(255, 255, 255, 0.15);
 }
 
+.middle-header .status-btn:hover {
+    background: rgba(0, 0, 0, 0.06);
+}
+
 .status-btn i {
-    font-size: 10.5px;
+    font-size: 11px;
 }
 
 .status-bar .header-dropdown-menu {
