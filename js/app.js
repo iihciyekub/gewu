@@ -831,14 +831,20 @@ class PaperReviewerApp {
         });
     }
 
-    toggleGroupCollapse(groupId) {
+    toggleGroupCollapse(groupId, opts = {}) {
         // Use the complete, unfiltered groups that were saved during last renderFileList
         const groups = this.completeGroupsForCurrentProject
             ? this.cloneFileGroups(this.completeGroupsForCurrentProject)
             : this.getCurrentGroups();
         const target = groups.find(g => g.id === groupId);
         if (!target) return;
-        target.collapsed = !target.collapsed;
+        if (opts.collapseAll) {
+            groups.forEach(g => {
+                g.collapsed = true;
+            });
+        } else {
+            target.collapsed = !target.collapsed;
+        }
         this.persistGroupsAndRender(groups, this.currentFile);
     }
 
@@ -3449,7 +3455,7 @@ class PaperReviewerApp {
             header.className = 'file-group-header';
             header.addEventListener('click', (ev) => {
                 if (ev.target.closest('.file-group-title')) return;
-                this.toggleGroupCollapse(group.id);
+                this.toggleGroupCollapse(group.id, { collapseAll: ev.shiftKey });
             });
             header.addEventListener('contextmenu', (e) => {
                 e.preventDefault();
@@ -3464,7 +3470,7 @@ class PaperReviewerApp {
             toggle.innerHTML = '<i class="fas fa-chevron-down"></i>';
             toggle.addEventListener('click', (e) => {
                 e.stopPropagation();
-                this.toggleGroupCollapse(group.id);
+                this.toggleGroupCollapse(group.id, { collapseAll: e.shiftKey });
             });
             const title = document.createElement('span');
             title.className = 'file-group-title';
