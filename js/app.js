@@ -13584,12 +13584,9 @@ class PaperReviewerApp {
                 await this.writeTextToClipboard(doi);
                 // 显示复制成功的反馈
                 const originalHtml = btn.innerHTML;
-                const originalBg = btn.style.background;
                 btn.innerHTML = '<i class="fas fa-check"></i>';
-                btn.style.background = '#22863a';
                 setTimeout(() => {
                     btn.innerHTML = originalHtml;
-                    btn.style.background = originalBg;
                 }, 1500);
                 this.showNotification(`已复制 DOI: ${doi}`, 'success');
             } catch (err) {
