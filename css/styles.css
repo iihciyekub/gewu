@@ -705,14 +705,14 @@ body {
 /* Bottom Status Bar (VS Code style, compact) */
 .status-bar {
     position: relative;
-    height: 18px;
-    padding: 0 8px;
+    height: 16px;
+    padding: 0 10px;
     background: var(--wos-blue);
     color: #fff;
     display: flex;
     align-items: center;
     justify-content: space-between;
-    font-size: 8px;
+    font-size: 10px;
     font-family: 'Segoe UI', 'Arial', sans-serif;
     border-top: 1px solid var(--wos-blue-dark);
 }
@@ -721,7 +721,7 @@ body {
 .status-right {
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: 4px;
     min-width: 0;
 }
 
@@ -731,11 +731,31 @@ body {
     text-overflow: ellipsis;
 }
 
+.status-project {
+    gap: 4px;
+    max-width: 50vw;
+}
+
+.status-bar .panel-header-left i {
+    font-size: 9px;
+    color: #fff;
+}
+
+.status-bar .project-name-btn {
+    color: #fff;
+    font-size: 10px;
+    font-weight: 500;
+}
+
+.status-bar .project-name-btn:hover {
+    color: #e8f3ff;
+}
+
 .status-btn {
     background: transparent;
     border: none;
     color: inherit;
-    padding: 2px 4px;
+    padding: 1px 3px;
     border-radius: 2px;
     cursor: pointer;
     line-height: 1;
@@ -746,7 +766,12 @@ body {
 }
 
 .status-btn i {
-    font-size: 10px;
+    font-size: 9px;
+}
+
+.status-bar .header-dropdown-menu {
+    top: auto;
+    bottom: calc(100% + 6px);
 }
 
 .middle-header .header-actions .btn,

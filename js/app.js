@@ -1203,10 +1203,10 @@ class PaperReviewerApp {
 
         if (this.currentProject) {
             nameEl.textContent = this.currentProject.name;
-            nameEl.title = 'Click to view project info';
+            nameEl.title = '点击查看项目信息';
         } else {
-            nameEl.textContent = 'No project loaded';
-            nameEl.title = '';
+            nameEl.textContent = '点击创建或切换项目';
+            nameEl.title = '点击创建或切换项目';
         }
     }
 
@@ -1235,10 +1235,6 @@ class PaperReviewerApp {
         document.querySelectorAll('.tab-btn').forEach(btn => {
             btn.addEventListener('click', (e) => this.switchView(e.target.closest('.tab-btn')));
         });
-        const middleSaveBtn = document.getElementById('middleSaveBtn');
-        if (middleSaveBtn) {
-            middleSaveBtn.addEventListener('click', () => this.handleSaveShortcut());
-        }
         const statusSaveBtn = document.getElementById('statusSaveBtn');
         if (statusSaveBtn) {
             statusSaveBtn.addEventListener('click', () => this.handleSaveShortcut());
@@ -1246,14 +1242,6 @@ class PaperReviewerApp {
         const statusToggleSourceBtn = document.getElementById('statusToggleSourceBtn');
         if (statusToggleSourceBtn) {
             statusToggleSourceBtn.addEventListener('click', () => this.toggleJsonMdSource());
-        }
-        const statusSettingsBtn = document.getElementById('statusSettingsBtn');
-        if (statusSettingsBtn) {
-            statusSettingsBtn.addEventListener('click', (e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                this.toggleSettingsMenu();
-            });
         }
         // 快捷键：Cmd/Ctrl + E 切换表格/Markdown
         document.addEventListener('keydown', (e) => {
@@ -1545,7 +1533,14 @@ class PaperReviewerApp {
         });
         const queryExportBtn = document.getElementById('queryExportBtn');
         if (queryExportBtn) {
-            queryExportBtn.addEventListener('click', () => this.openQueryExportModal());
+            queryExportBtn.addEventListener('click', () => {
+                const modal = document.getElementById('queryExportModal');
+                if (modal && modal.classList.contains('active')) {
+                    this.closeQueryExportModal();
+                    return;
+                }
+                this.openQueryExportModal();
+            });
         }
         const queryCancelBtn = document.getElementById('queryCancelBtn');
         if (queryCancelBtn) {

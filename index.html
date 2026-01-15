@@ -438,10 +438,7 @@
         <!-- Left Panel - File List -->
         <div class="left-panel">
             <div class="panel-header">
-                <div class="panel-header-left">
-                    <i class="fas fa-folder-open"></i>
-                    <button class="project-name-btn" id="currentProjectName" title="Click to view project info">No project loaded</button>
-                </div>
+                <div class="panel-header-left"></div>
                 <div class="panel-header-actions">
                     <button class="btn-switch-project" id="fileFilterToggleBtn" title="Search/filter files">
                         <i class="fas fa-search"></i>
@@ -483,10 +480,6 @@
                     <button class="tab-btn" data-view="markdown" type="button" title="Markdown Render">MD</button>
                     <button class="tab-btn active" data-view="draft" type="button" title="Markdown Draft">Draft</button>
                 </div>
-                <button id="middleSaveBtn" class="btn header-icon-only" type="button" title="Save (Cmd/Ctrl+S)"
-                    aria-label="Save">
-                    <i class="fas fa-save"></i>
-                </button>
                 <div class="header-actions">
                     <div class="header-dropdown" id="jsonMenuDropdown">
                         <button id="jsonMenuToggleBtn" class="btn header-icon-only" type="button" title="JSON Menu"
@@ -549,58 +542,6 @@
                             </button>
                         </div>
                     </div>
-                    <button class="btn btn-theme-toggle header-icon-only" id="themeToggleBtn" title="切换夜间/日间模式"
-                        aria-label="切换夜间/日间模式">
-                        <i class="fas fa-moon"></i>
-                    </button>
-                    <button id="editLockToggleBtn" class="btn header-icon-only" type="button" title="编辑未锁定"
-                        aria-label="锁定编辑">
-                        <i class="fas fa-lock-open"></i>
-                    </button>
-                    <button class="btn header-icon-only" id="queryExportBtn" type="button"
-                        title="Query & Export (DOI keyed)" aria-label="Query & Export">
-                        <i class="fas fa-list-check"></i>
-                    </button>
-                    <div class="header-dropdown" id="settingsDropdown">
-                        <button id="settingsToggleBtn" class="btn header-icon-only" type="button" title="设置"
-                            aria-label="设置">
-                            <i class="fas fa-cog"></i>
-                        </button>
-                        <div class="header-dropdown-menu" id="settingsMenu" role="menu" aria-label="设置">
-                            <button class="header-dropdown-item" id="autoLoadOnItem" type="button" role="menuitem"
-                                title="切换文件后自动加载 PDF 预览">
-                                <i class="fas fa-check" data-check="on" style="opacity:0"></i>
-                                <span>开启 PDF 自动加载</span>
-                            </button>
-                            <button class="header-dropdown-item" id="autoLoadOffItem" type="button" role="menuitem"
-                                title="仅在点击右侧时加载 PDF 预览">
-                                <i class="fas fa-check" data-check="off" style="opacity:0"></i>
-                                <span>关闭 PDF 自动加载</span>
-                            </button>
-                            <div class="header-dropdown-divider"></div>
-                            <button class="header-dropdown-item" id="fixAllMdDoisBtn" type="button" role="menuitem"
-                                title="批量修复所有MD文件中的DOI（去除路径部分）">
-                                <i class="fas fa-wrench"></i>
-                                <span>修复所有MD的DOI</span>
-                            </button>
-                            <div class="header-dropdown-divider"></div>
-                            <button class="header-dropdown-item" id="projectInfoBtn" type="button" role="menuitem"
-                                title="项目说明">
-                                <i class="fas fa-info-circle"></i>
-                                <span>项目说明</span>
-                            </button>
-                            <button class="header-dropdown-item" id="shortcutsInfoBtn" type="button" role="menuitem"
-                                title="快捷键说明">
-                                <i class="fas fa-keyboard"></i>
-                                <span>快捷键说明</span>
-                            </button>
-                        </div>
-                    </div>
-                    <div class="header-divider"></div>
-                    <button id="aideCopyToggleBtn" class="btn header-icon-only" type="button"
-                        title="打开工具面板 (Cmd+Shift+G)" aria-label="打开工具面板">
-                        <i class="fas fa-code-branch"></i>
-                    </button>
                 </div>
             </div>
             <div class="editor-container">
@@ -672,7 +613,10 @@
 
     <div class="status-bar" id="statusBar" role="status" aria-live="polite">
         <div class="status-left">
-            <span id="statusHint">Ready</span>
+            <div class="panel-header-left status-project">
+                <i class="fas fa-folder-open"></i>
+                <button class="project-name-btn" id="currentProjectName" title="点击创建或切换项目">点击创建或切换项目</button>
+            </div>
         </div>
         <div class="status-right">
             <button class="status-btn" id="statusSaveBtn" type="button" title="Save (Cmd/Ctrl+S)">
@@ -681,9 +625,57 @@
             <button class="status-btn" id="statusToggleSourceBtn" type="button" title="Toggle Markdown Source (Cmd/Ctrl+/)">
                 <i class="fa-brands fa-markdown"></i>
             </button>
-            <button class="status-btn" id="statusSettingsBtn" type="button" title="Settings">
-                <i class="fas fa-cog"></i>
+            <button class="status-btn" id="aideCopyToggleBtn" type="button"
+                title="打开工具面板 (Cmd+Shift+G)" aria-label="打开工具面板">
+                <i class="fas fa-code-branch"></i>
             </button>
+            <button class="status-btn" id="themeToggleBtn" title="切换夜间/日间模式"
+                aria-label="切换夜间/日间模式">
+                <i class="fas fa-moon"></i>
+            </button>
+            <button class="status-btn" id="queryExportBtn" type="button"
+                title="Query & Export (DOI keyed)" aria-label="Query & Export">
+                <i class="fas fa-list-check"></i>
+            </button>
+            <button id="editLockToggleBtn" class="status-btn" type="button" title="编辑未锁定"
+                aria-label="锁定编辑">
+                <i class="fas fa-lock-open"></i>
+            </button>
+            <div class="header-dropdown" id="settingsDropdown">
+                <button id="settingsToggleBtn" class="status-btn" type="button" title="设置"
+                    aria-label="设置">
+                    <i class="fas fa-cog"></i>
+                </button>
+                <div class="header-dropdown-menu" id="settingsMenu" role="menu" aria-label="设置">
+                    <button class="header-dropdown-item" id="autoLoadOnItem" type="button" role="menuitem"
+                        title="切换文件后自动加载 PDF 预览">
+                        <i class="fas fa-check" data-check="on" style="opacity:0"></i>
+                        <span>开启 PDF 自动加载</span>
+                    </button>
+                    <button class="header-dropdown-item" id="autoLoadOffItem" type="button" role="menuitem"
+                        title="仅在点击右侧时加载 PDF 预览">
+                        <i class="fas fa-check" data-check="off" style="opacity:0"></i>
+                        <span>关闭 PDF 自动加载</span>
+                    </button>
+                    <div class="header-dropdown-divider"></div>
+                    <button class="header-dropdown-item" id="fixAllMdDoisBtn" type="button" role="menuitem"
+                        title="批量修复所有MD文件中的DOI（去除路径部分）">
+                        <i class="fas fa-wrench"></i>
+                        <span>修复所有MD的DOI</span>
+                    </button>
+                    <div class="header-dropdown-divider"></div>
+                    <button class="header-dropdown-item" id="projectInfoBtn" type="button" role="menuitem"
+                        title="项目说明">
+                        <i class="fas fa-info-circle"></i>
+                        <span>项目说明</span>
+                    </button>
+                    <button class="header-dropdown-item" id="shortcutsInfoBtn" type="button" role="menuitem"
+                        title="快捷键说明">
+                        <i class="fas fa-keyboard"></i>
+                        <span>快捷键说明</span>
+                    </button>
+                </div>
+            </div>
         </div>
     </div>
 
