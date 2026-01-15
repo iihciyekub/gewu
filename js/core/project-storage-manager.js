@@ -255,6 +255,13 @@ class ProjectStorageManager {
         }
         
         console.log('Starting migration from localStorage to project storage...');
+        const projectKey = this.app?.getProjectKey ? this.app.getProjectKey() : null;
+        const pickProjectEntry = (raw) => {
+            if (!raw || !projectKey) return null;
+            const parsed = JSON.parse(raw);
+            if (!parsed || typeof parsed !== 'object') return null;
+            return parsed[projectKey] ?? null;
+        };
         
         try {
             // 迁移 citation metadata
@@ -285,9 +292,11 @@ class ProjectStorageManager {
             const qaStates = localStorage.getItem('qaCollapsedStateByProject');
             if (qaStates) {
                 try {
-                    const data = JSON.parse(qaStates);
-                    await this.save('qa-states', data);
-                    console.log('Migrated QA states');
+                    const data = pickProjectEntry(qaStates);
+                    if (data) {
+                        await this.save('qa-states', data);
+                        console.log('Migrated QA states');
+                    }
                 } catch (e) {
                     console.error('Failed to migrate QA states:', e);
                 }
@@ -297,41 +306,14 @@ class ProjectStorageManager {
             const sectionStates = localStorage.getItem('sectionExpandedStateByProject');
             if (sectionStates) {
                 try {
-                    const data = JSON.parse(sectionStates);
-                    await this.save('section-states', data);
-                    console.log('Migrated section states');
+                    const data = pickProjectEntry(sectionStates);
+                    if (data) {
+                        await this.save('section-states', data);
+                        console.log('Migrated section states');
+                    }
                 } catch (e) {
                     console.error('Failed to migrate section states:', e);
                 }
-            }
-            
-            // 迁移 prompt 配置
-            const promptConfig = {
-                selected: null,
-                position: null
-            };
-            
-            const promptSelected = localStorage.getItem('promptSelectedByGroup');
-            if (promptSelected) {
-                try {
-                    promptConfig.selected = JSON.parse(promptSelected);
-                } catch (e) {
-                    console.error('Failed to parse prompt selected:', e);
-                }
-            }
-            
-            const promptPos = localStorage.getItem('promptQuickPanelPos');
-            if (promptPos) {
-                try {
-                    promptConfig.position = JSON.parse(promptPos);
-                } catch (e) {
-                    console.error('Failed to parse prompt position:', e);
-                }
-            }
-            
-            if (promptConfig.selected || promptConfig.position) {
-                await this.save('prompt-config', promptConfig);
-                console.log('Migrated prompt config');
             }
             
             // 迁移 UI 首选项
@@ -347,7 +329,7 @@ class ProjectStorageManager {
             const lastJsonView = localStorage.getItem('lastJsonViewByProject');
             if (lastJsonView) {
                 try {
-                    uiPreferences.lastJsonView = JSON.parse(lastJsonView);
+                    uiPreferences.lastJsonView = pickProjectEntry(lastJsonView);
                 } catch (e) {
                     console.error('Failed to parse last JSON view:', e);
                 }
@@ -356,7 +338,7 @@ class ProjectStorageManager {
             const lastSelectedFile = localStorage.getItem('lastSelectedFileByProject');
             if (lastSelectedFile) {
                 try {
-                    uiPreferences.lastSelectedFile = JSON.parse(lastSelectedFile);
+                    uiPreferences.lastSelectedFile = pickProjectEntry(lastSelectedFile);
                 } catch (e) {
                     console.error('Failed to parse last selected file:', e);
                 }

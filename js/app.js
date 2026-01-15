@@ -457,8 +457,16 @@ class PaperReviewerApp {
     }
 
     persistQaCollapsedState() {
+        const key = this.getProjectKey();
+        const payload = (this.qaCollapsedStateByProject && this.qaCollapsedStateByProject[key])
+            ? this.qaCollapsedStateByProject[key]
+            : {};
+        if (this.projectStorage && this.currentProject) {
+            this.projectStorage.update('qa-states', payload);
+            return;
+        }
         try {
-            localStorage.setItem('qaCollapsedStateByProject', JSON.stringify(this.qaCollapsedStateByProject || {}));
+            localStorage.setItem('qaCollapsedStateByProject', JSON.stringify({ [key]: payload }));
         } catch (_e) {
             // ignore
         }
@@ -547,8 +555,16 @@ class PaperReviewerApp {
     }
 
     persistSectionExpandedState() {
+        const key = this.getProjectKey();
+        const payload = (this.sectionExpandedStateByProject && this.sectionExpandedStateByProject[key])
+            ? this.sectionExpandedStateByProject[key]
+            : {};
+        if (this.projectStorage && this.currentProject) {
+            this.projectStorage.update('section-states', payload);
+            return;
+        }
         try {
-            localStorage.setItem('sectionExpandedStateByProject', JSON.stringify(this.sectionExpandedStateByProject || {}));
+            localStorage.setItem('sectionExpandedStateByProject', JSON.stringify({ [key]: payload }));
         } catch (_e) {
             // ignore
         }
@@ -571,9 +587,10 @@ class PaperReviewerApp {
                 stored = { lastViewMode: fallbackView };
             }
         }
-        if (!stored || typeof stored !== 'object') return;
-        this.uiPreferences = { ...(this.uiPreferences || {}), ...stored };
-        const lastViewMode = stored.lastViewMode;
+        const sanitized = this.sanitizeUiPreferences(stored);
+        if (!sanitized) return;
+        this.uiPreferences = { ...(this.uiPreferences || {}), ...sanitized };
+        const lastViewMode = sanitized.lastViewMode;
         if (lastViewMode) {
             if (lastViewMode === 'draft') {
                 this.currentView = 'markdown';
@@ -583,20 +600,53 @@ class PaperReviewerApp {
                 this.isDraftViewActive = false;
             }
         }
-        if (typeof stored.draftMarkdownEditing === 'boolean') {
-            this.markdownEditMode.draft = stored.draftMarkdownEditing;
+        if (typeof sanitized.draftMarkdownEditing === 'boolean') {
+            this.markdownEditMode.draft = sanitized.draftMarkdownEditing;
         }
-        if (typeof stored.markdownEditing === 'boolean') {
-            this.markdownEditMode.markdown = stored.markdownEditing;
+        if (typeof sanitized.markdownEditing === 'boolean') {
+            this.markdownEditMode.markdown = sanitized.markdownEditing;
         }
-        if (!fromProjectStorage && this.projectStorage && this.currentProject) {
-            this.projectStorage.update('ui-preferences', this.uiPreferences);
+        if (this.projectStorage && this.currentProject && (!fromProjectStorage || JSON.stringify(stored) !== JSON.stringify(sanitized))) {
+            await this.projectStorage.save('ui-preferences', this.uiPreferences);
+        }
+    }
+
+    async loadProjectViewStatesFromStorage() {
+        const key = this.getProjectKey();
+        let qaState = null;
+        let sectionState = null;
+        if (this.projectStorage && this.currentProject) {
+            try {
+                qaState = await this.projectStorage.load('qa-states');
+            } catch (_e) {
+                qaState = null;
+            }
+            try {
+                sectionState = await this.projectStorage.load('section-states');
+            } catch (_e) {
+                sectionState = null;
+            }
+        }
+        const fallbackQa = this.loadQaCollapsedState();
+        const fallbackSection = this.loadSectionExpandedState();
+        const pickEntry = (map) => {
+            if (!map || typeof map !== 'object') return {};
+            return Object.prototype.hasOwnProperty.call(map, key) ? (map[key] || {}) : {};
+        };
+        this.qaCollapsedStateByProject = { [key]: qaState && typeof qaState === 'object' ? qaState : pickEntry(fallbackQa) };
+        this.sectionExpandedStateByProject = { [key]: sectionState && typeof sectionState === 'object' ? sectionState : pickEntry(fallbackSection) };
+        if (this.projectStorage && this.currentProject) {
+            const sanitizedQa = this.qaCollapsedStateByProject[key] || {};
+            const sanitizedSection = this.sectionExpandedStateByProject[key] || {};
+            await this.projectStorage.save('qa-states', sanitizedQa);
+            await this.projectStorage.save('section-states', sanitizedSection);
         }
     }
 
     updateUiPreferences(partial = {}) {
         if (!partial || typeof partial !== 'object') return;
-        this.uiPreferences = { ...(this.uiPreferences || {}), ...partial };
+        const merged = { ...(this.uiPreferences || {}), ...partial };
+        this.uiPreferences = this.sanitizeUiPreferences(merged) || {};
         if (this.projectStorage && this.currentProject) {
             this.projectStorage.update('ui-preferences', this.uiPreferences);
         }
@@ -609,6 +659,35 @@ class PaperReviewerApp {
         } catch (_e) {
             // ignore persistence errors
         }
+    }
+
+    sanitizeUiPreferences(raw) {
+        if (!raw || typeof raw !== 'object') return null;
+        const cleaned = {};
+        const projectKey = this.getProjectKey();
+        if (raw.lastViewMode) cleaned.lastViewMode = raw.lastViewMode;
+        if (raw.theme) cleaned.theme = raw.theme;
+        if (typeof raw.editLocked !== 'undefined') cleaned.editLocked = !!raw.editLocked;
+        if (typeof raw.debug !== 'undefined') cleaned.debug = raw.debug;
+        if (typeof raw.draftMarkdownEditing === 'boolean') cleaned.draftMarkdownEditing = raw.draftMarkdownEditing;
+        if (typeof raw.markdownEditing === 'boolean') cleaned.markdownEditing = raw.markdownEditing;
+        if (typeof raw.lastJsonView !== 'undefined') {
+            if (raw.lastJsonView && typeof raw.lastJsonView === 'object') {
+                const view = raw.lastJsonView[projectKey];
+                if (typeof view === 'string') cleaned.lastJsonView = view;
+            } else if (typeof raw.lastJsonView === 'string') {
+                cleaned.lastJsonView = raw.lastJsonView;
+            }
+        }
+        if (typeof raw.lastSelectedFile !== 'undefined') {
+            if (raw.lastSelectedFile && typeof raw.lastSelectedFile === 'object') {
+                const file = raw.lastSelectedFile[projectKey];
+                if (typeof file === 'string') cleaned.lastSelectedFile = file;
+            } else if (typeof raw.lastSelectedFile === 'string') {
+                cleaned.lastSelectedFile = raw.lastSelectedFile;
+            }
+        }
+        return cleaned;
     }
 
     getMarkdownEditPreference(isDraft) {
@@ -1076,6 +1155,7 @@ class PaperReviewerApp {
         }
 
         await this.loadUiPreferencesFromStorage();
+        await this.loadProjectViewStatesFromStorage();
         this.updateViewTabs();
 
         // 加载文件列表
@@ -10026,8 +10106,12 @@ class PaperReviewerApp {
             this.currentMarkdownBaselineText = content;
             this.currentMarkdownExists = true;
             this.hasUnsavedMarkdownChanges = false;
-            // 先退出编辑态，再渲染，确保用户立刻回到渲染视图
-            this.toggleMarkdownEdit(false, { skipConfirm: true });
+            if (this.isMarkdownEditing) {
+                this.updateMarkdownToolbar();
+                this.updateMarkdownDirtyUI();
+                this.showNotification(`✓ Markdown 已保存: ${mdFilename}`, 'success');
+                return;
+            }
             this.renderMarkdownView(content);
             this.showNotification(`✓ Markdown 已保存: ${mdFilename}`, 'success');
         } catch (err) {
@@ -10172,7 +10256,8 @@ class PaperReviewerApp {
                 const content = (this.isMarkdownEditing && textarea) ? textarea.value : (this.currentMarkdownText || '');
                 this.currentMarkdownText = content;
                 this.hasUnsavedMarkdownChanges = content !== (this.currentMarkdownBaselineText || '');
-                if (this.isMarkdownEditing) {
+                const preferEditing = this.getMarkdownEditPreference(false);
+                if (this.isMarkdownEditing && !preferEditing) {
                     this.toggleMarkdownEdit(false, { skipConfirm: true });
                 }
                 this.renderMarkdownView(content);
@@ -10232,7 +10317,8 @@ class PaperReviewerApp {
         if (view === 'markdown' && this.currentMarkdownExists && !isDraftRequested) {
             const textarea = document.getElementById('markdownTextarea');
             const content = (this.isMarkdownEditing && textarea) ? textarea.value : (this.currentMarkdownText || '');
-            if (this.isMarkdownEditing) {
+            const preferEditing = this.getMarkdownEditPreference(false);
+            if (this.isMarkdownEditing && !preferEditing) {
                 this.currentMarkdownText = content;
                 this.hasUnsavedMarkdownChanges = content !== (this.currentMarkdownBaselineText || '');
                 this.toggleMarkdownEdit(false, { skipConfirm: true });
