@@ -98,6 +98,8 @@ class PaperReviewerApp {
         this._eventListenersBound = false;
         this.sectionExpandedStateByProject = this.loadSectionExpandedState();
         this.lastSelectedFileByProject = this.loadLastSelectedFileByProject();
+        this.uiPreferences = {};
+        this.markdownEditMode = { draft: true, markdown: false };
 
         // 项目管理
         this.currentProject = null; // { name, path }
@@ -552,6 +554,79 @@ class PaperReviewerApp {
         }
     }
 
+    async loadUiPreferencesFromStorage() {
+        let stored = null;
+        let fromProjectStorage = false;
+        if (this.projectStorage && this.currentProject) {
+            try {
+                stored = await this.projectStorage.load('ui-preferences');
+                fromProjectStorage = !!stored;
+            } catch (_e) {
+                stored = null;
+            }
+        }
+        if (!stored) {
+            const fallbackView = localStorage.getItem('lastViewMode');
+            if (fallbackView) {
+                stored = { lastViewMode: fallbackView };
+            }
+        }
+        if (!stored || typeof stored !== 'object') return;
+        this.uiPreferences = { ...(this.uiPreferences || {}), ...stored };
+        const lastViewMode = stored.lastViewMode;
+        if (lastViewMode) {
+            if (lastViewMode === 'draft') {
+                this.currentView = 'markdown';
+                this.isDraftViewActive = true;
+            } else {
+                this.currentView = lastViewMode;
+                this.isDraftViewActive = false;
+            }
+        }
+        if (typeof stored.draftMarkdownEditing === 'boolean') {
+            this.markdownEditMode.draft = stored.draftMarkdownEditing;
+        }
+        if (typeof stored.markdownEditing === 'boolean') {
+            this.markdownEditMode.markdown = stored.markdownEditing;
+        }
+        if (!fromProjectStorage && this.projectStorage && this.currentProject) {
+            this.projectStorage.update('ui-preferences', this.uiPreferences);
+        }
+    }
+
+    updateUiPreferences(partial = {}) {
+        if (!partial || typeof partial !== 'object') return;
+        this.uiPreferences = { ...(this.uiPreferences || {}), ...partial };
+        if (this.projectStorage && this.currentProject) {
+            this.projectStorage.update('ui-preferences', this.uiPreferences);
+        }
+    }
+
+    async saveUiPreferencesNow() {
+        if (!this.projectStorage || !this.currentProject) return;
+        try {
+            await this.projectStorage.save('ui-preferences', this.uiPreferences || {});
+        } catch (_e) {
+            // ignore persistence errors
+        }
+    }
+
+    getMarkdownEditPreference(isDraft) {
+        return isDraft ? !!this.markdownEditMode.draft : !!this.markdownEditMode.markdown;
+    }
+
+    setMarkdownEditPreference(isDraft, editing) {
+        if (isDraft) {
+            this.markdownEditMode.draft = !!editing;
+        } else {
+            this.markdownEditMode.markdown = !!editing;
+        }
+        this.updateUiPreferences({
+            draftMarkdownEditing: !!this.markdownEditMode.draft,
+            markdownEditing: !!this.markdownEditMode.markdown
+        });
+    }
+
     getProjectKey() {
         if (!this.currentProject) return 'user';
         // 直接返回规范化的路径，服务端会正确处理绝对路径和相对路径
@@ -1000,6 +1075,9 @@ class PaperReviewerApp {
             }
         }
 
+        await this.loadUiPreferencesFromStorage();
+        this.updateViewTabs();
+
         // 加载文件列表
         await this.loadFileList();
     }
@@ -1088,19 +1166,7 @@ class PaperReviewerApp {
             }
             if (mod && e.key === '/') {
                 e.preventDefault();
-                if (this.currentView !== 'markdown') {
-                    this.switchToView('markdown');
-                }
-                if (!this.currentMarkdownExists) {
-                    // 文件不存在时创建文件
-                    this.createMarkdownFile();
-                    return;
-                }
-                const newState = !this.isMarkdownEditing;
-                this.toggleMarkdownEdit(newState);
-                if (newState) {
-                    document.getElementById('markdownTextarea')?.focus();
-                }
+                this.toggleJsonMdSource();
             }
         });
         // JSON 菜单：表格视图 / JSON 代码 / JSON 保存
@@ -1445,11 +1511,6 @@ class PaperReviewerApp {
             if (mod && !e.shiftKey && key === 's') {
                 e.preventDefault();
                 this.handleSaveShortcut();
-                return;
-            }
-            if (mod && e.shiftKey && key === 'e') {
-                e.preventDefault();
-                this.toggleJsonMdSource();
                 return;
             }
             if (key === 'escape') {
@@ -6859,16 +6920,22 @@ class PaperReviewerApp {
 
     async toggleJsonMdSource() {
         const view = this.currentView || 'structured';
-        // 根据当前视图进入对应的源码编辑模式
-        if (view === 'flat' || view === 'structured') {
-            // JSON 视图：进入 JSON 源码编辑
+        // JSON 视图：表格/源码之间切换
+        if (view === 'flat') {
+            await this.switchToView('structured');
+            return;
+        }
+        if (view === 'structured') {
             await this.goToJsonSource();
             return;
         }
+        // Markdown 视图：渲染/源码之间切换
         if (view === 'markdown') {
-            // Markdown 视图：进入 Markdown 源码编辑
+            if (this.isMarkdownEditing) {
+                this.toggleMarkdownEdit(false);
+                return;
+            }
             await this.goToMarkdownSource();
-            return;
         }
     }
 
@@ -8506,7 +8573,7 @@ class PaperReviewerApp {
             this.currentMarkdownFile = mdFilename;
             this.currentMarkdownText = text;
             this.currentMarkdownBaselineText = text;
-            this.isMarkdownEditing = true;
+            this.isMarkdownEditing = this.getMarkdownEditPreference(true);
             this.hasUnsavedMarkdownChanges = false;
             const textarea = document.getElementById('markdownTextarea');
             if (textarea) {
@@ -8550,7 +8617,7 @@ class PaperReviewerApp {
                     file: mdFilename,
                     text,
                     baseline: text,
-                    isEditing: false,
+                    isEditing: this.getMarkdownEditPreference(false),
                     hasUnsaved: false
                 };
             } catch (err) {
@@ -8594,7 +8661,7 @@ class PaperReviewerApp {
             this.currentMarkdownFile = mdFilename;
             this.currentMarkdownText = text;
             this.currentMarkdownBaselineText = text;
-            this.isMarkdownEditing = false;
+            this.isMarkdownEditing = this.getMarkdownEditPreference(false);
             this.hasUnsavedMarkdownChanges = false;
             this.renderMarkdownView(text);
         } catch (err) {
@@ -9931,6 +9998,7 @@ class PaperReviewerApp {
             }
         }
         this.isMarkdownEditing = editing;
+        this.setMarkdownEditPreference(this.isDraftViewActive, editing);
         const textarea = document.getElementById('markdownTextarea');
         if (textarea) {
             if (editing) {
@@ -10117,6 +10185,8 @@ class PaperReviewerApp {
         try {
             localStorage.setItem('lastViewMode', isDraftRequested ? 'draft' : view);
         } catch (_e) { }
+        this.updateUiPreferences({ lastViewMode: isDraftRequested ? 'draft' : view });
+        await this.saveUiPreferencesNow();
         const structured = document.getElementById('structuredView');
         const markdown = document.getElementById('markdownView');
         const flat = document.getElementById('flatView');
@@ -10196,14 +10266,20 @@ class PaperReviewerApp {
     }
 
     toggleTableMarkdownView() {
-        const current = this.currentView || 'structured';
-        let targetView = 'structured';
-        if (current === 'structured' || current === 'flat') {
-            targetView = 'markdown';
-        } else {
-            targetView = 'structured';
+        const tabs = Array.from(document.querySelectorAll('#middleViewTabs .tab-btn'));
+        const order = tabs.map(tab => tab.dataset.view).filter(Boolean);
+        const fallbackOrder = ['structured', 'markdown', 'draft'];
+        const sequence = order.length ? order : fallbackOrder;
+        let currentKey = 'structured';
+        if ((this.currentView || 'structured') === 'markdown') {
+            currentKey = this.isDraftViewActive ? 'draft' : 'markdown';
+        } else if (this.currentView === 'structured') {
+            currentKey = 'structured';
         }
-        this.switchToView(targetView);
+        let idx = sequence.indexOf(currentKey);
+        if (idx < 0) idx = 0;
+        const nextView = sequence[(idx + 1) % sequence.length];
+        this.switchToView(nextView);
     }
 
     formatKey(key) {

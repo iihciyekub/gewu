@@ -692,6 +692,51 @@ body.theme-dark .markdown-body table tbody tr:hover td:first-child {
     background: #2f3b4f;
 }
 
+/* Markdown metadata keeps light style */
+body.theme-dark .markdown-metadata {
+    background: #fafafa;
+    border: 1px solid #e0e0e0;
+}
+
+body.theme-dark .markdown-metadata .metadata-header {
+    color: #666;
+}
+
+body.theme-dark .markdown-metadata .metadata-header:hover {
+    background: #f0f0f0;
+}
+
+body.theme-dark .markdown-metadata .metadata-table {
+    background: transparent;
+    color: inherit;
+}
+
+body.theme-dark .markdown-metadata .metadata-table td {
+    background: transparent;
+    border-bottom-color: #f0f0f0;
+}
+
+body.theme-dark .markdown-metadata .metadata-table td:first-child {
+    background: transparent;
+    color: #333;
+}
+
+body.theme-dark .markdown-metadata .metadata-table tbody tr:hover td {
+    background: transparent;
+}
+
+body.theme-dark .markdown-metadata .metadata-table tbody tr:hover td:first-child {
+    background: transparent;
+}
+
+body.theme-dark .markdown-metadata .meta-key {
+    color: #333;
+}
+
+body.theme-dark .markdown-metadata .meta-value {
+    color: #555;
+}
+
 /* 项目详情面板 - 深色主题 */
 body.theme-dark .detail-section h3 {
     color: #dce6f5;

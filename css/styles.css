@@ -1623,7 +1623,6 @@ body.theme-vscode .nested-index-cell {
 
 .markdown-body table td {
     padding: 3px 6px;
-    border: 1px solid #ddd;
     background: #f5f6f8;
 }
 
@@ -4293,7 +4292,7 @@ body.theme-vscode .group-preview-item {
 /* Markdown Metadata Styles - Compact Academic Style */
 .markdown-metadata {
     background: #fafafa;
-    border-top: 1px solid #e0e0e0;
+    border: 1px solid #e0e0e0;
     margin-bottom: 16px;
 }
 
@@ -4361,32 +4360,4 @@ body.theme-vscode .group-preview-item {
     font-size: 12px;
     line-height: 1.5;
     width: 100%;
-}
-
-/* Dark theme support for metadata */
-body.theme-vscode .markdown-metadata {
-    background: #1a1a1a;
-    border-top-color: #333;
-    border-bottom-color: #333;
-}
-
-body.theme-vscode .metadata-header {
-    color: #aaa;
-}
-
-body.theme-vscode .metadata-header:hover {
-    background: #252525;
-}
-
-body.theme-vscode .metadata-table td {
-    background: transparent;
-    border-bottom-color: #2a2a2a;
-}
-
-body.theme-vscode .meta-key {
-    color: #aaa;
-}
-
-body.theme-vscode .meta-value {
-    color: #ccc;
 }
