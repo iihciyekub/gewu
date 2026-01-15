@@ -1208,8 +1208,9 @@ class PaperReviewerApp {
         const nameEl = document.getElementById('currentProjectName');
 
         if (this.currentProject) {
-            nameEl.textContent = this.currentProject.name;
-            nameEl.title = 'Click to view project info';
+            const pathText = this.currentProject.path || this.currentProject.name;
+            nameEl.textContent = pathText;
+            nameEl.title = pathText;
         } else {
             nameEl.textContent = 'Click to create or switch project';
             nameEl.title = 'Click to create or switch project';

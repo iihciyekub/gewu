@@ -773,6 +773,10 @@ body {
     color: #fff;
 }
 
+.status-project {
+    cursor: pointer;
+}
+
 .status-bar .project-name-btn {
     color: #fff;
     font-size: 10px;
