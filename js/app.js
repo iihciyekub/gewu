@@ -3623,17 +3623,34 @@ class PaperReviewerApp {
     }
 
     handleGroupDragOver(e, groupId) {
-        if (!this.draggingFile) return;
+        if (!e) return;
+        const hasPdf = Array.from(e.dataTransfer?.items || []).some(item => {
+            if (item.kind !== 'file') return false;
+            const type = (item.type || '').toLowerCase();
+            const name = (item.getAsFile?.()?.name || '').toLowerCase();
+            return type.includes('pdf') || name.endsWith('.pdf');
+        });
+        if (!this.draggingFile && !hasPdf) return;
         e.preventDefault();
         e.stopPropagation();
-        if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
+        if (e.dataTransfer) e.dataTransfer.dropEffect = hasPdf ? 'copy' : 'move';
         const body = e.currentTarget;
         if (body && body.classList) {
             body.classList.add('file-group-drop');
         }
     }
 
-    handleGroupDrop(e, groupId) {
+    async handleGroupDrop(e, groupId) {
+        if (!e) return;
+        const droppedFiles = Array.from(e.dataTransfer?.files || []);
+        const pdfFiles = droppedFiles.filter(f => this.isPdfFile(f));
+        if (pdfFiles.length) {
+            e.preventDefault();
+            e.stopPropagation();
+            await this.handlePdfDropCreateEntries(pdfFiles, groupId);
+            this.clearAllFileDragHighlights();
+            return;
+        }
         if (!this.draggingFile) return;
         e.preventDefault();
         e.stopPropagation();
@@ -3814,6 +3831,24 @@ class PaperReviewerApp {
         }
         this.lastFileSelectionAnchor = files[files.length - 1] || null;
         this.persistGroupsAndRender(groups, files[files.length - 1]);
+    }
+
+    moveFilesToGroup(files = [], targetGroupId, opts = {}) {
+        const list = Array.isArray(files) ? files.filter(Boolean) : [];
+        if (!list.length) return;
+        const groups = this.syncGroupsWithFiles(this.currentFileList || []);
+        const target = groups.find(g => g.id === targetGroupId) || groups[0];
+        if (!target) return;
+        if (!Array.isArray(target.files)) target.files = [];
+        const set = new Set(list);
+        groups.forEach(g => {
+            g.files = (g.files || []).filter(f => !set.has(f));
+        });
+        list.forEach(f => {
+            if (!target.files.includes(f)) target.files.push(f);
+        });
+        this.lastFileSelectionAnchor = list[list.length - 1] || null;
+        this.persistGroupsAndRender(groups, list[list.length - 1]);
     }
 
     handleFileClick(e, filename, fileItem) {
@@ -4686,7 +4721,7 @@ class PaperReviewerApp {
         const pdfFiles = files.filter(f => this.isPdfFile(f));
         if (!pdfFiles.length) return;
         e.preventDefault();
-        this.handlePdfDropOrPaste(pdfFiles, 'drop');
+        this.showNotification('请将 PDF 拖到左侧分组区域以添加', 'info');
     }
 
     async handlePdfDropOrPaste(files = [], source = 'drop') {
@@ -4754,6 +4789,116 @@ class PaperReviewerApp {
         } catch (error) {
             console.error('PDF processing failed:', error);
             this.showNotification(`✗ PDF processing failed: ${error.message}`, 'error');
+        }
+    }
+
+    async handlePdfDropCreateEntries(files = [], targetGroupId = null) {
+        if (!this.currentProject) {
+            this.showNotification('Please load a project first', 'warning');
+            return;
+        }
+        const pdfFiles = (files || []).filter(f => this.isPdfFile(f));
+        if (!pdfFiles.length) return;
+
+        let nextNo = null;
+        try {
+            const maxNo = await this.getMaxMetaNo();
+            nextNo = (Number.isFinite(maxNo) ? maxNo : 0) + 1;
+        } catch (err) {
+            console.warn('Failed to init auto-numbering for PDF drop:', err);
+        }
+
+        const view = this.currentJsonView || 'view1';
+        const created = [];
+        const moved = [];
+        const skipped = [];
+        const failed = [];
+        const seenBases = new Set();
+
+        for (const pdfFile of pdfFiles) {
+            try {
+                const doi = await this.extractDoiFromPdfFile(pdfFile);
+                if (!doi) {
+                    skipped.push({ file: pdfFile.name, reason: 'No DOI found' });
+                    continue;
+                }
+                const base = this.doiToFilenameBase(doi);
+                if (!base) {
+                    skipped.push({ file: pdfFile.name, reason: 'Invalid DOI' });
+                    continue;
+                }
+                const already = this.fileMetaByBase?.[base]?.views?.[view];
+                if (seenBases.has(base) || already) {
+                    if (already) moved.push(base);
+                    else skipped.push({ file: pdfFile.name, reason: 'Already exists' });
+                    continue;
+                }
+                seenBases.add(base);
+
+                const pdfTargetName = `${base}.pdf`;
+                const pdfPathKey = `pdf/${pdfTargetName}`;
+                if (this.fileMetaByPath?.[pdfPathKey]) {
+                    skipped.push({ file: pdfFile.name, reason: 'PDF already exists' });
+                    continue;
+                }
+
+                const dataUrl = await this.readFileAsDataUrl(pdfFile);
+                const base64 = (String(dataUrl).split(',')[1] || '').trim();
+                if (!base64) throw new Error('Unable to read PDF content');
+
+                const resp = await fetch('/upload-pdf', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        projectPath: this.currentProject.path,
+                        filename: pdfTargetName,
+                        content: base64
+                    })
+                });
+                const result = await resp.json();
+                if (!resp.ok || !result.success) {
+                    throw new Error(result.error || 'Upload failed');
+                }
+
+                const jsonFilename = `json/${view}/${base}.json`;
+                const payload = this.buildDoiJsonTemplate(doi);
+                payload.meta_info.pdf_path = pdfTargetName;
+                if (Number.isFinite(nextNo)) {
+                    payload.meta_info.No = nextNo;
+                    nextNo += 1;
+                }
+                await this.saveJsonPayload(jsonFilename, payload);
+                await this.ensureMarkdownExistsForFile(jsonFilename);
+                created.push(base);
+            } catch (err) {
+                console.error('PDF drop create failed:', pdfFile?.name, err);
+                failed.push({ file: pdfFile?.name || 'PDF', reason: err.message || 'Unknown error' });
+            }
+        }
+
+        if (created.length) {
+            await this.loadFileList(true);
+        }
+        const moveTargets = targetGroupId ? [...new Set([...created, ...moved])] : [];
+        if (moveTargets.length) {
+            this.moveFilesToGroup(moveTargets, targetGroupId);
+        }
+        if (created.length) {
+            const targetBase = created[0];
+            setTimeout(() => {
+                const item = document.querySelector(`.file-item[data-filename="${targetBase}"]`);
+                if (item) this.loadFile(targetBase, item);
+            }, 120);
+        }
+
+        const parts = [];
+        if (created.length) parts.push(`created ${created.length}`);
+        if (moved.length) parts.push(`moved ${moved.length}`);
+        if (skipped.length) parts.push(`skipped ${skipped.length}`);
+        if (failed.length) parts.push(`failed ${failed.length}`);
+        const type = failed.length ? 'error' : (created.length ? 'success' : 'info');
+        if (parts.length) {
+            this.showNotification(`PDF import: ${parts.join(', ')}`, type);
         }
     }
 
@@ -5856,6 +6001,26 @@ class PaperReviewerApp {
         return name.endsWith('.pdf') || type.includes('pdf');
     }
 
+    async loadPdfJsLib() {
+        if (this._pdfjsLib) return this._pdfjsLib;
+        const mod = await import('/js/pdfjs/build/pdf.mjs');
+        const pdfjsLib = mod?.default || mod;
+        if (pdfjsLib?.GlobalWorkerOptions) {
+            pdfjsLib.GlobalWorkerOptions.workerSrc = '/js/pdfjs/build/pdf.worker.mjs';
+        }
+        this._pdfjsLib = pdfjsLib;
+        return pdfjsLib;
+    }
+
+    readFileAsArrayBuffer(file) {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(reader.result);
+            reader.onerror = (err) => reject(err);
+            reader.readAsArrayBuffer(file);
+        });
+    }
+
     readFileAsDataUrl(file) {
         return new Promise((resolve, reject) => {
             const reader = new FileReader();
@@ -5863,6 +6028,27 @@ class PaperReviewerApp {
             reader.onerror = (err) => reject(err);
             reader.readAsDataURL(file);
         });
+    }
+
+    async extractPdfTextFirstPages(file, maxPages = 2) {
+        const pdfjsLib = await this.loadPdfJsLib();
+        const data = file?.arrayBuffer ? await file.arrayBuffer() : await this.readFileAsArrayBuffer(file);
+        const loadingTask = pdfjsLib.getDocument({ data });
+        const pdf = await loadingTask.promise;
+        const pages = Math.min(maxPages, pdf.numPages);
+        let text = '';
+        for (let i = 1; i <= pages; i++) {
+            const page = await pdf.getPage(i);
+            const content = await page.getTextContent();
+            text += content.items.map(it => it.str).join(' ') + '\n';
+        }
+        return text;
+    }
+
+    async extractDoiFromPdfFile(file) {
+        const text = await this.extractPdfTextFirstPages(file, 2);
+        const dois = this.extractDoisFromText(text);
+        return dois[0] || null;
     }
 
     getApaTooltipEl() {
