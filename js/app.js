@@ -1797,52 +1797,6 @@ class PaperReviewerApp {
             fileListEl.addEventListener('mouseenter', () => {
                 fileListEl.focus({ preventScroll: true });
             });
-            fileListEl.addEventListener('keydown', (e) => {
-                if (this.groupMenuState) return;
-                const mod = e.metaKey || e.ctrlKey;
-                const key = e.key;
-                if (mod && (key === 'Delete' || key === 'Backspace')) {
-                    e.preventDefault();
-                    const targets = this.getSelectedFilesArray();
-                    const fname = targets.length ? targets[targets.length - 1] : (this.currentFile || this.visibleFileOrder?.[0]);
-                    if (!fname) return;
-                    const item = fileListEl.querySelector(`.file-item[data-filename="${fname}"]`);
-                    this.deleteFile(fname, item);
-                    return;
-                }
-                if (!['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(key)) return;
-                if ((e.metaKey || e.ctrlKey) && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) {
-                    e.preventDefault();
-                    this.openGroupMoveMenu();
-                    return;
-                }
-                const order = this.visibleFileOrder || [];
-                if (!order.length) return;
-                const selected = this.getSelectedFilesArray();
-                const anchor = selected.length ? selected[selected.length - 1] : (this.currentFile || order[0]);
-                let idx = order.indexOf(anchor);
-                if (idx < 0) idx = 0;
-
-                if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
-                    e.preventDefault();
-                    idx += e.key === 'ArrowDown' ? 1 : -1;
-                    if (idx < 0) idx = 0;
-                    if (idx >= order.length) idx = order.length - 1;
-                    const fname = order[idx];
-                    const target = fname ? fileListEl.querySelector(`.file-item[data-filename="${fname}"]`) : null;
-                    if (fname && target) {
-                        this.setSelectedFiles([fname], fname);
-                        target.scrollIntoView({ block: 'nearest' });
-                        this.loadFile(fname, target);
-                    }
-                } else if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
-                    e.preventDefault();
-                    const filename = anchor;
-                    if (!filename) return;
-                    const offset = e.key === 'ArrowLeft' ? -1 : 1;
-                    this.reorderFileItem(filename, offset);
-                }
-            });
         }
 
         // 文件过滤

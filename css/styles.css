@@ -755,8 +755,7 @@ body {
     background: transparent;
     border: none;
     color: inherit;
-    padding: 1px 3px;
-    border-radius: 2px;
+    padding: 0px 4px;
     cursor: pointer;
     line-height: 1;
 }
