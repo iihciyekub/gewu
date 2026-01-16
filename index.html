@@ -451,12 +451,21 @@
                     <button class="btn-switch-project" id="openDoiModalBtn" title="Batch create files by DOI">
                         <i class="fas fa-link"></i>
                     </button>
-                    <button class="btn-sync-pdf btn-import-json" id="importJsonBtn" title="Import and merge JSON from directory (same name files only)">
-                        <i class="fas fa-file-import"></i>
-                    </button>
-                    <button class="btn-switch-project" id="importWosBtn" title="导入wos data">
-                        <i class="fas fa-qrcode"></i>
-                    </button>
+                    <div class="header-dropdown" id="importMenuDropdown">
+                        <button class="btn-switch-project" id="importMenuToggleBtn" title="Import">
+                            <i class="fas fa-file-import"></i>
+                        </button>
+                        <div class="header-dropdown-menu" id="importMenu" role="menu" aria-label="Import Menu">
+                            <button class="header-dropdown-item" id="importJsonMenuItem" type="button" role="menuitem"
+                                title="Import and merge JSON from directory (same name files only)">
+                                <i class="fas fa-file-import"></i><span>Import JSON</span>
+                            </button>
+                            <button class="header-dropdown-item" id="importWosMenuItem" type="button" role="menuitem"
+                                title="Import WOS data from .txt file">
+                                <i class="fas fa-qrcode"></i><span>Import WOS Data</span>
+                            </button>
+                        </div>
+                    </div>
                 </div>
             </div>
             <input type="file" id="importJsonFolderInput" webkitdirectory directory multiple style="display: none;">

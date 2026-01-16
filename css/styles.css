@@ -3748,6 +3748,12 @@ body.theme-vscode .prompt-chip.active {
     z-index: 4000;
 }
 
+#importMenu {
+    min-width: 0;
+    width: max-content;
+    max-width: 60vw;
+}
+
 .header-dropdown-menu.visible {
     display: flex;
 }

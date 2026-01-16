@@ -100,6 +100,7 @@ class PaperReviewerApp {
         this.lastSelectedFileByProject = this.loadLastSelectedFileByProject();
         this.uiPreferences = {};
         this.markdownEditMode = { draft: true, markdown: false };
+        this.importMenuVisible = false;
 
         // 项目管理
         this.currentProject = null; // { name, path }
@@ -1305,13 +1306,13 @@ class PaperReviewerApp {
         if (statusToggleSourceBtn) {
             statusToggleSourceBtn.addEventListener('click', () => this.toggleJsonMdSource());
         }
-        // 快捷键：Cmd/Ctrl + E 切换表格/Markdown
+        // 快捷键：Cmd/Ctrl + E 正向切换，Cmd/Ctrl + Shift + E 反向切换
         document.addEventListener('keydown', (e) => {
             const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
             const mod = isMac ? e.metaKey : e.ctrlKey;
             if (mod && e.key.toLowerCase() === 'e') {
                 e.preventDefault();
-                this.toggleTableMarkdownView();
+                this.toggleTableMarkdownView(e.shiftKey);
                 return;
             }
             if (mod && e.key === '/') {
@@ -1857,23 +1858,48 @@ class PaperReviewerApp {
                 this.toggleShortcutsPanel();
             });
         }
-        const importJsonBtn = document.getElementById('importJsonBtn');
         const importJsonFolderInput = document.getElementById('importJsonFolderInput');
-        if (importJsonBtn && importJsonFolderInput) {
-            importJsonBtn.addEventListener('click', (e) => {
-                e.preventDefault();
-                this.startImportJsonFlow(importJsonFolderInput);
-            });
+        const importWosInput = document.getElementById('importWosInput');
+        const importMenuToggleBtn = document.getElementById('importMenuToggleBtn');
+        const importMenu = document.getElementById('importMenu');
+        const importMenuDropdown = document.getElementById('importMenuDropdown');
+        const importJsonMenuItem = document.getElementById('importJsonMenuItem');
+        const importWosMenuItem = document.getElementById('importWosMenuItem');
+        if (importJsonFolderInput) {
             importJsonFolderInput.addEventListener('change', (e) => this.handleJsonFolderImport(e));
         }
-        const importWosBtn = document.getElementById('importWosBtn');
-        const importWosInput = document.getElementById('importWosInput');
-        if (importWosBtn && importWosInput) {
-            importWosBtn.addEventListener('click', (e) => {
+        if (importWosInput) {
+            importWosInput.addEventListener('change', (e) => this.handleWosTxtImport(e));
+        }
+        if (importMenuToggleBtn && importMenu) {
+            importMenuToggleBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                this.toggleImportMenu();
+                this.constrainDropdownMenu(importMenu, importMenuDropdown);
+            });
+            importMenu.addEventListener('click', (e) => {
+                e.stopPropagation();
+            });
+            document.addEventListener('click', (e) => {
+                if (!this.importMenuVisible) return;
+                if (importMenuDropdown && importMenuDropdown.contains(e.target)) return;
+                this.toggleImportMenu(false);
+            });
+        }
+        if (importJsonMenuItem && importJsonFolderInput) {
+            importJsonMenuItem.addEventListener('click', (e) => {
+                e.preventDefault();
+                this.startImportJsonFlow(importJsonFolderInput);
+                this.toggleImportMenu(false);
+            });
+        }
+        if (importWosMenuItem && importWosInput) {
+            importWosMenuItem.addEventListener('click', (e) => {
                 e.preventDefault();
                 importWosInput.click();
+                this.toggleImportMenu(false);
             });
-            importWosInput.addEventListener('change', (e) => this.handleWosTxtImport(e));
         }
         const promptCloseBtn = document.getElementById('promptPanelClose');
         if (promptCloseBtn) {
@@ -2893,10 +2919,8 @@ class PaperReviewerApp {
             schema_version: '1.0',
             meta_info: {
                 doi: clean,
-                pdf_path: '',
                 No: null
-            },
-            review: {}
+            }
         };
     }
 
@@ -4250,8 +4274,8 @@ class PaperReviewerApp {
             </div>
         `;
 
-        // Add copy DOI menu item when multiple files are selected
-        if (selectedCount > 1) {
+        // Add copy DOI menu item when at least one file is selected
+        if (selectedCount > 0) {
             menuHtml += `
             <div class="context-menu-divider"></div>
             <div class="context-menu-item" data-action="copySelectedFilesDois">
@@ -5075,7 +5099,10 @@ class PaperReviewerApp {
         const pdfFiles = files.filter(f => this.isPdfFile(f));
         if (!pdfFiles.length) return;
         e.preventDefault();
-        this.showNotification('Please drag PDF files to the left group area to add', 'info');
+        e.stopPropagation();
+        this.handlePdfDropOrPaste(pdfFiles, 'drop').catch(err => {
+            console.error('PDF drop failed:', err);
+        });
     }
 
     async handlePdfDropOrPaste(files = [], source = 'drop') {
@@ -5614,7 +5641,7 @@ class PaperReviewerApp {
 
                     if (!payload || !existed) {
                         payload = this.buildWosJsonPayload(entry.records[0], entry.doi, entry.wosid);
-                        this.mergeWodData(payload, entry.records.slice(1));
+                        this.mergeWosData(payload, entry.records.slice(1));
                         await this.saveJsonPayload(jsonFilename, payload);
                         if (entry.doi) {
                             await this.ensureMarkdownExistsForFile(jsonFilename);
@@ -5627,10 +5654,7 @@ class PaperReviewerApp {
                         if (entry.doi && !payload.meta_info.doi) {
                             payload.meta_info.doi = this.normalizeDoi(entry.doi);
                         }
-                        if (entry.wosid && !payload.meta_info.wosid) {
-                            payload.meta_info.wosid = entry.wosid;
-                        }
-                        this.mergeWodData(payload, entry.records);
+                        this.mergeWosData(payload, entry.records);
                         await this.saveJsonPayload(jsonFilename, payload);
                         updated += 1;
                     }
@@ -5647,7 +5671,7 @@ class PaperReviewerApp {
             }
 
             if (wosidBases.length) {
-                const groupId = this.ensureGroupByName('wodsid');
+                const groupId = this.ensureGroupByName('wosid');
                 this.moveFilesToGroup(wosidBases, groupId);
             }
 
@@ -5666,14 +5690,14 @@ class PaperReviewerApp {
         }
     }
 
-    mergeWodData(payload, records) {
+    mergeWosData(payload, records) {
         if (!payload || !records || !records.length) return;
         const ensureObject = (val) => {
             if (!val) return {};
             if (Array.isArray(val)) return val[0] && typeof val[0] === 'object' ? { ...val[0] } : {};
             return typeof val === 'object' ? { ...val } : {};
         };
-        let merged = ensureObject(payload.wod_data);
+        let merged = ensureObject(payload.wos_data);
         records.forEach((rec) => {
             const next = this.normalizeWosRecord(rec);
             Object.entries(next).forEach(([tag, value]) => {
@@ -5681,7 +5705,7 @@ class PaperReviewerApp {
                 merged[tag] = value;
             });
         });
-        payload.wod_data = merged;
+        payload.wos_data = merged;
     }
 
     parseWosTxt(text = '') {
@@ -5765,15 +5789,12 @@ class PaperReviewerApp {
         const cleanDoi = doi ? this.normalizeDoi(doi) : '';
         const meta = {
             doi: cleanDoi,
-            pdf_path: '',
             No: null
         };
-        if (wosid) meta.wosid = wosid;
         return {
             schema_version: '1.0',
             meta_info: meta,
-            review: {},
-            wod_data: this.normalizeWosRecord(record)
+            wos_data: this.normalizeWosRecord(record)
         };
     }
 
@@ -5784,7 +5805,9 @@ class PaperReviewerApp {
             if (!list.length) return;
             const meta = this.wosFieldTagsByTag?.[tag] || {};
             const key = meta.normalized_key || tag;
-            let value = list.length === 1 ? list[0] : list;
+            const mergedText = list.join(' ').replace(/\s+/g, ' ').trim();
+            let value = this.splitWosFieldValue(tag, mergedText);
+            if (value === null) value = mergedText;
             if (tag === 'PT' && this.wosFieldPtValueMap) {
                 const mapped = Array.isArray(value)
                     ? value.map(v => this.wosFieldPtValueMap[v] || v)
@@ -5794,6 +5817,30 @@ class PaperReviewerApp {
             out[key] = value;
         });
         return out;
+    }
+
+    splitWosFieldValue(tag, text) {
+        if (!text) return null;
+        const t = String(tag || '').toUpperCase();
+        if (t === 'C1') {
+            const out = [];
+            const re = /\[([^\]]+)\]\s*([^[]+)/g;
+            let match;
+            while ((match = re.exec(text)) !== null) {
+                const author = match[1]?.trim();
+                const address = match[2]?.trim();
+                if (author || address) {
+                    out.push({ author: author || '', address: address || '' });
+                }
+            }
+            if (out.length) return out;
+        }
+        const splitBySemicolon = new Set(['AU', 'AF', 'EM', 'RI', 'OI', 'DE', 'ID', 'SC', 'WC', 'WE', 'CR']);
+        if (splitBySemicolon.has(t)) {
+            const parts = text.split(/\s*;\s*/).map(v => v.trim()).filter(Boolean);
+            return parts.length ? parts : null;
+        }
+        return null;
     }
 
     coalesceRecordValue(record = {}, tag) {
@@ -6265,6 +6312,14 @@ class PaperReviewerApp {
                 return `<span class="keyword-links">${links}</span>`;
             }
         }
+        // 特殊处理: ISSN/eISSN 字段，跳转 Web of Science
+        if ((keyLower === 'issn' || keyLower === 'eissn') && typeof value === 'string' && value.trim()) {
+            const issnVal = value.trim();
+            const wosUrl = this.generateWosIssnUrl(issnVal);
+            return `<a href="${wosUrl}" target="_blank" class="doi-link" title="View ISSN on Web of Science">
+                <i class="fas fa-external-link-alt"></i> ${this.escapeHtml(displayValue)}
+            </a>`;
+        }
         // 特殊处理: DOI 字段，添加 Web of Science 链接和复制按钮
         if (keyLower === 'doi' && typeof value === 'string' && value.trim()) {
             const wosUrl = this.generateWosUrl(value.trim());
@@ -6321,32 +6376,6 @@ class PaperReviewerApp {
                 const links = keywordsArr.map(kw => {
                     const url = this.generateWosKeywordUrl(kw);
                     const tip = this.escapeHtml(kw);
-                    return `<a href="${url}" target="_blank" class="doi-link keyword-tip" data-tip="${tip}">
-                        <i class="fas fa-external-link-alt"></i>
-                    </a>`;
-                }).join('<span class="keyword-sep"> </span>');
-                return `<span class="keyword-links">${links}</span>`;
-            }
-        }
-        // 特殊处理: authors 字段，解析为数组并为每个作者生成 WoS 链接（AU=）
-        if (keyLower === 'authors' && value) {
-            let authorsArr = [];
-            if (Array.isArray(value)) {
-                authorsArr = value.filter(v => typeof v === 'string' && v.trim()).map(v => v.trim());
-            } else if (typeof value === 'string') {
-                try {
-                    const parsed = JSON.parse(value);
-                    if (Array.isArray(parsed)) {
-                        authorsArr = parsed.filter(v => typeof v === 'string' && v.trim()).map(v => v.trim());
-                    }
-                } catch (_err) {
-                    authorsArr = value.split(/[,;|]+/).map(v => v.trim()).filter(Boolean);
-                }
-            }
-            if (authorsArr.length) {
-                const links = authorsArr.map(author => {
-                    const url = this.generateWosAuthorUrl(author);
-                    const tip = this.escapeHtml(author);
                     return `<a href="${url}" target="_blank" class="doi-link keyword-tip" data-tip="${tip}">
                         <i class="fas fa-external-link-alt"></i>
                     </a>`;
@@ -6421,6 +6450,15 @@ class PaperReviewerApp {
         if (!journal) return '';
         const query = [{
             rowText: `SO=${journal}`
+        }];
+        const jsonStr = encodeURIComponent(JSON.stringify(query));
+        return `https://www.webofscience.com/wos/woscc/general-summary?queryJson=${jsonStr}`;
+    }
+
+    generateWosIssnUrl(issn) {
+        if (!issn) return '';
+        const query = [{
+            rowText: `IS=${issn}`
         }];
         const jsonStr = encodeURIComponent(JSON.stringify(query));
         return `https://www.webofscience.com/wos/woscc/general-summary?queryJson=${jsonStr}`;
@@ -7830,6 +7868,42 @@ class PaperReviewerApp {
         menu.classList.toggle('visible', next);
     }
 
+    toggleImportMenu(forceVisible) {
+        const menu = document.getElementById('importMenu');
+        if (!menu) return;
+        const next = typeof forceVisible === 'boolean' ? forceVisible : !this.importMenuVisible;
+        if (next) this.closeHeaderMenus('import');
+        this.importMenuVisible = next;
+        menu.classList.toggle('visible', next);
+    }
+
+    constrainDropdownMenu(menuEl, dropdownEl) {
+        if (!menuEl || !dropdownEl) return;
+        const margin = 8;
+        const anchor = dropdownEl.getBoundingClientRect();
+        menuEl.style.position = 'fixed';
+        menuEl.style.right = '';
+        menuEl.style.left = '';
+        menuEl.style.top = `${anchor.bottom + 6}px`;
+        const rect = menuEl.getBoundingClientRect();
+        let left = anchor.right - rect.width;
+        if (left + rect.width > window.innerWidth - margin) {
+            left = window.innerWidth - rect.width - margin;
+        }
+        if (left < margin) {
+            left = margin;
+        }
+        menuEl.style.left = `${left}px`;
+        const bottom = rect.top + rect.height;
+        if (bottom > window.innerHeight - margin) {
+            menuEl.style.maxHeight = `${Math.max(120, window.innerHeight - rect.top - margin)}px`;
+            menuEl.style.overflowY = 'auto';
+        } else {
+            menuEl.style.maxHeight = '';
+            menuEl.style.overflowY = '';
+        }
+    }
+
     toggleEditLock(forceLocked) {
         const next = typeof forceLocked === 'boolean' ? forceLocked : !this.isEditLocked;
         this.isEditLocked = next;
@@ -7918,6 +7992,7 @@ class PaperReviewerApp {
         if (keep !== 'json' && this.jsonMenuVisible) this.toggleJsonMenu(false);
         if (keep !== 'md' && this.mdMenuVisible) this.toggleMdMenu(false);
         if (keep !== 'settings' && this.settingsMenuVisible) this.toggleSettingsMenu(false);
+        if (keep !== 'import' && this.importMenuVisible) this.toggleImportMenu(false);
         if (keep !== 'prompt' && this.promptPanelVisible) this.togglePromptPanel(false, { skipClose: true });
         if (keep !== 'info' && this.projectInfoVisible) this.toggleProjectInfoPanel(false, { skipClose: true });
         if (keep !== 'shortcuts' && this.shortcutsVisible) this.toggleShortcutsPanel(false, { skipClose: true });
@@ -11143,7 +11218,7 @@ class PaperReviewerApp {
         await this.switchToView(view);
     }
 
-    toggleTableMarkdownView() {
+    toggleTableMarkdownView(reverse = false) {
         const tabs = Array.from(document.querySelectorAll('#middleViewTabs .tab-btn'));
         const order = tabs.map(tab => tab.dataset.view).filter(Boolean);
         const fallbackOrder = ['structured', 'markdown', 'draft'];
@@ -11156,7 +11231,8 @@ class PaperReviewerApp {
         }
         let idx = sequence.indexOf(currentKey);
         if (idx < 0) idx = 0;
-        const nextView = sequence[(idx + 1) % sequence.length];
+        const step = reverse ? -1 : 1;
+        const nextView = sequence[(idx + step + sequence.length) % sequence.length];
         this.switchToView(nextView);
     }
 
