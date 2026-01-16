@@ -517,11 +517,11 @@
                             </button>
                         </div>
                     </div>
-                    <select id="jsonViewSelect" class="json-view-select" title="选择 JSON 视图"></select>
+                    <select id="jsonViewSelect" class="json-view-select" title="Select JSON view"></select>
                     <div class="header-dropdown" id="mdMenuDropdown">
                         <button id="mdMenuToggleBtn" class="btn header-icon-only" type="button" title="Markdown Menu"
                             aria-label="Markdown Menu">
-                            <i class="fa-brands fa-markdown"></i>
+                            <i class="fa-brands fa-markdown fa-2xs"></i>
                         </button>
                         <div class="header-dropdown-menu" id="mdMenu" role="menu" aria-label="Markdown Menu">
                             <button class="header-dropdown-item" id="mdRenderItem" type="button" role="menuitem"
@@ -567,7 +567,7 @@
                     </div>
                     <div class="structured-footer">
                         <button id="addSectionBtn" class="btn-add-section" style="display: none;">
-                            <i class="fas fa-plus"></i> 添加类字段
+                            <i class="fas fa-plus"></i> Add Field
                         </button>
                     </div>
                 </div>
@@ -576,7 +576,7 @@
                         <div class="empty-state">
                             <i class="fas fa-file-alt"></i>
                             <h3>No File Selected</h3>
-                            <p>选择左侧 JSON 文件以查看对应的 Markdown 笔记</p>
+                            <p>Select a JSON file from the left panel to view the corresponding Markdown notes</p>
                         </div>
                     </div>
                     <div class="markdown-editor" id="markdownEditor" style="display:none;">
@@ -587,7 +587,7 @@
                     <div class="empty-state">
                         <i class="fas fa-code"></i>
                         <h3>No File Selected</h3>
-                        <p>选择左侧 JSON 查看原始 JSON</p>
+                        <p>Select a JSON file from the left panel to view raw JSON</p>
                     </div>
                 </div>
             </div>
@@ -595,30 +595,30 @@
 
         <!-- Resizer -->
         <div class="resizer" id="middleResizer">
-            <span class="resizer-toggle" title="点击隐藏/显示右侧面板"><i class="fas fa-angle-double-right"></i></span>
+            <span class="resizer-toggle" title="Click to hide/show right panel"><i class="fas fa-angle-double-right"></i></span>
         </div>
 
         <!-- Right Panel - PDF Viewer -->
         <div class="right-panel">
-            <button class="btn-pdf-popup" id="btnPdfPopup" title="切换 PDF 视图" aria-pressed="false">
-                <i class="fas fa-up-right-from-square"></i>
+            <button class="btn-pdf-popup" id="btnPdfPopup" title="Toggle PDF view" aria-pressed="false">
+            <i class="fas fa-up-right-from-square"></i>
             </button>
             <iframe id="pdfViewer" style="width: 100%; height: 100%; border: none;"></iframe>
             <div id="pdfPlaceholder" class="pdf-placeholder" aria-live="polite">
-                <div class="pdf-placeholder-inner">
-                    <button class="pdf-placeholder-btn" type="button" title="Load PDF">
-                        <i class="fas fa-file-pdf"></i>
-                    </button>
-                    <div class="pdf-placeholder-text"></div>
-                </div>
+            <div class="pdf-placeholder-inner">
+                <button class="pdf-placeholder-btn" type="button" title="Load PDF">
+                <i class="fas fa-file-pdf"></i>
+                </button>
+                <div class="pdf-placeholder-text"></div>
             </div>
-            <!-- PDF.js 全屏快捷按钮 -->
-            <button class="btn-pdfjs-fullscreen" id="btnPdfJsFullscreen" title="进入 PDF 全屏模式">
-                <i class="fas fa-expand"></i>
+            </div>
+            <!-- PDF.js fullscreen shortcut button -->
+            <button class="btn-pdfjs-fullscreen" id="btnPdfJsFullscreen" title="Enter PDF fullscreen mode">
+            <i class="fas fa-expand"></i>
             </button>
-            <!-- PDF.js 保存快捷按钮 -->
-            <button class="btn-pdfjs-download" id="btnPdfJsDownload" title="下载当前 PDF">
-                <i class="fas fa-download"></i>
+            <!-- PDF.js download shortcut button -->
+            <button class="btn-pdfjs-download" id="btnPdfJsDownload" title="Download current PDF">
+            <i class="fas fa-download"></i>
             </button>
         </div>
     </div>
@@ -650,31 +650,31 @@
                 </button>
                 <div class="header-dropdown-menu" id="settingsMenu" role="menu" aria-label="Settings">
                     <button class="header-dropdown-item" id="autoLoadOnItem" type="button" role="menuitem"
-                        title="切换文件后自动加载 PDF 预览">
+                        title="Automatically load PDF preview after switching files">
                         <i class="fas fa-check" data-check="on" style="opacity:0"></i>
-                        <span>开启 PDF 自动加载</span>
+                        <span>Enable PDF Auto-load</span>
                     </button>
                     <button class="header-dropdown-item" id="autoLoadOffItem" type="button" role="menuitem"
-                        title="仅在点击右侧时加载 PDF 预览">
+                        title="Load PDF preview only when clicking the right panel">
                         <i class="fas fa-check" data-check="off" style="opacity:0"></i>
-                        <span>关闭 PDF 自动加载</span>
+                        <span>Disable PDF Auto-load</span>
                     </button>
                     <div class="header-dropdown-divider"></div>
                     <button class="header-dropdown-item" id="fixAllMdDoisBtn" type="button" role="menuitem"
-                        title="批量修复所有MD文件中的DOI（去除路径部分）">
+                        title="Batch fix DOIs in all MD files (remove path components)">
                         <i class="fas fa-wrench"></i>
-                        <span>修复所有MD的DOI</span>
+                        <span>Fix All MD DOIs</span>
                     </button>
                     <div class="header-dropdown-divider"></div>
                     <button class="header-dropdown-item" id="projectInfoBtn" type="button" role="menuitem"
-                        title="项目说明">
+                        title="Project Information">
                         <i class="fas fa-info-circle"></i>
-                        <span>项目说明</span>
+                        <span>Project Info</span>
                     </button>
                     <button class="header-dropdown-item" id="shortcutsInfoBtn" type="button" role="menuitem"
-                        title="快捷键说明">
+                        title="Keyboard Shortcuts">
                         <i class="fas fa-keyboard"></i>
-                        <span>快捷键说明</span>
+                        <span>Shortcuts</span>
                     </button>
                 </div>
             </div>

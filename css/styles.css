@@ -818,6 +818,10 @@ body {
     font-size: 11px;
 }
 
+.middle-tabs-left .status-btn i {
+    font-size: 13px;
+}
+
 .status-bar .header-dropdown-menu {
     top: auto;
     bottom: calc(100% + 6px);
@@ -825,7 +829,7 @@ body {
 
 .middle-header .header-actions .btn,
 .middle-header .header-actions .btn-save {
-    width: 30px;
+    width: 28px;
     height: 28px;
     padding: 0;
     border-radius: 999px;
@@ -837,7 +841,7 @@ body {
 
 .middle-header .header-actions .btn i,
 .middle-header .header-actions .btn-save i {
-    font-size: 12px;
+    font-size: 13px;
 }
 
 .middle-header .header-actions .btn-save {

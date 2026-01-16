@@ -7550,7 +7550,6 @@ class PaperReviewerApp {
                 ? 'fa-solid fa-pen-to-square'
                 : 'fa-solid fa-person-chalkboard';
         };
-        setMdToggleIcon('mdMenuToggleBtn');
         setMdToggleIcon('statusToggleSourceBtn');
 
         const hasFile = this.isDraftViewActive ? true : !!this.currentFile;
