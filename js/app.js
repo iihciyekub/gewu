@@ -1114,6 +1114,7 @@ class PaperReviewerApp {
 
         // 加载环境信息（用于占位符和默认路径），不阻塞主流程
         this.loadEnvInfo();
+        this.loadStatusVersion();
 
         // 先加载项目配置
         this.loadProjectConfig();
@@ -1136,6 +1137,27 @@ class PaperReviewerApp {
         this.setupResizers();
         this.setupDraggableModal();
         this.loadPromptShortcuts();
+    }
+
+    async loadStatusVersion() {
+        const labelEl = document.getElementById('statusVersion');
+        if (!labelEl) return;
+        try {
+            const resp = await fetch('manifest.json', { cache: 'no-store' });
+            if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+            const data = await resp.json();
+            const version = String(data?.version || '').trim();
+            if (!version) return;
+            const label = `Enlightenkey ${version}`;
+            labelEl.textContent = label;
+            const iconLink = document.querySelector('.status-version-icon');
+            if (iconLink) {
+                iconLink.title = `Docker Hub: ${label}`;
+                iconLink.setAttribute('aria-label', `Docker Hub: ${label}`);
+            }
+        } catch (err) {
+            console.warn('Failed to load manifest version:', err);
+        }
     }
 
     async initializeProject() {
@@ -2070,6 +2092,7 @@ class PaperReviewerApp {
                 rightPanel.style.flexGrow = '0';
                 middlePanel.style.flex = '1';
                 middlePanel.style.minWidth = '0';
+                this.fitPdfViewerToWidth();
             }
         };
 
@@ -11043,6 +11066,18 @@ class PaperReviewerApp {
         delete pdfViewer.dataset.pdfSig;
     }
 
+    fitPdfViewerToWidth() {
+        const pdfViewer = document.getElementById('pdfViewer');
+        const win = pdfViewer?.contentWindow;
+        const pdfApp = win?.PDFViewerApplication;
+        if (!pdfViewer || !win || !pdfApp?.pdfViewer) return;
+        try {
+            pdfApp.pdfViewer.currentScaleValue = 'page-width';
+        } catch (err) {
+            console.warn('PDF fit to width failed:', err);
+        }
+    }
+
     updatePdfPopupButtonState() {
         const btn = document.getElementById('btnPdfPopup');
         if (!btn) return;
@@ -11352,7 +11387,12 @@ class PaperReviewerApp {
                             styleEl.id = styleId;
                             // 缩放容器到80%，并修正标注编辑层的坐标系统
                             styleEl.textContent = `
-                                :root { --pr-pdf-scale: 0.8; }
+                                :root {
+                                    --pr-pdf-scale: 0.85;
+                                    --toolbar-height: 30px;
+                                    --toolbar-vertical-padding: 2px;
+                                    --toolbar-horizontal-padding: 1px;
+                                }
                                 #outerContainer {
                                     transform: scale(var(--pr-pdf-scale));
                                     transform-origin: top left;
