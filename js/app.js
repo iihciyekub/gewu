@@ -1912,10 +1912,10 @@ class PaperReviewerApp {
         }
         if (fixAllMdDoisBtn) {
             fixAllMdDoisBtn.addEventListener('click', async () => {
-            this.toggleSettingsMenu(false);
-            if (confirm('Are you sure you want to batch fix DOIs in all MD files?\n\nThis will correct the DOI field in the frontmatter of all MD files to only include the filename (removing the path portion).')) {
-                await this.fixAllMarkdownDois();
-            }
+                this.toggleSettingsMenu(false);
+                if (confirm('Are you sure you want to batch fix DOIs in all MD files?\n\nThis will correct the DOI field in the frontmatter of all MD files to only include the filename (removing the path portion).')) {
+                    await this.fixAllMarkdownDois();
+                }
             });
         }
 
@@ -2295,7 +2295,7 @@ class PaperReviewerApp {
             localStorage.setItem('panelWidths', JSON.stringify(widths));
         } catch (error) {
             console.error('Failed to save panel widths:', error);
-            
+
         }
     }
 
@@ -2324,7 +2324,7 @@ class PaperReviewerApp {
                     rightPanel.classList.add('panel-collapsed');
                 }
                 this.debugLog('Panel widths have been restored:', widths);
-                
+
                 return widths;
             }
         } catch (error) {
@@ -2405,8 +2405,6 @@ class PaperReviewerApp {
             this.importModeCallback = null;
         }
     }
-
-    // 同步 PDF 功能已移除
 
     async startImportJsonFlow(importJsonFolderInput) {
         if (!this.currentProject) {
@@ -4755,7 +4753,7 @@ class PaperReviewerApp {
 
         } catch (error) {
             console.error('Error renaming file:', error);
-            this.showNotification('✗ Rename failed', 'error');
+            this.showNotification('Rename failed', 'error');
         }
     }
 
@@ -4808,7 +4806,7 @@ class PaperReviewerApp {
         }
 
         if (!targets.length) {
-            this.showNotification('✗ No files found to delete', 'error');
+            this.showNotification('No files found to delete', 'error');
             return;
         }
 
@@ -4870,7 +4868,7 @@ class PaperReviewerApp {
 
         } catch (error) {
             console.error('Error deleting file:', error);
-            this.showNotification('✗ Delete failed', 'error');
+            this.showNotification('Delete failed', 'error');
         }
     }
 
@@ -4893,7 +4891,7 @@ class PaperReviewerApp {
         const pdfFiles = files.filter(f => this.isPdfFile(f));
         if (!pdfFiles.length) return;
         e.preventDefault();
-        this.showNotification('请将 PDF 拖到左侧分组区域以添加', 'info');
+        this.showNotification('Please drag PDF files to the left group area to add', 'info');
     }
 
     async handlePdfDropOrPaste(files = [], source = 'drop') {
@@ -4949,7 +4947,7 @@ class PaperReviewerApp {
                 this.updateSaveButtonState();
             }
 
-            this.showNotification(`✓ PDF saved as ${targetName}`, 'success');
+            this.showNotification(`PDF saved as ${targetName}`, 'success');
 
             // Refresh current PDF preview
             this.currentPdfUrl = this.getPdfUrl(targetName);
@@ -4960,7 +4958,7 @@ class PaperReviewerApp {
             await this.ensurePdfLoaded();
         } catch (error) {
             console.error('PDF processing failed:', error);
-            this.showNotification(`✗ PDF processing failed: ${error.message}`, 'error');
+            this.showNotification(`PDF processing failed: ${error.message}`, 'error');
         }
     }
 
@@ -5339,9 +5337,9 @@ class PaperReviewerApp {
                 })
             });
 
-            if (!response.ok) throw new Error('保存失败');
+            if (!response.ok) throw new Error('Save failed');
 
-            this.showNotification(`✓ 已创建文件 ${filename}`, 'success');
+            this.showNotification(`File created: ${filename}`, 'success');
 
             // 保存当前文件名，加载列表后恢复选中
             const tempCurrentFile = this.currentFile;
@@ -5361,7 +5359,7 @@ class PaperReviewerApp {
 
         } catch (error) {
             console.error('Error saving new JSON file:', error);
-            this.showNotification(`✗ 保存失败: ${error.message}`, 'error');
+            this.showNotification(`Save failed: ${error.message}`, 'error');
         }
     }
 
@@ -5469,9 +5467,9 @@ class PaperReviewerApp {
             await this.applyCurrentView();
         } catch (error) {
             console.error('Error loading file:', error);
-            const spaceHint = /\s/.test(filename) ? ' (提示: 文件名包含空格，请去掉空格后重试)' : '';
+            const spaceHint = /\s/.test(filename) ? ' (Hint: Filename contains spaces, please remove them and try again)' : '';
             alert(`Failed to load file: ${error.message}${spaceHint}`);
-            this.showNotification(`✗ Failed to load file${spaceHint}`, 'error');
+            this.showNotification(`Failed to load file${spaceHint}`, 'error');
         }
     }
 
@@ -8671,7 +8669,6 @@ class PaperReviewerApp {
 
     undoLastMarkdownPaste() {
         if (!this.lastMarkdownPasteBackup || this.lastMarkdownPasteBackup.file !== this.currentFile) {
-            this.showNotification('没有可撤销的 Markdown 粘贴', 'info');
             return;
         }
         this.currentMarkdownText = this.lastMarkdownPasteBackup.content;
@@ -9380,15 +9377,15 @@ class PaperReviewerApp {
 
         if (collapseBtn && pre) {
             collapseBtn.addEventListener('click', () => {
-            pre.classList.toggle('collapsed');
-            const icon = collapseBtn.querySelector('i');
-            if (pre.classList.contains('collapsed')) {
-                icon.className = 'fas fa-chevron-down';
-                collapseBtn.title = 'Expand';
-            } else {
-                icon.className = 'fas fa-chevron-up';
-                collapseBtn.title = 'Collapse';
-            }
+                pre.classList.toggle('collapsed');
+                const icon = collapseBtn.querySelector('i');
+                if (pre.classList.contains('collapsed')) {
+                    icon.className = 'fas fa-chevron-down';
+                    collapseBtn.title = 'Expand';
+                } else {
+                    icon.className = 'fas fa-chevron-up';
+                    collapseBtn.title = 'Collapse';
+                }
             });
         }
     }
@@ -9727,7 +9724,7 @@ class PaperReviewerApp {
         }
 
         if (showToast) {
-            this.showNotification('已清除引文缓存与本地元数据', 'success');
+            this.showNotification('Citation cache and local metadata cleared', 'success');
         }
     }
 
@@ -9938,7 +9935,7 @@ class PaperReviewerApp {
         return mode === 'cite' ? joined : `(${joined})`;
     }
 
-    
+
     async formatBibliography(dois = []) {
         const clean = (dois || []).map(d => this.normalizeDoiString(d)).filter(Boolean);
         if (!clean.length) return '';
@@ -10022,12 +10019,13 @@ class PaperReviewerApp {
     async generateReferencesFromMarkdown() {
         const source = this.isMarkdownEditing ? (document.getElementById('markdownTextarea')?.value || '') : (this.currentMarkdownText || '');
         if (!source) {
-            this.showNotification('当前无 Markdown 内容', 'info');
+            this.showNotification('No Markdown content available', 'info');
+
             return;
         }
         const dois = this.extractDoisFromMarkdown(source);
         if (!dois.length) {
-            this.showNotification('未在 Markdown 中找到 DOI', 'info');
+            this.showNotification('No DOIs found in Markdown', 'info');
             return;
         }
         try {
@@ -10040,10 +10038,10 @@ class PaperReviewerApp {
             this.renderMarkdownView(updated);
             this.updateMarkdownToolbar();
             this.updateMarkdownDirtyUI();
-            this.showNotification(`已生成参考文献 (${dois.length} 篇)`, 'success');
+            this.showNotification(`References generated (${dois.length} items)`, 'success');
         } catch (err) {
-            console.error('生成参考文献失败:', err);
-            this.showNotification(`生成参考文献失败: ${err.message}`, 'error');
+            console.error('Failed to generate references:', err);
+            this.showNotification(`Failed to generate references: ${err.message}`, 'error');
         }
     }
 
@@ -10378,8 +10376,7 @@ class PaperReviewerApp {
             this.updateMarkdownToolbar();
             this.updateMarkdownDirtyUI();
         } catch (err) {
-            console.error('创建 Markdown 失败:', err);
-            this.showNotification(`创建 Markdown 失败: ${err.message}`, 'error');
+            this.showNotification(`Failed to create Markdown: ${err.message}`, 'error');
         }
     }
 
@@ -10426,7 +10423,7 @@ class PaperReviewerApp {
             this.updateMarkdownDirtyUI();
             this.showNotification(`Deleted: ${mdFilename}`, 'success');
         } catch (err) {
-            console.error('删除 Markdown 失败:', err);
+            console.error('Failed to delete Markdown:', err);
             this.showNotification(`Failed to delete: ${err.message}`, 'error');
         }
     }
@@ -10479,14 +10476,14 @@ class PaperReviewerApp {
             if (this.isMarkdownEditing) {
                 this.updateMarkdownToolbar();
                 this.updateMarkdownDirtyUI();
-                this.showNotification(`✓ Markdown 已保存: ${mdFilename}`, 'success');
+                this.showNotification(`Markdown saved: ${mdFilename}`, 'success');
                 return;
             }
             this.renderMarkdownView(content);
-            this.showNotification(`✓ Markdown 已保存: ${mdFilename}`, 'success');
+            this.showNotification(`Markdown saved: ${mdFilename}`, 'success');
         } catch (err) {
-            console.error('保存 Markdown 失败:', err);
-            this.showNotification(`保存 Markdown 失败: ${err.message}`, 'error');
+            console.error('Failed to save Markdown:', err);
+            this.showNotification(`Failed to save Markdown: ${err.message}`, 'error');
         }
     }
 
@@ -10518,7 +10515,7 @@ class PaperReviewerApp {
                 this.showNotification('Code copied', 'success');
             }).catch((err) => {
                 console.warn('Copy failed:', err);
-                this.showNotification('Copy failed', 'error');
+                this.showNotification('Failed to copy code', 'error');
             });
         });
 
@@ -10568,12 +10565,29 @@ class PaperReviewerApp {
             const viewName = isDraftRequested ? 'markdown' : requestedView;
             const prevView = this.currentView || 'structured';
             const wasDraft = this.isDraftViewActive;
-        const shouldPromptDraft = wasDraft && !isDraftRequested;
-        const shouldPromptFileMd = !wasDraft && isDraftRequested;
-        // 离开 Markdown 视图时：若有未保存修改，提示保存；并退出编辑态，避免 UI/按钮残留
-        if (prevView === 'markdown' && viewName !== 'markdown') {
-            if (this.hasUnsavedMarkdownChanges && this.currentMarkdownExists) {
-                const mdFilename = this.getActiveMarkdownFilename(wasDraft);
+            const shouldPromptDraft = wasDraft && !isDraftRequested;
+            const shouldPromptFileMd = !wasDraft && isDraftRequested;
+            // 离开 Markdown 视图时：若有未保存修改，提示保存；并退出编辑态，避免 UI/按钮残留
+            if (prevView === 'markdown' && viewName !== 'markdown') {
+                if (this.hasUnsavedMarkdownChanges && this.currentMarkdownExists) {
+                    const mdFilename = this.getActiveMarkdownFilename(wasDraft);
+                    const shouldSave = confirm(`Markdown "${mdFilename}" 有未保存的修改，是否保存？`);
+                    try {
+                        if (shouldSave) {
+                            await this.saveCurrentMarkdownSilently();
+                        } else {
+                            this.discardCurrentMarkdownChanges();
+                        }
+                    } catch (err) {
+                        this.showNotification(`Failed to save Markdown: ${err.message}`, 'error');
+                    }
+                } else if (this.isMarkdownEditing) {
+                    this.isMarkdownEditing = false;
+                    this.updateMarkdownToolbar();
+                }
+            }
+            if (prevView === 'markdown' && viewName === 'markdown' && shouldPromptFileMd && this.hasUnsavedMarkdownChanges && this.currentMarkdownExists) {
+                const mdFilename = this.getActiveMarkdownFilename(false);
                 const shouldSave = confirm(`Markdown "${mdFilename}" 有未保存的修改，是否保存？`);
                 try {
                     if (shouldSave) {
@@ -10582,129 +10596,109 @@ class PaperReviewerApp {
                         this.discardCurrentMarkdownChanges();
                     }
                 } catch (err) {
-                    console.error('切换视图时保存 Markdown 失败:', err);
-                    this.showNotification(`保存 Markdown 失败: ${err.message}`, 'error');
+                    this.showNotification(`Failed to save Markdown: ${err.message}`, 'error');
                 }
-            } else if (this.isMarkdownEditing) {
-                this.isMarkdownEditing = false;
-                this.updateMarkdownToolbar();
             }
-        }
-        if (prevView === 'markdown' && viewName === 'markdown' && shouldPromptFileMd && this.hasUnsavedMarkdownChanges && this.currentMarkdownExists) {
-            const mdFilename = this.getActiveMarkdownFilename(false);
-            const shouldSave = confirm(`Markdown "${mdFilename}" 有未保存的修改，是否保存？`);
-            try {
-                if (shouldSave) {
-                    await this.saveCurrentMarkdownSilently();
-                } else {
-                    this.discardCurrentMarkdownChanges();
+            if (prevView === 'markdown' && viewName === 'markdown' && shouldPromptDraft && this.hasUnsavedMarkdownChanges && this.currentMarkdownExists) {
+                const mdFilename = this.getActiveMarkdownFilename(true);
+                const shouldSave = confirm(`Markdown "${mdFilename}" 有未保存的修改，是否保存？`);
+                try {
+                    if (shouldSave) {
+                        await this.saveCurrentMarkdownSilently();
+                    } else {
+                        this.discardCurrentMarkdownChanges();
+                    }
+                } catch (err) {
+                    this.showNotification(`Failed to save Markdown: ${err.message}`, 'error');
                 }
-            } catch (err) {
-                console.error('切换到草稿时保存 Markdown 失败:', err);
-                this.showNotification(`保存 Markdown 失败: ${err.message}`, 'error');
             }
-        }
-        if (prevView === 'markdown' && viewName === 'markdown' && shouldPromptDraft && this.hasUnsavedMarkdownChanges && this.currentMarkdownExists) {
-            const mdFilename = this.getActiveMarkdownFilename(true);
-            const shouldSave = confirm(`Markdown "${mdFilename}" 有未保存的修改，是否保存？`);
-            try {
-                if (shouldSave) {
-                    await this.saveCurrentMarkdownSilently();
-                } else {
-                    this.discardCurrentMarkdownChanges();
-                }
-            } catch (err) {
-                console.error('切换到 Markdown 时保存草稿失败:', err);
-                this.showNotification(`保存 Markdown 失败: ${err.message}`, 'error');
-            }
-        }
 
-        // 在 Markdown 视图内再次点击 Markdown tab：强制从编辑态切回渲染态并渲染最新内容
-        if (prevView === 'markdown' && viewName === 'markdown' && !isDraftRequested && !wasDraft) {
-            if (this.currentMarkdownExists) {
+            // 在 Markdown 视图内再次点击 Markdown tab：强制从编辑态切回渲染态并渲染最新内容
+            if (prevView === 'markdown' && viewName === 'markdown' && !isDraftRequested && !wasDraft) {
+                if (this.currentMarkdownExists) {
+                    const textarea = document.getElementById('markdownTextarea');
+                    const content = (this.isMarkdownEditing && textarea) ? textarea.value : (this.currentMarkdownText || '');
+                    this.currentMarkdownText = content;
+                    this.hasUnsavedMarkdownChanges = content !== (this.currentMarkdownBaselineText || '');
+                    const preferEditing = this.getMarkdownEditPreference(false);
+                    if (this.isMarkdownEditing && !preferEditing) {
+                        this.toggleMarkdownEdit(false, { skipConfirm: true });
+                    }
+                    this.renderMarkdownView(content);
+                }
+            }
+
+            // Switch views
+            const view = viewName;
+            this.currentView = view;
+            try {
+                localStorage.setItem('lastViewMode', isDraftRequested ? 'draft' : view);
+            } catch (_e) { }
+            this.updateUiPreferences({ lastViewMode: isDraftRequested ? 'draft' : view });
+            await this.saveUiPreferencesNow();
+            const structured = document.getElementById('structuredView');
+            const markdown = document.getElementById('markdownView');
+            const flat = document.getElementById('flatView');
+            if (structured) structured.classList.remove('active');
+            if (markdown) markdown.classList.remove('active');
+            if (flat) flat.classList.remove('active');
+
+            if (view === 'structured' && structured) {
+                structured.classList.add('active');
+            } else if (view === 'markdown' && markdown) {
+                markdown.classList.add('active');
+            } else if (view === 'flat' && flat) {
+                flat.classList.add('active');
+            }
+
+            this.updateHeaderControls();
+            this.updateMarkdownToolbar();
+            this.updateMarkdownDirtyUI();
+            this.updateJsonMenuState();
+            this.updateMarkdownMenuState();
+
+            // 切换到 Markdown 视图时，确保渲染区域为最新内容（尤其是从编辑态进入）
+            if (isDraftRequested) {
+                if (!wasDraft) {
+                    this.cacheFileMarkdownState();
+                } else {
+                    this.cacheDraftMarkdownState();
+                }
+                this.isDraftViewActive = true;
+                await this.loadDraftMarkdownFile();
+            } else if (wasDraft) {
+                this.cacheDraftMarkdownState();
+                this.isDraftViewActive = false;
+                const expectedMd = this.currentFile ? this.getMarkdownFilename(this.currentFile) : '';
+                if (this.fileMarkdownState && this.fileMarkdownState.file === expectedMd) {
+                    this.applyMarkdownState(this.fileMarkdownState, { render: view === 'markdown' });
+                } else if (view === 'markdown') {
+                    await this.loadMarkdownForCurrentFile();
+                }
+            } else {
+                this.isDraftViewActive = false;
+            }
+
+            if (!this.isDraftViewActive && view === 'markdown' && this.currentFile) {
+                const expectedMd = this.getMarkdownFilename(this.currentFile);
+                if (this.currentMarkdownFile !== expectedMd) {
+                    await this.loadMarkdownForCurrentFile();
+                }
+            }
+
+            if (view === 'markdown' && this.currentMarkdownExists && !isDraftRequested) {
                 const textarea = document.getElementById('markdownTextarea');
                 const content = (this.isMarkdownEditing && textarea) ? textarea.value : (this.currentMarkdownText || '');
-                this.currentMarkdownText = content;
-                this.hasUnsavedMarkdownChanges = content !== (this.currentMarkdownBaselineText || '');
                 const preferEditing = this.getMarkdownEditPreference(false);
                 if (this.isMarkdownEditing && !preferEditing) {
+                    this.currentMarkdownText = content;
+                    this.hasUnsavedMarkdownChanges = content !== (this.currentMarkdownBaselineText || '');
                     this.toggleMarkdownEdit(false, { skipConfirm: true });
                 }
                 this.renderMarkdownView(content);
+                this.updateMarkdownToolbar();
+                this.updateMarkdownDirtyUI();
             }
-        }
-
-        // Switch views
-        const view = viewName;
-        this.currentView = view;
-        try {
-            localStorage.setItem('lastViewMode', isDraftRequested ? 'draft' : view);
-        } catch (_e) { }
-        this.updateUiPreferences({ lastViewMode: isDraftRequested ? 'draft' : view });
-        await this.saveUiPreferencesNow();
-        const structured = document.getElementById('structuredView');
-        const markdown = document.getElementById('markdownView');
-        const flat = document.getElementById('flatView');
-        if (structured) structured.classList.remove('active');
-        if (markdown) markdown.classList.remove('active');
-        if (flat) flat.classList.remove('active');
-
-        if (view === 'structured' && structured) {
-            structured.classList.add('active');
-        } else if (view === 'markdown' && markdown) {
-            markdown.classList.add('active');
-        } else if (view === 'flat' && flat) {
-            flat.classList.add('active');
-        }
-
-        this.updateHeaderControls();
-        this.updateMarkdownToolbar();
-        this.updateMarkdownDirtyUI();
-        this.updateJsonMenuState();
-        this.updateMarkdownMenuState();
-
-        // 切换到 Markdown 视图时，确保渲染区域为最新内容（尤其是从编辑态进入）
-        if (isDraftRequested) {
-            if (!wasDraft) {
-                this.cacheFileMarkdownState();
-            } else {
-                this.cacheDraftMarkdownState();
-            }
-            this.isDraftViewActive = true;
-            await this.loadDraftMarkdownFile();
-        } else if (wasDraft) {
-            this.cacheDraftMarkdownState();
-            this.isDraftViewActive = false;
-            const expectedMd = this.currentFile ? this.getMarkdownFilename(this.currentFile) : '';
-            if (this.fileMarkdownState && this.fileMarkdownState.file === expectedMd) {
-                this.applyMarkdownState(this.fileMarkdownState, { render: view === 'markdown' });
-            } else if (view === 'markdown') {
-                await this.loadMarkdownForCurrentFile();
-            }
-        } else {
-            this.isDraftViewActive = false;
-        }
-
-        if (!this.isDraftViewActive && view === 'markdown' && this.currentFile) {
-            const expectedMd = this.getMarkdownFilename(this.currentFile);
-            if (this.currentMarkdownFile !== expectedMd) {
-                await this.loadMarkdownForCurrentFile();
-            }
-        }
-
-        if (view === 'markdown' && this.currentMarkdownExists && !isDraftRequested) {
-            const textarea = document.getElementById('markdownTextarea');
-            const content = (this.isMarkdownEditing && textarea) ? textarea.value : (this.currentMarkdownText || '');
-            const preferEditing = this.getMarkdownEditPreference(false);
-            if (this.isMarkdownEditing && !preferEditing) {
-                this.currentMarkdownText = content;
-                this.hasUnsavedMarkdownChanges = content !== (this.currentMarkdownBaselineText || '');
-                this.toggleMarkdownEdit(false, { skipConfirm: true });
-            }
-            this.renderMarkdownView(content);
-            this.updateMarkdownToolbar();
-            this.updateMarkdownDirtyUI();
-        }
             this.updateViewTabs();
             this.applyEditLockState();
         } catch (err) {
@@ -10822,7 +10816,7 @@ class PaperReviewerApp {
         const pathArr = pathStr.split('.').filter(Boolean);
         const oldVal = this.getValueByPath(pathArr);
         if (typeof oldVal !== 'string') {
-            this.showNotification('目标字段不是文本，无法更新引用', 'error');
+            this.showNotification('Target field is not text, cannot update reference', 'error');
             return;
         }
         let count = 0;
@@ -10835,7 +10829,7 @@ class PaperReviewerApp {
             return m;
         });
         if (updated === oldVal) {
-            this.showNotification('未找到可更新的 goto 引用', 'info');
+            this.showNotification('No updatable goto references found', 'info');
             return;
         }
         this.setValueByPath(pathArr, updated);
@@ -10848,7 +10842,7 @@ class PaperReviewerApp {
             this.renderMarkdownView(this.currentMarkdownText);
         }
         this.setupEditableListeners();
-        this.showNotification('引用文本已更新', 'success');
+        this.showNotification('Reference text updated', 'success');
     }
 
     async updateMarkdownGotoText(oldText = '', newText, targetIndex = 0, opts = {}) {
@@ -10856,7 +10850,7 @@ class PaperReviewerApp {
         const reAll = /goto\{([^}]*?)\}/g;
         const matches = [...this.currentMarkdownText.matchAll(reAll)];
         if (!matches.length) {
-            this.showNotification('未在 Markdown 中找到可更新的 goto 引用', 'info');
+            this.showNotification('No updatable goto references found in Markdown', 'info');
             return;
         }
         const escapeReg = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -10891,7 +10885,7 @@ class PaperReviewerApp {
         }
 
         if (!replaced) {
-            this.showNotification('未在 Markdown 中找到可更新的 goto 引用', 'info');
+            this.showNotification('No updatable goto references found in Markdown', 'info');
             return;
         }
 
@@ -10904,9 +10898,9 @@ class PaperReviewerApp {
         try {
             const mdFilename = this.getActiveMarkdownFilename();
             await this.persistMarkdown(mdFilename, this.currentMarkdownText);
-            this.showNotification('Markdown 引用已更新并保存', 'success');
+            this.showNotification('Markdown references updated and saved', 'success');
         } catch (err) {
-            this.showNotification(`Markdown 保存失败: ${err.message}`, 'error');
+            this.showNotification(`Failed to save Markdown: ${err.message}`, 'error');
         }
         this.renderMarkdownView(this.currentMarkdownText);
         this.updateMarkdownToolbar();
@@ -11452,8 +11446,7 @@ class PaperReviewerApp {
                 }
             };
         } catch (error) {
-            console.error('Error loading PDF:', error);
-            this.showNotification(`PDF 加载失败: ${error.message}`, 'error');
+            this.showNotification(`Failed to load PDF: ${error.message}`, 'error');
         }
     }
 
@@ -11514,7 +11507,7 @@ class PaperReviewerApp {
             this.pendingPdfFallback = null;
             this.lastPdfLoadedUrl = '';
             this.updatePdfPlaceholder('empty');
-            this.showNotification('未找到 PDF 文件', 'warning');
+            this.showNotification('PDF file not found', 'warning');
             return;
         }
 
@@ -11625,8 +11618,7 @@ class PaperReviewerApp {
             }
 
             if (!pdfApp) {
-                this.showNotification('PDF 尚未加载完成', 'error');
-                console.error('❌ PDFViewerApplication未找到');
+                this.showNotification('PDF not fully loaded', 'error');
                 return;
             }
 
@@ -11641,23 +11633,22 @@ class PaperReviewerApp {
                 return;
             }
 
-            this.showNotification('正在切换到 PDF 全屏模式', 'success');
+            this.showNotification('Switching to PDF fullscreen mode', 'success');
         } catch (error) {
-            console.error('PDF 全屏切换失败:', error);
-            this.showNotification(`全屏失败: ${error.message}`, 'error');
+            this.showNotification(`Failed to enter fullscreen: ${error.message}`, 'error');
         }
     }
 
     async downloadCurrentPdf() {
         // 防止重复点击保存
         if (this._isSavingPdf) {
-            this.showNotification('⏳ 正在保存中，请稍候...', 'warning');
+            this.showNotification('Saving in progress, please wait...', 'warning');
             return;
         }
 
         try {
             this._isSavingPdf = true;
-            this.showNotification('📝 开始保存PDF...', 'info');
+            this.showNotification('Starting to save PDF...', 'info');
 
             let pdfApp = null;
 
@@ -11687,8 +11678,8 @@ class PaperReviewerApp {
             const pdfUrl = this.currentPdfUrl;
 
             if (!pdfApp) {
-                this.showNotification('❌ PDF 尚未加载完成', 'error');
-                console.error('❌ PDFViewerApplication未找到');
+                this.showNotification('PDF not fully loaded', 'error');
+                console.error('PDFViewerApplication not found');
                 return;
             }
 
@@ -11699,7 +11690,7 @@ class PaperReviewerApp {
             }
 
             // 🔑 关键修复：在保存前确保所有标注已提交
-            this.showNotification('📝 正在准备标注数据...', 'info');
+            this.showNotification('Preparing annotation data...', 'info');
             await this.ensureAnnotationsCommitted(pdfApp);
 
             // 从URL中获取当前PDF的原始文件名（与pdf目录下的文件同名）
@@ -11731,7 +11722,7 @@ class PaperReviewerApp {
                 try {
                     const savedPath = await this.savePdfToProjectDirectory(pdfUrl, filename, annotatedBlob);
                     if (savedPath) {
-                        this.showNotification(`✓ 已保存到: ${savedPath}`, 'success');
+                        this.showNotification(`Saved to: ${savedPath}`, 'success');
                         return;
                     }
                 } catch (saveError) {
@@ -11764,7 +11755,7 @@ class PaperReviewerApp {
                     await writable.write(annotatedBlob);
                     await writable.close();
 
-                    this.showNotification(`已保存到: ${handle.name}`, 'success');
+                    this.showNotification(`Saved to: ${handle.name}`, 'success');
                     return;
                 } catch (pickerError) {
                     // 用户取消不提示；其他错误则回退到 PDF.js 下载
@@ -11776,11 +11767,11 @@ class PaperReviewerApp {
             // 如果获取到了带标注的Blob，直接触发下载
             if (annotatedBlob) {
                 this.triggerBlobDownload(annotatedBlob, filename);
-                this.showNotification('开始下载 PDF（包含标注）', 'success');
+                this.showNotification('Starting PDF download (with annotations)', 'success');
                 return;
             }
 
-            // 回退: 使用 PDF.js 内置下载
+            // Fallback: Use PDF.js built-in download   
             if (typeof pdfApp.download === 'function') {
                 pdfApp.download({ source: pdfApp.pdfDocument, url: pdfUrl, filename });
             } else if (pdfApp.eventBus) {
@@ -11794,10 +11785,9 @@ class PaperReviewerApp {
                 return;
             }
 
-            this.showNotification('开始下载 PDF', 'success');
+            this.showNotification('Starting PDF download', 'success');
         } catch (error) {
-            console.error('PDF 下载失败:', error);
-            this.showNotification(`❌ 保存失败: ${error.message}`, 'error');
+            this.showNotification(`Save failed: ${error.message}`, 'error');
         } finally {
             // 释放保存锁
             this._isSavingPdf = false;
@@ -11879,13 +11869,13 @@ class PaperReviewerApp {
                 return null;
             }
 
-            this.debugLog(`📝 保存PDF到项目pdf目录 (${blob.size} bytes, 尝试 ${retryCount + 1}/${maxRetries + 1})...`);
+            this.debugLog(`Saving PDF to project pdf directory (${blob.size} bytes, attempt ${retryCount + 1}/${maxRetries + 1})...`);
 
             // 将Blob转换为ArrayBuffer
             const arrayBuffer = await blob.arrayBuffer();
             const base64Data = this.arrayBufferToBase64(arrayBuffer);
 
-            this.debugLog(`🔄 发送保存请求到服务器 (${base64Data.length} chars base64)...`);
+            this.debugLog(`Sending save request to server (${base64Data.length} chars base64)...`);
 
             // 请求服务器直接写入文件到项目pdf目录
             const response = await fetch('/save-pdf-to-project', {
@@ -11900,12 +11890,12 @@ class PaperReviewerApp {
 
             if (!response.ok) {
                 const error = await response.text();
-                console.error('❌ 服务器保存PDF失败:', error);
+                console.error('Server failed to save PDF:', error);
 
                 // 如果还有重试次数，等待后重试
                 if (retryCount < maxRetries) {
-                    console.log(`🔄 服务器保存失败，重试 (${retryCount + 1}/${maxRetries})...`);
-                    this.showNotification(`⏳ 重试保存 (${retryCount + 1}/${maxRetries})...`, 'warning');
+                    console.log(`Server save failed, retrying (${retryCount + 1}/${maxRetries})...`);
+                    this.showNotification(`⏳ Retrying save (${retryCount + 1}/${maxRetries})...`, 'warning');
                     await new Promise(resolve => setTimeout(resolve, 1000 * (retryCount + 1)));
                     return await this.savePdfToProjectDirectory(pdfUrl, filename, blob, retryCount + 1);
                 }
@@ -11919,14 +11909,14 @@ class PaperReviewerApp {
                 return result.path;
             }
 
-            console.warn('⚠️ 服务器返回但未确认成功:', result);
+            console.warn('Server returned but did not confirm success:', result);
             return null;
         } catch (error) {
-            console.error('❌ 保存PDF到项目目录失败:', error);
+            console.error('Failed to save PDF to project directory:', error);
 
             // 如果还有重试次数，等待后重试
             if (retryCount < maxRetries) {
-                console.log(`🔄 重试保存 (${retryCount + 1}/${maxRetries})...`);
+                console.log(`Retrying save (${retryCount + 1}/${maxRetries})...`);
                 await new Promise(resolve => setTimeout(resolve, 1000));
                 return await this.savePdfToProjectDirectory(pdfUrl, filename, blob, retryCount + 1);
             }
@@ -12348,7 +12338,6 @@ class PaperReviewerApp {
                     const checkAndSearch = () => {
                         checkAttempts++;
                         if (checkAttempts > maxAttempts) {
-                            console.error('独立窗口PDF.js加载超时');
                             this.showNotification('PDF viewer not ready', 'error');
                             return;
                         }
@@ -12402,8 +12391,7 @@ class PaperReviewerApp {
                     checkAndSearch();
                     return;
                 } catch (error) {
-                    console.error('独立窗口搜索失败:', error);
-                    this.showNotification('独立窗口搜索失败', 'error');
+                    this.showNotification('Popup window search failed', 'error');
                     return;
                 }
             }
@@ -12447,15 +12435,13 @@ class PaperReviewerApp {
             }
 
         } catch (error) {
-            console.error('Error in search:', error);
-            this.showNotification('❌ 操作失败', 'error');
+            this.showNotification('Operation failed', 'error');
         }
     }
 
     // 丝滑滚动到指定页码
     smoothScrollToPage(pdfApp, targetPage) {
         try {
-            this.debugLog(`🎯 开始丝滑滚动到第 ${targetPage} 页`);
 
             // 获取PDF iframe
             const pdfIframe = document.querySelector('#pdfViewer');
@@ -12471,13 +12457,12 @@ class PaperReviewerApp {
             const viewerContainer = pdfDoc.querySelector('#viewerContainer');
 
             if (!viewerContainer) {
-                console.warn('⚠️ 找不到viewerContainer，尝试使用PDF.js API跳转');
                 pdfApp.page = targetPage;
-                this.showNotification(`📄 第 ${targetPage} 页`, 'info');
+                this.showNotification(`Page ${targetPage}`, 'info');
                 return;
             }
 
-            this.debugLog('✅ 找到viewerContainer');
+            this.debugLog('找到viewerContainer');
 
             // 确保设置了平滑滚动（以防未设置）
             if (viewerContainer.style.scrollBehavior !== 'smooth') {
@@ -12515,18 +12500,17 @@ class PaperReviewerApp {
                     pdfApp.page = targetPage;
                 }, 500);
 
-                this.showNotification(`📄 第 ${targetPage} 页`, 'info');
+                this.showNotification(`Page ${targetPage}`, 'info');
             } else {
-                console.warn(`⚠️ 找不到页面${targetPage}的DOM元素，可能还未渲染`);
                 const allPages = pdfDoc.querySelectorAll('[data-page-number]');
 
                 // 使用PDF.js API跳转
                 pdfApp.page = targetPage;
-                this.showNotification(`📄 第 ${targetPage} 页`, 'info');
+                this.showNotification(`Page ${targetPage}`, 'info');
             }
         } catch (error) {
             pdfApp.page = targetPage;
-            this.showNotification(`📄 第 ${targetPage} 页`, 'info');
+            this.showNotification(`Page ${targetPage}`, 'info');
         }
     }
 
@@ -12924,13 +12908,13 @@ class PaperReviewerApp {
         }
 
         if (!parent || typeof parent !== 'object') {
-            this.showNotification('✗ 无法找到父对象', 'error');
+            this.showNotification('Parent object not found', 'error');
             return;
         }
 
         // 检查新key是否已存在
         if (parent.hasOwnProperty(newKey)) {
-            this.showNotification('✗ 字段名已存在', 'error');
+            this.showNotification('Field name already exists', 'error');
             return;
         }
 
@@ -12956,7 +12940,7 @@ class PaperReviewerApp {
         this.renderFlatView();
         this.setupEditableListeners();
 
-        this.showNotification(`✓ 字段已重命名: ${oldKey} → ${newKey}`, 'success');
+        this.showNotification(`Field renamed: ${oldKey} → ${newKey}`, 'success');
     }
 
     openEditModal(path, currentValue) {
@@ -13000,7 +12984,6 @@ class PaperReviewerApp {
             this.tempDataCache[this.currentFile] = this.currentData;
             this.updateSaveButtonState();
 
-            this.debugLog(`✓ 已自动创建 ${locKey} 字段`);
         }
 
         if (current && current[locKey]) {
@@ -13026,8 +13009,7 @@ class PaperReviewerApp {
         content.style.transform = 'translate(-50%, -50%)';
         modal.classList.add('active');
     }
-
-    // 初始化引用标签页
+    // Initialize reference tabs
     initQuoteTabs(quotes) {
         const quotesArray = Array.isArray(quotes) ? quotes : (quotes ? [quotes] : []);
         const tabsContainer = document.getElementById('quoteTabs');
@@ -13037,32 +13019,32 @@ class PaperReviewerApp {
         panelsContainer.innerHTML = '';
 
         if (quotesArray.length === 0) {
-            // 显示空状态
+            // Display empty state
             panelsContainer.innerHTML = `
                 <div class="quote-empty-state">
                     <i class="fas fa-quote-right"></i>
-                    <p>暂无引用文本</p>
-                    <p style="font-size: 10px; color: #bbb;">点击上方"添加引用"按钮添加</p>
+                    <p>No reference text</p>
+                    <p style="font-size: 10px; color: #bbb;">Click "Add Reference" button above to add</p>
                 </div>
             `;
         } else {
-            // 创建标签页
+            // Create tabs
             quotesArray.forEach((quote, index) => {
                 this.addQuoteTab(quote, index, index === 0);
             });
         }
 
-        // 绑定添加按钮
+        // Bind add button
         const btnAdd = document.getElementById('btnAddQuote');
         btnAdd.onclick = () => this.addQuoteTab('', tabsContainer.children.length, true);
 
-        // 绑定一键整理按钮
+        // Bind flatten button
         const btnFlatten = document.getElementById('btnFlattenQuote');
         if (btnFlatten) {
             btnFlatten.onclick = () => this.flattenActiveQuote();
         }
 
-        // 绑定测试搜索按钮：使用当前选中引用文本，执行PDF搜索并跳转
+        // Bind test search button: use current selected reference text, execute PDF search and jump
         const btnTestSearch = document.getElementById('btnTestSearch');
         if (btnTestSearch) {
             btnTestSearch.onclick = () => this.testSearchFromActiveQuote();
@@ -13093,7 +13075,7 @@ class PaperReviewerApp {
         const panel = document.createElement('div');
         panel.className = 'quote-panel' + (setActive ? ' active' : '');
         panel.dataset.index = index;
-        const placeholderText = '在此粘贴从PDF复制的引用文本...\n\n提示：可以包含关键词、段落或公式\n支持多行文本';
+        const placeholderText = 'Paste reference text copied from PDF here...\n\nTip: Can include keywords, paragraphs, or formulas\nMulti-line text supported';
         panel.innerHTML = `
             <textarea placeholder="${placeholderText}">${this.escapeHtml(content)}</textarea>
         `;
@@ -13119,7 +13101,7 @@ class PaperReviewerApp {
     flattenActiveQuote() {
         const activeTextarea = document.querySelector('.quote-panel.active textarea');
         if (!activeTextarea) {
-            this.showNotification('未找到可整理的引用文本', 'error');
+            this.showNotification('No active reference text found to format', 'error');
             return;
         }
 
@@ -13129,42 +13111,41 @@ class PaperReviewerApp {
         // 将换行统一为空格并压缩多余空格
         const singleLine = noHyphenBreaks.replace(/\s*\n\s*/g, ' ').replace(/\s+/g, ' ').trim();
         activeTextarea.value = singleLine;
-        this.showNotification('已整理为单行并修正连字符断行', 'success');
     }
 
-    // 从当前引用文本触发PDF搜索并跳转
+    // Test PDF search from current reference text
     testSearchFromActiveQuote() {
         const activeTextarea = document.querySelector('.quote-panel.active textarea');
         if (!activeTextarea) {
-            this.showNotification('未找到引用文本', 'error');
+            this.showNotification('Reference text not found', 'error');
             return;
         }
 
         const text = (activeTextarea.value || '').trim();
         if (!text) {
-            this.showNotification('引用文本为空，无法搜索', 'error');
+            this.showNotification('Reference text is empty, cannot search', 'error');
             return;
         }
 
-        // 使用现有搜索逻辑，跳转到找到的第一个匹配
+        // Use existing search logic to jump to the first match found
         const pdfViewer = document.getElementById('pdfViewer');
         if (!pdfViewer || !this.currentPdfUrl) {
-            this.showNotification('PDF 未加载', 'error');
+            this.showNotification('PDF not loaded', 'error');
             return;
         }
 
         const pdfWindow = pdfViewer.contentWindow;
         const pdfApp = pdfWindow?.PDFViewerApplication;
         if (!pdfApp) {
-            this.showNotification('PDF.js 未初始化', 'error');
+            this.showNotification('PDF.js not initialized', 'error');
             return;
         }
 
         this.executeSearchAndScroll(pdfApp, text, null);
-        this.showNotification('已发起PDF搜索', 'info');
+        this.showNotification('PDF search initiated', 'info');
     }
 
-    // 切换标签页
+    // Switch reference tab
     switchQuoteTab(index) {
         const tabs = document.querySelectorAll('.quote-tab');
         const panels = document.querySelectorAll('.quote-panel');
@@ -13179,19 +13160,19 @@ class PaperReviewerApp {
         if (targetPanel) {
             targetPanel.classList.add('active');
 
-            // 自动聚焦到文本输入框
+            // Auto-focus on text input
             const textarea = targetPanel.querySelector('textarea');
             if (textarea) {
                 setTimeout(() => {
                     textarea.focus();
-                    // 将光标移动到文本末尾
+                    // Move cursor to end of text
                     textarea.setSelectionRange(textarea.value.length, textarea.value.length);
                 }, 100);
             }
         }
     }
 
-    // 删除标签页
+    // Remove quote tab
     removeQuoteTab(index) {
         const tabsContainer = document.getElementById('quoteTabs');
         const panelsContainer = document.getElementById('quotePanels');
@@ -13202,30 +13183,30 @@ class PaperReviewerApp {
         if (tab) tab.remove();
         if (panel) panel.remove();
 
-        // 重新索引
+        // Re-index remaining tabs and panels
         const remainingTabs = tabsContainer.querySelectorAll('.quote-tab');
         const remainingPanels = panelsContainer.querySelectorAll('.quote-panel');
 
         if (remainingTabs.length === 0) {
-            // 显示空状态
+            // Show empty state
             panelsContainer.innerHTML = `
                 <div class="quote-empty-state">
                     <i class="fas fa-quote-right"></i>
-                    <p>暂无引用文本</p>
-                    <p style="font-size: 10px; color: #bbb;">点击上方"添加引用"按钮添加</p>
+                    <p>No reference text</p>
+                    <p style="font-size: 10px; color: #bbb;">Click "Add Reference" button above to add</p>
                 </div>
             `;
         } else {
-            // 重新编号
+            // Re-number tabs
             remainingTabs.forEach((tab, newIndex) => {
                 tab.dataset.index = newIndex;
-                tab.querySelector('span').textContent = `引用 ${newIndex + 1}`;
+                tab.querySelector('span').textContent = `Reference ${newIndex + 1}`;
             });
             remainingPanels.forEach((panel, newIndex) => {
                 panel.dataset.index = newIndex;
             });
 
-            // 激活第一个标签
+            // Activate first tab
             this.switchQuoteTab(0);
         }
     }
@@ -13284,17 +13265,17 @@ class PaperReviewerApp {
     }
 
     async testGotoSearch() {
-        // 测试编辑框中的文本能否在PDF中找到
+        // Test if the text in the edit box can be found in the PDF
         const textarea = document.getElementById('gotoEditTextarea');
         if (!textarea) return;
 
         const searchText = textarea.value.trim();
         if (!searchText) {
-            this.showNotification('请输入要测试的文本', 'info');
+            this.showNotification('Please enter text to test', 'info');
             return;
         }
 
-        // 获取PDFViewerApplication
+        // Get PDFViewerApplication
         let pdfApp = null;
         if (this.isPdfPopupMode && this.pdfPopupWindow && !this.pdfPopupWindow.closed) {
             const popupIframe = this.pdfPopupWindow.document.getElementById('pdfFrame');
@@ -13309,24 +13290,24 @@ class PaperReviewerApp {
         }
 
         if (!pdfApp || !pdfApp.pdfDocument) {
-            this.showNotification('PDF未加载，无法测试搜索', 'error');
+            this.showNotification('PDF not loaded, cannot test search', 'error');
             return;
         }
 
-        this.showNotification('正在测试搜索...', 'info');
+        this.showNotification('Testing search...', 'info');
 
-        // 执行搜索测试
+        // Execute search test
         try {
             const result = await this.runPdfSearch(pdfApp, searchText);
 
             if (result.total > 0) {
-                this.showNotification(`✓ 找到 ${result.total} 个匹配项`, 'success');
+                this.showNotification(`Found ${result.total} match(es)`, 'success');
 
-                // 可选：滚动到第一个匹配位置
+                // Optional: scroll to first match
                 setTimeout(() => this.scrollToCurrentMatch(pdfApp), 200);
             } else {
-                // 尝试变体搜索
-                this.showNotification('未找到完全匹配，尝试变体搜索...', 'info');
+                // Try variant search
+                this.showNotification('No exact match found, trying variants...', 'info');
                 const variants = this.buildSearchVariants(searchText);
 
                 let foundVariant = null;
@@ -13342,15 +13323,15 @@ class PaperReviewerApp {
                 }
 
                 if (foundVariant) {
-                    this.showNotification(`✓ 找到变体匹配: "${foundVariant}" (${foundCount}个)`, 'success');
+                    this.showNotification(`Found variant match: "${foundVariant}" (${foundCount} match(es))`, 'success');
                     setTimeout(() => this.scrollToCurrentMatch(pdfApp), 200);
                 } else {
-                    this.showNotification('✗ 未找到匹配，建议修改文本', 'error');
+                    this.showNotification('No match found, consider modifying the text', 'error');
                 }
             }
         } catch (error) {
-            console.error('搜索测试失败:', error);
-            this.showNotification('搜索测试失败', 'error');
+            console.error('Search test failed:', error);
+            this.showNotification('Search test failed', 'error');
         }
     }
 
@@ -13383,7 +13364,7 @@ class PaperReviewerApp {
         // 如果用户修改了字段名，进行重命名（含 _loc）
         if (inputKey && inputKey !== lastKey) {
             if (current.hasOwnProperty(inputKey)) {
-                this.showNotification(`字段名已存在: ${inputKey}`, 'error');
+                this.showNotification(`Field name already exists: ${inputKey}`, 'error');
                 return;
             }
             const oldLocKey = lastKey + '_loc';
@@ -13473,9 +13454,6 @@ class PaperReviewerApp {
         this.updateUndoButtonState();
 
         this.closeEditModal();
-
-        // 提示已暂存
-        this.showNotification('修改已暂存（未保存到文件）', 'info');
 
         // 如果更新了 meta_info.pdf_path，则立即按新路径加载 PDF
         if (shouldReloadPdf && nextPdfFile) {
@@ -13598,7 +13576,7 @@ class PaperReviewerApp {
         document.getElementById('addItemModal').classList.add('active');
     }
 
-    // 初始化添加条目的引用标签页
+    // Initialize reference tabs for adding items
     initQuoteTabsForItem(quotes) {
         const quotesArray = Array.isArray(quotes) ? quotes : (quotes ? [quotes] : []);
         const tabsContainer = document.getElementById('quoteTabsItem');
@@ -13608,56 +13586,56 @@ class PaperReviewerApp {
         panelsContainer.innerHTML = '';
 
         if (quotesArray.length === 0) {
-            // 显示空状态
+            // Display empty state
             panelsContainer.innerHTML = `
                 <div class="quote-empty-state">
                     <i class="fas fa-quote-right"></i>
-                    <p>暂无引用文本</p>
-                    <p style="font-size: 10px; color: #bbb;">点击上方“添加引用”按钮添加</p>
+                    <p>No reference text</p>
+                    <p style="font-size: 10px; color: #bbb;">Click "Add Reference" button above to add</p>
                 </div>
             `;
         } else {
-            // 创建标签页
+            // Create tabs
             quotesArray.forEach((quote, index) => {
                 this.addQuoteTabForItem(quote, index, index === 0);
             });
         }
 
-        // 绑定添加按钮
+        // Bind add button
         const btnAdd = document.getElementById('btnAddQuoteItem');
         btnAdd.onclick = () => this.addQuoteTabForItem('', tabsContainer.children.length, true);
     }
 
-    // 添加条目的引用标签页
+    // Add reference tab for item
     addQuoteTabForItem(content = '', index = 0, setActive = false) {
         const tabsContainer = document.getElementById('quoteTabsItem');
         const panelsContainer = document.getElementById('quotePanelsItem');
 
-        // 移除空状态
+        // Remove empty state
         const emptyState = panelsContainer.querySelector('.quote-empty-state');
         if (emptyState) {
             emptyState.remove();
         }
 
-        // 创建标签
+        // Create tab
         const tab = document.createElement('div');
         tab.className = 'quote-tab' + (setActive ? ' active' : '');
         tab.dataset.index = index;
         tab.innerHTML = `
-            <span>引用 ${index + 1}</span>
-            <i class="fas fa-times tab-remove" title="删除"></i>
+            <span>Reference ${index + 1}</span>
+            <i class="fas fa-times tab-remove" title="Remove"></i>
         `;
 
-        // 创建面板
+        // Create panel
         const panel = document.createElement('div');
         panel.className = 'quote-panel' + (setActive ? ' active' : '');
         panel.dataset.index = index;
-        const placeholderText = '在此粘贴从PDF复制的引用文本...\n\n提示：可以包含关键词、段落或公式\n支持多行文本';
+        const placeholderText = 'Paste reference text copied from PDF here...\n\nTip: Can include keywords, paragraphs, or formulas\nMulti-line text supported';
         panel.innerHTML = `
             <textarea placeholder="${placeholderText}">${this.escapeHtml(content)}</textarea>
         `;
 
-        // 点击标签切换
+        // Click tab to switch
         tab.addEventListener('click', (e) => {
             if (e.target.classList.contains('tab-remove')) {
                 this.removeQuoteTabForItem(index);
@@ -13757,17 +13735,17 @@ class PaperReviewerApp {
             .filter(q => q.length > 0);
 
         if (!category) {
-            this.showNotification('请选择分类', 'error');
+            this.showNotification('Please select a category', 'error');
             return;
         }
 
         if (category === 'custom' && !customKey) {
-            this.showNotification('请输入自定义键名', 'error');
+            this.showNotification('Please enter a custom key', 'error');
             return;
         }
 
         if (!content.trim()) {
-            this.showNotification('请输入内容', 'error');
+            this.showNotification('Please enter content', 'error');
             return;
         }
 
@@ -13815,23 +13793,23 @@ class PaperReviewerApp {
         this.setupEditableListeners();
 
         this.closeAddItemModal();
-        this.showNotification(`✓ 已添加到 ${key}`, 'success');
+        this.showNotification(`Added to ${key}`, 'success');
     }
 
     // 创建一个空的类字段模板，便于用户快速编辑
     createEmptySectionTemplate() {
         if (!this.currentData) {
-            this.showNotification('请先加载一个JSON文件', 'error');
+            this.showNotification('Please load a JSON file first', 'error');
             return;
         }
 
-        let sectionName = prompt('请输入新类字段名称（顶级键）:', 'new_section');
+        let sectionName = prompt('Enter new section name (top-level key):', 'new_section');
         if (!sectionName) return;
         sectionName = sectionName.trim();
         if (!sectionName) return;
 
         if (this.currentData.hasOwnProperty(sectionName)) {
-            this.showNotification(`字段 "${sectionName}" 已存在`, 'error');
+            this.showNotification(`Field "${sectionName}" already exists`, 'error');
             return;
         }
 
@@ -13854,23 +13832,23 @@ class PaperReviewerApp {
         this.renderStructuredView();
         this.renderFlatView();
         this.setupEditableListeners();
-        this.showNotification(`已创建类字段 "${sectionName}"，可双击键或值进行编辑`, 'success');
+        this.showNotification(`Created section "${sectionName}", double-click key or value to edit`, 'success');
     }
 
-    // 在指定类下添加子条目（带_loc占位）
+    // Add child field under specified section (with _loc placeholder)
     addChildField(sectionKey) {
         if (!this.currentData || !this.currentData[sectionKey] || typeof this.currentData[sectionKey] !== 'object') {
-            this.showNotification('当前类不可用，无法添加条目', 'error');
+            this.showNotification('Current section unavailable, cannot add field', 'error');
             return;
         }
 
         const parent = this.currentData[sectionKey];
-        let key = prompt(`在 "${sectionKey}" 下添加子字段，输入字段名:`, 'new_field');
+        let key = prompt(`Add child field under "${sectionKey}", enter field name:`, 'new_field');
         if (!key) return;
         key = key.trim();
         if (!key) return;
 
-        // 若存在同名，自动追加序号
+        // If name exists, auto-append sequence number
         let finalKey = key;
         let idx = 1;
         while (parent.hasOwnProperty(finalKey) || parent.hasOwnProperty(finalKey + '_loc')) {
@@ -13891,19 +13869,19 @@ class PaperReviewerApp {
         this.renderStructuredView();
         this.renderFlatView();
         this.setupEditableListeners();
-        this.showNotification(`已添加子字段 "${finalKey}"，可双击编辑`, 'success');
+        this.showNotification(`Added child field "${finalKey}", double-click to edit`, 'success');
     }
 
-    // 快速插入稳健性检查模板
+    // Quick insert robustness check template
     createRobustnessTemplate() {
         if (!this.currentData) {
-            this.showNotification('请先加载一个JSON文件', 'error');
+            this.showNotification('Please load a JSON file first', 'error');
             return;
         }
 
         const tplKey = 'robustness_checks';
         if (this.currentData[tplKey]) {
-            if (!confirm('已存在 robustness_checks，是否覆盖现有内容？')) return;
+            if (!confirm('robustness_checks already exists, overwrite existing content?')) return;
         }
 
         this.currentData[tplKey] = {
@@ -13929,8 +13907,9 @@ class PaperReviewerApp {
         this.renderStructuredView();
         this.renderFlatView();
         this.setupEditableListeners();
-        this.showNotification('已添加稳健性检查模板，可直接编辑字段', 'success');
+        this.showNotification('Robustness check template added, fields can be edited directly', 'success');
     }
+
 
     setupEditableListeners() {
         // 使用事件委托，监听整个文档的双击事件，更稳健
@@ -14031,19 +14010,19 @@ class PaperReviewerApp {
             const btn = e.target.closest('.apa-fetch-btn');
             if (!btn) return;
 
-            // 如果是 PDF、WoS 或 DOI URL 按钮，不处理 APA 生成
+            // If it's a PDF, WoS or DOI URL button, don't handle APA generation
             if (btn.dataset.pdf || btn.dataset.wosUrl || btn.dataset.doiUrl) {
                 return;
             }
 
             e.preventDefault();
             if (btn.dataset.disabled === '1') {
-                this.showNotification('未找到 DOI，无法生成 APA', 'error');
+                this.showNotification('No DOI found, cannot generate APA', 'error');
                 return;
             }
             const doi = btn.dataset.doi || this.findFirstDoiInCurrentData();
             if (!doi) {
-                this.showNotification('未找到 DOI，无法生成 APA', 'error');
+                this.showNotification('No DOI found, cannot generate APA', 'error');
                 return;
             }
             btn.disabled = true;
@@ -14051,10 +14030,10 @@ class PaperReviewerApp {
             try {
                 const citeFn = window.citeDoiToApa;
                 const text = citeFn ? await citeFn(doi) : null;
-                if (!text) throw new Error('未得到 APA 文本');
+                if (!text) throw new Error('Failed to get APA text');
                 await this.writeTextToClipboard(text);
-                this.showNotification('APA 引用已复制到剪贴板', 'success');
-                // 写回 meta_info.apa，便于展示与保存
+                this.showNotification('APA citation copied to clipboard', 'success');
+                // Write back to meta_info.apa for display and saving
                 if (!this.currentData.meta_info || typeof this.currentData.meta_info !== 'object') {
                     this.currentData.meta_info = {};
                 }
@@ -14063,17 +14042,17 @@ class PaperReviewerApp {
                 if (this.currentFile) {
                     this.tempDataCache[this.currentFile] = this.currentData;
                 }
-                // 立刻刷新按钮的悬浮内容
+                // Immediately update the button's hover content
                 btn.setAttribute('data-apa-text', text);
-                // 重渲染视图以展示 APA 文本
+                // Re-render views to display APA text
                 this.updateSaveButtonState();
                 this.renderStructuredView();
                 this.renderFlatView();
                 this.setupEditableListeners();
                 this.updateUndoButtonState();
             } catch (err) {
-                console.error('APA 生成失败:', err);
-                this.showNotification(`APA 生成失败: ${err.message}`, 'error');
+                console.error('APA generation failed:', err);
+                this.showNotification(`APA generation failed: ${err.message}`, 'error');
             } finally {
                 btn.disabled = false;
                 btn.classList.remove('loading');
@@ -14092,7 +14071,7 @@ class PaperReviewerApp {
             this.hideApaTooltip();
         };
         this._doiCopyBtnHandler = async (e) => {
-            // 检查是否是 WoS 或 DOI URL 按钮（使用 apa-fetch-btn 样式）
+            // Check if it's a WoS or DOI URL button (using apa-fetch-btn style)
             let btn = e.target.closest('.apa-fetch-btn');
             if (btn) {
                 e.preventDefault();
@@ -14110,7 +14089,7 @@ class PaperReviewerApp {
                     return;
                 }
 
-                // 检查是否是 PDF 复制按钮
+                // Check if it's a PDF copy button
                 const pdf = btn.dataset.pdf || '';
                 if (pdf) {
                     if (btn.dataset.busy === '1') return;
@@ -14120,8 +14099,8 @@ class PaperReviewerApp {
                     try {
                         await this.copyPdfFileByName(pdf);
                     } catch (err) {
-                        console.error('复制 PDF 失败:', err);
-                        this.showNotification(`复制 PDF 失败: ${err.message}`, 'error');
+                        console.error('Failed to copy PDF:', err);
+                        this.showNotification(`Failed to copy PDF: ${err.message}`, 'error');
                     } finally {
                         setTimeout(() => {
                             btn.dataset.busy = '0';
@@ -14140,21 +14119,21 @@ class PaperReviewerApp {
 
             const doi = btn.dataset.doi || '';
             if (!doi.trim()) {
-                this.showNotification('DOI 不能为空', 'error');
+                this.showNotification('DOI cannot be empty', 'error');
                 return;
             }
             try {
                 await this.writeTextToClipboard(doi);
-                // 显示复制成功的反馈
+                // Show copy success feedback
                 const originalHtml = btn.innerHTML;
                 btn.innerHTML = '<i class="fas fa-check"></i>';
                 setTimeout(() => {
                     btn.innerHTML = originalHtml;
                 }, 1500);
-                this.showNotification(`已复制 DOI: ${doi}`, 'success');
+                this.showNotification(`DOI copied: ${doi}`, 'success');
             } catch (err) {
-                console.error('复制 DOI 失败:', err);
-                this.showNotification(`复制失败: ${err.message}`, 'error');
+                console.error('Failed to copy DOI:', err);
+                this.showNotification(`Copy failed: ${err.message}`, 'error');
             }
         };
         this._pdfCopyBtnHandler = async (e) => {
@@ -14171,8 +14150,8 @@ class PaperReviewerApp {
             try {
                 await this.copyPdfFileByName(pdf);
             } catch (err) {
-                console.error('复制 PDF 失败:', err);
-                this.showNotification(`复制 PDF 失败: ${err.message}`, 'error');
+                console.error('Failed to copy PDF:', err);
+                this.showNotification(`Failed to copy PDF: ${err.message}`, 'error');
             } finally {
                 setTimeout(() => {
                     btn.dataset.busy = '0';
@@ -14188,14 +14167,14 @@ class PaperReviewerApp {
             e.stopPropagation();
             const pdf = btn.dataset.pdf || '';
             if (!pdf) return;
-            const ok = window.confirm(`确定删除 PDF "${pdf}" 吗？此操作不可恢复。`);
+            const ok = window.confirm(`Are you sure you want to delete PDF "${pdf}"? This action cannot be undone.`);
             if (!ok) return;
             try {
                 await this.deletePdfFileByName(pdf);
-                this.showNotification(`已删除 PDF: ${pdf}`, 'success');
+                this.showNotification(`PDF deleted: ${pdf}`, 'success');
             } catch (err) {
-                console.error('删除 PDF 失败:', err);
-                this.showNotification(`删除 PDF 失败: ${err.message}`, 'error');
+                console.error('Failed to delete PDF:', err);
+                this.showNotification(`Failed to delete PDF: ${err.message}`, 'error');
             }
         };
 
@@ -14653,7 +14632,7 @@ class PaperReviewerApp {
             });
 
             if (!response.ok) {
-                throw new Error(`保存失败: ${response.statusText}`);
+                throw new Error(`Save failed: ${response.statusText}`);
             }
 
             const result = await response.json();
@@ -14668,12 +14647,12 @@ class PaperReviewerApp {
 
             // 成功通知
             if (!silent) {
-                this.showNotification(`✓ ${this.currentFile} 已保存`, 'success');
+                this.showNotification(`${this.currentFile} saved`, 'success');
             }
             this.debugLog('File saved:', result);
         } catch (error) {
             console.error('Error saving file:', error);
-            this.showNotification(`✗ 保存失败: ${error.message}`, 'error');
+            this.showNotification(`✗ Save failed: ${error.message}`, 'error');
         }
     }
 }

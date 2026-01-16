@@ -2830,7 +2830,7 @@ ol.json-array {
 /* Notification Toast - 通知提示 */
 .notification-toast {
     position: fixed;
-    top: 20px;
+    bottom: 100px;
     right: 20px;
     padding: 12px 20px;
     background: #ffffff;
@@ -2839,11 +2839,11 @@ ol.json-array {
     border-radius: 6px;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
     z-index: 10000;
-    font-size: 13px;
+    font-size: 11px;
     display: flex;
     align-items: center;
     gap: 10px;
-    max-width: 400px;
+    max-width: 600px;
     animation: slideInRight 0.3s ease, fadeOut 0.3s ease 2.7s;
     pointer-events: none;
 }
