@@ -709,39 +709,6 @@
                     <textarea id="editTextarea"></textarea>
                 </div>
 
-                <!-- Page number and quote editing section -->
-                <div class="location-edit-section" id="locationEditSection" style="display: none;">
-                    <div class="section-divider"></div>
-                    <h4><i class="fa-solid fa-location-dot"></i> PDF Location Information</h4>
-
-                    <div class="form-group">
-                        <label for="editPageNumber">Page number:</label>
-                        <input type="number" id="editPageNumber" placeholder="PDF page number" min="1">
-                    </div>
-
-                    <div class="form-group">
-                        <div class="quotes-header">
-                            <label>Quote text:</label>
-                            <div class="quote-actions">
-                                <button type="button" class="btn-add-quote" id="btnAddQuote" title="Add quote">
-                                    <i class="fas fa-plus"></i> Add quote
-                                </button>
-                                <button type="button" class="btn-add-quote" id="btnFlattenQuote" title="Format pasted text to single line">
-                                    <i class="fas fa-magic"></i> Format text
-                                </button>
-                                <button type="button" class="btn-add-quote" id="btnTestSearch" title="Test search and jump to PDF">
-                                    <i class="fas fa-search-location"></i> Test search
-                                </button>
-                            </div>
-                        </div>
-
-                        <!-- Quote tabs header -->
-                        <div class="quote-tabs" id="quoteTabs"></div>
-
-                        <!-- Quote tab panels -->
-                        <div class="quote-panels" id="quotePanels"></div>
-                    </div>
-                </div>
             </div>
             <div class="modal-footer">
                 <button class="btn btn-danger" id="deleteEdit">Delete field</button>
@@ -806,31 +773,6 @@
                     <textarea id="itemContent" rows="4" placeholder="Enter item content"></textarea>
                 </div>
 
-                <!-- PDF Location Information -->
-                <div class="location-edit-section">
-                    <div class="section-divider"></div>
-                    <h4><i class="fa-solid fa-location-dot"></i> PDF Location Information (Optional)</h4>
-
-                    <div class="form-group">
-                        <label for="itemPageNumber">Page Number:</label>
-                        <input type="number" id="itemPageNumber" placeholder="PDF page number" min="1">
-                    </div>
-
-                    <div class="form-group">
-                        <div class="quotes-header">
-                            <label>Quote Text:</label>
-                            <button type="button" class="btn-add-quote" id="btnAddQuoteItem" title="Add quote">
-                                <i class="fas fa-plus"></i> Add Quote
-                            </button>
-                        </div>
-
-                        <!-- Quote tabs -->
-                        <div class="quote-tabs" id="quoteTabsItem"></div>
-
-                        <!-- Quote panels -->
-                        <div class="quote-panels" id="quotePanelsItem"></div>
-                    </div>
-                </div>
             </div>
             <div class="modal-footer">
                 <button class="btn btn-cancel" id="cancelAddItem">Cancel</button>

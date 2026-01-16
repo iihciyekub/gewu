@@ -16,7 +16,6 @@ class PaperReviewerApp {
         this.lastPasteBackup = null; // { file, data }
         this.hasUnsavedChanges = false;
         this.tempDataCache = {}; // 临时数据缓存 {filename: data}
-        this.currentQuoteIndex = {}; // 跟踪每个字段当前显示的quote索引 {valuePath: index}
         this.lastSearchText = null; // 跟踪上次搜索的文本
         this.lastSearchValuePath = null; // 跟踪上次搜索的字段路径
         this.searchMatchCount = 0; // 当前搜索的匹配数量
@@ -5688,10 +5687,6 @@ class PaperReviewerApp {
             const keyCell = document.createElement('td');
             const valueCell = document.createElement('td');
 
-            // Check if there's corresponding location information
-            const locKey = key + '_loc';
-            const locationInfo = obj[locKey] || null;
-
             // First column: Keep placeholder but don't place clickable expand button
             toggleCell.className = 'toggle-cell';
             toggleCell.innerHTML = `
@@ -5752,18 +5747,17 @@ class PaperReviewerApp {
                 if (Array.isArray(value)) {
                     if (value.length === 1) {
                         const sole = value[0];
-                        const soleLoc = Array.isArray(locationInfo) ? locationInfo[0] : locationInfo;
                         if (sole && typeof sole === 'object') {
                             valueCell.innerHTML = '';
                             const subTable = document.createElement('table');
                             subTable.className = 'json-table nested-table';
                             const solePath = [...currentPath, '0'];
                             subTable.dataset.path = solePath.join('.');
-                            this.renderObject(sole, subTable, solePath, soleLoc);
+                            this.renderObject(sole, subTable, solePath);
                             valueCell.appendChild(subTable);
                         } else {
                             // Single element primitive value, directly edit with path index 0
-                            valueCell.innerHTML = this.createEditableValue(sole, [...currentPath, '0'], soleLoc, key);
+                            valueCell.innerHTML = this.createEditableValue(sole, [...currentPath, '0'], null, key);
                         }
                     } else {
                         valueCell.innerHTML = '';
@@ -5771,13 +5765,7 @@ class PaperReviewerApp {
                         subTable.className = 'json-table nested-table';
                         subTable.dataset.path = currentPath.join('.');
                         const objValue = Object.fromEntries(value.map((v, i) => [i, v]));
-                        // Map corresponding loc information to sub-objects for array elements to also display references/jumps
-                        if (Array.isArray(locationInfo)) {
-                            locationInfo.forEach((locItem, idx) => {
-                                objValue[`${idx}_loc`] = locItem;
-                            });
-                        }
-                        this.renderObject(objValue, subTable, currentPath, Array.isArray(locationInfo) ? null : locationInfo);
+                        this.renderObject(objValue, subTable, currentPath);
                         valueCell.appendChild(subTable);
                     }
                 } else {
@@ -5785,49 +5773,18 @@ class PaperReviewerApp {
                     const subTable = document.createElement('table');
                     subTable.className = 'json-table nested-table';
                     subTable.dataset.path = currentPath.join('.');
-                    this.renderObject(value, subTable, currentPath, locationInfo);
+                    this.renderObject(value, subTable, currentPath);
                     valueCell.appendChild(subTable);
                 }
             } else {
                 // Simple values (strings, numbers, etc.)
-                valueCell.innerHTML = this.createEditableValue(value, currentPath, locationInfo, key);
+                valueCell.innerHTML = this.createEditableValue(value, currentPath, null, key);
             }
 
             row.appendChild(toggleCell);
             row.appendChild(keyCell);
             row.appendChild(valueCell);
             table.appendChild(row);
-        }
-    }
-
-    // 切换_loc字段的显示/隐藏
-    toggleLocField(table, baseKey) {
-        const locKey = baseKey + '_loc';
-        const locRows = Array.from(table.querySelectorAll('tr.loc-field-row')).filter(row => {
-            const keySpan = row.querySelector('.editable-key');
-            return keySpan && keySpan.dataset.key === locKey;
-        });
-
-        locRows.forEach(row => {
-            row.classList.toggle('collapsed');
-        });
-
-        // 更新按钮图标 - 现在按钮在独立的toggle-cell中
-        const toggleBtn = Array.from(table.querySelectorAll('.loc-toggle-btn')).find(btn => {
-            const toggleCell = btn.parentElement;
-            const row = toggleCell.parentElement;
-            const keyCell = row.querySelector('td:nth-child(2)'); // 第二列是key列
-            const keySpan = keyCell?.querySelector('.editable-key');
-            return keySpan && keySpan.dataset.key === baseKey;
-        });
-
-        if (toggleBtn) {
-            const icon = toggleBtn.querySelector('i');
-            if (locRows[0]?.classList.contains('collapsed')) {
-                icon.className = 'fas fa-chevron-down';
-            } else {
-                icon.className = 'fas fa-chevron-up';
-            }
         }
     }
 
@@ -5967,38 +5924,6 @@ class PaperReviewerApp {
             const btn = `<button class="apa-fetch-btn" data-doi="${doiAttr}" data-apa-text="${apaTextAttr}" title="${btnTitle}"${disabled}><i class="fas fa-quote-left"></i><span>APA</span></button>`;
             const hint = doi ? `<span class="apa-doi-hint" title="DOI used">${doiAttr}</span>` : `<span class="apa-doi-hint muted">No DOI</span>`;
             html += `<span class="apa-actions">${btn}${hint}</span>`;
-        }
-
-        if (location) {
-            const page = location.pdf_page_index || 1;
-            const quotes = location.quote || [];
-            const valuePath = path.join('.');
-
-            // 如果quote是数组，为每个quote创建一个引用图标
-            if (Array.isArray(quotes) && quotes.length > 0) {
-                const validQuotes = quotes.filter(q => q && q.trim());
-                if (validQuotes.length > 0) {
-                    const links = validQuotes.map((quote, index) => {
-                        return `<a href="#" class="location-link" 
-                            data-page="${page}" 
-                            data-value-path="${valuePath}"
-                            data-quote-index="${index}"
-                            title="Jump to PDF page ${page} (cycle ${index + 1}/${validQuotes.length})">
-                            <i class="fa-solid fa-quote-right"></i>
-                        </a>`;
-                    }).join('');
-                    html += `<span class="location-links">${links}</span>`;
-                }
-            } else if (typeof quotes === 'string' && quotes.trim()) {
-                // 兼容旧的字符串格式
-                html += `<a href="#" class="location-link" 
-                    data-page="${page}" 
-                    data-value-path="${valuePath}"
-                    data-quote-index="0"
-                    title="Jump to PDF page ${page}">
-                    <i class="fa-solid fa-quote-right"></i>
-                </a>`;
-            } // 无有效引用文本则不显示跳转图标
         }
 
         return html;
@@ -10905,35 +10830,6 @@ class PaperReviewerApp {
         this.renderMarkdownView(this.currentMarkdownText);
         this.updateMarkdownToolbar();
 
-        // 同步 JSON 中的 _loc.quote 文本（如果提供了 valuePath）
-        if (opts.valuePath) {
-            const pathArr = opts.valuePath.split('.').filter(Boolean);
-            const locKey = pathArr[pathArr.length - 1] + '_loc';
-            let node = this.currentData;
-            for (let i = 0; i < pathArr.length - 1; i++) {
-                if (node && typeof node === 'object' && node.hasOwnProperty(pathArr[i])) {
-                    node = node[pathArr[i]];
-                } else {
-                    node = null;
-                    break;
-                }
-            }
-            if (node && node[locKey]) {
-                const quotes = Array.isArray(node[locKey].quote) ? [...node[locKey].quote] : [];
-                if (quotes.length) {
-                    const idx = Number.isFinite(targetIndex) ? targetIndex : 0;
-                    if (idx >= 0 && idx < quotes.length) {
-                        quotes[idx] = newText;
-                        node[locKey].quote = quotes;
-                        this.hasUnsavedChanges = true;
-                        if (this.currentFile) this.tempDataCache[this.currentFile] = this.currentData;
-                        this.updateSaveButtonState();
-                        this.renderStructuredView();
-                        this.renderFlatView();
-                    }
-                }
-            }
-        }
     }
 
     showSectionPreviewInline() {
@@ -10959,11 +10855,6 @@ class PaperReviewerApp {
                         <td class="toggle-cell"><i class="fa-solid fa-circle-check row-select-indicator"></i></td>
                         <td class="preview-key">${this.formatKey('placeholder_field')}</td>
                         <td class="preview-dim">value</td>
-                    </tr>
-                    <tr>
-                        <td class="toggle-cell"></td>
-                        <td class="preview-key">${this.formatKey('placeholder_field_loc')}</td>
-                        <td class="preview-dim">{ page_label:"", pdf_page_index:null, quote: [] }</td>
                     </tr>
                 </table>
             </div>
@@ -12922,14 +12813,6 @@ class PaperReviewerApp {
         parent[newKey] = parent[oldKey];
         delete parent[oldKey];
 
-        // 如果有对应的_loc字段，也需要重命名
-        const oldLocKey = oldKey + '_loc';
-        const newLocKey = newKey + '_loc';
-        if (parent.hasOwnProperty(oldLocKey)) {
-            parent[newLocKey] = parent[oldLocKey];
-            delete parent[oldLocKey];
-        }
-
         // 标记为有未保存的修改
         this.hasUnsavedChanges = true;
         this.tempDataCache[this.currentFile] = this.currentData;
@@ -12957,50 +12840,6 @@ class PaperReviewerApp {
         }
         document.getElementById('editTextarea').value = currentValue;
 
-        // 检查是否有对应的_loc字段
-        const locSection = document.getElementById('locationEditSection');
-        const pageInput = document.getElementById('editPageNumber');
-
-        // 获取当前字段所在的父对象
-        let current = this.currentData;
-        for (let i = 0; i < path.length - 1; i++) {
-            current = current[path[i]];
-        }
-
-        const locKey = lastKey + '_loc';
-
-        // 🔧 检查并自动创建 _loc 字段（如果不存在）
-        if (current && !current[locKey]) {
-            // 初始化标准的 _loc 结构，所有值允许为空
-            current[locKey] = {
-                "page_label": "",
-                "pdf_page_index": null,
-                "pdf_open_params": "",
-                "quote": []
-            };
-
-            // 标记数据已修改
-            this.hasUnsavedChanges = true;
-            this.tempDataCache[this.currentFile] = this.currentData;
-            this.updateSaveButtonState();
-
-        }
-
-        if (current && current[locKey]) {
-            // 有location数据，显示编辑区
-            locSection.style.display = 'block';
-            pageInput.value = current[locKey].pdf_page_index || '';
-
-            // 初始化引用标签页
-            const quotes = current[locKey].quote;
-            this.initQuoteTabs(quotes);
-        } else {
-            // 无location数据，隐藏编辑区
-            locSection.style.display = 'none';
-            pageInput.value = '';
-            this.initQuoteTabs([]);
-        }
-
         const modal = document.getElementById('editModal');
         const content = modal.querySelector('.modal-content');
         // 重新居中并显示
@@ -13009,208 +12848,6 @@ class PaperReviewerApp {
         content.style.transform = 'translate(-50%, -50%)';
         modal.classList.add('active');
     }
-    // Initialize reference tabs
-    initQuoteTabs(quotes) {
-        const quotesArray = Array.isArray(quotes) ? quotes : (quotes ? [quotes] : []);
-        const tabsContainer = document.getElementById('quoteTabs');
-        const panelsContainer = document.getElementById('quotePanels');
-
-        tabsContainer.innerHTML = '';
-        panelsContainer.innerHTML = '';
-
-        if (quotesArray.length === 0) {
-            // Display empty state
-            panelsContainer.innerHTML = `
-                <div class="quote-empty-state">
-                    <i class="fas fa-quote-right"></i>
-                    <p>No reference text</p>
-                    <p style="font-size: 10px; color: #bbb;">Click "Add Reference" button above to add</p>
-                </div>
-            `;
-        } else {
-            // Create tabs
-            quotesArray.forEach((quote, index) => {
-                this.addQuoteTab(quote, index, index === 0);
-            });
-        }
-
-        // Bind add button
-        const btnAdd = document.getElementById('btnAddQuote');
-        btnAdd.onclick = () => this.addQuoteTab('', tabsContainer.children.length, true);
-
-        // Bind flatten button
-        const btnFlatten = document.getElementById('btnFlattenQuote');
-        if (btnFlatten) {
-            btnFlatten.onclick = () => this.flattenActiveQuote();
-        }
-
-        // Bind test search button: use current selected reference text, execute PDF search and jump
-        const btnTestSearch = document.getElementById('btnTestSearch');
-        if (btnTestSearch) {
-            btnTestSearch.onclick = () => this.testSearchFromActiveQuote();
-        }
-    }
-
-    // 添加引用标签页
-    addQuoteTab(content = '', index = 0, setActive = false) {
-        const tabsContainer = document.getElementById('quoteTabs');
-        const panelsContainer = document.getElementById('quotePanels');
-
-        // 移除空状态
-        const emptyState = panelsContainer.querySelector('.quote-empty-state');
-        if (emptyState) {
-            emptyState.remove();
-        }
-
-        // 创建标签
-        const tab = document.createElement('div');
-        tab.className = 'quote-tab' + (setActive ? ' active' : '');
-        tab.dataset.index = index;
-        tab.innerHTML = `
-            <span>引用 ${index + 1}</span>
-            <i class="fas fa-times tab-remove" title="删除"></i>
-        `;
-
-        // 创建面板
-        const panel = document.createElement('div');
-        panel.className = 'quote-panel' + (setActive ? ' active' : '');
-        panel.dataset.index = index;
-        const placeholderText = 'Paste reference text copied from PDF here...\n\nTip: Can include keywords, paragraphs, or formulas\nMulti-line text supported';
-        panel.innerHTML = `
-            <textarea placeholder="${placeholderText}">${this.escapeHtml(content)}</textarea>
-        `;
-
-        // 点击标签切换
-        tab.addEventListener('click', (e) => {
-            if (e.target.classList.contains('tab-remove')) {
-                this.removeQuoteTab(index);
-            } else {
-                this.switchQuoteTab(index);
-            }
-        });
-
-        tabsContainer.appendChild(tab);
-        panelsContainer.appendChild(panel);
-
-        if (setActive) {
-            this.switchQuoteTab(index);
-        }
-    }
-
-    // 将当前引用文本整理为单行，并修正因换行产生的连字符
-    flattenActiveQuote() {
-        const activeTextarea = document.querySelector('.quote-panel.active textarea');
-        if (!activeTextarea) {
-            this.showNotification('No active reference text found to format', 'error');
-            return;
-        }
-
-        const raw = activeTextarea.value || '';
-        // 处理跨行的连字符单词（例如 "exam-\nple" => "example"）
-        const noHyphenBreaks = raw.replace(/-\s*\n\s*/g, '');
-        // 将换行统一为空格并压缩多余空格
-        const singleLine = noHyphenBreaks.replace(/\s*\n\s*/g, ' ').replace(/\s+/g, ' ').trim();
-        activeTextarea.value = singleLine;
-    }
-
-    // Test PDF search from current reference text
-    testSearchFromActiveQuote() {
-        const activeTextarea = document.querySelector('.quote-panel.active textarea');
-        if (!activeTextarea) {
-            this.showNotification('Reference text not found', 'error');
-            return;
-        }
-
-        const text = (activeTextarea.value || '').trim();
-        if (!text) {
-            this.showNotification('Reference text is empty, cannot search', 'error');
-            return;
-        }
-
-        // Use existing search logic to jump to the first match found
-        const pdfViewer = document.getElementById('pdfViewer');
-        if (!pdfViewer || !this.currentPdfUrl) {
-            this.showNotification('PDF not loaded', 'error');
-            return;
-        }
-
-        const pdfWindow = pdfViewer.contentWindow;
-        const pdfApp = pdfWindow?.PDFViewerApplication;
-        if (!pdfApp) {
-            this.showNotification('PDF.js not initialized', 'error');
-            return;
-        }
-
-        this.executeSearchAndScroll(pdfApp, text, null);
-        this.showNotification('PDF search initiated', 'info');
-    }
-
-    // Switch reference tab
-    switchQuoteTab(index) {
-        const tabs = document.querySelectorAll('.quote-tab');
-        const panels = document.querySelectorAll('.quote-panel');
-
-        tabs.forEach(tab => tab.classList.remove('active'));
-        panels.forEach(panel => panel.classList.remove('active'));
-
-        const targetTab = document.querySelector(`.quote-tab[data-index="${index}"]`);
-        const targetPanel = document.querySelector(`.quote-panel[data-index="${index}"]`);
-
-        if (targetTab) targetTab.classList.add('active');
-        if (targetPanel) {
-            targetPanel.classList.add('active');
-
-            // Auto-focus on text input
-            const textarea = targetPanel.querySelector('textarea');
-            if (textarea) {
-                setTimeout(() => {
-                    textarea.focus();
-                    // Move cursor to end of text
-                    textarea.setSelectionRange(textarea.value.length, textarea.value.length);
-                }, 100);
-            }
-        }
-    }
-
-    // Remove quote tab
-    removeQuoteTab(index) {
-        const tabsContainer = document.getElementById('quoteTabs');
-        const panelsContainer = document.getElementById('quotePanels');
-
-        const tab = document.querySelector(`.quote-tab[data-index="${index}"]`);
-        const panel = document.querySelector(`.quote-panel[data-index="${index}"]`);
-
-        if (tab) tab.remove();
-        if (panel) panel.remove();
-
-        // Re-index remaining tabs and panels
-        const remainingTabs = tabsContainer.querySelectorAll('.quote-tab');
-        const remainingPanels = panelsContainer.querySelectorAll('.quote-panel');
-
-        if (remainingTabs.length === 0) {
-            // Show empty state
-            panelsContainer.innerHTML = `
-                <div class="quote-empty-state">
-                    <i class="fas fa-quote-right"></i>
-                    <p>No reference text</p>
-                    <p style="font-size: 10px; color: #bbb;">Click "Add Reference" button above to add</p>
-                </div>
-            `;
-        } else {
-            // Re-number tabs
-            remainingTabs.forEach((tab, newIndex) => {
-                tab.dataset.index = newIndex;
-                tab.querySelector('span').textContent = `Reference ${newIndex + 1}`;
-            });
-            remainingPanels.forEach((panel, newIndex) => {
-                panel.dataset.index = newIndex;
-            });
-
-            // Activate first tab
-            this.switchQuoteTab(0);
-        }
-    }
-
     closeEditModal() {
         document.getElementById('editModal').classList.remove('active');
         this.editingPath = null;
@@ -13343,15 +12980,8 @@ class PaperReviewerApp {
         if (!this.editingPath) return;
 
         const newValue = document.getElementById('editTextarea').value;
-        const pageNumber = document.getElementById('editPageNumber').value;
         const keyInput = document.getElementById('editKeyInput');
         const inputKey = keyInput ? keyInput.value.trim() : '';
-
-        // 从标签页收集所有引用文本
-        const quotePanels = document.querySelectorAll('.quote-panel textarea');
-        const quotes = Array.from(quotePanels)
-            .map(textarea => textarea.value.trim())
-            .filter(q => q.length > 0);
 
         // Update data
         let current = this.currentData;
@@ -13361,20 +12991,14 @@ class PaperReviewerApp {
 
         let lastKey = this.editingPath[this.editingPath.length - 1];
 
-        // 如果用户修改了字段名，进行重命名（含 _loc）
+        // 如果用户修改了字段名，进行重命名
         if (inputKey && inputKey !== lastKey) {
             if (current.hasOwnProperty(inputKey)) {
                 this.showNotification(`Field name already exists: ${inputKey}`, 'error');
                 return;
             }
-            const oldLocKey = lastKey + '_loc';
-            const newLocKey = inputKey + '_loc';
             current[inputKey] = current[lastKey];
             delete current[lastKey];
-            if (current.hasOwnProperty(oldLocKey)) {
-                current[newLocKey] = current[oldLocKey];
-                delete current[oldLocKey];
-            }
             lastKey = inputKey;
             this.editingPath[this.editingPath.length - 1] = inputKey;
         }
@@ -13412,31 +13036,6 @@ class PaperReviewerApp {
                 }
             }
         }
-
-        // Update location数据
-        const locKey = lastKey + '_loc';
-
-        // 确保 _loc 字段存在（如果不存在则创建标准结构）
-        if (!current[locKey]) {
-            current[locKey] = {
-                "page_label": "",
-                "pdf_page_index": null,
-                "pdf_open_params": "",
-                "quote": []
-            };
-        }
-
-        // 更新 _loc 字段的值
-        if (pageNumber) {
-            const pageIndex = parseInt(pageNumber);
-            current[locKey].pdf_page_index = pageIndex;
-            // 同步更新 page_label 和 pdf_open_params
-            current[locKey].page_label = pageIndex.toString();
-            current[locKey].pdf_open_params = `#page=${pageIndex}`;
-        }
-
-        // 保存引用数组
-        current[locKey].quote = quotes;
 
         // 标记为有未保存的修改
         this.hasUnsavedChanges = true;
@@ -13487,7 +13086,7 @@ class PaperReviewerApp {
         if (!this.editingPath) return;
         const lastKey = this.editingPath[this.editingPath.length - 1];
         const parentPath = this.editingPath.slice(0, -1);
-        if (confirm(`确定删除字段 "${lastKey}" 及其 _loc 信息？`)) {
+        if (confirm(`确定删除字段 "${lastKey}"？`)) {
             this.deleteField(parentPath, lastKey);
             this.closeEditModal();
         }
@@ -13567,155 +13166,9 @@ class PaperReviewerApp {
         document.getElementById('itemCategory').value = '';
         document.getElementById('customKey').value = '';
         document.getElementById('itemContent').value = '';
-        document.getElementById('itemPageNumber').value = '';
         document.getElementById('customKeyGroup').style.display = 'none';
 
-        // 初始化引用标签页（空状态）
-        this.initQuoteTabsForItem([]);
-
         document.getElementById('addItemModal').classList.add('active');
-    }
-
-    // Initialize reference tabs for adding items
-    initQuoteTabsForItem(quotes) {
-        const quotesArray = Array.isArray(quotes) ? quotes : (quotes ? [quotes] : []);
-        const tabsContainer = document.getElementById('quoteTabsItem');
-        const panelsContainer = document.getElementById('quotePanelsItem');
-
-        tabsContainer.innerHTML = '';
-        panelsContainer.innerHTML = '';
-
-        if (quotesArray.length === 0) {
-            // Display empty state
-            panelsContainer.innerHTML = `
-                <div class="quote-empty-state">
-                    <i class="fas fa-quote-right"></i>
-                    <p>No reference text</p>
-                    <p style="font-size: 10px; color: #bbb;">Click "Add Reference" button above to add</p>
-                </div>
-            `;
-        } else {
-            // Create tabs
-            quotesArray.forEach((quote, index) => {
-                this.addQuoteTabForItem(quote, index, index === 0);
-            });
-        }
-
-        // Bind add button
-        const btnAdd = document.getElementById('btnAddQuoteItem');
-        btnAdd.onclick = () => this.addQuoteTabForItem('', tabsContainer.children.length, true);
-    }
-
-    // Add reference tab for item
-    addQuoteTabForItem(content = '', index = 0, setActive = false) {
-        const tabsContainer = document.getElementById('quoteTabsItem');
-        const panelsContainer = document.getElementById('quotePanelsItem');
-
-        // Remove empty state
-        const emptyState = panelsContainer.querySelector('.quote-empty-state');
-        if (emptyState) {
-            emptyState.remove();
-        }
-
-        // Create tab
-        const tab = document.createElement('div');
-        tab.className = 'quote-tab' + (setActive ? ' active' : '');
-        tab.dataset.index = index;
-        tab.innerHTML = `
-            <span>Reference ${index + 1}</span>
-            <i class="fas fa-times tab-remove" title="Remove"></i>
-        `;
-
-        // Create panel
-        const panel = document.createElement('div');
-        panel.className = 'quote-panel' + (setActive ? ' active' : '');
-        panel.dataset.index = index;
-        const placeholderText = 'Paste reference text copied from PDF here...\n\nTip: Can include keywords, paragraphs, or formulas\nMulti-line text supported';
-        panel.innerHTML = `
-            <textarea placeholder="${placeholderText}">${this.escapeHtml(content)}</textarea>
-        `;
-
-        // Click tab to switch
-        tab.addEventListener('click', (e) => {
-            if (e.target.classList.contains('tab-remove')) {
-                this.removeQuoteTabForItem(index);
-            } else {
-                this.switchQuoteTabForItem(index);
-            }
-        });
-
-        tabsContainer.appendChild(tab);
-        panelsContainer.appendChild(panel);
-
-        if (setActive) {
-            this.switchQuoteTabForItem(index);
-        }
-    }
-
-    // 切换添加条目的标签页
-    switchQuoteTabForItem(index) {
-        const tabs = document.querySelectorAll('#quoteTabsItem .quote-tab');
-        const panels = document.querySelectorAll('#quotePanelsItem .quote-panel');
-
-        tabs.forEach(tab => tab.classList.remove('active'));
-        panels.forEach(panel => panel.classList.remove('active'));
-
-        const targetTab = document.querySelector(`#quoteTabsItem .quote-tab[data-index="${index}"]`);
-        const targetPanel = document.querySelector(`#quotePanelsItem .quote-panel[data-index="${index}"]`);
-
-        if (targetTab) targetTab.classList.add('active');
-        if (targetPanel) {
-            targetPanel.classList.add('active');
-
-            // 自动聚焦到文本输入框
-            const textarea = targetPanel.querySelector('textarea');
-            if (textarea) {
-                setTimeout(() => {
-                    textarea.focus();
-                    // 将光标移动到文本末尾
-                    textarea.setSelectionRange(textarea.value.length, textarea.value.length);
-                }, 100);
-            }
-        }
-    }
-
-    // 删除添加条目的标签页
-    removeQuoteTabForItem(index) {
-        const tabsContainer = document.getElementById('quoteTabsItem');
-        const panelsContainer = document.getElementById('quotePanelsItem');
-
-        const tab = document.querySelector(`#quoteTabsItem .quote-tab[data-index="${index}"]`);
-        const panel = document.querySelector(`#quotePanelsItem .quote-panel[data-index="${index}"]`);
-
-        if (tab) tab.remove();
-        if (panel) panel.remove();
-
-        // 重新索引
-        const remainingTabs = tabsContainer.querySelectorAll('.quote-tab');
-        const remainingPanels = panelsContainer.querySelectorAll('.quote-panel');
-
-        if (remainingTabs.length === 0) {
-            // 显示空状态
-            panelsContainer.innerHTML = `
-                <div class="quote-empty-state">
-                    <i class="fas fa-quote-right"></i>
-                    <p>暂无引用文本</p>
-                    <p style="font-size: 10px; color: #bbb;">点击上方“添加引用”按钮添加</p>
-                </div>
-            `;
-        } else {
-            // 重新编号
-            remainingTabs.forEach((tab, newIndex) => {
-                tab.dataset.index = newIndex;
-                tab.querySelector('span').textContent = `引用 ${newIndex + 1}`;
-            });
-            remainingPanels.forEach((panel, newIndex) => {
-                panel.dataset.index = newIndex;
-            });
-
-            // 激活第一个标签
-            this.switchQuoteTabForItem(0);
-        }
     }
 
     closeAddItemModal() {
@@ -13726,13 +13179,6 @@ class PaperReviewerApp {
         const category = document.getElementById('itemCategory').value;
         const customKey = document.getElementById('customKey').value;
         const content = document.getElementById('itemContent').value;
-        const pageNumber = document.getElementById('itemPageNumber').value;
-
-        // 从标签页收集所有引用文本
-        const quotePanels = document.querySelectorAll('#quotePanelsItem .quote-panel textarea');
-        const quotes = Array.from(quotePanels)
-            .map(textarea => textarea.value.trim())
-            .filter(q => q.length > 0);
 
         if (!category) {
             this.showNotification('Please select a category', 'error');
@@ -13753,33 +13199,15 @@ class PaperReviewerApp {
         const key = category === 'custom' ? customKey : category;
 
         const newItem = content.trim();
-        const locPayload = {
-            pdf_page_index: pageNumber ? parseInt(pageNumber) : null,
-            page_label: pageNumber ? pageNumber.toString() : '',
-            pdf_open_params: pageNumber ? `#page=${pageNumber}` : '',
-            quote: quotes
-        };
-
         // 处理不同数据形态：如果已有数组则push；如果不存在则按字符串+loc对象；如果已有非数组则直接覆盖
         if (Array.isArray(this.currentData[key])) {
             this.currentData[key].push(newItem);
-            if (pageNumber || quotes.length > 0) {
-                const locKey = key + '_loc';
-                if (!Array.isArray(this.currentData[locKey])) {
-                    this.currentData[locKey] = [];
-                }
-                this.currentData[locKey].push(locPayload);
-            }
         } else if (this.currentData[key] === undefined) {
             // 新建为标量字段，loc为对象
             this.currentData[key] = newItem;
-            const locKey = key + '_loc';
-            this.currentData[locKey] = locPayload;
         } else {
             // 已存在但不是数组：覆盖现有值及loc
             this.currentData[key] = newItem;
-            const locKey = key + '_loc';
-            this.currentData[locKey] = locPayload;
         }
 
         // 标记为有未保存的修改
@@ -13813,15 +13241,9 @@ class PaperReviewerApp {
             return;
         }
 
-        // 提供一个可编辑的占位结构，包含loc信息
+        // 提供一个可编辑的占位结构
         const template = {
-            placeholder_field: '',
-            placeholder_field_loc: {
-                page_label: '',
-                pdf_page_index: null,
-                pdf_open_params: '',
-                quote: []
-            }
+            placeholder_field: ''
         };
 
         this.currentData[sectionName] = template;
@@ -13835,7 +13257,7 @@ class PaperReviewerApp {
         this.showNotification(`Created section "${sectionName}", double-click key or value to edit`, 'success');
     }
 
-    // Add child field under specified section (with _loc placeholder)
+    // Add child field under specified section
     addChildField(sectionKey) {
         if (!this.currentData || !this.currentData[sectionKey] || typeof this.currentData[sectionKey] !== 'object') {
             this.showNotification('Current section unavailable, cannot add field', 'error');
@@ -13851,17 +13273,11 @@ class PaperReviewerApp {
         // If name exists, auto-append sequence number
         let finalKey = key;
         let idx = 1;
-        while (parent.hasOwnProperty(finalKey) || parent.hasOwnProperty(finalKey + '_loc')) {
+        while (parent.hasOwnProperty(finalKey)) {
             finalKey = `${key}_${idx++}`;
         }
 
         parent[finalKey] = '';
-        parent[finalKey + '_loc'] = {
-            page_label: '',
-            pdf_page_index: null,
-            pdf_open_params: '',
-            quote: []
-        };
 
         this.hasUnsavedChanges = true;
         this.tempDataCache[this.currentFile] = this.currentData;
@@ -13886,19 +13302,7 @@ class PaperReviewerApp {
 
         this.currentData[tplKey] = {
             endogeneity_method: '',
-            endogeneity_method_loc: {
-                page_label: '',
-                pdf_page_index: null,
-                pdf_open_params: '',
-                quote: []
-            },
-            parallel_trend_check: '',
-            parallel_trend_check_loc: {
-                page_label: '',
-                pdf_page_index: null,
-                pdf_open_params: '',
-                quote: []
-            }
+            parallel_trend_check: ''
         };
 
         this.hasUnsavedChanges = true;
@@ -14272,7 +13676,7 @@ class PaperReviewerApp {
                 const tablePath = table?.dataset.path ? table.dataset.path.split('.').filter(Boolean) : [];
                 const key = row.dataset.key;
                 if (!key) return;
-                if (confirm(`删除字段 "${key}" 及其 _loc 信息？`)) {
+                if (confirm(`删除字段 "${key}"？`)) {
                     this.deleteField(tablePath, key);
                 }
                 return;
@@ -14317,39 +13721,6 @@ class PaperReviewerApp {
         document.addEventListener('mouseout', this._mathLeaveHandler);
     }
 
-    // 获取指定字段的quote数量
-    getQuoteCount(valuePath) {
-        if (!valuePath) return 0;
-
-        const pathArray = valuePath.split('.');
-        let current = this.currentData;
-
-        // 导航到字段所在的父对象
-        for (let i = 0; i < pathArray.length - 1; i++) {
-            if (current && current.hasOwnProperty(pathArray[i])) {
-                current = current[pathArray[i]];
-            } else {
-                return 0;
-            }
-        }
-
-        if (current) {
-            const lastKey = pathArray[pathArray.length - 1];
-            const locKey = lastKey + '_loc';
-
-            if (current[locKey] && current[locKey].quote) {
-                const quotes = current[locKey].quote;
-                if (Array.isArray(quotes)) {
-                    return quotes.filter(q => q && q.trim()).length;
-                } else if (typeof quotes === 'string' && quotes.trim()) {
-                    return 1;
-                }
-            }
-        }
-
-        return 0;
-    }
-
     // 跳转到页面并高亮指定的quote
     jumpToPageWithQuote(page, valuePath, quoteIndex = null, quoteText = '', openParams = '') {
         let searchText = quoteText ? this.cleanQuoteForSearch(quoteText) : '';
@@ -14371,34 +13742,6 @@ class PaperReviewerApp {
 
             if (current) {
                 const lastKey = pathArray[pathArray.length - 1];
-                const locKey = lastKey + '_loc';
-
-                // 从 _loc.quote 获取搜索文本
-                if (!searchText && current[locKey] && current[locKey].quote) {
-                    const quotes = current[locKey].quote;
-
-                    if (Array.isArray(quotes)) {
-                        // 如果是数组，获取指定索引的quote
-                        if (quoteIndex !== null && quoteIndex >= 0 && quoteIndex < quotes.length) {
-                            searchText = this.cleanQuoteForSearch(quotes[quoteIndex]);
-                            this.debugLog(`🔍 从 quote[${quoteIndex}] 获取搜索文本:`, searchText);
-                        } else if (quotes.length > 0) {
-                            // 默认使用第一个
-                            searchText = this.cleanQuoteForSearch(quotes[0]);
-                            this.debugLog('🔍 从 quote[0] 获取搜索文本:', searchText);
-                        }
-                    } else if (typeof quotes === 'string') {
-                        // 兼容旧的字符串格式
-                        searchText = this.cleanQuoteForSearch(quotes);
-                        this.debugLog('🔍 从 quote 字符串获取搜索文本:', searchText);
-                    }
-                }
-
-                if (!targetPage && current[locKey] && current[locKey].pdf_page_index) {
-                    targetPage = current[locKey].pdf_page_index;
-                }
-
-                // 如果没有 quote，使用字段值本身
                 if (!searchText) {
                     const fieldValue = current[lastKey];
                     if (fieldValue !== null && fieldValue !== undefined) {
@@ -14454,45 +13797,6 @@ class PaperReviewerApp {
         }
 
         return cleanText;
-    }
-
-    // 根据路径从当前数据中获取location的quote（保留用于其他地方调用）
-    getSearchTextFromPath(pathString) {
-        if (!pathString) {
-            console.warn('getSearchTextFromPath: pathString is empty');
-            return '';
-        }
-
-        const pathArray = pathString.split('.');
-
-        try {
-            // 获取对应的_loc字段
-            let current = this.currentData;
-            for (let i = 0; i < pathArray.length - 1; i++) {
-                current = current[pathArray[i]];
-                if (!current) {
-                    console.warn(`Path not found at: ${pathArray.slice(0, i + 1).join('.')}`);
-                    return '';
-                }
-            }
-
-            const lastKey = pathArray[pathArray.length - 1];
-            const locKey = lastKey + '_loc';
-
-            this.debugLog('Searching for location:', { pathString, locKey, hasLoc: !!current[locKey] });
-
-            if (current[locKey] && current[locKey].quote) {
-                const searchText = this.cleanQuoteForSearch(current[locKey].quote);
-                this.debugLog('Found quote:', searchText);
-                return searchText;
-            }
-
-            console.warn('No quote found in location');
-            return '';
-        } catch (error) {
-            console.error('Error getting search text:', error);
-            return '';
-        }
     }
 
     highlightTextInPDF(pdfFrame, searchText) {
