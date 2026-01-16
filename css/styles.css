@@ -315,23 +315,11 @@ body {
     box-shadow: 0 0 0 2px rgba(0, 62, 116, 0.08);
 }
 
-.left-panel::after {
-    content: "Drop PDF onto a group to auto-create entries";
-    position: absolute;
-    left: 8px;
-    right: 8px;
-    bottom: 6px;
-    font-size: 11px;
-    color: var(--gray-600);
-    text-align: center;
-    opacity: 0.7;
-    pointer-events: none;
-}
 
 .file-list {
     flex: 1;
     overflow: hidden;
-    padding: 2px 2px 24px;
+    padding: 2px;
     display: flex;
     flex-direction: column;
     gap: 4px;
@@ -369,6 +357,14 @@ body {
     font-size: 10px;
     color: var(--gray-700);
     flex: 0 0 auto;
+}
+
+.file-group-header.group-drag-over-before {
+    border-top: 2px solid var(--wos-blue);
+}
+
+.file-group-header.group-drag-over-after {
+    border-bottom: 2px solid var(--wos-blue);
 }
 
 .file-group-toggle {

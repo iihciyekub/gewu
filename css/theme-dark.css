@@ -48,10 +48,6 @@ body.theme-dark .section-header {
     color: var(--vscode-text);
 }
 
-body.theme-dark .left-panel::after {
-    color: #b8b8b8;
-    opacity: 0.6;
-}
 
 body.theme-dark #lastUpdateDisplay {
     color: var(--vscode-text);

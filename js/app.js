@@ -110,6 +110,8 @@ class PaperReviewerApp {
         this.currentFileList = [];
         this.draggingFile = null; // { filename, fromGroupId }
         this.currentFileDragState = null; // { targetFilename, targetGroupId, placeAfter }
+        this.draggingGroup = null; // { groupId }
+        this.currentGroupDragState = null; // { targetGroupId, placeAfter }
         this.dragPreviewEl = null;
         this.selectedFiles = new Set();
         this.lastFileSelectionAnchor = null;
@@ -3472,6 +3474,7 @@ class PaperReviewerApp {
 
             const header = document.createElement('div');
             header.className = 'file-group-header';
+            header.draggable = true;
             header.addEventListener('click', (ev) => {
                 if (ev.target.closest('.file-group-title')) return;
                 this.toggleGroupCollapse(group.id, { collapseAll: ev.shiftKey });
@@ -3480,9 +3483,23 @@ class PaperReviewerApp {
                 e.preventDefault();
                 this.showGroupContextMenu(e, group);
             });
-            header.addEventListener('dragover', (e) => this.handleGroupDragOver(e, group.id));
-            header.addEventListener('drop', (e) => this.handleGroupDrop(e, group.id));
+            header.addEventListener('dragstart', (e) => this.handleGroupDragStart(e, group, header));
+            header.addEventListener('dragover', (e) => {
+                if (this.draggingGroup) {
+                    this.handleGroupOrderDragOver(e, group, header);
+                } else {
+                    this.handleGroupDragOver(e, group.id);
+                }
+            });
+            header.addEventListener('drop', (e) => {
+                if (this.draggingGroup) {
+                    this.handleGroupOrderDrop(e, group);
+                } else {
+                    this.handleGroupDrop(e, group.id);
+                }
+            });
             header.addEventListener('dragleave', () => this.clearAllFileDragHighlights());
+            header.addEventListener('dragend', () => this.handleGroupDragEnd());
 
             const toggle = document.createElement('span');
             toggle.className = 'file-group-toggle';
@@ -3532,7 +3549,7 @@ class PaperReviewerApp {
             if (!group.visible || group.visible.length === 0) {
                 const placeholder = document.createElement('div');
                 placeholder.className = 'file-group-empty';
-                placeholder.textContent = this.fileFilter ? 'No matching files' : 'Drag files to this group';
+                placeholder.textContent = this.fileFilter ? 'No matching files' : 'Drag files/pdf onto this group';
                 body.appendChild(placeholder);
             } else {
                 group.visible.forEach((file) => {
@@ -3658,6 +3675,96 @@ class PaperReviewerApp {
         }
     }
 
+    handleGroupDragStart(e, group, headerEl) {
+        if (!group || group.id === 'init') {
+            if (e?.dataTransfer) e.dataTransfer.effectAllowed = 'none';
+            return;
+        }
+        if (e?.target?.closest('button')) {
+            e.preventDefault();
+            return;
+        }
+        this.draggingGroup = { groupId: group.id };
+        this.currentGroupDragState = null;
+        if (headerEl?.classList) headerEl.classList.add('dragging');
+        const label = group.name || 'group';
+        const preview = this.createDragPreview(`Group: ${label}`);
+        if (e?.dataTransfer) {
+            e.dataTransfer.effectAllowed = 'move';
+            e.dataTransfer.setData('text/plain', group.id);
+            if (preview) e.dataTransfer.setDragImage(preview, -10, -10);
+        }
+    }
+
+    handleGroupOrderDragOver(e, group, headerEl) {
+        if (!this.draggingGroup || !group || !headerEl) return;
+        if (this.draggingGroup.groupId === group.id) return;
+        e.preventDefault();
+        e.stopPropagation();
+        if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
+        const before = e.offsetY < (headerEl.clientHeight || 0) / 2;
+        this.currentGroupDragState = { targetGroupId: group.id, placeAfter: !before };
+        this.markGroupDragPosition(headerEl, before);
+    }
+
+    handleGroupOrderDrop(e, group) {
+        if (!this.draggingGroup || !group) return;
+        e.preventDefault();
+        e.stopPropagation();
+        const sourceId = this.draggingGroup.groupId;
+        const targetId = group.id;
+        if (!sourceId || !targetId || sourceId === targetId) {
+            this.clearAllFileDragHighlights();
+            this.draggingGroup = null;
+            this.currentGroupDragState = null;
+            return;
+        }
+        const placeAfter = this.currentGroupDragState?.targetGroupId === targetId
+            ? !!this.currentGroupDragState.placeAfter
+            : (e.offsetY >= (e.currentTarget?.clientHeight || 0) / 2);
+        this.reorderGroups(sourceId, targetId, placeAfter);
+        this.draggingGroup = null;
+        this.currentGroupDragState = null;
+        this.clearAllFileDragHighlights();
+    }
+
+    handleGroupDragEnd() {
+        this.draggingGroup = null;
+        this.currentGroupDragState = null;
+        this.clearAllFileDragHighlights();
+    }
+
+    markGroupDragPosition(targetEl, before) {
+        if (!targetEl) return;
+        targetEl.classList.add('group-dragging-over');
+        targetEl.classList.toggle('group-drag-over-before', before);
+        targetEl.classList.toggle('group-drag-over-after', !before);
+    }
+
+    reorderGroups(sourceId, targetId, placeAfter) {
+        if (!sourceId || !targetId || sourceId === targetId) return;
+        if (sourceId === 'init') {
+            this.showNotification('Default group cannot be moved', 'info');
+            return;
+        }
+        const baseGroups = this.completeGroupsForCurrentProject
+            ? this.cloneFileGroups(this.completeGroupsForCurrentProject)
+            : this.getCurrentGroups();
+        const sourceIdx = baseGroups.findIndex(g => g.id === sourceId);
+        const targetIdx = baseGroups.findIndex(g => g.id === targetId);
+        if (sourceIdx < 0 || targetIdx < 0) return;
+        const [moving] = baseGroups.splice(sourceIdx, 1);
+        let insertIdx = targetIdx + (placeAfter ? 1 : 0);
+        if (sourceIdx < targetIdx) insertIdx -= 1;
+        baseGroups.splice(insertIdx, 0, moving);
+        const initIdx = baseGroups.findIndex(g => g.id === 'init');
+        if (initIdx > 0) {
+            const [initGroup] = baseGroups.splice(initIdx, 1);
+            baseGroups.unshift(initGroup);
+        }
+        this.persistGroupsAndRender(baseGroups, this.currentFile);
+    }
+
     async handleGroupDrop(e, groupId) {
         if (!e) return;
         const droppedFiles = Array.from(e.dataTransfer?.files || []);
@@ -3699,6 +3806,9 @@ class PaperReviewerApp {
         document.querySelectorAll('.file-item').forEach(el => {
             this.clearFileDragHighlights(el);
             el.classList.remove('dragging');
+        });
+        document.querySelectorAll('.file-group-header').forEach(el => {
+            el.classList.remove('dragging', 'group-dragging-over', 'group-drag-over-before', 'group-drag-over-after');
         });
         document.querySelectorAll('.file-group-body').forEach(el => el.classList.remove('file-group-drop'));
         document.querySelectorAll('.file-group-header').forEach(el => el.classList.remove('file-group-drop'));
