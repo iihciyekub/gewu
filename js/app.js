@@ -139,6 +139,9 @@ class PaperReviewerApp {
         this.importJsonTargetPath = 'json/imported';
         this.jsonTargetCallback = null;
         this.importModeCallback = null;
+        this.wosFieldTagsByTag = {};
+        this.wosFieldTagsByKey = {};
+        this.wosFieldPtValueMap = {};
         this.selectedJsonTargetPath = null;
         this.fileMetaByPath = {};
         this.fileMetaByBase = {};
@@ -1113,6 +1116,7 @@ class PaperReviewerApp {
 
         // 加载环境信息（用于占位符和默认路径），不阻塞主流程
         this.loadEnvInfo();
+        this.loadWosFieldTags();
         this.loadStatusVersion();
 
         // 先加载项目配置
@@ -1156,6 +1160,33 @@ class PaperReviewerApp {
             }
         } catch (err) {
             console.warn('Failed to load manifest version:', err);
+        }
+    }
+
+    async loadWosFieldTags() {
+        try {
+            const resp = await fetch('js/WosFieldTags.json', { cache: 'no-store' });
+            if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+            const data = await resp.json();
+            const byTag = {};
+            const byKey = {};
+            const ptMap = data?.PT_value_map && typeof data.PT_value_map === 'object' ? data.PT_value_map : {};
+            Object.entries(data || {}).forEach(([tag, info]) => {
+                if (tag === 'PT_value_map') return;
+                if (!info || typeof info !== 'object') return;
+                const normalized = info.normalized_key || '';
+                if (!normalized) return;
+                byTag[tag] = { full_name: info.full_name || '', normalized_key: normalized };
+                byKey[normalized] = { full_name: info.full_name || '', source_tag: tag };
+            });
+            this.wosFieldTagsByTag = byTag;
+            this.wosFieldTagsByKey = byKey;
+            this.wosFieldPtValueMap = ptMap;
+        } catch (err) {
+            console.warn('Failed to load WOS field tags:', err);
+            this.wosFieldTagsByTag = {};
+            this.wosFieldTagsByKey = {};
+            this.wosFieldPtValueMap = {};
         }
     }
 
@@ -1834,6 +1865,15 @@ class PaperReviewerApp {
                 this.startImportJsonFlow(importJsonFolderInput);
             });
             importJsonFolderInput.addEventListener('change', (e) => this.handleJsonFolderImport(e));
+        }
+        const importWosBtn = document.getElementById('importWosBtn');
+        const importWosInput = document.getElementById('importWosInput');
+        if (importWosBtn && importWosInput) {
+            importWosBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                importWosInput.click();
+            });
+            importWosInput.addEventListener('change', (e) => this.handleWosTxtImport(e));
         }
         const promptCloseBtn = document.getElementById('promptPanelClose');
         if (promptCloseBtn) {
@@ -2853,7 +2893,6 @@ class PaperReviewerApp {
             schema_version: '1.0',
             meta_info: {
                 doi: clean,
-                title: '',
                 pdf_path: '',
                 No: null
             },
@@ -4262,9 +4301,17 @@ class PaperReviewerApp {
                 if (action === 'rename') {
                     this.renameFile(filename, fileItem);
                 } else if (action === 'delete') {
-                    this.deleteFile(filename, fileItem, false);
+                    if (this.selectedFiles.size > 1) {
+                        this.deleteSelectedFilesCurrentView();
+                    } else {
+                        this.deleteFile(filename, fileItem, false);
+                    }
                 } else if (action === 'deleteAll') {
-                    this.deleteFile(filename, fileItem, true);
+                    if (this.selectedFiles.size > 1) {
+                        this.deleteSelectedFilesAll();
+                    } else {
+                        this.deleteFile(filename, fileItem, true);
+                    }
                 } else if (action === 'copyPdfFile') {
                     this.copyPdfFileToClipboard(filename);
                 } else if (action === 'copySelectedFilesDois') {
@@ -4871,6 +4918,144 @@ class PaperReviewerApp {
         }
     }
 
+    async deleteSelectedFilesAll() {
+        const projectPath = this.currentProject ? this.currentProject.path : 'user';
+        const bases = this.getSelectedFilesArray().map(f => (f || '').replace(/\.json$/i, '')).filter(Boolean);
+        const uniqueBases = Array.from(new Set(bases));
+        if (!uniqueBases.length) {
+            this.showNotification('No files selected', 'warning');
+            return;
+        }
+        const targetMap = new Map();
+        uniqueBases.forEach((base) => {
+            const targets = this.getAllPathsForDelete(base);
+            const pdfInMeta = Object.entries(this.fileMetaByPath || {}).find(([path, meta]) => {
+                const baseName = path.split('/').pop()?.replace(/\.(pdf|JSON|md)$/i, '');
+                return baseName === base && meta.kind === 'pdf';
+            });
+            if (pdfInMeta) {
+                targets.push({ path: pdfInMeta[0], type: 'pdf' });
+            } else {
+                targets.push({ path: `pdf/${base}.pdf`, type: 'pdf' });
+            }
+            targets.forEach(t => {
+                if (!t?.path) return;
+                const key = `${t.type}:${t.path}`;
+                if (!targetMap.has(key)) targetMap.set(key, t);
+            });
+        });
+        const targets = Array.from(targetMap.values());
+        const jsonCount = targets.filter(t => t.type === 'json').length;
+        const mdCount = targets.filter(t => t.type === 'md').length;
+        const pdfCount = targets.filter(t => t.type === 'pdf').length;
+        const ok = window.confirm(
+            `Are you sure you want to delete all files for ${uniqueBases.length} selection(s)?\n` +
+            `JSON: ${jsonCount} file(s)\n` +
+            `Markdown: ${mdCount} file(s)\n` +
+            `PDF: ${pdfCount} file(s)\n` +
+            `This action cannot be undone!`
+        );
+        if (!ok) return;
+
+        let deletedCount = 0;
+        for (const t of targets) {
+            try {
+                const endpoint = t.type === 'pdf' ? '/delete-pdf' : '/delete-json';
+                const resp = await fetch(endpoint, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        projectPath,
+                        filename: t.path
+                    })
+                });
+                if (!resp.ok) continue;
+                deletedCount++;
+            } catch (err) {
+                console.warn('Delete failed', t.path, err);
+            }
+        }
+
+        uniqueBases.forEach((base) => {
+            this.removeFilenameFromGroups(base);
+            delete this.tempDataCache[`${base}.json`];
+            delete this.tempDataCache[`md/${base}.md`];
+        });
+
+        const currentBase = (this.currentFileBase || this.currentFile || '').split('/').pop()?.replace(/\.json$/i, '');
+        if (currentBase && uniqueBases.includes(currentBase)) {
+            this.currentFile = null;
+            this.currentData = null;
+            this.hasUnsavedChanges = false;
+        }
+
+        this.showNotification(`✓ Deleted ${deletedCount} file(s)`, 'success');
+        await this.loadFileList(true);
+        if (!this.currentFile && (this.currentFileList || []).length) {
+            const nextFile = this.currentFileList[0];
+            const nextEl = document.querySelector(`.file-item[data-filename="${nextFile}"]`);
+            if (nextEl) this.loadFile(nextFile, nextEl);
+        }
+    }
+
+    async deleteSelectedFilesCurrentView() {
+        const projectPath = this.currentProject ? this.currentProject.path : 'user';
+        const bases = this.getSelectedFilesArray().map(f => (f || '').replace(/\.json$/i, '')).filter(Boolean);
+        const uniqueBases = Array.from(new Set(bases));
+        if (!uniqueBases.length) {
+            this.showNotification('No files selected', 'warning');
+            return;
+        }
+        const currentView = this.currentJsonView || 'view1';
+        const targets = [];
+        uniqueBases.forEach((base) => {
+            targets.push({ path: `json/${currentView}/${base}.json`, type: 'json' });
+            targets.push({ path: `md/${base}.md`, type: 'md' });
+        });
+        const ok = window.confirm(
+            `Are you sure you want to delete JSON and Markdown files for ${uniqueBases.length} selection(s) in current view (${currentView})? This action cannot be undone!`
+        );
+        if (!ok) return;
+
+        let deletedCount = 0;
+        for (const t of targets) {
+            try {
+                const resp = await fetch('/delete-json', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        projectPath,
+                        filename: t.path
+                    })
+                });
+                if (!resp.ok) continue;
+                deletedCount++;
+            } catch (err) {
+                console.warn('Delete failed', t.path, err);
+            }
+        }
+
+        uniqueBases.forEach((base) => {
+            delete this.tempDataCache[`${base}.json`];
+            delete this.tempDataCache[`md/${base}.md`];
+        });
+
+        const currentBase = (this.currentFileBase || this.currentFile || '').split('/').pop()?.replace(/\.json$/i, '');
+        if (currentBase && uniqueBases.includes(currentBase)) {
+            this.currentFile = null;
+            this.currentData = null;
+            this.hasUnsavedChanges = false;
+        }
+
+        this.showNotification(`✓ Deleted ${deletedCount} file(s)`, 'success');
+        await this.loadFileList(true);
+        if (!this.currentFile && (this.currentFileList || []).length) {
+            const nextFile = this.currentFileList[0];
+            const nextEl = document.querySelector(`.file-item[data-filename="${nextFile}"]`);
+            if (nextEl) this.loadFile(nextFile, nextEl);
+        }
+    }
+
     handlePdfPanelDragOver(e) {
         if (!e?.dataTransfer) return;
         const hasPdf = Array.from(e.dataTransfer.items || []).some(item => {
@@ -5362,6 +5547,273 @@ class PaperReviewerApp {
         }
     }
 
+    async handleWosTxtImport(e) {
+        const input = e?.target;
+        const file = input?.files?.[0];
+        if (!file) return;
+        if (!this.currentProject) {
+            this.showNotification('Please load a project first', 'warning');
+            if (input) input.value = '';
+            return;
+        }
+        const view = this.currentJsonView || 'view1';
+        try {
+            const text = await this.readFileAsText(file);
+            if (!this.isValidWosTxt(text)) {
+                this.showNotification('Import failed: not a valid WOS data file', 'error');
+                if (input) input.value = '';
+                return;
+            }
+            const records = this.parseWosTxt(text);
+            if (!records.length) {
+                this.showNotification('No WOS records found', 'warning');
+                if (input) input.value = '';
+                return;
+            }
+            const batches = new Map();
+            let skipped = 0;
+
+            for (const rec of records) {
+                const doi = this.extractWosDoi(rec);
+                const wosid = this.extractWosId(rec);
+                const base = doi ? this.doiToFilenameBase(doi) : this.wosidToFilenameBase(wosid);
+                if (!base) {
+                    skipped += 1;
+                    continue;
+                }
+                const entry = batches.get(base) || {
+                    records: [],
+                    doi: '',
+                    wosid: '',
+                    isWosidOnly: true
+                };
+                entry.records.push(rec);
+                if (doi && !entry.doi) entry.doi = doi;
+                if (wosid && !entry.wosid) entry.wosid = wosid;
+                if (doi) entry.isWosidOnly = false;
+                batches.set(base, entry);
+            }
+
+            const wosidBases = [];
+            let created = 0;
+            let updated = 0;
+            let failed = 0;
+
+            for (const [base, entry] of batches.entries()) {
+                try {
+                    const existingPath = this.fileMetaByBase?.[base]?.views?.[view] || null;
+                    const jsonFilename = existingPath || `json/${view}/${base}.json`;
+                    let payload = null;
+                    let existed = false;
+                    try {
+                        payload = await this.readProjectFile(jsonFilename);
+                        existed = !!payload;
+                    } catch (_err) {
+                        existed = false;
+                    }
+
+                    if (!payload || !existed) {
+                        payload = this.buildWosJsonPayload(entry.records[0], entry.doi, entry.wosid);
+                        this.mergeWodData(payload, entry.records.slice(1));
+                        await this.saveJsonPayload(jsonFilename, payload);
+                        if (entry.doi) {
+                            await this.ensureMarkdownExistsForFile(jsonFilename);
+                        }
+                        created += 1;
+                    } else {
+                        if (!payload.meta_info || typeof payload.meta_info !== 'object') {
+                            payload.meta_info = {};
+                        }
+                        if (entry.doi && !payload.meta_info.doi) {
+                            payload.meta_info.doi = this.normalizeDoi(entry.doi);
+                        }
+                        if (entry.wosid && !payload.meta_info.wosid) {
+                            payload.meta_info.wosid = entry.wosid;
+                        }
+                        this.mergeWodData(payload, entry.records);
+                        await this.saveJsonPayload(jsonFilename, payload);
+                        updated += 1;
+                    }
+
+                    if (entry.isWosidOnly) wosidBases.push(base);
+                } catch (err) {
+                    console.warn('WOS import failed for base:', base, err);
+                    failed += 1;
+                }
+            }
+
+            if (created || updated) {
+                await this.loadFileList(true);
+            }
+
+            if (wosidBases.length) {
+                const groupId = this.ensureGroupByName('wodsid');
+                this.moveFilesToGroup(wosidBases, groupId);
+            }
+
+            const parts = [];
+            if (created) parts.push(`created ${created}`);
+            if (updated) parts.push(`updated ${updated}`);
+            if (skipped) parts.push(`skipped ${skipped}`);
+            if (failed) parts.push(`failed ${failed}`);
+            const type = failed ? 'error' : 'success';
+            this.showNotification(`WOS import: ${parts.join(', ')}`, type);
+        } catch (err) {
+            console.error('WOS txt import failed:', err);
+            this.showNotification(`WOS import failed: ${err.message}`, 'error');
+        } finally {
+            if (input) input.value = '';
+        }
+    }
+
+    mergeWodData(payload, records) {
+        if (!payload || !records || !records.length) return;
+        const ensureObject = (val) => {
+            if (!val) return {};
+            if (Array.isArray(val)) return val[0] && typeof val[0] === 'object' ? { ...val[0] } : {};
+            return typeof val === 'object' ? { ...val } : {};
+        };
+        let merged = ensureObject(payload.wod_data);
+        records.forEach((rec) => {
+            const next = this.normalizeWosRecord(rec);
+            Object.entries(next).forEach(([tag, value]) => {
+                if (value === undefined || value === null || value === '') return;
+                merged[tag] = value;
+            });
+        });
+        payload.wod_data = merged;
+    }
+
+    parseWosTxt(text = '') {
+        const lines = String(text || '').split(/\r?\n/);
+        const records = [];
+        let current = null;
+        let currentTag = null;
+        for (const raw of lines) {
+            const line = raw || '';
+            if (!line.trim()) continue;
+            if (line.startsWith('EF')) break;
+            if (line.startsWith('ER')) {
+                if (current) records.push(current);
+                current = null;
+                currentTag = null;
+                continue;
+            }
+            const match = line.match(/^([A-Z0-9]{2})\s+(.*)$/);
+            if (match) {
+                const tag = match[1];
+                if (tag === 'FN' || tag === 'VR' || tag === 'EF') {
+                    currentTag = null;
+                    continue;
+                }
+                const value = match[2]?.trim() || '';
+                if (!current) current = {};
+                if (!current[tag]) current[tag] = [];
+                if (value) current[tag].push(value);
+                currentTag = tag;
+                continue;
+            }
+            if (current && currentTag && line.startsWith(' ')) {
+                const value = line.trim();
+                if (value) {
+                    if (!current[currentTag]) current[currentTag] = [];
+                    current[currentTag].push(value);
+                }
+            }
+        }
+        if (current) records.push(current);
+        return records;
+    }
+
+    isValidWosTxt(text = '') {
+        const lines = String(text || '').split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+        if (!lines.length) return false;
+        const hasHeader = lines[0] === 'FN Clarivate Analytics Web of Science';
+        const hasVersion = lines[1] === 'VR 1.0';
+        const hasFooter = lines.some(l => l === 'EF');
+        return hasHeader && hasVersion && hasFooter;
+    }
+
+    extractWosDoi(record = {}) {
+        const di = record.DI || record.Do || record.DO || [];
+        const candidates = Array.isArray(di) ? di : [di];
+        const primary = candidates.find(Boolean) || '';
+        if (primary) return this.normalizeDoi(primary);
+        const allText = Object.values(record || {})
+            .flat()
+            .filter(Boolean)
+            .join(' ');
+        const fallback = this.extractDoisFromText(allText)[0];
+        return fallback || '';
+    }
+
+    extractWosId(record = {}) {
+        const ut = record.UT || [];
+        const value = Array.isArray(ut) ? ut.find(Boolean) : ut;
+        if (!value) return '';
+        const match = String(value).match(/WOS:(.+)/i);
+        return match ? match[1].trim() : String(value).trim();
+    }
+
+    wosidToFilenameBase(wosid = '') {
+        const clean = String(wosid || '').trim();
+        if (!clean) return '';
+        return clean.replace(/[^a-zA-Z0-9._-]+/g, '_') || 'wos_item';
+    }
+
+    buildWosJsonPayload(record = {}, doi = '', wosid = '') {
+        const cleanDoi = doi ? this.normalizeDoi(doi) : '';
+        const meta = {
+            doi: cleanDoi,
+            pdf_path: '',
+            No: null
+        };
+        if (wosid) meta.wosid = wosid;
+        return {
+            schema_version: '1.0',
+            meta_info: meta,
+            review: {},
+            wod_data: this.normalizeWosRecord(record)
+        };
+    }
+
+    normalizeWosRecord(record = {}) {
+        const out = {};
+        Object.entries(record || {}).forEach(([tag, values]) => {
+            const list = Array.isArray(values) ? values.filter(Boolean) : [values].filter(Boolean);
+            if (!list.length) return;
+            const meta = this.wosFieldTagsByTag?.[tag] || {};
+            const key = meta.normalized_key || tag;
+            let value = list.length === 1 ? list[0] : list;
+            if (tag === 'PT' && this.wosFieldPtValueMap) {
+                const mapped = Array.isArray(value)
+                    ? value.map(v => this.wosFieldPtValueMap[v] || v)
+                    : (this.wosFieldPtValueMap[value] || value);
+                value = mapped;
+            }
+            out[key] = value;
+        });
+        return out;
+    }
+
+    coalesceRecordValue(record = {}, tag) {
+        const val = record?.[tag];
+        if (Array.isArray(val)) return val.join(' ').trim();
+        return val ? String(val).trim() : '';
+    }
+
+    ensureGroupByName(name) {
+        const groups = this.getCurrentGroups();
+        let target = groups.find(g => (g.name || '').toLowerCase() === name.toLowerCase());
+        if (!target) {
+            const id = `group-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+            target = { id, name, files: [], collapsed: false };
+            groups.push(target);
+            this.persistGroupsAndRender(groups, this.currentFile);
+        }
+        return target.id;
+    }
+
     async loadFile(identifier, clickedElement = null) {
         const base = (identifier || '').split('/').pop()?.replace(/\.json$/i, '') || identifier;
         const paths = this.getPathsForBase(base);
@@ -5696,7 +6148,9 @@ class PaperReviewerApp {
             // Second column: Editable Key
             const isNestedIndex = table.classList.contains('nested-table') && /^\d+$/.test(key);
             const displayKey = isNestedIndex ? `#${parseInt(key, 10) + 1}` : this.formatKey(key);
-            const keyDisplay = `<span class="editable-key" data-path="${basePath.join('.')}" data-key="${key}">${displayKey}</span>`;
+            const wosHint = this.wosFieldTagsByKey?.[key]?.full_name || '';
+            const keyTitle = wosHint ? ` title="${this.escapeAttr(wosHint)}"` : '';
+            const keyDisplay = `<span class="editable-key" data-path="${basePath.join('.')}" data-key="${key}"${keyTitle}>${displayKey}</span>`;
 
             keyCell.innerHTML = keyDisplay;
             const currentPath = [...basePath, key];
@@ -5792,6 +6246,25 @@ class PaperReviewerApp {
         const displayValue = typeof value === 'string' ? value : JSON.stringify(value);
 
         const keyLower = (key || '').toLowerCase();
+        // 特殊处理: ORCID 字段，渲染跳转链接
+        if ((keyLower === 'orcid' || keyLower === 'orcid_id') && value) {
+            const rawList = Array.isArray(value) ? value : String(value).split(';');
+            const entries = rawList.map(v => String(v || '').trim()).filter(Boolean);
+            if (entries.length) {
+                const links = entries.map((entry) => {
+                    const parts = entry.split('/').map(p => p.trim()).filter(Boolean);
+                    const name = parts[0] || '';
+                    const rawId = parts[1] || parts[0] || '';
+                    const clean = rawId.replace(/^https?:\/\/orcid\.org\//i, '').trim();
+                    const url = `https://orcid.org/${encodeURIComponent(clean)}`;
+                    const label = name || clean;
+                    return `<a href="${url}" target="_blank" class="doi-link" title="Open ORCID: ${this.escapeHtml(clean)}">
+                        <i class="fa-brands fa-orcid"></i> ${this.escapeHtml(label)}
+                    </a>`;
+                }).join('<span class="keyword-sep"> </span>');
+                return `<span class="keyword-links">${links}</span>`;
+            }
+        }
         // 特殊处理: DOI 字段，添加 Web of Science 链接和复制按钮
         if (keyLower === 'doi' && typeof value === 'string' && value.trim()) {
             const wosUrl = this.generateWosUrl(value.trim());
@@ -5889,15 +6362,19 @@ class PaperReviewerApp {
             </a>`;
         }
         // 特殊处理: WOSID 字段，跳转 Web of Science Full Record
-        if (keyLower.includes('wos') && typeof value === 'string') {
+        if (typeof value === 'string') {
             const trimmed = value.trim();
-            const match = trimmed.match(/WOS:[^\\s]+/i);
-            const wosId = match ? match[0] : trimmed;
-            if (wosId) {
-                const url = `https://www.webofscience.com/wos/woscc/full-record/${encodeURIComponent(wosId)}`;
-                return `<a href="${url}" target="_blank" class="doi-link" title="View full record on Web of Science">
-                    <i class="fas fa-external-link-alt"></i> ${this.escapeHtml(displayValue)}
-                </a>`;
+            const hasWosPrefix = /^WOS:/i.test(trimmed);
+            const isWosIdKey = keyLower === 'wosid' || keyLower === 'wos_id';
+            if (hasWosPrefix || isWosIdKey) {
+                const match = trimmed.match(/WOS:[^\\s]+/i);
+                const wosId = match ? match[0] : trimmed;
+                if (wosId) {
+                    const url = `https://www.webofscience.com/wos/woscc/full-record/${encodeURIComponent(wosId)}`;
+                    return `<a href="${url}" target="_blank" class="doi-link" title="View full record on Web of Science">
+                        <i class="fas fa-external-link-alt"></i> ${this.escapeHtml(displayValue)}
+                    </a>`;
+                }
             }
         }
 
@@ -6122,6 +6599,24 @@ class PaperReviewerApp {
             reader.onload = () => resolve(reader.result);
             reader.onerror = (err) => reject(err);
             reader.readAsDataURL(file);
+        });
+    }
+
+    readFileAsText(file) {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(reader.result);
+            reader.onerror = (err) => reject(err);
+            reader.readAsText(file);
+        });
+    }
+
+    readFileAsText(file) {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(reader.result);
+            reader.onerror = (err) => reject(err);
+            reader.readAsText(file);
         });
     }
 
@@ -11398,7 +11893,6 @@ class PaperReviewerApp {
             this.pendingPdfFallback = null;
             this.lastPdfLoadedUrl = '';
             this.updatePdfPlaceholder('empty');
-            this.showNotification('PDF file not found', 'warning');
             return;
         }
 
@@ -13257,7 +13751,7 @@ class PaperReviewerApp {
         this.showNotification(`Created section "${sectionName}", double-click key or value to edit`, 'success');
     }
 
-    // Add child field under specified section
+    // Add child field under specified section (with _loc placeholder)
     addChildField(sectionKey) {
         if (!this.currentData || !this.currentData[sectionKey] || typeof this.currentData[sectionKey] !== 'object') {
             this.showNotification('Current section unavailable, cannot add field', 'error');

@@ -1,0 +1,296 @@
+{
+    "PT": {
+        "full_name": "Publication Type",
+        "normalized_key": "publication_type"
+    },
+    "AU": {
+        "full_name": "Authors",
+        "normalized_key": "authors"
+    },
+    "AF": {
+        "full_name": "Author Full Names",
+        "normalized_key": "author_full_names"
+    },
+    "TI": {
+        "full_name": "Title",
+        "normalized_key": "title"
+    },
+    "SO": {
+        "full_name": "Source (Journal/Book/Proceedings Title)",
+        "normalized_key": "source_title"
+    },
+    "LA": {
+        "full_name": "Language",
+        "normalized_key": "language"
+    },
+    "DT": {
+        "full_name": "Document Type",
+        "normalized_key": "document_type"
+    },
+    "DE": {
+        "full_name": "Author Keywords",
+        "normalized_key": "author_keywords"
+    },
+    "ID": {
+        "full_name": "Keywords Plus",
+        "normalized_key": "keywords_plus"
+    },
+    "AB": {
+        "full_name": "Abstract",
+        "normalized_key": "abstract"
+    },
+    "C1": {
+        "full_name": "Author Address",
+        "normalized_key": "author_addresses"
+    },
+    "C3": {
+        "full_name": "Affiliations / Organizations (Consolidated)",
+        "normalized_key": "organizations"
+    },
+    "RP": {
+        "full_name": "Reprint Address",
+        "normalized_key": "corresponding_address"
+    },
+    "EM": {
+        "full_name": "E-mail Addresses",
+        "normalized_key": "emails"
+    },
+    "RI": {
+        "full_name": "ResearcherID Numbers",
+        "normalized_key": "researcher_id"
+    },
+    "OI": {
+        "full_name": "ORCID Identifiers",
+        "normalized_key": "orcid"
+    },
+    "FU": {
+        "full_name": "Funding Agency and Grant Number",
+        "normalized_key": "funding_agency_grant"
+    },
+    "FX": {
+        "full_name": "Funding Text",
+        "normalized_key": "funding_text"
+    },
+    "NR": {
+        "full_name": "Cited Reference Count",
+        "normalized_key": "cited_reference_count"
+    },
+    "TC": {
+        "full_name": "Times Cited, Web of Science Core Collection",
+        "normalized_key": "times_cited_wos"
+    },
+    "Z9": {
+        "full_name": "Total Times Cited (All Databases)",
+        "normalized_key": "times_cited_all_databases"
+    },
+    "U1": {
+        "full_name": "Usage Count (Last 180 Days)",
+        "normalized_key": "usage_count_180_days"
+    },
+    "U2": {
+        "full_name": "Usage Count (Since 2013)",
+        "normalized_key": "usage_count_since_2013"
+    },
+    "PU": {
+        "full_name": "Publisher",
+        "normalized_key": "publisher"
+    },
+    "PI": {
+        "full_name": "Publisher City",
+        "normalized_key": "publisher_city"
+    },
+    "PA": {
+        "full_name": "Publisher Address",
+        "normalized_key": "publisher_address"
+    },
+    "SN": {
+        "full_name": "ISSN",
+        "normalized_key": "issn"
+    },
+    "EI": {
+        "full_name": "eISSN",
+        "normalized_key": "eissn"
+    },
+    "J9": {
+        "full_name": "29-Character Source Abbreviation",
+        "normalized_key": "source_abbrev_29"
+    },
+    "JI": {
+        "full_name": "ISO Source Abbreviation",
+        "normalized_key": "source_abbrev_iso"
+    },
+    "PD": {
+        "full_name": "Publication Date (Month/Season)",
+        "normalized_key": "publication_month_or_season"
+    },
+    "PY": {
+        "full_name": "Publication Year",
+        "normalized_key": "publication_year"
+    },
+    "VL": {
+        "full_name": "Volume",
+        "normalized_key": "volume"
+    },
+    "IS": {
+        "full_name": "Issue",
+        "normalized_key": "issue"
+    },
+    "SI": {
+        "full_name": "Special Issue",
+        "normalized_key": "special_issue"
+    },
+    "BP": {
+        "full_name": "Beginning Page",
+        "normalized_key": "begin_page"
+    },
+    "EP": {
+        "full_name": "Ending Page",
+        "normalized_key": "end_page"
+    },
+    "PG": {
+        "full_name": "Page Count",
+        "normalized_key": "page_count"
+    },
+    "DI": {
+        "full_name": "Digital Object Identifier (DOI)",
+        "normalized_key": "doi"
+    },
+    "EA": {
+        "full_name": "Early Access Date",
+        "normalized_key": "early_access_date"
+    },
+    "WC": {
+        "full_name": "Web of Science Categories",
+        "normalized_key": "wos_categories"
+    },
+    "WE": {
+        "full_name": "Web of Science Indexes",
+        "normalized_key": "wos_indexes"
+    },
+    "SC": {
+        "full_name": "Research Areas",
+        "normalized_key": "research_areas"
+    },
+    "GA": {
+        "full_name": "Document Delivery Number",
+        "normalized_key": "document_delivery_number"
+    },
+    "UT": {
+        "full_name": "Unique Article Identifier (Web of Science Accession Number)",
+        "normalized_key": "wos_id"
+    },
+    "OA": {
+        "full_name": "Open Access Indicator",
+        "normalized_key": "open_access"
+    },
+    "DA": {
+        "full_name": "Date this record was exported / processed",
+        "normalized_key": "export_date"
+    },
+    "ER": {
+        "full_name": "End of Record",
+        "normalized_key": "end_of_record_marker"
+    },
+    "PT_value_map": {
+        "J": "Journal",
+        "B": "Book",
+        "S": "Series",
+        "P": "Proceedings Paper"
+    },
+    "BA": {
+        "full_name": "Book Authors",
+        "normalized_key": "book_authors"
+    },
+    "BF": {
+        "full_name": "Book Authors Full Name",
+        "normalized_key": "book_author_full_names"
+    },
+    "CA": {
+        "full_name": "Group Authors",
+        "normalized_key": "group_authors"
+    },
+    "GP": {
+        "full_name": "Book Group Authors",
+        "normalized_key": "book_group_authors"
+    },
+    "BE": {
+        "full_name": "Editors",
+        "normalized_key": "editors"
+    },
+    "SE": {
+        "full_name": "Book Series Title",
+        "normalized_key": "book_series_title"
+    },
+    "BS": {
+        "full_name": "Book Series Subtitle",
+        "normalized_key": "book_series_subtitle"
+    },
+    "CT": {
+        "full_name": "Conference Title",
+        "normalized_key": "conference_title"
+    },
+    "CY": {
+        "full_name": "Conference Date",
+        "normalized_key": "conference_date"
+    },
+    "CL": {
+        "full_name": "Conference Location",
+        "normalized_key": "conference_location"
+    },
+    "SP": {
+        "full_name": "Conference Sponsors",
+        "normalized_key": "conference_sponsors"
+    },
+    "HO": {
+        "full_name": "Conference Host",
+        "normalized_key": "conference_host"
+    },
+    "CR": {
+        "full_name": "Cited References",
+        "normalized_key": "cited_references"
+    },
+    "BN": {
+        "full_name": "International Standard Book Number (ISBN)",
+        "normalized_key": "isbn"
+    },
+    "PN": {
+        "full_name": "Part Number",
+        "normalized_key": "part_number"
+    },
+    "SU": {
+        "full_name": "Supplement",
+        "normalized_key": "supplement"
+    },
+    "MA": {
+        "full_name": "Meeting Abstract",
+        "normalized_key": "meeting_abstract"
+    },
+    "AR": {
+        "full_name": "Article Number",
+        "normalized_key": "article_number"
+    },
+    "D2": {
+        "full_name": "Book Digital Object Identifier (DOI)",
+        "normalized_key": "book_doi"
+    },
+    "EY": {
+        "full_name": "Early Access Year",
+        "normalized_key": "early_access_year"
+    },
+    "P2": {
+        "full_name": "Chapter Count (Book Citation Index)",
+        "normalized_key": "chapter_count"
+    },
+    "PM": {
+        "full_name": "PubMed ID",
+        "normalized_key": "pubmed_id"
+    },
+    "HP": {
+        "full_name": "ESI Hot Paper",
+        "normalized_key": "esi_hot_paper"
+    },
+    "HC": {
+        "full_name": "ESI Highly Cited Paper",
+        "normalized_key": "esi_highly_cited_paper"
+    }
+}

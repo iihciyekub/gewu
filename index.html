@@ -390,7 +390,7 @@
             </div>
             <div class="modal-footer">
                 <button class="btn btn-cancel" onclick="window.paperReviewerApp.closeJsonTargetDialog()">Cancel</button>
-                <button class="btn btn-primary" id="confirmJsonTargetBtn">Confirm</button>
+                <button class="btn btn-primary" id="confirmJsonTargetBtn">Next</button>
             </div>
         </div>
     </div>
@@ -438,7 +438,9 @@
         <!-- Left Panel - File List -->
         <div class="left-panel">
             <div class="panel-header">
-                <div class="panel-header-left"></div>
+                <div class="panel-header-left">
+                    <i class="fa-solid fa-qrcode" title="Enlightenkey"></i>
+                </div>
                 <div class="panel-header-actions">
                     <button class="btn-switch-project" id="fileFilterToggleBtn" title="Search/filter files">
                         <i class="fas fa-search"></i>
@@ -452,9 +454,13 @@
                     <button class="btn-sync-pdf btn-import-json" id="importJsonBtn" title="Import and merge JSON from directory (same name files only)">
                         <i class="fas fa-file-import"></i>
                     </button>
+                    <button class="btn-switch-project" id="importWosBtn" title="导入wos data">
+                        <i class="fas fa-qrcode"></i>
+                    </button>
                 </div>
             </div>
             <input type="file" id="importJsonFolderInput" webkitdirectory directory multiple style="display: none;">
+            <input type="file" id="importWosInput" accept=".txt" style="display: none;">
             <div class="file-filter" id="fileFilterContainer">
                 <i class="fas fa-search"></i>
                 <input type="text" id="fileFilterInput" placeholder="Filter files..." autocomplete="off">
