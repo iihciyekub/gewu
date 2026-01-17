@@ -5705,7 +5705,33 @@ class PaperReviewerApp {
                 merged[tag] = value;
             });
         });
+        this.applyWosLinkFields(merged);
         payload.wos_data = merged;
+    }
+
+    applyWosLinkFields(wosData) {
+        if (!wosData || typeof wosData !== 'object') return;
+        const legacyRaw = Array.isArray(wosData.wosid) ? wosData.wosid[0] : wosData.wosid;
+        const currentRaw = Array.isArray(wosData.wos_id) ? wosData.wos_id[0] : wosData.wos_id;
+        const raw = currentRaw || legacyRaw;
+        if (!raw) return;
+        if (!currentRaw && legacyRaw) {
+            wosData.wos_id = legacyRaw;
+            delete wosData.wosid;
+        }
+        const normalized = this.normalizeWosIdPrefix(raw);
+        if (!normalized) return;
+        wosData.wos_id = normalized;
+        const encoded = encodeURIComponent(normalized);
+        wosData.citations = `https://www.webofscience.com/wos/woscc/citing-summary/${encoded}?from=woscc&type=colluid&eventMode=timeCitedOnSummary`;
+        wosData.references = `https://www.webofscience.com/wos/woscc/cited-references-summary/${encoded}?type=colluid&from=woscc`;
+        wosData.related = `https://www.webofscience.com/wos/woscc/related-records-summary/${encoded}?type=colluid&from=woscc`;
+    }
+
+    normalizeWosIdPrefix(value) {
+        const clean = String(value || '').trim();
+        if (!clean) return '';
+        return clean.includes(':') ? clean : `WOS:${clean}`;
     }
 
     parseWosTxt(text = '') {
@@ -5791,10 +5817,12 @@ class PaperReviewerApp {
             doi: cleanDoi,
             No: null
         };
+        const wosData = this.normalizeWosRecord(record);
+        this.applyWosLinkFields(wosData);
         return {
             schema_version: '1.0',
             meta_info: meta,
-            wos_data: this.normalizeWosRecord(record)
+            wos_data: wosData
         };
     }
 
@@ -6174,7 +6202,8 @@ class PaperReviewerApp {
     }
 
     renderObject(obj, table, basePath, parentLocation = null) {
-        for (const [key, value] of Object.entries(obj)) {
+        const entries = this.getOrderedEntriesForObject(obj, basePath);
+        for (const [key, value] of entries) {
             // Skip *_loc fields to prevent rendering in table
             if (key.endsWith('_loc')) continue;
 
@@ -6289,6 +6318,25 @@ class PaperReviewerApp {
         }
     }
 
+    getOrderedEntriesForObject(obj, basePath = []) {
+        const entries = Object.entries(obj || {});
+        if (!Array.isArray(basePath) || !basePath.includes('wos_data')) return entries;
+        const preferred = ['title', 'doi', 'wos_id', 'citations', 'references', 'related', 'source_title', 'issn', 'eissn', 'authors'];
+        const keys = entries.map(([k]) => k);
+        const seen = new Set();
+        const ordered = [];
+        preferred.forEach((k) => {
+            if (keys.includes(k)) {
+                ordered.push(k);
+                seen.add(k);
+            }
+        });
+        keys.forEach((k) => {
+            if (!seen.has(k)) ordered.push(k);
+        });
+        return ordered.map(k => [k, obj[k]]);
+    }
+
     createEditableValue(value, path, location = null, key = null) {
         const displayValue = typeof value === 'string' ? value : JSON.stringify(value);
 
@@ -6311,6 +6359,18 @@ class PaperReviewerApp {
                 }).join('<span class="keyword-sep"> </span>');
                 return `<span class="keyword-links">${links}</span>`;
             }
+        }
+        // 特殊处理: WOS 相关链接字段
+        if (['citations', 'references', 'related'].includes(keyLower) && typeof value === 'string' && value.trim()) {
+            const labelMap = {
+                citations: 'Citations',
+                references: 'References',
+                related: 'Related Records'
+            };
+            const label = labelMap[keyLower] || 'WOS Link';
+            return `<a href="${this.escapeAttr(value)}" target="_blank" class="doi-link" title="Open ${label} on Web of Science">
+                <i class="fas fa-external-link-alt"></i> ${label}
+            </a>`;
         }
         // 特殊处理: ISSN/eISSN 字段，跳转 Web of Science
         if ((keyLower === 'issn' || keyLower === 'eissn') && typeof value === 'string' && value.trim()) {
@@ -6397,7 +6457,8 @@ class PaperReviewerApp {
             const isWosIdKey = keyLower === 'wosid' || keyLower === 'wos_id';
             if (hasWosPrefix || isWosIdKey) {
                 const match = trimmed.match(/WOS:[^\\s]+/i);
-                const wosId = match ? match[0] : trimmed;
+                const rawId = match ? match[0] : trimmed;
+                const wosId = this.normalizeWosIdPrefix(rawId);
                 if (wosId) {
                     const url = `https://www.webofscience.com/wos/woscc/full-record/${encodeURIComponent(wosId)}`;
                     return `<a href="${url}" target="_blank" class="doi-link" title="View full record on Web of Science">
