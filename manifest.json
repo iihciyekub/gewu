@@ -31,15 +31,6 @@
           "p6.md"
         ]
       }
-    },
-    "tools": {
-      "aide": {
-        "basePath": "/src/tools/",
-        "files": [
-          "wosAide.js",
-          "chatgptAide.js"
-        ]
-      }
     }
   }
 }

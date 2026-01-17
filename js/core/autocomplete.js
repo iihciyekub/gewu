@@ -1,6 +1,6 @@
 /**
  * Markdown 编辑器自动补全功能
- * 支持 LaTeX 风格命令补全，从 src/tabCode/code.json 加载命令
+ * 支持 LaTeX 风格命令补全，从 src/schema/code.json 加载命令
  */
 
 class AutocompleteManager {
@@ -36,7 +36,7 @@ class AutocompleteManager {
         this.bindEvents();
     }
     
-    async loadCommands(url = '/src/tabCode/code.json') {
+    async loadCommands(url = '/src/schema/code.json') {
         try {
             const response = await fetch(url);
             if (!response.ok) {

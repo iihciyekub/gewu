@@ -35,11 +35,6 @@ class SpecialSyntaxManager {
                 pattern: /\\doi\{([^}]+)\}/g,
                 description: 'DOI link to publisher',
                 renderer: (matches, fullMatch) => this.renderDoiLink(matches, fullMatch)
-            },
-            'wos.query': {
-                pattern: /\\wos\.query\{([\s\S]+?)\}/g,
-                description: 'WOS query with DOIs and WOSIDs',
-                renderer: (matches, fullMatch) => this.renderWosQueryLink(matches, fullMatch)
             }
         };
         
@@ -226,40 +221,6 @@ class SpecialSyntaxManager {
         const escDoi = this.app.escapeHtml(doi);
         const doiUrl = `https://doi.org/${encodeURIComponent(doi)}`;
         return `<a href="${doiUrl}" target="_blank" class="doi-link" title="Open DOI: ${escDoi}"><i class="fa-solid fa-external-link-alt"></i> ${escDoi}</a>`;
-    }
-    
-    /**
-     * 渲染 WOS 查询链接 (wos.query)
-     */
-    renderWosQueryLink(content, fullMatch) {
-        const query = content.trim();
-        if (!query) {
-            return this.app.escapeHtml(fullMatch);
-        }
-        
-        // 分割内容，支持换行符和逗号
-        const items = query.split(/[\n,，]+/).map(s => s.trim()).filter(Boolean);
-        
-        // 分类 WOSIDs 和 DOIs
-        const wosids = [];
-        const dois = [];
-        
-        const wosidPattern = /^WOS:[A-Z0-9]+$/i;
-        const doiPattern = /^10\.\d{4,9}\/[^\s]+$/i;
-        
-        items.forEach(item => {
-            if (wosidPattern.test(item)) {
-                wosids.push(item);
-            } else if (doiPattern.test(item)) {
-                dois.push(item);
-            }
-        });
-        
-        const escQuery = this.app.escapeHtml(query);
-        const dataWosids = this.app.escapeAttr(JSON.stringify(wosids));
-        const dataDois = this.app.escapeAttr(JSON.stringify(dois));
-        
-        return `<a href="#" class="wos-query-link" data-wosids="${dataWosids}" data-dois="${dataDois}" title="WOS Query: ${escQuery}"><i class="fa-solid fa-search"></i> Query WOS</a>`;
     }
     
     /**

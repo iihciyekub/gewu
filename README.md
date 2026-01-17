@@ -87,7 +87,7 @@ ref_251207_reviewer/
 
 ### 基础文档
 - [快速开始](QUICK_START.md) - 30 秒快速上手
-- [项目创建指南](PROJECT_CREATION_GUIDE.md) - 详细的项目创建和管理文档
+- [项目创建指南](docs/dev/PROJECT_CREATION_GUIDE.md) - 详细的项目创建和管理文档
 - [快捷键](shortcuts.md) - 快捷键速查表
 
 ### Markdown Front Matter 功能 🏷️ NEW!
@@ -236,7 +236,7 @@ Content-Type: application/json
 }
 ```
 
-完整 API 文档见 [PROJECT_CREATION_GUIDE.md](PROJECT_CREATION_GUIDE.md)
+完整 API 文档见 [docs/dev/PROJECT_CREATION_GUIDE.md](docs/dev/PROJECT_CREATION_GUIDE.md)
 
 ## 🔄 向后兼容性
 

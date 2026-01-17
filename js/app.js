@@ -128,6 +128,8 @@ class PaperReviewerApp {
         this.isPdfPopupMode = false;
         this.pdfPopupFocusInterval = null;
         this.pdfViewModeRestored = false; // 标记是否已经恢复过PDF窗口模式
+        this.pdfPopupAutoCollapsed = false;
+        this.pdfPopupRightWasCollapsed = false;
         this.metaDefaultsPatched = false;
         this.addSectionShowTimer = null;
         this.addSectionHoverCleanup = null;
@@ -713,9 +715,20 @@ class PaperReviewerApp {
     }
 
     getProjectKey() {
-        if (!this.currentProject) return 'user';
+        if (!this.currentProject) {
+            return '';
+        }
         // 直接返回规范化的路径，服务端会正确处理绝对路径和相对路径
-        return this.normalizeProjectPathString(this.currentProject.path || '') || 'user';
+        return this.normalizeProjectPathString(this.currentProject.path || '');
+    }
+
+    getRequiredProjectPath() {
+        const projectPath = this.getProjectKey();
+        if (!projectPath) {
+            this.showNotification('Please load a project first', 'error');
+            return '';
+        }
+        return projectPath;
     }
 
     normalizeFileGroups(raw) {
@@ -1166,7 +1179,7 @@ class PaperReviewerApp {
 
     async loadWosFieldTags() {
         try {
-            const resp = await fetch('js/WosFieldTags.json', { cache: 'no-store' });
+            const resp = await fetch('src/schema/WosFieldTags.json', { cache: 'no-store' });
             if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
             const data = await resp.json();
             const byTag = {};
@@ -1479,32 +1492,6 @@ class PaperReviewerApp {
                 console.log('✓ Autocomplete initialized for markdown editor');
             }
         }
-
-        // 绑定 WOS 查询链接点击事件
-        document.addEventListener('click', async (e) => {
-            const link = e.target.closest('.wos-query-link');
-            if (link) {
-                e.preventDefault();
-                const wosids = JSON.parse(link.dataset.wosids || '[]');
-                const dois = JSON.parse(link.dataset.dois || '[]');
-
-                if (typeof wos !== 'undefined' && typeof wos.query_wosid_or_doi_url === 'function') {
-                    try {
-                        // 调用 WOS 查询获取 URL
-                        const queryUrl = await wos.query_wosid_or_doi_url(wosids, dois);
-
-                        // 直接在新窗口打开 WOS 查询 URL
-                        window.open(queryUrl, '_blank');
-                        this.showNotification(`WOS query opened: ${wosids.length} WOSIDs, ${dois.length} DOIs`, 'success');
-                    } catch (error) {
-                        console.error('WOS query failed:', error);
-                        this.showNotification(`WOS query failed: ${error.message}`, 'error');
-                    }
-                } else {
-                    this.showNotification('WOS API not loaded', 'error');
-                }
-            }
-        });
 
         const jsonViewSelect = document.getElementById('jsonViewSelect');
         if (jsonViewSelect) {
@@ -2229,6 +2216,10 @@ class PaperReviewerApp {
         if (middleToggle) {
             middleToggle.addEventListener('click', (e) => {
                 e.stopPropagation();
+                if (this.isPdfPopupMode) {
+                    this.togglePdfPopup().catch(err => console.error('Toggle PDF popup failed:', err));
+                    return;
+                }
                 const icon = middleToggle.querySelector('i');
                 if (rightPanel.classList.contains('panel-collapsed')) {
                     rightPanel.classList.remove('panel-collapsed');
@@ -2267,7 +2258,8 @@ class PaperReviewerApp {
     }
 
     applyFileOrder(files = []) {
-        const projectKey = this.currentProject ? this.normalizeProjectPathString(this.currentProject.path) : 'user';
+        const projectKey = this.getProjectKey();
+        if (!projectKey) return files;
         const stored = this.fileOrders?.[projectKey] || [];
         const inStored = [];
         const seen = new Set();
@@ -2282,7 +2274,8 @@ class PaperReviewerApp {
     }
 
     saveFileOrderForProject(order = [], groups = null) {
-        const projectKey = this.currentProject ? this.normalizeProjectPathString(this.currentProject.path) : 'user';
+        const projectKey = this.getProjectKey();
+        if (!projectKey) return;
         this.fileOrders[projectKey] = [...order];
         if (groups) {
             this.fileGroups[projectKey] = { groups: this.cloneFileGroups(groups) };
@@ -2292,7 +2285,8 @@ class PaperReviewerApp {
     }
 
     async fetchFileOrder() {
-        const projectPath = this.currentProject ? this.currentProject.path : 'user';
+        const projectPath = this.getProjectKey();
+        if (!projectPath) return;
         try {
             const resp = await fetch('/file-order', {
                 method: 'POST',
@@ -2314,7 +2308,8 @@ class PaperReviewerApp {
     }
 
     async persistFileOrder(order = [], groups = null) {
-        const projectPath = this.currentProject ? this.currentProject.path : 'user';
+        const projectPath = this.getProjectKey();
+        if (!projectPath) return;
         const payload = { projectPath, action: 'set', order };
         if (groups && Array.isArray(groups)) {
             payload.groups = groups;
@@ -2446,6 +2441,42 @@ class PaperReviewerApp {
             if (middleToggle) middleToggle.title = 'Show PDF preview (Cmd+Shift+F / Ctrl+Shift+F)';
             this.savePanelWidths(leftPanel, rightPanel, { collapsedRight: true, lastLeftWidth: this.lastLeftWidth, lastRightWidth: this.lastRightWidth });
         }
+    }
+
+    collapseRightPanelForPdfPopup() {
+        const rightPanel = document.querySelector('.right-panel');
+        const middleToggle = document.querySelector('#middleResizer .resizer-toggle');
+        if (!rightPanel) return;
+        this.pdfPopupRightWasCollapsed = rightPanel.classList.contains('panel-collapsed');
+        if (this.pdfPopupRightWasCollapsed) {
+            this.pdfPopupAutoCollapsed = false;
+            return;
+        }
+        this.pdfPopupAutoCollapsed = true;
+        this.lastRightWidth = rightPanel.getBoundingClientRect().width || this.lastRightWidth;
+        rightPanel.classList.add('panel-collapsed');
+        rightPanel.style.width = '';
+        if (middleToggle) middleToggle.title = 'Show PDF preview (Cmd+Shift+F / Ctrl+Shift+F)';
+        const icon = middleToggle?.querySelector('i');
+        if (icon) icon.style.transform = 'rotate(180deg)';
+    }
+
+    restoreRightPanelAfterPdfPopup() {
+        if (!this.pdfPopupAutoCollapsed) return;
+        this.pdfPopupAutoCollapsed = false;
+        const rightPanel = document.querySelector('.right-panel');
+        const middleToggle = document.querySelector('#middleResizer .resizer-toggle');
+        const container = document.querySelector('.container');
+        if (!rightPanel || !rightPanel.classList.contains('panel-collapsed')) return;
+        rightPanel.classList.remove('panel-collapsed');
+        if (!this.lastRightWidth || this.lastRightWidth <= 1) {
+            const containerWidth = container?.getBoundingClientRect().width || window.innerWidth;
+            this.lastRightWidth = Math.max(200, Math.floor(containerWidth * 0.33));
+        }
+        rightPanel.style.width = this.lastRightWidth + 'px';
+        if (middleToggle) middleToggle.title = 'Hide PDF preview (Cmd+Shift+F / Ctrl+Shift+F)';
+        const icon = middleToggle?.querySelector('i');
+        if (icon) icon.style.transform = 'rotate(0deg)';
     }
 
     // ========== 项目管理方法 ==========
@@ -2744,6 +2775,10 @@ class PaperReviewerApp {
 
     // 处理浏览器目录选择
     async handleBrowserSelection(e) {
+        await this.fillPathFromBrowserEvent(e, 'projectPathInput');
+    }
+
+    async fillPathFromBrowserEvent(e, targetInputId) {
         const files = e.target.files;
         if (!files || files.length === 0) return;
 
@@ -2767,8 +2802,14 @@ class PaperReviewerApp {
         }
 
         if (detectedPath) {
-            document.getElementById('projectPathInput').value = detectedPath;
+            const input = document.getElementById(targetInputId);
+            if (input) {
+                input.value = detectedPath;
+            }
             this.showNotification('Path set', 'success');
+            if (targetInputId === 'projectPathInput') {
+                await this.initProjectFromPath();
+            }
         } else {
             this.showNotification('✗ Path not set', 'error');
         }
@@ -2926,11 +2967,15 @@ class PaperReviewerApp {
 
     async saveJsonPayload(filename, jsonData) {
         const jsonString = JSON.stringify(jsonData, null, 2);
+        const projectPath = this.getRequiredProjectPath();
+        if (!projectPath) {
+            throw new Error('Project not selected');
+        }
         const response = await fetch('/save-json', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                projectPath: this.currentProject ? this.currentProject.path : 'user',
+                projectPath,
                 filename,
                 content: jsonString
             })
@@ -3302,6 +3347,7 @@ class PaperReviewerApp {
     async loadFileList(keepSelection = false) {
         const fileListEl = document.getElementById('fileList');
         const currentSelected = this.currentFileBase || (this.currentFile ? this.currentFile.split('/').pop()?.replace(/\.[^.]+$/, '') : null); // 保存当前选中的文件（基名）
+        const loadId = ++this.currentLoadToken;
 
         // 检查是否有当前项目
         if (!this.currentProject) {
@@ -3316,6 +3362,9 @@ class PaperReviewerApp {
         try {
             // 先从服务器拿到所有 json/md 文件，动态视图列表
             const { bases, views } = await this.loadFileBasesFromServer();
+            if (loadId !== this.currentLoadToken || !this.currentProject) {
+                return;
+            }
             this.availableJsonViews = views;
             const projectKey = this.getProjectKey();
             const savedView = this.lastJsonViewByProject?.[projectKey];
@@ -3340,6 +3389,9 @@ class PaperReviewerApp {
             // renderFileList will handle filtering and grouping
             this.renderFileList(ordered, keepSelection ? currentSelected : null, true, ensuredGroups);
         } catch (error) {
+            if (loadId !== this.currentLoadToken || !this.currentProject) {
+                return;
+            }
             console.error('Error loading file list:', error);
             this.showNotification('Failed to load file list', 'error');
             fileListEl.innerHTML = '<div class="empty-state"><p>Failed to load, please check server</p></div>';
@@ -4636,7 +4688,10 @@ class PaperReviewerApp {
     }
 
     async copyPdfFileViaServer(pdfFile) {
-        const projectPath = this.currentProject ? this.currentProject.path : 'user';
+        const projectPath = this.getRequiredProjectPath();
+        if (!projectPath) {
+            throw new Error('Project not selected');
+        }
         const resp = await fetch('/copy-pdf-to-clipboard', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -4669,7 +4724,10 @@ class PaperReviewerApp {
     async deletePdfFileByName(pdfFile) {
         const clean = this.normalizePdfPathValue(pdfFile);
         if (!clean) throw new Error('PDF filename is empty');
-        const projectPath = this.currentProject ? this.currentProject.path : 'user';
+        const projectPath = this.getRequiredProjectPath();
+        if (!projectPath) {
+            throw new Error('Project not selected');
+        }
         const resp = await fetch('/delete-pdf', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -4740,7 +4798,8 @@ class PaperReviewerApp {
 
         // Ensure filename ends with .json
         const finalFilename = newFilename.endsWith('.json') ? newFilename : newFilename + '.json';
-        const projectPath = this.currentProject ? this.currentProject.path : 'user';
+        const projectPath = this.getRequiredProjectPath();
+        if (!projectPath) return;
 
         try {
             const response = await fetch('/rename-json', {
@@ -4829,7 +4888,8 @@ class PaperReviewerApp {
 
     // 删除文件
     async deleteFile(filename, fileItem, deleteAll = false) {
-        const projectPath = this.currentProject ? this.currentProject.path : 'user';
+        const projectPath = this.getRequiredProjectPath();
+        if (!projectPath) return;
         const base = (filename || '').replace(/\.json$/i, '');
 
         let targets = [];
@@ -4943,7 +5003,8 @@ class PaperReviewerApp {
     }
 
     async deleteSelectedFilesAll() {
-        const projectPath = this.currentProject ? this.currentProject.path : 'user';
+        const projectPath = this.getRequiredProjectPath();
+        if (!projectPath) return;
         const bases = this.getSelectedFilesArray().map(f => (f || '').replace(/\.json$/i, '')).filter(Boolean);
         const uniqueBases = Array.from(new Set(bases));
         if (!uniqueBases.length) {
@@ -5023,7 +5084,8 @@ class PaperReviewerApp {
     }
 
     async deleteSelectedFilesCurrentView() {
-        const projectPath = this.currentProject ? this.currentProject.path : 'user';
+        const projectPath = this.getRequiredProjectPath();
+        if (!projectPath) return;
         const bases = this.getSelectedFilesArray().map(f => (f || '').replace(/\.json$/i, '')).filter(Boolean);
         const uniqueBases = Array.from(new Set(bases));
         if (!uniqueBases.length) {
@@ -5537,12 +5599,14 @@ class PaperReviewerApp {
     async saveNewJSONFile(filename, jsonData) {
         try {
             const jsonString = JSON.stringify(jsonData, null, 2);
+            const projectPath = this.getRequiredProjectPath();
+            if (!projectPath) return;
 
             const response = await fetch('/save-json', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    projectPath: this.currentProject ? this.currentProject.path : 'user',
+                    projectPath,
                     filename: filename,
                     content: jsonString
                 })
@@ -6043,6 +6107,11 @@ class PaperReviewerApp {
 
         // Reset complete groups cache when project changes
         this.completeGroupsForCurrentProject = null;
+
+        // Clear view selector state when no project is active
+        this.availableJsonViews = [];
+        this.currentJsonView = '';
+        this.renderJsonViewSelector();
     }
 
     showLoading() {
@@ -7189,11 +7258,13 @@ class PaperReviewerApp {
             item.data.lastupdate = this.generateLastUpdate();
             const payload = JSON.stringify(item.data, null, 2);
             try {
+                const projectPath = this.getRequiredProjectPath();
+                if (!projectPath) return;
                 const resp = await fetch('/save-json', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        projectPath: this.currentProject ? this.currentProject.path : 'user',
+                        projectPath,
                         filename: item.path,
                         content: payload
                     })
@@ -7395,12 +7466,14 @@ class PaperReviewerApp {
                         incomingData.schema_version = this.generateSchemaVersion();
                     }
                     incomingData.lastupdate = this.generateLastUpdate();
+                    const projectPath = this.getRequiredProjectPath();
+                    if (!projectPath) return;
 
                     const saveResp = await fetch('/save-json', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
-                            projectPath: this.currentProject ? this.currentProject.path : 'user',
+                            projectPath,
                             filename: targetFilename,
                             content: JSON.stringify(incomingData, null, 2)
                         })
@@ -7427,11 +7500,13 @@ class PaperReviewerApp {
                     merged.schema_version = this.generateSchemaVersion();
                 }
                 merged.lastupdate = this.generateLastUpdate();
+                const projectPath = this.getRequiredProjectPath();
+                if (!projectPath) return;
                 const saveResp = await fetch('/save-json', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        projectPath: this.currentProject ? this.currentProject.path : 'user',
+                        projectPath,
                         filename: targetFilename,
                         content: JSON.stringify(merged, null, 2)
                     })
@@ -7808,44 +7883,6 @@ class PaperReviewerApp {
         this.updateSaveButtonState();
         this.renderStructuredView();
         this.setupEditableListeners();
-    }
-
-    async copyWosAideSource() {
-        try {
-            const response = await fetch('/wosAide.js');
-            if (!response.ok) throw new Error(`Failed to read: ${response.statusText}`);
-            const text = await response.text();
-
-            if (navigator.clipboard && navigator.clipboard.writeText) {
-                await navigator.clipboard.writeText(text);
-            } else {
-                // Fallback
-                const textarea = document.createElement('textarea');
-                textarea.value = text;
-                document.body.appendChild(textarea);
-                textarea.select();
-                document.execCommand('copy');
-                textarea.remove();
-            }
-
-            this.showNotification('Copied wosAide.js source to clipboard', 'success');
-        } catch (error) {
-            console.error('Failed to copy wosAide.js:', error);
-            this.showNotification(`Copy failed: ${error.message}`, 'error');
-        }
-    }
-
-    async copyChatgptAideSource() {
-        try {
-            const response = await fetch('/chatgptAide.js');
-            if (!response.ok) throw new Error(`Failed to read: ${response.statusText}`);
-            const text = await response.text();
-            await this.writeTextToClipboard(text);
-            this.showNotification('Copied chatgptAide.js source to clipboard', 'success');
-        } catch (error) {
-            console.error('Failed to copy chatgptAide.js:', error);
-            this.showNotification(`Copy failed: ${error.message}`, 'error');
-        }
     }
 
     async goToJsonSource() {
@@ -8791,24 +8828,8 @@ class PaperReviewerApp {
             };
             md.use(gotoPlugin);
 
-            // 添加 \doi{} 和 \wos.query{} 的 inline 规则处理
+            // 添加 \doi{} 的 inline 规则处理
             const specialLinkPlugin = (mdInstance) => {
-                // 在 block 解析之前预处理多行 \wos.query{}
-                const wosQueryCache = new Map();
-                let wosQueryCounter = 0;
-
-                mdInstance.core.ruler.before('normalize', 'preprocess-wos-query', (state) => {
-                    wosQueryCache.clear();
-                    wosQueryCounter = 0;
-
-                    // 处理多行的 \wos.query{...}
-                    state.src = state.src.replace(/\\wos\.query\{([\s\S]*?)\}/g, (match, query) => {
-                        const id = `__WOS_QUERY_${wosQueryCounter++}__`;
-                        wosQueryCache.set(id, query.trim());
-                        return id;
-                    });
-                });
-
                 // 定义 inline rule 来识别 \doi{}
                 const doiRule = (state, silent) => {
                     const max = state.posMax;
@@ -8837,38 +8858,8 @@ class PaperReviewerApp {
                     return true;
                 };
 
-                // 定义 inline rule 来识别 WOS query 占位符
-                const wosQueryRule = (state, silent) => {
-                    const max = state.posMax;
-                    const start = state.pos;
-
-                    // 检查是否以 __WOS_QUERY_ 开始
-                    if (state.src.slice(start, start + 12) !== '__WOS_QUERY_') return false;
-
-                    // 找到匹配的 __
-                    let pos = start + 12;
-                    while (pos < max && state.src.slice(pos, pos + 2) !== '__') {
-                        pos++;
-                    }
-                    if (pos >= max) return false;
-                    pos += 2;
-
-                    const placeholder = state.src.slice(start, pos);
-                    const query = wosQueryCache.get(placeholder);
-                    if (!query) return false;
-
-                    if (!silent) {
-                        const token = state.push('wos_query_link', '', 0);
-                        token.content = query;
-                    }
-
-                    state.pos = pos;
-                    return true;
-                };
-
                 // 注册 inline rules
                 mdInstance.inline.ruler.before('escape', 'doi_link', doiRule);
-                mdInstance.inline.ruler.before('text', 'wos_query_link', wosQueryRule);
 
                 // 添加 renderers
                 mdInstance.renderer.rules.doi_link = (tokens, idx) => {
@@ -8876,52 +8867,6 @@ class PaperReviewerApp {
                     const escDoi = md.utils.escapeHtml(doi);
                     const doiUrl = `https://doi.org/${encodeURIComponent(doi)}`;
                     return `<a href="${doiUrl}" target="_blank" class="doi-link" title="Open DOI: ${escDoi}"><i class="fa-solid fa-external-link-alt"></i> DOI</a>`;
-                };
-
-                mdInstance.renderer.rules.wos_query_link = (tokens, idx) => {
-                    const query = tokens[idx].content;
-                    // 支持换行符和逗号分割（包括混合使用和末尾多余的分隔符）
-                    const items = query.split(/[\n,，\s]+/)
-                        .map(s => s.trim())
-                        .filter(s => s.length > 0);
-
-                    const wosids = [];
-                    const dois = [];
-                    // WOSID 格式：WOS: 开头 + 字母数字
-                    const wosidPattern = /^WOS:[A-Z0-9]+$/i;
-                    // DOI 标准格式：10. + 数字(4+位) + / + 任意非空白字符
-                    // 示例：10.1234/abc, 10.12345/def.ghi-123, 10.1287/mnsc.2018.3223
-                    const doiExtractPattern = /^10\.\d{4,}\/[^\s,，]+$/i;
-
-                    items.forEach(item => {
-                        // 先检查是否是 WOSID（严格匹配）
-                        if (wosidPattern.test(item)) {
-                            wosids.push(item);
-                        }
-                        // 再检查是否是 DOI（严格匹配完整格式）
-                        else if (doiExtractPattern.test(item)) {
-                            dois.push(item);
-                        }
-                        // 如果不是完整格式，尝试提取 DOI
-                        else {
-                            const doiMatch = item.match(/10\.\d{4,}\/[^\s,，]+/i);
-                            if (doiMatch) {
-                                dois.push(doiMatch[0]);
-                            } else if (item) {
-                                // 记录不匹配的项目，方便调试
-                                console.warn(`WOS Query: Unrecognized item "${item}"`);
-
-                            }
-                        }
-                    });
-
-                    const escQuery = md.utils.escapeHtml(query);
-                    const dataWosids = md.utils.escapeHtml(JSON.stringify(wosids));
-                    const dataDois = md.utils.escapeHtml(JSON.stringify(dois));
-
-                    // 显示识别到的数量
-                    const countText = `${wosids.length + dois.length} 项 (${wosids.length} WOSID, ${dois.length} DOI)`;
-                    return `<a href="#" class="wos-query-link" data-wosids="${dataWosids}" data-dois="${dataDois}" title="WOS Query: ${countText}"><i class="fa-solid fa-search"></i> WOS Query</a>`;
                 };
             };
             md.use(specialLinkPlugin);
@@ -9303,7 +9248,10 @@ class PaperReviewerApp {
 
     // 新方法：通过 API 读取文件（支持外部项目）
     async readProjectFile(filename) {
-        const projectPath = this.currentProject ? this.currentProject.path : 'user';
+        const projectPath = this.getRequiredProjectPath();
+        if (!projectPath) {
+            throw new Error('Project not selected');
+        }
         const response = await fetch('/read-file', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -9327,7 +9275,10 @@ class PaperReviewerApp {
     }
 
     async persistMarkdown(filename, content) {
-        const projectPath = this.currentProject ? this.currentProject.path : 'user';
+        const projectPath = this.getRequiredProjectPath();
+        if (!projectPath) {
+            throw new Error('Project not selected');
+        }
         const normalized = (() => {
             const name = String(filename || '').replace(/^[/\\]+/, '');
             const lower = name.toLowerCase();
@@ -10918,7 +10869,6 @@ class PaperReviewerApp {
         }
         if (!this.currentFile) return;
         const mdFilename = this.getMarkdownFilename(this.currentFile);
-        const projectPath = this.currentProject ? this.currentProject.path : 'user';
         const content = this.buildDefaultMarkdown();
         try {
             await this.persistMarkdown(mdFilename, content);
@@ -10946,7 +10896,8 @@ class PaperReviewerApp {
         const confirmed = window.confirm(`Delete markdown file "${mdFilename}"?\nThis action cannot be undone.`);
         if (!confirmed) return;
 
-        const projectPath = this.currentProject ? this.currentProject.path : 'user';
+        const projectPath = this.getRequiredProjectPath();
+        if (!projectPath) return;
         try {
             const resp = await fetch('/delete-json', {
                 method: 'POST',
@@ -11638,6 +11589,7 @@ class PaperReviewerApp {
             this.isPdfPopupMode = false;
             this.pdfPopupWindow = null;
             this.updatePdfPopupButtonState();
+            this.restoreRightPanelAfterPdfPopup();
             // 标记用户已手动切换，禁止自动恢复
             this.pdfViewModeRestored = true;
             // 保存状态到localStorage
@@ -11711,6 +11663,7 @@ class PaperReviewerApp {
                     this.updatePdfPopupButtonState();
                     // 保存状态到localStorage
                     this.savePdfViewMode();
+                    this.collapseRightPanelForPdfPopup();
 
                     // 清空内嵌iframe
                     const pdfViewer = document.getElementById('pdfViewer');
@@ -11735,6 +11688,7 @@ class PaperReviewerApp {
                             this.pdfPopupWindow = null;
                             this.lastPdfLoadedUrl = '';
                             this.updatePdfPopupButtonState();
+                            this.restoreRightPanelAfterPdfPopup();
                             // 保存状态到localStorage（窗口关闭=切换回嵌入模式）
                             this.savePdfViewMode();
 
@@ -11829,6 +11783,7 @@ class PaperReviewerApp {
         this.isPdfPopupMode = false;
         this.pdfViewModeRestored = true; // 标记已处理，防止自动恢复
         this.updatePdfPopupButtonState();
+        this.restoreRightPanelAfterPdfPopup();
 
         // 清除保存的popup模式状态
         try {
@@ -14552,6 +14507,8 @@ class PaperReviewerApp {
             // 更新最后保存时间戳
             this.currentData.lastupdate = this.generateLastUpdate();
             const jsonString = JSON.stringify(this.currentData, null, 2);
+            const projectPath = this.getRequiredProjectPath();
+            if (!projectPath) return;
 
             // 发送POST请求到服务器保存文件
             const response = await fetch('/save-json', {
@@ -14560,7 +14517,7 @@ class PaperReviewerApp {
                     'Content-Type': 'application/json',
                 },
                 body: JSON.stringify({
-                    projectPath: this.currentProject ? this.currentProject.path : 'user',
+                    projectPath,
                     filename: this.currentFile,
                     content: jsonString
                 })

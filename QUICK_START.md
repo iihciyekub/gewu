@@ -106,7 +106,7 @@ A: 直接复制整个项目文件夹即可，所有数据都在 `json/`, `md/`, 
 
 ## 📝 API 文档
 
-完整的 API 文档请查看 [PROJECT_CREATION_GUIDE.md](PROJECT_CREATION_GUIDE.md)
+完整的 API 文档请查看 [docs/dev/PROJECT_CREATION_GUIDE.md](docs/dev/PROJECT_CREATION_GUIDE.md)
 
 ## ✨ 特性总结
 

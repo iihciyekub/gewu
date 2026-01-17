@@ -258,8 +258,11 @@ function getMdTargetPath(fullPath, filename) {
 ensurePromptManifest();
 
 // 路径规范化，返回安全的 projectKey 以及完整路径（限定在 ALLOWED_ROOTS 内）
-function normalizeProjectPath(projectPath = 'user') {
-    const raw = (projectPath || 'user').trim() || 'user';
+function normalizeProjectPath(projectPath) {
+    const raw = String(projectPath || '').trim();
+    if (!raw) {
+        throw new Error('Missing projectPath');
+    }
     const normalizedInput = raw.replace(/^[/\\]+/, '');
     const candidate = path.isAbsolute(raw)
         ? path.normalize(raw)
@@ -480,8 +483,13 @@ const server = http.createServer((req, res) => {
         req.on('end', () => {
             try {
                 const data = JSON.parse(body);
-                const { projectPath = 'user', filename, content } = data;
-                
+                const { projectPath, filename, content } = data;
+
+                if (!projectPath) {
+                    res.writeHead(400, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ success: false, error: 'Missing projectPath' }));
+                    return;
+                }
                 if (!filename || typeof content === 'undefined') {
                     res.writeHead(400, { 'Content-Type': 'application/json' });
                     res.end(JSON.stringify({ success: false, error: 'Missing filename or content' }));
@@ -527,7 +535,12 @@ const server = http.createServer((req, res) => {
         req.on('end', () => {
             try {
                 const data = JSON.parse(body);
-                const { projectPath = 'user', filename, content = '' } = data;
+                const { projectPath, filename, content = '' } = data;
+                if (!projectPath) {
+                    res.writeHead(400, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ success: false, error: 'Missing projectPath' }));
+                    return;
+                }
                 if (!filename) {
                     res.writeHead(400, { 'Content-Type': 'application/json' });
                     res.end(JSON.stringify({ success: false, error: 'Missing filename' }));
@@ -561,8 +574,13 @@ const server = http.createServer((req, res) => {
         req.on('end', () => {
             try {
                 const data = JSON.parse(body);
-                const { projectPath = 'user', oldFilename, newFilename } = data;
+                const { projectPath, oldFilename, newFilename } = data;
                 
+                if (!projectPath) {
+                    res.writeHead(400, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ success: false, error: 'Missing projectPath' }));
+                    return;
+                }
                 if (!oldFilename || !newFilename) {
                     res.writeHead(400, { 'Content-Type': 'application/json' });
                     res.end(JSON.stringify({ success: false, error: 'Missing oldFilename or newFilename' }));
@@ -632,8 +650,13 @@ const server = http.createServer((req, res) => {
         req.on('end', () => {
             try {
                 const data = JSON.parse(body);
-                const { projectPath = 'user', filename } = data;
+                const { projectPath, filename } = data;
                 
+                if (!projectPath) {
+                    res.writeHead(400, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ success: false, error: 'Missing projectPath' }));
+                    return;
+                }
                 if (!filename) {
                     res.writeHead(400, { 'Content-Type': 'application/json' });
                     res.end(JSON.stringify({ success: false, error: 'Missing filename' }));
@@ -691,8 +714,14 @@ const server = http.createServer((req, res) => {
         req.on('end', () => {
             try {
                 const data = JSON.parse(body);
-                const { projectPath = 'user', filePath: relativeFilePath } = data;
+                const { projectPath, filePath: relativeFilePath } = data;
                 
+                if (!projectPath) {
+                    res.writeHead(400, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ success: false, error: 'Missing projectPath' }));
+                    return;
+                }
+
                 console.log('📖 读取文件请求:', { projectPath, relativeFilePath });
                 
                 const { projectKey, fullPath } = normalizeProjectPath(projectPath);
@@ -933,8 +962,13 @@ const server = http.createServer((req, res) => {
     if (req.method === 'GET' && pathname === '/get-pdf') {
         try {
             const query = new URL(req.url, `http://${req.headers.host}`).searchParams;
-            const projectPath = query.get('projectPath') || 'user';
+            const projectPath = query.get('projectPath');
             const pdfFile = query.get('file') || '';
+            if (!projectPath) {
+                res.writeHead(400, { 'Content-Type': 'text/plain' });
+                res.end('Missing projectPath');
+                return;
+            }
             
             console.log('📄 PDF请求:', { projectPath, pdfFile });
             
@@ -1082,10 +1116,13 @@ const server = http.createServer((req, res) => {
         req.on('end', () => {
             try {
                 const data = JSON.parse(body || '{}');
-                const projectPath = data.projectPath || 'user';
+                const projectPath = data.projectPath;
                 const filename = String(data.filename || '').trim();
                 const base64 = String(data.content || '').trim();
 
+                if (!projectPath) {
+                    throw new Error('Missing projectPath');
+                }
                 if (!filename.toLowerCase().endsWith('.pdf')) {
                     throw new Error('仅支持 PDF 文件');
                 }
@@ -1129,8 +1166,11 @@ const server = http.createServer((req, res) => {
         req.on('end', () => {
             try {
                 const data = JSON.parse(body || '{}');
-                const projectPath = data.projectPath || 'user';
+                const projectPath = data.projectPath;
                 const filename = String(data.filename || '').trim();
+                if (!projectPath) {
+                    throw new Error('Missing projectPath');
+                }
                 if (!filename.toLowerCase().endsWith('.pdf')) {
                     throw new Error('仅支持删除 PDF 文件');
                 }
@@ -1183,8 +1223,13 @@ const server = http.createServer((req, res) => {
         req.on('end', () => {
             try {
                 const data = JSON.parse(body);
-                const { projectPath = 'user', pdfFile } = data;
+                const { projectPath, pdfFile } = data;
                 
+                if (!projectPath) {
+                    res.writeHead(400, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ success: false, error: 'Missing projectPath' }));
+                    return;
+                }
                 if (!pdfFile) {
                     res.writeHead(400, { 'Content-Type': 'application/json' });
                     res.end(JSON.stringify({ success: false, error: 'PDF file name is required' }));
@@ -1295,7 +1340,13 @@ const server = http.createServer((req, res) => {
         req.on('end', () => {
             try {
                 const data = JSON.parse(body);
-                const { projectPath = 'user' } = data;
+                const { projectPath } = data;
+                
+                if (!projectPath) {
+                    res.writeHead(400, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ success: false, error: 'Missing projectPath' }));
+                    return;
+                }
                 
                 const { projectKey, fullPath } = normalizeProjectPath(projectPath);
                 console.log(`\n📥 /list-json-files 请求 - 项目路径: ${projectPath}`);
@@ -1467,8 +1518,13 @@ const server = http.createServer((req, res) => {
         req.on('end', () => {
             try {
                 const data = body ? JSON.parse(body) : {};
-                const projectPath = data.projectPath || 'user';
+                const projectPath = data.projectPath;
                 const subDir = data.subDir || ''; // 可选：指定子目录如 'md'
+                if (!projectPath) {
+                    res.writeHead(400, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ success: false, error: 'Missing projectPath' }));
+                    return;
+                }
                 const { fullPath } = normalizeProjectPath(projectPath);
                 
                 const targetDir = subDir ? path.join(fullPath, subDir) : fullPath;
@@ -1502,10 +1558,15 @@ const server = http.createServer((req, res) => {
         req.on('end', () => {
             try {
                 const data = body ? JSON.parse(body) : {};
-                const projectPath = data.projectPath || 'user';
+                const projectPath = data.projectPath;
                 const action = data.action || 'get';
                 const order = Array.isArray(data.order) ? data.order : [];
                 const groups = normalizeGroupList(data.groups);
+                if (!projectPath) {
+                    res.writeHead(400, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ success: false, error: 'Missing projectPath' }));
+                    return;
+                }
                 const { fullPath } = normalizeProjectPath(projectPath);
                 ensureProjectStructure(fullPath);
                 const orderFile = path.join(fullPath, FILE_ORDER_NAME);
