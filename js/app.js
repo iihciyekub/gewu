@@ -104,6 +104,7 @@ class PaperReviewerApp {
         this._statusProgressEls = null;
         this._statusProgressState = { text: '', percent: 0 };
         this._statusProgressTagTimer = null;
+        this.groupSortState = {};
 
         // 项目管理
         this.currentProject = null; // { name, path }
@@ -276,6 +277,102 @@ class PaperReviewerApp {
         this.persistGroupsAndRender(groups, this.currentFile);
         this.showNotification(`Sorted by No completed (${target.name})`, 'success');
 
+    }
+
+    async sortGroupByPublicationYear(groupId) {
+        const view = this.currentJsonView || '';
+        const groups = this.getCurrentGroups();
+        const target = groups.find(g => g.id === groupId);
+        if (!target) return;
+        const files = (target.files || []).slice();
+        if (!files.length) return;
+
+        const prev = this.groupSortState[groupId]?.year || 'asc';
+        const nextDir = prev === 'asc' ? 'desc' : 'asc';
+        this.groupSortState[groupId] = { ...(this.groupSortState[groupId] || {}), year: nextDir };
+
+        const fetchYear = async (base) => {
+            const path = this.getViewPathForBase(base, view);
+            if (!path) return { year: null, base };
+            try {
+                const data = await this.readProjectFile(path);
+                const wos = data?.wos_data || {};
+                const raw = wos.publication_year ?? wos.publicationYear ?? wos.pub_year ?? wos.year;
+                const val = Array.isArray(raw) ? raw[0] : raw;
+                const parsed = val !== undefined && val !== null ? Number(String(val).trim()) : NaN;
+                const year = Number.isFinite(parsed) ? parsed : null;
+                return { year, base };
+            } catch (err) {
+                console.warn('sortGroupByPublicationYear fetch failed for', base, err);
+                return { year: null, base };
+            }
+        };
+
+        const results = await Promise.all(files.map(f => fetchYear(f)));
+        const dir = nextDir === 'asc' ? 1 : -1;
+        const order = results
+            .sort((a, b) => {
+                const aMissing = !Number.isFinite(a.year);
+                const bMissing = !Number.isFinite(b.year);
+                if (aMissing && bMissing) return a.base.localeCompare(b.base);
+                if (aMissing) return 1;
+                if (bMissing) return -1;
+                return (a.year - b.year) * dir || a.base.localeCompare(b.base);
+            })
+            .map(r => r.base);
+
+        target.files = order;
+        this.persistGroupsAndRender(groups, this.currentFile);
+        const label = nextDir === 'asc' ? 'ascending' : 'descending';
+        this.showNotification(`Sorted by publication year (${label})`, 'success');
+    }
+
+    async sortGroupBySourceTitle(groupId) {
+        const view = this.currentJsonView || '';
+        const groups = this.getCurrentGroups();
+        const target = groups.find(g => g.id === groupId);
+        if (!target) return;
+        const files = (target.files || []).slice();
+        if (!files.length) return;
+
+        const prev = this.groupSortState[groupId]?.sourceTitle || 'asc';
+        const nextDir = prev === 'asc' ? 'desc' : 'asc';
+        this.groupSortState[groupId] = { ...(this.groupSortState[groupId] || {}), sourceTitle: nextDir };
+
+        const fetchTitle = async (base) => {
+            const path = this.getViewPathForBase(base, view);
+            if (!path) return { title: '', base };
+            try {
+                const data = await this.readProjectFile(path);
+                const wos = data?.wos_data || {};
+                const raw = wos.source_title ?? wos.sourceTitle ?? wos.journal ?? wos.SO;
+                const val = Array.isArray(raw) ? raw[0] : raw;
+                const title = val ? String(val).trim() : '';
+                return { title, base };
+            } catch (err) {
+                console.warn('sortGroupBySourceTitle fetch failed for', base, err);
+                return { title: '', base };
+            }
+        };
+
+        const results = await Promise.all(files.map(f => fetchTitle(f)));
+        const dir = nextDir === 'asc' ? 1 : -1;
+        const order = results
+            .sort((a, b) => {
+                const aMissing = !a.title;
+                const bMissing = !b.title;
+                if (aMissing && bMissing) return a.base.localeCompare(b.base);
+                if (aMissing) return 1;
+                if (bMissing) return -1;
+                return a.title.localeCompare(b.title, undefined, { sensitivity: 'base' }) * dir
+                    || a.base.localeCompare(b.base);
+            })
+            .map(r => r.base);
+
+        target.files = order;
+        this.persistGroupsAndRender(groups, this.currentFile);
+        const label = nextDir === 'asc' ? 'A→Z' : 'Z→A';
+        this.showNotification(`Sorted by journal (${label})`, 'success');
     }
 
     loadDebugEnabled() {
@@ -1862,14 +1959,20 @@ class PaperReviewerApp {
             });
         }
         const importJsonFolderInput = document.getElementById('importJsonFolderInput');
+        const importPdfInput = document.getElementById('importPdfInput');
         const importWosInput = document.getElementById('importWosInput');
         const importMenuToggleBtn = document.getElementById('importMenuToggleBtn');
         const importMenu = document.getElementById('importMenu');
         const importMenuDropdown = document.getElementById('importMenuDropdown');
+        const importDoiMenuItem = document.getElementById('importDoiMenuItem');
         const importJsonMenuItem = document.getElementById('importJsonMenuItem');
+        const importPdfMenuItem = document.getElementById('importPdfMenuItem');
         const importWosMenuItem = document.getElementById('importWosMenuItem');
         if (importJsonFolderInput) {
             importJsonFolderInput.addEventListener('change', (e) => this.handleJsonFolderImport(e));
+        }
+        if (importPdfInput) {
+            importPdfInput.addEventListener('change', (e) => this.handlePdfImportInput(e));
         }
         if (importWosInput) {
             importWosInput.addEventListener('change', (e) => this.handleWosTxtImport(e));
@@ -1894,6 +1997,20 @@ class PaperReviewerApp {
             importJsonMenuItem.addEventListener('click', (e) => {
                 e.preventDefault();
                 this.startImportJsonFlow(importJsonFolderInput);
+                this.toggleImportMenu(false);
+            });
+        }
+        if (importDoiMenuItem) {
+            importDoiMenuItem.addEventListener('click', (e) => {
+                e.preventDefault();
+                this.openDoiModal();
+                this.toggleImportMenu(false);
+            });
+        }
+        if (importPdfMenuItem && importPdfInput) {
+            importPdfMenuItem.addEventListener('click', (e) => {
+                e.preventDefault();
+                importPdfInput.click();
                 this.toggleImportMenu(false);
             });
         }
@@ -2036,10 +2153,6 @@ class PaperReviewerApp {
             });
         }
 
-        const doiBtn = document.getElementById('openDoiModalBtn');
-        if (doiBtn) {
-            doiBtn.addEventListener('click', () => this.openDoiModal());
-        }
         const doiExtractBtn = document.getElementById('doiExtractBtn');
         if (doiExtractBtn) {
             doiExtractBtn.addEventListener('click', () => this.formatDoiInput());
@@ -3682,7 +3795,13 @@ class PaperReviewerApp {
             sortBtn.innerHTML = '<i class="fas fa-sort-numeric-down-alt"></i>';
             sortBtn.addEventListener('click', (e) => {
                 e.stopPropagation();
-                this.sortGroupByMetaNo(group.id);
+                const rect = sortBtn.getBoundingClientRect();
+                const menuEvt = {
+                    pageX: rect.left + rect.width / 2,
+                    pageY: rect.bottom + 6,
+                    preventDefault: () => {}
+                };
+                this.showGroupContextMenu(menuEvt, group);
             });
 
             const count = document.createElement('span');
@@ -4594,7 +4713,21 @@ class PaperReviewerApp {
         menu.style.left = `${e.pageX}px`;
         menu.style.top = `${e.pageY}px`;
         const canEdit = group && group.id !== 'init';
+        const yearDir = this.groupSortState?.[group?.id]?.year || 'asc';
+        const yearIcon = yearDir === 'asc' ? 'fa-sort-amount-down-alt' : 'fa-sort-amount-up-alt';
+        const titleDir = this.groupSortState?.[group?.id]?.sourceTitle || 'asc';
+        const titleIcon = titleDir === 'asc' ? 'fa-sort-alpha-down' : 'fa-sort-alpha-up';
         menu.innerHTML = `
+            <div class="context-menu-item" data-action="sortGroupByNo">
+                <i class="fas fa-sort-numeric-down-alt"></i> Sort by No
+            </div>
+            <div class="context-menu-item" data-action="sortGroupByYear">
+                <i class="fas ${yearIcon}"></i> Sort by Publication Year
+            </div>
+            <div class="context-menu-item" data-action="sortGroupBySourceTitle">
+                <i class="fas ${titleIcon}"></i> Sort by Journal
+            </div>
+            <div class="context-menu-divider"></div>
             <div class="context-menu-item" data-action="copyGroupDois">
                 <i class="fas fa-copy"></i> Copy All DOIs from Group
             </div>
@@ -4638,6 +4771,12 @@ class PaperReviewerApp {
                     await this.copyGroupDois(group);
                 } else if (action === 'downloadGroupBib') {
                     await this.downloadGroupBib(group);
+                } else if (action === 'sortGroupByNo') {
+                    await this.sortGroupByMetaNo(group.id);
+                } else if (action === 'sortGroupByYear') {
+                    await this.sortGroupByPublicationYear(group.id);
+                } else if (action === 'sortGroupBySourceTitle') {
+                    await this.sortGroupBySourceTitle(group.id);
                 } else if (action === 'deleteGroupFiles') {
                     await this.deleteAllFilesInGroup(group);
                 } else if (action === 'renameGroup') {
@@ -5521,6 +5660,7 @@ class PaperReviewerApp {
         }
         const pdfFiles = (files || []).filter(f => this.isPdfFile(f));
         if (!pdfFiles.length) return;
+        const tracker = this.createStatusProgressTracker('PDF import');
 
         let nextNo = null;
         try {
@@ -5536,6 +5676,10 @@ class PaperReviewerApp {
         const skipped = [];
         const failed = [];
         const seenBases = new Set();
+        const total = pdfFiles.length;
+        let processed = 0;
+        const notifyStep = Math.max(1, Math.floor(total / 10));
+        tracker.update(`PDF import: 0/${total}`, 5);
 
         for (const pdfFile of pdfFiles) {
             try {
@@ -5595,6 +5739,12 @@ class PaperReviewerApp {
             } catch (err) {
                 console.error('PDF drop create failed:', pdfFile?.name, err);
                 failed.push({ file: pdfFile?.name || 'PDF', reason: err.message || 'Unknown error' });
+            } finally {
+                processed += 1;
+                if (processed % notifyStep === 0 || processed === total) {
+                    const percent = total ? Math.round((processed / total) * 90) : 90;
+                    tracker.update(`PDF import: ${processed}/${total}`, Math.min(95, percent));
+                }
             }
         }
 
@@ -5621,7 +5771,21 @@ class PaperReviewerApp {
         if (failed.length) parts.push(`failed ${failed.length}`);
         const type = failed.length ? 'error' : (created.length ? 'success' : 'info');
         if (parts.length) {
+            tracker.finish('PDF import: finalizing...', 800);
             this.showNotification(`PDF import: ${parts.join(', ')}`, type);
+        } else {
+            tracker.finish('PDF import: done', 600);
+        }
+    }
+
+    async handlePdfImportInput(e) {
+        const input = e?.target;
+        const files = Array.from(input?.files || []);
+        if (!files.length) return;
+        try {
+            await this.handlePdfDropCreateEntries(files, null);
+        } finally {
+            if (input) input.value = '';
         }
     }
 

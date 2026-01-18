@@ -447,17 +447,22 @@
                     <button class="btn-switch-project" id="addGroupBtn" title="Create new group">
                         <i class="fas fa-layer-group"></i>
                     </button>
-                    <button class="btn-switch-project" id="openDoiModalBtn" title="Batch create files by DOI">
-                        <i class="fas fa-link"></i>
-                    </button>
                     <div class="header-dropdown" id="importMenuDropdown">
                         <button class="btn-switch-project" id="importMenuToggleBtn" title="Import">
                             <i class="fas fa-file-import"></i>
                         </button>
                         <div class="header-dropdown-menu" id="importMenu" role="menu" aria-label="Import Menu">
+                            <button class="header-dropdown-item" id="importDoiMenuItem" type="button" role="menuitem"
+                                title="Open DOI List Processing panel">
+                                <i class="fas fa-link"></i><span>Import DOI</span>
+                            </button>
                             <button class="header-dropdown-item" id="importJsonMenuItem" type="button" role="menuitem"
                                 title="Import and merge JSON from directory (same name files only)">
                                 <i class="fas fa-file-import"></i><span>Import JSON</span>
+                            </button>
+                            <button class="header-dropdown-item" id="importPdfMenuItem" type="button" role="menuitem"
+                                title="Import PDFs (extract DOI and create entries)">
+                                <i class="fas fa-file-pdf"></i><span>Import PDF</span>
                             </button>
                             <button class="header-dropdown-item" id="importWosMenuItem" type="button" role="menuitem"
                                 title="Import WOS data from .txt file">
@@ -468,6 +473,7 @@
                 </div>
             </div>
             <input type="file" id="importJsonFolderInput" webkitdirectory directory multiple style="display: none;">
+            <input type="file" id="importPdfInput" accept=".pdf" multiple style="display: none;">
             <input type="file" id="importWosInput" accept=".txt" multiple style="display: none;">
             <div class="file-filter" id="fileFilterContainer">
                 <i class="fas fa-search"></i>
