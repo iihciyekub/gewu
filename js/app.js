@@ -5813,8 +5813,8 @@ class PaperReviewerApp {
 
     async handleWosTxtImport(e) {
         const input = e?.target;
-        const file = input?.files?.[0];
-        if (!file) return;
+        const files = Array.from(input?.files || []);
+        if (!files.length) return;
         if (!this.currentProject) {
             this.showNotification('Please load a project first', 'warning');
             if (input) input.value = '';
@@ -5822,16 +5822,37 @@ class PaperReviewerApp {
         }
         const view = this.currentJsonView || 'view1';
         try {
-            const text = await this.readFileAsText(file);
-            if (!this.isValidWosTxt(text)) {
-                this.showNotification('Import failed: not a valid WOS data file', 'error');
-                if (input) input.value = '';
-                return;
+            const records = [];
+            let invalid = 0;
+            let empty = 0;
+            let readFailed = 0;
+
+            for (const file of files) {
+                try {
+                    const text = await this.readFileAsText(file);
+                    if (!this.isValidWosTxt(text)) {
+                        invalid += 1;
+                        continue;
+                    }
+                    const parsed = this.parseWosTxt(text);
+                    if (!parsed.length) {
+                        empty += 1;
+                        continue;
+                    }
+                    records.push(...parsed);
+                } catch (err) {
+                    console.warn('Failed to read WOS file:', file?.name, err);
+                    readFailed += 1;
+                }
             }
-            const records = this.parseWosTxt(text);
+
             if (!records.length) {
-                this.showNotification('No WOS records found', 'warning');
-                if (input) input.value = '';
+                const parts = [];
+                if (invalid) parts.push(`invalid ${invalid}`);
+                if (empty) parts.push(`empty ${empty}`);
+                if (readFailed) parts.push(`failed ${readFailed}`);
+                const suffix = parts.length ? ` (${parts.join(', ')})` : '';
+                this.showNotification(`No WOS records found${suffix}`, 'warning');
                 return;
             }
             const batches = new Map();
@@ -5917,6 +5938,9 @@ class PaperReviewerApp {
             if (updated) parts.push(`updated ${updated}`);
             if (skipped) parts.push(`skipped ${skipped}`);
             if (failed) parts.push(`failed ${failed}`);
+            if (invalid) parts.push(`invalid ${invalid}`);
+            if (empty) parts.push(`empty ${empty}`);
+            if (readFailed) parts.push(`read failed ${readFailed}`);
             const type = failed ? 'error' : 'success';
             this.showNotification(`WOS import: ${parts.join(', ')}`, type);
         } catch (err) {
