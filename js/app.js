@@ -5989,6 +5989,20 @@ class PaperReviewerApp {
         wosData.related = `https://www.webofscience.com/wos/woscc/related-records-summary/${encoded}?type=colluid&from=woscc`;
     }
 
+    syncWosLinks(wosData) {
+        if (!wosData || typeof wosData !== 'object') return;
+        const legacyRaw = Array.isArray(wosData.wosid) ? wosData.wosid[0] : wosData.wosid;
+        const currentRaw = Array.isArray(wosData.wos_id) ? wosData.wos_id[0] : wosData.wos_id;
+        const raw = (currentRaw || legacyRaw || '').trim();
+        if (!raw) {
+            delete wosData.citations;
+            delete wosData.references;
+            delete wosData.related;
+            return;
+        }
+        this.applyWosLinkFields(wosData);
+    }
+
     normalizeWosIdPrefix(value) {
         const clean = String(value || '').trim();
         if (!clean) return '';
@@ -13818,6 +13832,10 @@ class PaperReviewerApp {
                     current[k] = current[lastKey];
                 }
             }
+        }
+        const parentKey = this.editingPath.length >= 2 ? this.editingPath[this.editingPath.length - 2] : '';
+        if (parentKey && parentKey.toLowerCase() === 'wos_data' && (keyLower === 'wos_id' || keyLower === 'wosid')) {
+            this.syncWosLinks(current);
         }
 
         // 标记为有未保存的修改
