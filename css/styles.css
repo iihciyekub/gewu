@@ -422,6 +422,23 @@ body {
     flex: 1 1 auto;
 }
 
+.file-group-body.file-group-virtual {
+    position: relative;
+}
+
+.file-virtual-spacer {
+    position: relative;
+    width: 100%;
+}
+
+.file-virtual-inner {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    will-change: transform;
+}
+
 .file-group.collapsed .file-group-body {
     display: none;
 }

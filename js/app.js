@@ -156,6 +156,13 @@ class PaperReviewerApp {
         this.lastGotoLink = null;
         this.lastGotoAttemptText = '';
         this.completeGroupsForCurrentProject = null; // 存储完整的、未被view过滤的分组结构
+        this.virtualGroupState = {};
+        this.visibleFilePositions = {};
+        this.virtualListConfig = {
+            overscan: 6,
+            defaultItemHeight: 22
+        };
+        this._virtualResizeBound = false;
 
         // 搜索防抖和互斥控制
         this._isSearching = false;
@@ -1311,6 +1318,12 @@ class PaperReviewerApp {
         document.querySelectorAll('.tab-btn').forEach(btn => {
             btn.addEventListener('click', (e) => this.switchView(e.target.closest('.tab-btn')));
         });
+        if (!this._virtualResizeBound) {
+            this._virtualResizeBound = true;
+            window.addEventListener('resize', () => {
+                this.renderAllVirtualGroups(true);
+            });
+        }
         const statusSaveBtn = document.getElementById('statusSaveBtn');
         if (statusSaveBtn) {
             statusSaveBtn.addEventListener('click', () => this.handleSaveShortcut());
@@ -1763,10 +1776,10 @@ class PaperReviewerApp {
                 if (idx >= order.length) idx = order.length - 1;
                 const fname = order[idx];
                 const listEl = document.getElementById('fileList');
-                const target = fname && listEl ? listEl.querySelector(`.file-item[data-filename="${fname}"]`) : null;
-                if (fname && target) {
+                if (fname && listEl) {
                     this.setSelectedFiles([fname], fname);
-                    target.scrollIntoView({ block: 'nearest' });
+                    this.scrollFileIntoView(fname, { align: 'center' });
+                    const target = this.getRenderedFileItem(fname);
                     this.loadFile(fname, target);
                 }
             }
@@ -3050,11 +3063,9 @@ class PaperReviewerApp {
         if (target) {
             const targetBase = target.split('/').pop()?.replace(/\.json$/i, '') || target;
             setTimeout(() => {
-                const item = Array.from(document.querySelectorAll('.file-item'))
-                    .find(el => (el.dataset.filename || '').replace(/\.json$/i, '') === targetBase);
-                if (item) {
-                    this.loadFile(item.dataset.filename, item);
-                }
+                this.scrollFileIntoView(targetBase, { align: 'center' });
+                const item = this.getRenderedFileItem(targetBase);
+                if (item) this.loadFile(targetBase, item);
             }, 100);
         }
 
@@ -3591,15 +3602,23 @@ class PaperReviewerApp {
         this.selectedFiles = new Set(nextSelection);
         this.lastFileSelectionAnchor = nextSelection.length ? nextSelection[nextSelection.length - 1] : null;
 
+        // Build visible position map for virtual scroll targeting
+        this.visibleFilePositions = {};
+        groupsView.forEach(group => {
+            (group.visible || []).forEach((file, idx) => {
+                this.visibleFilePositions[file] = { groupId: group.id, index: idx };
+            });
+        });
+
         // Create new file list structure
         const newFileListEl = document.createElement('div');
+        this.virtualGroupState = {};
 
         const autoLoadTarget = (!this.currentFile || !flatVisible.includes(this.currentFile)) && nextSelection.length
             ? nextSelection[0]
             : null;
 
         groupsView.forEach((group, gIndex) => {
-            let visibleCounter = 0;
             const groupEl = document.createElement('div');
             groupEl.className = 'file-group';
             groupEl.dataset.groupId = group.id;
@@ -3677,51 +3696,17 @@ class PaperReviewerApp {
             const body = document.createElement('div');
             body.className = 'file-group-body';
             body.dataset.groupId = group.id;
-            body.addEventListener('dragover', (e) => this.handleGroupDragOver(e, group.id));
-            body.addEventListener('drop', (e) => this.handleGroupDrop(e, group.id));
-            body.addEventListener('dragleave', () => this.clearAllFileDragHighlights());
 
             if (!group.visible || group.visible.length === 0) {
+                body.addEventListener('dragover', (e) => this.handleGroupDragOver(e, group.id));
+                body.addEventListener('drop', (e) => this.handleGroupDrop(e, group.id));
+                body.addEventListener('dragleave', () => this.clearAllFileDragHighlights());
                 const placeholder = document.createElement('div');
                 placeholder.className = 'file-group-empty';
                 placeholder.textContent = this.fileFilter ? 'No matching files' : 'Drag files/pdf onto this group';
                 body.appendChild(placeholder);
             } else {
-                group.visible.forEach((file) => {
-                    const displayName = file;
-                    const number = visibleCounter + 1;
-                    const fileItem = document.createElement('div');
-                    fileItem.className = 'file-item';
-                    fileItem.dataset.filename = file;
-                    fileItem.dataset.groupId = group.id;
-                    fileItem.draggable = true;
-                    this.setFileItemContent(fileItem, displayName, number);
-
-                    fileItem.addEventListener('click', (e) => this.handleFileClick(e, file, fileItem));
-
-                    fileItem.addEventListener('contextmenu', (e) => {
-                        e.preventDefault();
-                        window.paperReviewerApp.showFileContextMenu(e, file, fileItem);
-                    });
-
-                    fileItem.addEventListener('dragstart', (e) => this.handleFileDragStart(e, file, group.id, fileItem));
-                    fileItem.addEventListener('dragover', (e) => this.handleFileDragOver(e, file, group.id, fileItem));
-                    fileItem.addEventListener('dragleave', () => this.clearFileDragHighlights(fileItem));
-                    fileItem.addEventListener('drop', (e) => this.handleFileDropOnItem(e, file, group.id));
-                    fileItem.addEventListener('dragend', () => {
-                        this.draggingFile = null;
-                        this.currentFileDragState = null;
-                        this.clearAllFileDragHighlights();
-                        fileItem.classList.remove('dragging');
-                    });
-
-                    if (this.selectedFiles.has(file)) {
-                        fileItem.classList.add('active');
-                    }
-
-                    visibleCounter += 1;
-                    body.appendChild(fileItem);
-                });
+                this.setupVirtualGroupBody(body, group, group.visible);
             }
 
             groupEl.appendChild(body);
@@ -3730,13 +3715,188 @@ class PaperReviewerApp {
 
         fileListEl.innerHTML = '';
         fileListEl.appendChild(newFileListEl);
+        this.renderAllVirtualGroups(true);
         this.updateFileSelectionDom();
         if (autoLoadTarget) {
-            const autoEl = fileListEl.querySelector(`.file-item[data-filename="${autoLoadTarget}"]`);
-            if (autoEl) {
-                setTimeout(() => this.loadFile(autoLoadTarget, autoEl), 30);
-            }
+            this.scrollFileIntoView(autoLoadTarget, { align: 'center' });
+            const autoEl = this.getRenderedFileItem(autoLoadTarget);
+            setTimeout(() => this.loadFile(autoLoadTarget, autoEl), 30);
         }
+    }
+
+    setupVirtualGroupBody(body, group, files) {
+        body.innerHTML = '';
+        body.classList.add('file-group-virtual');
+        const spacer = document.createElement('div');
+        spacer.className = 'file-virtual-spacer';
+        const inner = document.createElement('div');
+        inner.className = 'file-virtual-inner';
+        body.appendChild(spacer);
+        body.appendChild(inner);
+        const state = {
+            groupId: group.id,
+            body,
+            spacer,
+            inner,
+            files: Array.isArray(files) ? files : [],
+            itemHeight: this.virtualListConfig.defaultItemHeight,
+            overscan: this.virtualListConfig.overscan,
+            startIndex: -1,
+            endIndex: -1,
+            needsMeasure: true,
+            scrollRaf: null
+        };
+        this.virtualGroupState[group.id] = state;
+
+        body.addEventListener('click', (e) => {
+            const item = e.target.closest('.file-item');
+            if (!item) return;
+            this.handleFileClick(e, item.dataset.filename, item);
+        });
+        body.addEventListener('contextmenu', (e) => {
+            const item = e.target.closest('.file-item');
+            if (!item) return;
+            e.preventDefault();
+            window.paperReviewerApp.showFileContextMenu(e, item.dataset.filename, item);
+        });
+        body.addEventListener('dragstart', (e) => {
+            const item = e.target.closest('.file-item');
+            if (!item) return;
+            this.handleFileDragStart(e, item.dataset.filename, group.id, item);
+        });
+        body.addEventListener('dragover', (e) => {
+            const item = e.target.closest('.file-item');
+            if (item) {
+                this.handleFileDragOver(e, item.dataset.filename, group.id, item);
+            } else {
+                this.handleGroupDragOver(e, group.id);
+            }
+        });
+        body.addEventListener('dragleave', (e) => {
+            const item = e.target.closest('.file-item');
+            if (item) this.clearFileDragHighlights(item);
+        });
+        body.addEventListener('drop', (e) => {
+            const item = e.target.closest('.file-item');
+            if (item) {
+                this.handleFileDropOnItem(e, item.dataset.filename, group.id);
+            } else {
+                this.handleGroupDrop(e, group.id);
+            }
+        });
+        body.addEventListener('dragend', (e) => {
+            const item = e.target.closest('.file-item');
+            if (!item) return;
+            this.draggingFile = null;
+            this.currentFileDragState = null;
+            this.clearAllFileDragHighlights();
+            item.classList.remove('dragging');
+        });
+        body.addEventListener('scroll', () => this.scheduleVirtualGroupRender(group.id));
+    }
+
+    scheduleVirtualGroupRender(groupId) {
+        const state = this.virtualGroupState[groupId];
+        if (!state || state.scrollRaf) return;
+        state.scrollRaf = requestAnimationFrame(() => {
+            state.scrollRaf = null;
+            this.renderVirtualGroup(groupId);
+        });
+    }
+
+    renderAllVirtualGroups(force = false) {
+        Object.keys(this.virtualGroupState || {}).forEach(groupId => {
+            this.renderVirtualGroup(groupId, force);
+        });
+    }
+
+    measureVirtualItemHeight(state) {
+        if (!state?.body) return;
+        const sample = document.createElement('div');
+        sample.className = 'file-item';
+        sample.style.visibility = 'hidden';
+        sample.textContent = 'Sample';
+        state.body.appendChild(sample);
+        const rect = sample.getBoundingClientRect();
+        const styles = window.getComputedStyle(sample);
+        const marginTop = parseFloat(styles.marginTop) || 0;
+        const marginBottom = parseFloat(styles.marginBottom) || 0;
+        sample.remove();
+        const height = rect.height + marginTop + marginBottom;
+        state.itemHeight = height || this.virtualListConfig.defaultItemHeight;
+        state.needsMeasure = false;
+    }
+
+    renderVirtualGroup(groupId, force = false) {
+        const state = this.virtualGroupState[groupId];
+        if (!state || !state.body || !state.inner || !state.spacer) return;
+        if (state.needsMeasure) this.measureVirtualItemHeight(state);
+        if (!state.itemHeight || !Number.isFinite(state.itemHeight)) {
+            state.itemHeight = this.virtualListConfig.defaultItemHeight;
+        }
+        const total = state.files.length;
+        if (!total) {
+            state.spacer.style.height = '0px';
+            state.inner.innerHTML = '';
+            return;
+        }
+        const viewportHeight = state.body.clientHeight || 0;
+        const itemsPerView = Math.ceil(viewportHeight / state.itemHeight) || 1;
+        const start = Math.max(0, Math.floor(state.body.scrollTop / state.itemHeight) - state.overscan);
+        const end = Math.min(total, start + itemsPerView + state.overscan * 2);
+        if (!force && start === state.startIndex && end === state.endIndex) return;
+        state.startIndex = start;
+        state.endIndex = end;
+        state.spacer.style.height = `${total * state.itemHeight}px`;
+        state.inner.style.transform = `translateY(${start * state.itemHeight}px)`;
+        state.inner.innerHTML = '';
+        for (let i = start; i < end; i += 1) {
+            const file = state.files[i];
+            const number = i + 1;
+            const fileItem = document.createElement('div');
+            fileItem.className = 'file-item';
+            fileItem.dataset.filename = file;
+            fileItem.dataset.groupId = groupId;
+            fileItem.draggable = true;
+            this.setFileItemContent(fileItem, file, number);
+            if (this.selectedFiles.has(file)) {
+                fileItem.classList.add('active');
+            }
+            state.inner.appendChild(fileItem);
+        }
+    }
+
+    normalizeFileBase(name) {
+        if (!name) return '';
+        const base = name.split('/').pop() || name;
+        return base.replace(/\.json$/i, '');
+    }
+
+    getRenderedFileItem(filename) {
+        const base = this.normalizeFileBase(filename);
+        if (!base) return null;
+        return document.querySelector(`.file-item[data-filename="${base}"]`);
+    }
+
+    scrollFileIntoView(filename, opts = {}) {
+        const base = this.normalizeFileBase(filename);
+        if (!base) return null;
+        const pos = this.visibleFilePositions?.[base];
+        if (!pos) return null;
+        const state = this.virtualGroupState?.[pos.groupId];
+        if (!state || !state.body) return null;
+        if (state.needsMeasure) this.measureVirtualItemHeight(state);
+        const align = opts.align || 'center';
+        const targetTop = pos.index * state.itemHeight;
+        let scrollTop = targetTop;
+        if (align === 'center') {
+            scrollTop = Math.max(0, targetTop - state.body.clientHeight / 2 + state.itemHeight / 2);
+        } else if (align === 'end') {
+            scrollTop = Math.max(0, targetTop - state.body.clientHeight + state.itemHeight);
+        }
+        state.body.scrollTop = scrollTop;
+        this.renderVirtualGroup(pos.groupId, true);
+        return this.getRenderedFileItem(base);
     }
 
     handleFileDragStart(e, filename, groupId, itemEl = null) {
@@ -3969,7 +4129,12 @@ class PaperReviewerApp {
         });
         document.body.appendChild(menu);
         const anchorFile = this.getSelectedFilesArray()[0] || this.currentFile;
-        const anchorEl = anchorFile ? document.querySelector(`.file-item[data-filename="${anchorFile}"]`) : null;
+        const anchorBase = anchorFile ? anchorFile.split('/').pop()?.replace(/\.json$/i, '') || anchorFile : null;
+        let anchorEl = null;
+        if (anchorBase) {
+            this.scrollFileIntoView(anchorBase, { align: 'center' });
+            anchorEl = this.getRenderedFileItem(anchorBase);
+        }
         if (anchorEl) {
             const rect = anchorEl.getBoundingClientRect();
             const margin = 8;
@@ -3980,6 +4145,10 @@ class PaperReviewerApp {
             menu.style.left = `${left}px`;
             menu.style.top = `${top}px`;
             menu.style.transform = 'translate(0, 0)';
+        } else {
+            menu.style.left = '50%';
+            menu.style.top = '30%';
+            menu.style.transform = 'translate(-50%, -50%)';
         }
         this.groupMenuState = { menuEl: menu, groups, index: 0 };
 
@@ -4041,8 +4210,9 @@ class PaperReviewerApp {
         this.moveSelectedFilesToGroup(groupId, { placeBottom: true });
         if (nextFocus) {
             this.setSelectedFiles([nextFocus], nextFocus);
-            const el = document.querySelector(`.file-item[data-filename="${nextFocus}"]`);
-            if (el) this.loadFile(nextFocus, el);
+            this.scrollFileIntoView(nextFocus, { align: 'center' });
+            const el = this.getRenderedFileItem(nextFocus);
+            this.loadFile(nextFocus, el);
         }
     }
 
@@ -4982,7 +5152,8 @@ class PaperReviewerApp {
 
                 const nextFile = (this.currentFileList || [])[0];
                 if (nextFile) {
-                    const nextEl = document.querySelector(`.file-item[data-filename="${nextFile}"]`);
+                    this.scrollFileIntoView(nextFile, { align: 'center' });
+                    const nextEl = this.getRenderedFileItem(nextFile);
                     this.loadFile(nextFile, nextEl);
                 } else {
                     this.showLoading();
@@ -5078,7 +5249,8 @@ class PaperReviewerApp {
         await this.loadFileList(true);
         if (!this.currentFile && (this.currentFileList || []).length) {
             const nextFile = this.currentFileList[0];
-            const nextEl = document.querySelector(`.file-item[data-filename="${nextFile}"]`);
+            this.scrollFileIntoView(nextFile, { align: 'center' });
+            const nextEl = this.getRenderedFileItem(nextFile);
             if (nextEl) this.loadFile(nextFile, nextEl);
         }
     }
@@ -5137,7 +5309,8 @@ class PaperReviewerApp {
         await this.loadFileList(true);
         if (!this.currentFile && (this.currentFileList || []).length) {
             const nextFile = this.currentFileList[0];
-            const nextEl = document.querySelector(`.file-item[data-filename="${nextFile}"]`);
+            this.scrollFileIntoView(nextFile, { align: 'center' });
+            const nextEl = this.getRenderedFileItem(nextFile);
             if (nextEl) this.loadFile(nextFile, nextEl);
         }
     }
@@ -5329,7 +5502,8 @@ class PaperReviewerApp {
         if (created.length) {
             const targetBase = created[0];
             setTimeout(() => {
-                const item = document.querySelector(`.file-item[data-filename="${targetBase}"]`);
+                this.scrollFileIntoView(targetBase, { align: 'center' });
+                const item = this.getRenderedFileItem(targetBase);
                 if (item) this.loadFile(targetBase, item);
             }, 120);
         }
@@ -5625,11 +5799,10 @@ class PaperReviewerApp {
 
             // 自动加载新创建的文件
             setTimeout(() => {
-                const newFileItem = Array.from(document.querySelectorAll('.file-item'))
-                    .find(item => item.querySelector('span').textContent === filename);
-                if (newFileItem) {
-                    this.loadFile(filename, newFileItem);
-                }
+                const base = filename.split('/').pop()?.replace(/\.json$/i, '') || filename;
+                this.scrollFileIntoView(base, { align: 'center' });
+                const newFileItem = this.getRenderedFileItem(base);
+                if (newFileItem) this.loadFile(base, newFileItem);
             }, 200);
 
         } catch (error) {
