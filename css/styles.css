@@ -221,6 +221,8 @@ body {
 #currentProjectName {
     font-weight: 500;
     overflow: hidden;
+    color: #000;
+    padding: 0px 10px 0px 2px;
     text-overflow: ellipsis;
     white-space: nowrap;
 }
@@ -398,6 +400,20 @@ body {
     padding: 2px 4px;
     opacity: 0;
     transition: color 0.15s ease, opacity 0.15s ease;
+}
+
+.file-group-sort {
+    background: transparent;
+    border: none;
+    color: var(--gray-500);
+    cursor: pointer;
+    padding: 2px 4px;
+    margin-left: 4px;
+    transition: color 0.15s ease;
+}
+
+.file-group-sort:hover {
+    color: var(--wos-blue);
 }
 
 .file-group-header:hover .file-group-delete {
@@ -765,7 +781,6 @@ body {
 .status-bar {
     position: relative;
     height: 16px;
-    padding: 0 0 0 10px;
     background: var(--wos-blue);
     color: #fff;
     display: flex;
@@ -776,18 +791,68 @@ body {
     border-top: 1px solid var(--wos-blue-dark);
 }
 
+.status-left-group,
 .status-left,
 .status-right {
     display: flex;
     align-items: center;
-    gap: 4px;
     min-width: 0;
 }
 
+
 .status-left {
     overflow: hidden;
+    height: 16px;
     white-space: nowrap;
     text-overflow: ellipsis;
+    background: #f6c500;
+    color: #0d1117;
+}
+
+.status-progress {
+    display: none;
+    align-items: center;
+    gap: 6px;
+    padding: 0px 6px;
+    min-width: 220px;
+}
+
+.status-progress.active {
+    display: inline-flex;
+}
+.status-progress-bar {
+    height: 6px;
+    width: 90px;
+    border-radius: 999px;
+    background: #23272e;
+    box-shadow: none;
+    position: relative;
+    overflow: hidden;
+}
+
+.status-progress-bar::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: none;
+    opacity: 1;
+}
+
+.status-progress-bar::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    width: var(--status-progress, 0%);
+    background: linear-gradient(90deg, #00e884, #00bfff 80%, #00aaff);
+    box-shadow: none;
+    transition: width 0.2s cubic-bezier(.4,1,.7,1);
+}
+
+.status-progress-text {
+    font-size: 10px;
+    color: #f6fbff;
+    text-shadow: 0 1px 1px rgba(0, 0, 0, 0.6);
+    white-space: nowrap;
 }
 
 .status-project {
@@ -797,7 +862,8 @@ body {
 
 .status-bar .panel-header-left i {
     font-size: 9px;
-    color: #fff;
+    padding: 0px 0px 0px 20px;
+    color: #000000;
 }
 
 .status-project {

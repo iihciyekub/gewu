@@ -638,10 +638,16 @@
     </div>
 
     <div class="status-bar" id="statusBar" role="status" aria-live="polite">
-        <div class="status-left">
-            <div class="panel-header-left status-project">
-                <i class="fas fa-folder-open"></i>
-                <button class="project-name-btn" id="currentProjectName" title="Click to create or switch project">Click to create or switch project</button>
+        <div class="status-left-group">
+            <div class="status-left">
+                <div class="panel-header-left status-project">
+                    <i class="fas fa-folder-open"></i>
+                    <button class="project-name-btn" id="currentProjectName" title="Click to create or switch project">Click to create or switch project</button>
+                </div>
+            </div>
+            <div class="status-progress" id="statusProgress" aria-live="polite">
+                <div class="status-progress-bar" id="statusProgressBar"></div>
+                <div class="status-progress-text" id="statusProgressText"></div>
             </div>
         </div>
         <div class="status-right">

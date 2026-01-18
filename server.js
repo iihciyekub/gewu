@@ -22,6 +22,9 @@ const TOOLS_ROOTS = [
 const CUSTOM_MANIFEST_PATH = path.join(ROOT_DIR, 'manifest.json');
 const FILE_ORDER_NAME = '.file_order.json';
 let promptManifestCache = null;
+const deleteJobs = new Map();
+const DELETE_JOB_TTL_MS = 5 * 60 * 1000;
+const DELETE_GROUP_SCAN_YIELD = 20;
 const ALLOWED_ROOTS = (() => {
     const fsRoot = path.parse(process.cwd()).root || path.sep;
     const envRoots = (process.env.ALLOWED_ROOTS || '')
@@ -254,6 +257,80 @@ function getMdTargetPath(fullPath, filename) {
     return path.join(fullPath, 'md', safeName);
 }
 
+function resolvePdfDeleteTarget(fullPath, filename) {
+    const clean = String(filename || '').trim();
+    if (!clean) throw new Error('Missing filename');
+    const safeName = clean.includes('/') || clean.includes('\\')
+        ? path.normalize(clean).replace(/^[/\\]+/, '')
+        : clean;
+    const candidates = [
+        path.join(fullPath, safeName),
+        path.join(fullPath, 'pdf', safeName),
+        path.join(fullPath, 'papers', safeName)
+    ];
+    return candidates.find(p => fs.existsSync(p)) || null;
+}
+
+function ensurePathInsideProject(fullPath, targetPath) {
+    const rel = path.relative(fullPath, targetPath);
+    if (rel.startsWith('..') || path.isAbsolute(rel)) {
+        throw new Error('Invalid path');
+    }
+}
+
+async function buildDeleteTargetsForBases(fullPath, bases, job) {
+    const targets = [];
+    const jsonRoot = path.join(fullPath, 'json');
+    let viewDirs = [];
+    try {
+        const entries = await fs.promises.readdir(jsonRoot, { withFileTypes: true });
+        viewDirs = entries.filter(e => e.isDirectory()).map(e => e.name);
+    } catch (_err) {
+        viewDirs = [];
+    }
+
+    job.scanTotal = bases.length;
+    job.scanProcessed = 0;
+    job.targetsFound = 0;
+    for (let i = 0; i < bases.length; i += 1) {
+        const base = String(bases[i] || '').trim();
+        if (!base) {
+            job.scanProcessed += 1;
+            continue;
+        }
+        const baseFile = `${base}.json`;
+        viewDirs.forEach((dir) => {
+            const jsonPath = path.join(jsonRoot, dir, baseFile);
+            if (fs.existsSync(jsonPath)) {
+                targets.push({ type: 'json', path: path.join('json', dir, baseFile).split(path.sep).join('/') });
+            }
+        });
+
+        const mdPath = path.join(fullPath, 'md', `${base}.md`);
+        if (fs.existsSync(mdPath)) {
+            targets.push({ type: 'md', path: path.join('md', `${base}.md`).split(path.sep).join('/') });
+        }
+
+        const pdfCandidates = [
+            path.join(fullPath, 'pdf', `${base}.pdf`),
+            path.join(fullPath, 'papers', `${base}.pdf`),
+            path.join(fullPath, `${base}.pdf`)
+        ];
+        const pdfTarget = pdfCandidates.find(p => fs.existsSync(p));
+        if (pdfTarget) {
+            const rel = path.relative(fullPath, pdfTarget).split(path.sep).join('/');
+            targets.push({ type: 'pdf', path: rel });
+        }
+
+        job.targetsFound = targets.length;
+        job.scanProcessed += 1;
+        if (job.scanProcessed % DELETE_GROUP_SCAN_YIELD === 0) {
+            await new Promise(resolve => setImmediate(resolve));
+        }
+    }
+    return targets;
+}
+
 // Build manifest once at startup
 ensurePromptManifest();
 
@@ -307,6 +384,7 @@ const mimeTypes = {
 const server = http.createServer((req, res) => {
     const parsedUrl = url.parse(req.url, true);
     const pathname = parsedUrl.pathname;
+    const query = parsedUrl.query || {};
 
     // 设置CORS头
     res.setHeader('Access-Control-Allow-Origin', '*');
@@ -639,6 +717,233 @@ const server = http.createServer((req, res) => {
         return;
     }
 
+    // 处理批量删除请求（后台任务）
+    if (req.method === 'POST' && pathname === '/delete-batch') {
+        let body = '';
+        req.on('data', chunk => { body += chunk.toString(); });
+        req.on('end', () => {
+            try {
+                const data = JSON.parse(body || '{}');
+                const { projectPath, targets } = data;
+                if (!projectPath) {
+                    res.writeHead(400, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ success: false, error: 'Missing projectPath' }));
+                    return;
+                }
+                if (!Array.isArray(targets) || !targets.length) {
+                    res.writeHead(400, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ success: false, error: 'Missing targets' }));
+                    return;
+                }
+
+                const { fullPath } = normalizeProjectPath(projectPath);
+                const jobId = `del_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+                const job = {
+                    id: jobId,
+                    total: targets.length,
+                    processed: 0,
+                    deleted: 0,
+                    failed: 0,
+                    done: false,
+                    startedAt: Date.now()
+                };
+                deleteJobs.set(jobId, job);
+
+                res.writeHead(202, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ success: true, jobId }));
+
+                const queue = targets.filter(t => t && t.path && t.type);
+                job.total = queue.length;
+                if (!queue.length) {
+                    job.done = true;
+                    job.finishedAt = Date.now();
+                    return;
+                }
+
+                const concurrency = 8;
+                let index = 0;
+                const worker = async () => {
+                    while (index < queue.length) {
+                        const item = queue[index++];
+                        try {
+                            let targetPath = null;
+                            if (item.type === 'pdf') {
+                                targetPath = resolvePdfDeleteTarget(fullPath, item.path);
+                                if (!targetPath) throw new Error('PDF not found');
+                            } else if (item.type === 'md') {
+                                targetPath = getMdTargetPath(fullPath, item.path);
+                            } else if (item.type === 'json') {
+                                targetPath = getJsonTargetPath(fullPath, item.path);
+                            } else {
+                                throw new Error('Unknown type');
+                            }
+                            ensurePathInsideProject(fullPath, targetPath);
+                            if (!fs.existsSync(targetPath)) {
+                                job.failed += 1;
+                            } else {
+                                fs.unlinkSync(targetPath);
+                                job.deleted += 1;
+                            }
+                        } catch (_err) {
+                            job.failed += 1;
+                        } finally {
+                            job.processed += 1;
+                        }
+                    }
+                };
+
+                Promise.all(Array.from({ length: Math.min(concurrency, queue.length) }, () => worker()))
+                    .then(() => {
+                        job.done = true;
+                        job.finishedAt = Date.now();
+                        setTimeout(() => deleteJobs.delete(jobId), DELETE_JOB_TTL_MS);
+                    })
+                    .catch(() => {
+                        job.done = true;
+                        job.finishedAt = Date.now();
+                        setTimeout(() => deleteJobs.delete(jobId), DELETE_JOB_TTL_MS);
+                    });
+            } catch (error) {
+                console.error('✗ Error starting delete batch:', error);
+                res.writeHead(500, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ success: false, error: error.message }));
+            }
+        });
+        return;
+    }
+
+    if (req.method === 'GET' && pathname === '/delete-batch-status') {
+        const jobId = String(query.jobId || '').trim();
+        if (!jobId || !deleteJobs.has(jobId)) {
+            res.writeHead(404, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ success: false, error: 'Job not found' }));
+            return;
+        }
+        const job = deleteJobs.get(jobId);
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ success: true, job }));
+        return;
+    }
+
+    if (req.method === 'POST' && pathname === '/delete-group-start') {
+        let body = '';
+        req.on('data', chunk => { body += chunk.toString(); });
+        req.on('end', () => {
+            try {
+                const data = JSON.parse(body || '{}');
+                const { projectPath, bases } = data;
+                if (!projectPath) {
+                    res.writeHead(400, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ success: false, error: 'Missing projectPath' }));
+                    return;
+                }
+                if (!Array.isArray(bases) || !bases.length) {
+                    res.writeHead(400, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ success: false, error: 'Missing bases' }));
+                    return;
+                }
+
+                const { fullPath } = normalizeProjectPath(projectPath);
+                const jobId = `gdel_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+                const job = {
+                    id: jobId,
+                    phase: 'scanning',
+                    scanTotal: bases.length,
+                    scanProcessed: 0,
+                    targetsFound: 0,
+                    total: 0,
+                    processed: 0,
+                    deleted: 0,
+                    failed: 0,
+                    done: false,
+                    startedAt: Date.now()
+                };
+                deleteJobs.set(jobId, job);
+
+                res.writeHead(202, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ success: true, jobId }));
+
+                (async () => {
+                    try {
+                        const targets = await buildDeleteTargetsForBases(fullPath, bases, job);
+                        job.phase = 'deleting';
+                        job.total = targets.length;
+                        job.processed = 0;
+                        job.deleted = 0;
+                        job.failed = 0;
+                        if (!targets.length) {
+                            job.done = true;
+                            job.finishedAt = Date.now();
+                            setTimeout(() => deleteJobs.delete(jobId), DELETE_JOB_TTL_MS);
+                            return;
+                        }
+
+                        const queue = targets;
+                        let index = 0;
+                        const concurrency = 8;
+                        const worker = async () => {
+                            while (index < queue.length) {
+                                const item = queue[index++];
+                                try {
+                                    let targetPath = null;
+                                    if (item.type === 'pdf') {
+                                        targetPath = resolvePdfDeleteTarget(fullPath, item.path);
+                                        if (!targetPath) throw new Error('PDF not found');
+                                    } else if (item.type === 'md') {
+                                        targetPath = getMdTargetPath(fullPath, item.path);
+                                    } else if (item.type === 'json') {
+                                        targetPath = getJsonTargetPath(fullPath, item.path);
+                                    } else {
+                                        throw new Error('Unknown type');
+                                    }
+                                    ensurePathInsideProject(fullPath, targetPath);
+                                    if (!fs.existsSync(targetPath)) {
+                                        job.failed += 1;
+                                    } else {
+                                        fs.unlinkSync(targetPath);
+                                        job.deleted += 1;
+                                    }
+                                } catch (_err) {
+                                    job.failed += 1;
+                                } finally {
+                                    job.processed += 1;
+                                }
+                            }
+                        };
+
+                        await Promise.all(Array.from({ length: Math.min(concurrency, queue.length) }, () => worker()));
+                        job.done = true;
+                        job.finishedAt = Date.now();
+                        setTimeout(() => deleteJobs.delete(jobId), DELETE_JOB_TTL_MS);
+                    } catch (_err) {
+                        job.done = true;
+                        job.failed += 1;
+                        job.finishedAt = Date.now();
+                        setTimeout(() => deleteJobs.delete(jobId), DELETE_JOB_TTL_MS);
+                    }
+                })();
+            } catch (error) {
+                console.error('✗ Error starting group delete:', error);
+                res.writeHead(500, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ success: false, error: error.message }));
+            }
+        });
+        return;
+    }
+
+    if (req.method === 'GET' && pathname === '/delete-group-status') {
+        const jobId = String(query.jobId || '').trim();
+        if (!jobId || !deleteJobs.has(jobId)) {
+            res.writeHead(404, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ success: false, error: 'Job not found' }));
+            return;
+        }
+        const job = deleteJobs.get(jobId);
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ success: true, job }));
+        return;
+    }
+
     // 处理JSON删除请求
     if (req.method === 'POST' && pathname === '/delete-json') {
         let body = '';
@@ -775,6 +1080,44 @@ const server = http.createServer((req, res) => {
             }
         });
         
+        return;
+    }
+
+    if (req.method === 'POST' && pathname === '/file-exists') {
+        let body = '';
+        req.on('data', chunk => {
+            body += chunk.toString();
+        });
+        req.on('end', () => {
+            try {
+                const data = JSON.parse(body || '{}');
+                const { projectPath, filePath: relativeFilePath } = data;
+                if (!projectPath) {
+                    res.writeHead(400, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ success: false, error: 'Missing projectPath' }));
+                    return;
+                }
+                if (!relativeFilePath) {
+                    res.writeHead(400, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ success: false, error: 'Missing filePath' }));
+                    return;
+                }
+
+                const { fullPath } = normalizeProjectPath(projectPath);
+                const targetFile = path.join(fullPath, relativeFilePath);
+                const relativePath = path.relative(fullPath, targetFile);
+                if (relativePath.startsWith('..')) {
+                    throw new Error('访问被拒绝：文件必须在项目目录内');
+                }
+                const exists = fs.existsSync(targetFile);
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ success: true, exists }));
+            } catch (error) {
+                console.error('✗ Error checking file exists:', error);
+                res.writeHead(500, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ success: false, error: error.message }));
+            }
+        });
         return;
     }
 
@@ -1694,5 +2037,10 @@ server.listen(PORT, HOST, () => {
     console.log('   - POST /save-json (create/update)');
     console.log('   - POST /rename-json (rename)');
     console.log('   - POST /delete-json (delete)');
+    console.log('   - POST /delete-batch (delete)');
+    console.log('   - GET  /delete-batch-status (delete)');
+    console.log('   - POST /delete-group-start (delete)');
+    console.log('   - GET  /delete-group-status (delete)');
+    console.log('   - POST /file-exists');
     console.log('Press Ctrl+C to stop\n');
 });

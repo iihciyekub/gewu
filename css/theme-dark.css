@@ -130,6 +130,14 @@ body.theme-dark .file-group-delete:hover {
     color: #f28b82;
 }
 
+body.theme-dark .file-group-sort {
+    color: var(--vscode-text-muted);
+}
+
+body.theme-dark .file-group-sort:hover {
+    color: #9cdcfe;
+}
+
 body.theme-dark .file-item:hover {
     background: #f0dba1;
     color: #1b1f25;

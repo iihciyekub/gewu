@@ -101,6 +101,7 @@ class PaperReviewerApp {
         this.uiPreferences = {};
         this.markdownEditMode = { draft: true, markdown: false };
         this.importMenuVisible = false;
+        this._statusProgressEls = null;
 
         // 项目管理
         this.currentProject = null; // { name, path }
@@ -4598,6 +4599,10 @@ class PaperReviewerApp {
             <div class="context-menu-item" data-action="downloadGroupBib">
                 <i class="fas fa-book"></i> Export Group DOIs to BibTeX
             </div>
+            <div class="context-menu-divider"></div>
+            <div class="context-menu-item danger" data-action="deleteGroupFiles">
+                <i class="fas fa-trash-alt"></i> Delete All Files in Group (JSON/MD/PDF)
+            </div>
             ${canEdit ? '<div class="context-menu-divider"></div>' : ''}
             ${canEdit ? `
             <div class="context-menu-item" data-action="renameGroup">
@@ -4631,6 +4636,8 @@ class PaperReviewerApp {
                     await this.copyGroupDois(group);
                 } else if (action === 'downloadGroupBib') {
                     await this.downloadGroupBib(group);
+                } else if (action === 'deleteGroupFiles') {
+                    await this.deleteAllFilesInGroup(group);
                 } else if (action === 'renameGroup') {
                     this.renameGroup(group.id);
                 } else if (action === 'deleteGroup') {
@@ -4661,6 +4668,103 @@ class PaperReviewerApp {
         } catch (err) {
             console.error('Failed to copy group DOIs:', err);
             this.showNotification(`Copy failed: ${err.message}`, 'error');
+        }
+    }
+
+    async deleteAllFilesInGroup(group) {
+        const projectPath = this.getRequiredProjectPath();
+        if (!projectPath) return;
+        const files = Array.isArray(group?.files) ? group.files : [];
+        const bases = files.map(f => (f || '').replace(/\.json$/i, '')).filter(Boolean);
+        const uniqueBases = Array.from(new Set(bases));
+        if (!uniqueBases.length) {
+            this.showNotification('No files in this group', 'warning');
+            return;
+        }
+
+        const groupName = group?.name || group?.id || 'group';
+        const ok = window.confirm(
+            `Delete all files in group "${groupName}"?\n` +
+            `This action cannot be undone!`
+        );
+        if (!ok) return;
+
+        const tracker = this.createStatusProgressTracker('Delete group files');
+        let job = null;
+        try {
+            tracker.update('Scanning group files... 0/0', 4);
+            const startResp = await fetch('/delete-group-start', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ projectPath, bases: uniqueBases })
+            });
+            if (!startResp.ok) {
+                throw new Error('Failed to start batch delete');
+            }
+            const startData = await startResp.json();
+            const jobId = startData.jobId;
+
+            job = await new Promise((resolve) => {
+                const poll = async () => {
+                    try {
+                        const statusResp = await fetch(`/delete-group-status?jobId=${encodeURIComponent(jobId)}`);
+                        if (!statusResp.ok) throw new Error('Status not available');
+                        const statusData = await statusResp.json();
+                        const jobData = statusData.job || {};
+                        const phase = jobData.phase || 'scanning';
+                        if (phase === 'scanning') {
+                            const scanTotal = Number(jobData.scanTotal || uniqueBases.length || 0);
+                            const scanProcessed = Number(jobData.scanProcessed || 0);
+                            const found = Number(jobData.targetsFound || 0);
+                            const percent = scanTotal ? Math.round((scanProcessed / scanTotal) * 30) : 8;
+                            tracker.update(`Scanning files... ${scanProcessed}/${scanTotal} | found ${found}`, percent);
+                        } else {
+                            const processed = Number(jobData.processed || 0);
+                            const totalCount = Number(jobData.total || 0);
+                            const percent = totalCount ? 30 + Math.round((processed / totalCount) * 70) : 30;
+                            tracker.update(`Deleting files... ${processed}/${totalCount}`, percent);
+                        }
+                        if (jobData.done) {
+                            resolve(jobData);
+                            return;
+                        }
+                        setTimeout(poll, 700);
+                    } catch (_err) {
+                        setTimeout(poll, 1000);
+                    }
+                };
+                poll();
+            });
+        } catch (err) {
+            tracker.fail(`Delete failed: ${err.message}`);
+            this.showNotification(`Delete failed: ${err.message}`, 'error');
+            return;
+        }
+
+        uniqueBases.forEach((base) => {
+            this.removeFilenameFromGroups(base);
+            delete this.tempDataCache[`${base}.json`];
+            delete this.tempDataCache[`md/${base}.md`];
+        });
+
+        const currentBase = (this.currentFileBase || this.currentFile || '').split('/').pop()?.replace(/\.json$/i, '');
+        if (currentBase && uniqueBases.includes(currentBase)) {
+            this.currentFile = null;
+            this.currentData = null;
+            this.hasUnsavedChanges = false;
+        }
+
+        const deletedCount = Number(job.deleted || 0);
+        const failedCount = Number(job.failed || 0);
+        const tail = failedCount ? `, failed ${failedCount}` : '';
+        tracker.finish('Finalizing...', 800);
+        this.showNotification(`✓ Deleted ${deletedCount} file(s) from "${groupName}"${tail}`, failedCount ? 'error' : 'success');
+        await this.loadFileList(true);
+        if (!this.currentFile && (this.currentFileList || []).length) {
+            const nextFile = this.currentFileList[0];
+            this.scrollFileIntoView(nextFile, { align: 'center' });
+            const nextEl = this.getRenderedFileItem(nextFile);
+            if (nextEl) this.loadFile(nextFile, nextEl);
         }
     }
 
@@ -5821,11 +5925,21 @@ class PaperReviewerApp {
             return;
         }
         const view = this.currentJsonView || 'view1';
+        let tracker = null;
         try {
+            tracker = this.createStatusProgressTracker('WOS import');
             const records = [];
             let invalid = 0;
             let empty = 0;
             let readFailed = 0;
+            const totalFiles = files.length;
+            let processedFiles = 0;
+            const notifyFileStep = Math.max(1, Math.floor(totalFiles / 10));
+            const updateFileProgress = () => {
+                const percent = totalFiles ? Math.round((processedFiles / totalFiles) * 30) : 8;
+                tracker.update(`WOS import: reading ${processedFiles}/${totalFiles}`, percent);
+            };
+            updateFileProgress();
 
             for (const file of files) {
                 try {
@@ -5843,6 +5957,11 @@ class PaperReviewerApp {
                 } catch (err) {
                     console.warn('Failed to read WOS file:', file?.name, err);
                     readFailed += 1;
+                } finally {
+                    processedFiles += 1;
+                    if (processedFiles % notifyFileStep === 0 || processedFiles === totalFiles) {
+                        updateFileProgress();
+                    }
                 }
             }
 
@@ -5853,10 +5972,19 @@ class PaperReviewerApp {
                 if (readFailed) parts.push(`failed ${readFailed}`);
                 const suffix = parts.length ? ` (${parts.join(', ')})` : '';
                 this.showNotification(`No WOS records found${suffix}`, 'warning');
+                tracker.finish('WOS import: no records', 800);
                 return;
             }
             const batches = new Map();
             let skipped = 0;
+            const totalRecords = records.length;
+            let processedRecords = 0;
+            const notifyRecordStep = Math.max(1, Math.floor(totalRecords / 10));
+            const updateRecordProgress = () => {
+                const percent = totalRecords ? 30 + Math.round((processedRecords / totalRecords) * 30) : 30;
+                tracker.update(`WOS import: processing ${processedRecords}/${totalRecords}`, percent);
+            };
+            updateRecordProgress();
 
             for (const rec of records) {
                 const doi = this.extractWosDoi(rec);
@@ -5864,6 +5992,10 @@ class PaperReviewerApp {
                 const base = doi ? this.doiToFilenameBase(doi) : this.wosidToFilenameBase(wosid);
                 if (!base) {
                     skipped += 1;
+                    processedRecords += 1;
+                    if (processedRecords % notifyRecordStep === 0 || processedRecords === totalRecords) {
+                        updateRecordProgress();
+                    }
                     continue;
                 }
                 const entry = batches.get(base) || {
@@ -5877,12 +6009,24 @@ class PaperReviewerApp {
                 if (wosid && !entry.wosid) entry.wosid = wosid;
                 if (doi) entry.isWosidOnly = false;
                 batches.set(base, entry);
+                processedRecords += 1;
+                if (processedRecords % notifyRecordStep === 0 || processedRecords === totalRecords) {
+                    updateRecordProgress();
+                }
             }
 
             const wosidBases = [];
             let created = 0;
             let updated = 0;
             let failed = 0;
+            const totalBatches = batches.size;
+            let processedBatches = 0;
+            const notifyBatchStep = Math.max(1, Math.floor(totalBatches / 10));
+            const updateBatchProgress = () => {
+                const percent = totalBatches ? 60 + Math.round((processedBatches / totalBatches) * 40) : 60;
+                tracker.update(`WOS import: saving ${processedBatches}/${totalBatches}`, percent);
+            };
+            if (totalBatches) updateBatchProgress();
 
             for (const [base, entry] of batches.entries()) {
                 try {
@@ -5891,8 +6035,11 @@ class PaperReviewerApp {
                     let payload = null;
                     let existed = false;
                     try {
-                        payload = await this.readProjectFile(jsonFilename);
-                        existed = !!payload;
+                        const exists = await this.projectFileExists(jsonFilename);
+                        if (exists) {
+                            payload = await this.readProjectFile(jsonFilename);
+                            existed = !!payload;
+                        }
                     } catch (_err) {
                         existed = false;
                     }
@@ -5921,6 +6068,11 @@ class PaperReviewerApp {
                 } catch (err) {
                     console.warn('WOS import failed for base:', base, err);
                     failed += 1;
+                } finally {
+                    processedBatches += 1;
+                    if (processedBatches % notifyBatchStep === 0 || processedBatches === totalBatches) {
+                        updateBatchProgress();
+                    }
                 }
             }
 
@@ -5942,9 +6094,13 @@ class PaperReviewerApp {
             if (empty) parts.push(`empty ${empty}`);
             if (readFailed) parts.push(`read failed ${readFailed}`);
             const type = failed ? 'error' : 'success';
+            tracker.finish('WOS import: finalizing...', 800);
             this.showNotification(`WOS import: ${parts.join(', ')}`, type);
         } catch (err) {
             console.error('WOS txt import failed:', err);
+            if (tracker) {
+                tracker.fail(`WOS import failed: ${err.message}`);
+            }
             this.showNotification(`WOS import failed: ${err.message}`, 'error');
         } finally {
             if (input) input.value = '';
@@ -5987,6 +6143,57 @@ class PaperReviewerApp {
         wosData.citations = `https://www.webofscience.com/wos/woscc/citing-summary/${encoded}?from=woscc&type=colluid&eventMode=timeCitedOnSummary`;
         wosData.references = `https://www.webofscience.com/wos/woscc/cited-references-summary/${encoded}?type=colluid&from=woscc`;
         wosData.related = `https://www.webofscience.com/wos/woscc/related-records-summary/${encoded}?type=colluid&from=woscc`;
+    }
+
+    getStatusProgressEls() {
+        if (this._statusProgressEls) return this._statusProgressEls;
+        const wrap = document.getElementById('statusProgress');
+        const bar = document.getElementById('statusProgressBar');
+        const text = document.getElementById('statusProgressText');
+        this._statusProgressEls = { wrap, bar, text };
+        return this._statusProgressEls;
+    }
+
+    setStatusProgress(text = '', percent = 0) {
+        const { wrap, bar, text: textEl } = this.getStatusProgressEls();
+        if (!wrap || !bar || !textEl) return;
+        wrap.classList.add('active');
+        bar.style.setProperty('--status-progress', `${Math.max(0, Math.min(100, percent))}%`);
+        textEl.textContent = text || '';
+    }
+
+    clearStatusProgress() {
+        const { wrap, bar, text: textEl } = this.getStatusProgressEls();
+        if (!wrap || !bar || !textEl) return;
+        wrap.classList.remove('active');
+        bar.style.setProperty('--status-progress', '0%');
+        textEl.textContent = '';
+    }
+
+    createStatusProgressTracker(label = 'Working', opts = {}) {
+        const minIntervalMs = Number.isFinite(opts.minIntervalMs) ? opts.minIntervalMs : 200;
+        let active = true;
+        let lastTs = 0;
+        const update = (text = label, percent = 0) => {
+            if (!active) return;
+            const now = Date.now();
+            if (now - lastTs < minIntervalMs && percent < 100) return;
+            lastTs = now;
+            this.setStatusProgress(text, percent);
+        };
+        const finish = (text = `${label} done`, delayMs = 1200) => {
+            if (!active) return;
+            active = false;
+            this.setStatusProgress(text, 100);
+            setTimeout(() => this.clearStatusProgress(), delayMs);
+        };
+        const fail = (text = `${label} failed`, delayMs = 1600) => {
+            if (!active) return;
+            active = false;
+            this.setStatusProgress(text, 100);
+            setTimeout(() => this.clearStatusProgress(), delayMs);
+        };
+        return { update, finish, fail };
     }
 
     syncWosLinks(wosData) {
@@ -9458,7 +9665,7 @@ class PaperReviewerApp {
     }
 
     // 新方法：通过 API 读取文件（支持外部项目）
-    async readProjectFile(filename) {
+    async readProjectFile(filename, opts = {}) {
         const projectPath = this.getRequiredProjectPath();
         if (!projectPath) {
             throw new Error('Project not selected');
@@ -9474,6 +9681,9 @@ class PaperReviewerApp {
         });
 
         if (!response.ok) {
+            if (response.status === 404 && opts.allowNotFound) {
+                return null;
+            }
             throw new Error(`Failed to read file: ${response.status}`);
         }
 
@@ -9483,6 +9693,27 @@ class PaperReviewerApp {
         } else {
             return await response.text();
         }
+    }
+
+    async projectFileExists(filename) {
+        const projectPath = this.getRequiredProjectPath();
+        if (!projectPath) {
+            throw new Error('Project not selected');
+        }
+        const response = await fetch('/file-exists', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                projectPath: projectPath,
+                filePath: filename
+            }),
+            cache: 'no-store'
+        });
+        if (!response.ok) {
+            throw new Error(`Failed to check file: ${response.status}`);
+        }
+        const data = await response.json();
+        return !!data.exists;
     }
 
     async persistMarkdown(filename, content) {
@@ -9544,13 +9775,9 @@ class PaperReviewerApp {
     buildDefaultMarkdown() {
         // 从文件名提取basename（去掉路径），再将_转换为/
         let base = this.currentFile ? this.currentFile.replace(/\.json$/i, '') : 'notes';
-        console.log('🔍 buildDefaultMarkdown - Original filename:', this.currentFile);
-        console.log('🔍 buildDefaultMarkdown - After removing .json:', base);
         // 如果包含路径分隔符，只取最后的文件名部分
         base = base.split('/').pop() || base;
-        console.log('🔍 buildDefaultMarkdown - Extracted basename:', base);
         const doi = base.replace(/_/g, '/');
-        console.log('🔍 buildDefaultMarkdown - Generated DOI:', doi);
         // 获取当前日期时间（精确到秒）
         const now = new Date();
         const year = now.getFullYear();
@@ -9566,13 +9793,9 @@ class PaperReviewerApp {
     buildDefaultMarkdownForFilename(jsonFilename) {
         // 从文件名提取basename（去掉路径），再将_转换为/
         let base = jsonFilename ? jsonFilename.replace(/\.json$/i, '') : 'notes';
-        console.log('🔍 buildDefaultMarkdownForFilename - Original filename:', jsonFilename);
-        console.log('🔍 buildDefaultMarkdownForFilename - After removing .json:', base);
         // 如果包含路径分隔符，只取最后的文件名部分
         base = base.split('/').pop() || base;
-        console.log('🔍 buildDefaultMarkdownForFilename - Extracted basename:', base);
         const doi = base.replace(/_/g, '/');
-        console.log('🔍 buildDefaultMarkdownForFilename - Generated DOI:', doi);
         // 获取当前日期时间（精确到秒）
         const now = new Date();
         const year = now.getFullYear();
@@ -9589,16 +9812,11 @@ class PaperReviewerApp {
         if (!jsonFilename) return;
         const mdFilename = this.getMarkdownFilename(jsonFilename);
         try {
-            const text = await this.readProjectFile(mdFilename);
-            // 文件存在，无需创建
+            const exists = await this.projectFileExists(mdFilename);
+            if (exists) return;
+            await this.persistMarkdown(mdFilename, this.buildDefaultMarkdownForFilename(jsonFilename));
         } catch (err) {
-            // 404或其他错误，创建默认MD文件
-            console.warn('ensureMarkdownExistsForFile failed, creating:', jsonFilename, err);
-            try {
-                await this.persistMarkdown(mdFilename, this.buildDefaultMarkdownForFilename(jsonFilename));
-            } catch (err2) {
-                console.warn('Failed to create markdown:', err2);
-            }
+            console.warn('Failed to ensure markdown:', err);
         }
     }
 
