@@ -208,6 +208,12 @@ body {
     text-align: left;
 }
 
+.project-name-btn:focus,
+.project-name-btn:focus-visible {
+    outline: none;
+    box-shadow: none;
+}
+
 .project-name-btn:hover {
     color: var(--wos-blue-light);
 }
@@ -799,6 +805,21 @@ body {
     min-width: 0;
 }
 
+.status-left-icon {
+    width: 16px;
+    height: 16px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: #0f1115;
+    color: #ffffff;
+    flex-shrink: 0;
+}
+
+.status-left-icon i {
+    font-size: 14px;
+}
+
 
 .status-left {
     overflow: hidden;
@@ -815,6 +836,7 @@ body {
     gap: 6px;
     padding: 0px 6px;
     min-width: 220px;
+    background: #050154;
 }
 
 .status-progress.active {
@@ -846,10 +868,10 @@ body {
 }
 
 .status-progress-bar {
-    height: 6px;
-    width: 90px;
+    height: 4px;
+    width: 200px;
     border-radius: 999px;
-    background: #23272e;
+    background: #ffffff;
     box-shadow: none;
     position: relative;
     overflow: hidden;
@@ -870,7 +892,7 @@ body {
     width: var(--status-progress, 0%);
     background: linear-gradient(90deg, #00e884, #00bfff 80%, #00aaff);
     box-shadow: none;
-    transition: width 0.2s cubic-bezier(.4,1,.7,1);
+    transition: width 0.2s cubic-bezier(.4, 1, .7, 1);
 }
 
 .status-progress-text {
@@ -885,9 +907,13 @@ body {
     max-width: 50vw;
 }
 
+.status-left:hover {
+    background: rgb(203, 206, 9);
+}
+
 .status-bar .panel-header-left i {
     font-size: 9px;
-    padding: 0px 0px 0px 20px;
+    padding: 0px 0px 0px 10px;
     color: #000000;
 }
 
@@ -1306,7 +1332,7 @@ body.theme-vscode .nested-index-cell {
 }
 
 /* .json-table tr:last-child td { */
-    /* border-bottom: none; */
+/* border-bottom: none; */
 /* } */
 
 .json-table td {

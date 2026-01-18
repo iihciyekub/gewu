@@ -1947,6 +1947,15 @@ class PaperReviewerApp {
                 this.showProjectDetailsPanel();
             });
         }
+        const statusProject = document.querySelector('.status-project');
+        if (statusProject && projectNameBtn) {
+            statusProject.addEventListener('click', (e) => {
+                if (e.target.closest('#currentProjectName')) return;
+                e.preventDefault();
+                e.stopPropagation();
+                projectNameBtn.click();
+            });
+        }
         const shortcutsInfoBtn = document.getElementById('shortcutsInfoBtn');
         if (shortcutsInfoBtn) {
             shortcutsInfoBtn.addEventListener('click', (e) => {
@@ -4910,32 +4919,50 @@ class PaperReviewerApp {
     }
 
     async downloadGroupBib(group) {
+        const tracker = this.createStatusProgressTracker('Export BibTeX');
         try {
             const files = group?.files || [];
             if (files.length === 0) {
                 this.showNotification('No files in this group', 'warning');
                 return;
             }
-            const uniqueDois = await this.collectGroupDois(group);
+            tracker.update(`Collecting DOIs... 0/${files.length}`, 5);
+            const uniqueDois = await this.collectGroupDois(group, {
+                onProgress: (done, total) => {
+                    const percent = total ? Math.round((done / total) * 35) : 10;
+                    tracker.update(`Collecting DOIs... ${done}/${total}`, percent);
+                }
+            });
             if (uniqueDois.length === 0) {
+                tracker.finish('No DOI found', 800);
                 this.showNotification('No DOI found in this group', 'warning');
                 return;
             }
-            const bibtex = await this.formatBibliography(uniqueDois);
+            tracker.update(`Fetching BibTeX... 0/${uniqueDois.length}`, 40);
+            const bibtex = await this.formatBibliography(uniqueDois, {
+                onProgress: (done, total) => {
+                    const percent = total ? 40 + Math.round((done / total) * 55) : 60;
+                    tracker.update(`Fetching BibTeX... ${done}/${total}`, Math.min(95, percent));
+                }
+            });
             const groupName = String(group?.name || 'group').trim();
             const safeGroup = groupName.replace(/[^a-zA-Z0-9._-]+/g, '_') || 'group';
             const filename = `${safeGroup}_${Date.now()}.bib`;
             this.triggerBlobDownload(new Blob([bibtex], { type: 'text/plain' }), filename);
+            tracker.finish('BibTeX ready', 800);
             this.showNotification(`Downloaded BibTeX (${uniqueDois.length} DOIs)`, 'success');
         } catch (err) {
             console.error('Failed to download BibTeX for group:', err);
+            tracker.fail(`Export failed: ${err.message}`);
             this.showNotification(`Download failed: ${err.message}`, 'error');
         }
     }
 
-    async collectGroupDois(group) {
+    async collectGroupDois(group, opts = {}) {
         const dois = [];
         const files = group?.files || [];
+        const total = files.length;
+        let done = 0;
         for (const filename of files) {
             try {
                 const base = filename;
@@ -4954,6 +4981,11 @@ class PaperReviewerApp {
                 }
             } catch (err) {
                 console.warn(`Failed to read file ${filename}:`, err);
+            } finally {
+                done += 1;
+                if (typeof opts.onProgress === 'function') {
+                    opts.onProgress(done, total);
+                }
             }
         }
         return [...new Set(dois)];
@@ -6323,6 +6355,10 @@ class PaperReviewerApp {
     setStatusProgress(text = '', percent = 0) {
         const { wrap, bar, text: textEl } = this.getStatusProgressEls();
         if (!wrap || !bar || !textEl) return;
+        if (this._statusProgressTagTimer) {
+            clearTimeout(this._statusProgressTagTimer);
+            this._statusProgressTagTimer = null;
+        }
         wrap.classList.add('active');
         wrap.dataset.mode = 'progress';
         wrap.dataset.type = '';
@@ -6350,12 +6386,15 @@ class PaperReviewerApp {
         const minIntervalMs = Number.isFinite(opts.minIntervalMs) ? opts.minIntervalMs : 200;
         let active = true;
         let lastTs = 0;
+        let lastPercent = 0;
         const update = (text = label, percent = 0) => {
             if (!active) return;
             const now = Date.now();
             if (now - lastTs < minIntervalMs && percent < 100) return;
             lastTs = now;
-            this.setStatusProgress(text, percent);
+            const next = Math.max(lastPercent, percent);
+            lastPercent = next;
+            this.setStatusProgress(text, next);
         };
         const finish = (text = `${label} done`, delayMs = 1200) => {
             if (!active) return;
@@ -11077,7 +11116,7 @@ class PaperReviewerApp {
     }
 
 
-    async formatBibliography(dois = []) {
+    async formatBibliography(dois = [], opts = {}) {
         const clean = (dois || []).map(d => this.normalizeDoiString(d)).filter(Boolean);
         if (!clean.length) return '';
 
@@ -11085,25 +11124,54 @@ class PaperReviewerApp {
             const Cite = await this.ensureCiteLib();
             if (!Cite) throw new Error('citation-js 未加载');
 
-            // 使用 Promise.all 并行处理多个 DOI
-            const bibtexResults = await Promise.all(
-                clean.map(async (doi) => {
+            const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+            const results = [];
+            const queue = clean.map(doi => ({ doi, attempts: 0 }));
+            let done = 0;
+            const total = clean.length;
+            const batchSize = 3;
+
+            while (queue.length) {
+                const batch = queue.splice(0, batchSize);
+                const batchResults = await Promise.all(batch.map(async (item) => {
+                    item.attempts += 1;
                     try {
-                        const cite = await Cite.async(doi);
+                        const cite = await Cite.async(item.doi);
                         const bibtex = cite.format('bibtex', {
                             format: 'text',
                             lang: 'en-US'
                         });
-                        return bibtex;
+                        const ok = typeof bibtex === 'string' && bibtex.trim().length > 0;
+                        if (!ok) throw new Error('Empty BibTeX');
+                        return { ok: true, bibtex, item };
                     } catch (error) {
-                        console.warn(`Failed to fetch BibTeX for ${doi}:`, error);
-                        return this.formatSingleBibFallback(doi);
+                        console.warn(`Failed to fetch BibTeX for ${item.doi} (attempt ${item.attempts}):`, error);
+                        return { ok: false, bibtex: '', item };
                     }
-                })
-            );
+                }));
+
+                batchResults.forEach(({ ok, bibtex, item }) => {
+                    if (ok) {
+                        results.push(bibtex);
+                        done += 1;
+                    } else if (item.attempts < 3) {
+                        queue.push(item);
+                    } else {
+                        done += 1;
+                    }
+                    if (typeof opts.onProgress === 'function') {
+                        opts.onProgress(done, total);
+                    }
+                });
+
+                if (queue.length) {
+                    const pauseMs = 1000 + Math.floor(Math.random() * 2001);
+                    await sleep(pauseMs);
+                }
+            }
 
             // 合并所有 BibTeX 条目
-            const text = bibtexResults.filter(Boolean).join('\n\n');
+            const text = results.filter(Boolean).join('\n\n');
 
             // 保存到项目存储
             if (this.projectStorage && text) {
