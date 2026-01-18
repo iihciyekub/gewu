@@ -820,6 +820,31 @@ body {
 .status-progress.active {
     display: inline-flex;
 }
+
+.status-progress[data-mode="tag"] .status-progress-bar {
+    display: none;
+}
+
+.status-progress[data-mode="tag"] {
+    padding: 0 8px;
+}
+
+.status-progress[data-type="success"] .status-progress-text {
+    color: #c8f7c0;
+}
+
+.status-progress[data-type="error"] .status-progress-text {
+    color: #ffd1d1;
+}
+
+.status-progress[data-type="warning"] .status-progress-text {
+    color: #ffe7a3;
+}
+
+.status-progress[data-type="info"] .status-progress-text {
+    color: #f6fbff;
+}
+
 .status-progress-bar {
     height: 6px;
     width: 90px;
@@ -1240,6 +1265,10 @@ body.theme-vscode .nested-table-header {
     text-align: left;
 }
 
+.json-table.nested-table .json-table.nested-table td {
+    border-bottom: none;
+}
+
 .nested-index-cell {
     font-weight: 600;
     width: 20px;
@@ -1276,14 +1305,13 @@ body.theme-vscode .nested-index-cell {
     background-color: var(--wos-hover);
 }
 
-.json-table tr:last-child td {
-    border-bottom: none;
-}
+/* .json-table tr:last-child td { */
+    /* border-bottom: none; */
+/* } */
 
 .json-table td {
-    padding: 0px;
     font-size: 10px;
-    line-height: 1.3;
+    line-height: 1.35;
     vertical-align: top;
     border-bottom: 1px solid var(--gray-200);
 }
@@ -1307,7 +1335,6 @@ body.theme-vscode .nested-index-cell {
     width: 30px;
     min-width: 30px;
     max-width: 30px;
-    padding-left: 4px;
     padding-right: 4px;
     text-align: center;
 }
@@ -1316,12 +1343,16 @@ body.theme-vscode .nested-index-cell {
 .json-table td.toggle-cell {
     width: 25px;
     min-width: 25px;
-    padding: 3px 4px;
+    padding: 2px 4px;
     text-align: center;
     background: var(--gray-50);
     border-right: 1px solid var(--gray-300);
     cursor: default;
     position: relative;
+}
+
+.json-table tr:last-child td.toggle-cell {
+    border-bottom: none;
 }
 
 .json-table .row-select-indicator {
@@ -1411,17 +1442,20 @@ body.theme-vscode .nested-index-cell {
     font-weight: 500;
     color: var(--gray-700);
     width: 160px;
+    border-bottom: none;
     min-width: 160px;
     background: var(--gray-100);
     text-align: right;
-    padding-right: 12px;
+    padding-right: 10px;
+    padding-left: 6px;
     border-right: 1px solid var(--gray-300);
 }
 
 /* 第三列：Value值列 */
 .json-table td:nth-child(3) {
     color: var(--gray-800);
-    padding-left: 12px;
+    padding-left: 10px;
+    word-break: break-word;
 }
 
 /* 可编辑的字段名（Key）*/

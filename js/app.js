@@ -102,6 +102,8 @@ class PaperReviewerApp {
         this.markdownEditMode = { draft: true, markdown: false };
         this.importMenuVisible = false;
         this._statusProgressEls = null;
+        this._statusProgressState = { text: '', percent: 0 };
+        this._statusProgressTagTimer = null;
 
         // 项目管理
         this.currentProject = null; // { name, path }
@@ -6158,16 +6160,26 @@ class PaperReviewerApp {
         const { wrap, bar, text: textEl } = this.getStatusProgressEls();
         if (!wrap || !bar || !textEl) return;
         wrap.classList.add('active');
+        wrap.dataset.mode = 'progress';
+        wrap.dataset.type = '';
         bar.style.setProperty('--status-progress', `${Math.max(0, Math.min(100, percent))}%`);
         textEl.textContent = text || '';
+        this._statusProgressState = { text: textEl.textContent, percent: Math.max(0, Math.min(100, percent)) };
     }
 
     clearStatusProgress() {
         const { wrap, bar, text: textEl } = this.getStatusProgressEls();
         if (!wrap || !bar || !textEl) return;
         wrap.classList.remove('active');
+        wrap.dataset.mode = '';
+        wrap.dataset.type = '';
         bar.style.setProperty('--status-progress', '0%');
         textEl.textContent = '';
+        this._statusProgressState = { text: '', percent: 0 };
+        if (this._statusProgressTagTimer) {
+            clearTimeout(this._statusProgressTagTimer);
+            this._statusProgressTagTimer = null;
+        }
     }
 
     createStatusProgressTracker(label = 'Working', opts = {}) {
@@ -6194,6 +6206,35 @@ class PaperReviewerApp {
             setTimeout(() => this.clearStatusProgress(), delayMs);
         };
         return { update, finish, fail };
+    }
+
+    showStatusTag(message = '', type = 'info', durationMs = 2500) {
+        const { wrap, bar, text: textEl } = this.getStatusProgressEls();
+        if (!wrap || !bar || !textEl) return;
+        const prevMode = wrap.dataset.mode || '';
+        const prevState = { ...this._statusProgressState };
+        wrap.classList.add('active');
+        wrap.dataset.mode = 'tag';
+        wrap.dataset.type = type || 'info';
+        textEl.textContent = message;
+        if (prevMode === 'progress') {
+            bar.style.setProperty('--status-progress', `${prevState.percent}%`);
+        } else {
+            bar.style.setProperty('--status-progress', '0%');
+        }
+        if (this._statusProgressTagTimer) {
+            clearTimeout(this._statusProgressTagTimer);
+        }
+        this._statusProgressTagTimer = setTimeout(() => {
+            if (prevMode === 'progress') {
+                wrap.dataset.mode = 'progress';
+                wrap.dataset.type = '';
+                bar.style.setProperty('--status-progress', `${prevState.percent}%`);
+                textEl.textContent = prevState.text || '';
+            } else {
+                this.clearStatusProgress();
+            }
+        }, durationMs);
     }
 
     syncWosLinks(wosData) {
@@ -6710,7 +6751,7 @@ class PaperReviewerApp {
 
             // Second column: Editable Key
             const isNestedIndex = table.classList.contains('nested-table') && /^\d+$/.test(key);
-            const displayKey = isNestedIndex ? `#${parseInt(key, 10) + 1}` : this.formatKey(key);
+            const displayKey = isNestedIndex ? `#${parseInt(key, 10)}` : this.formatKey(key);
             const wosHint = this.wosFieldTagsByKey?.[key]?.full_name || '';
             const keyTitle = wosHint ? ` title="${this.escapeAttr(wosHint)}"` : '';
             const keyDisplay = `<span class="editable-key" data-path="${basePath.join('.')}" data-key="${key}"${keyTitle}>${displayKey}</span>`;
@@ -14898,27 +14939,7 @@ class PaperReviewerApp {
 
     showNotification(message, type = 'info') {
         this.debugLog(`${type.toUpperCase()}: ${message}`);
-
-        // 创建美化的通知元素
-        const notification = document.createElement('div');
-        notification.className = `notification-toast ${type}`;
-
-        // 添加图标
-        let icon = 'fa-info-circle';
-        if (type === 'success') icon = 'fa-check-circle';
-        if (type === 'error') icon = 'fa-exclamation-circle';
-
-        notification.innerHTML = `
-            <i class="fas ${icon}"></i>
-            <span>${message}</span>
-        `;
-
-        document.body.appendChild(notification);
-
-        // 自动移除
-        setTimeout(() => {
-            notification.remove();
-        }, 3000);
+        this.showStatusTag(message, type);
     }
 
     async saveToFile(options = {}) {
