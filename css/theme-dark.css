@@ -680,14 +680,15 @@ body.theme-dark .quote-tab .tab-remove:hover {
     color: #f28b82;
 }
 
-/* Markdown 渲染保持浅色风格 */
+/* Markdown 渲染适配黑金风格 */
 body.theme-dark .markdown-view {
-    color: #1f1f1f;
+    color: #e7d8a9;
 }
 
 body.theme-dark .markdown-body {
-    background: #f6f7f9;
-    color: #1f1f1f;
+    background: #151311;
+    color: #e7d8a9;
+    border: 1px solid #3a2f1b;
     border-radius: 6px;
 }
 
@@ -697,50 +698,75 @@ body.theme-dark .markdown-body h3,
 body.theme-dark .markdown-body h4,
 body.theme-dark .markdown-body h5,
 body.theme-dark .markdown-body h6 {
-    color: #111;
+    color: #f5d88a;
+}
+
+body.theme-dark .markdown-body a {
+    color: #f0c76a;
+}
+
+body.theme-dark .markdown-body a:hover {
+    color: #ffd98a;
 }
 
 body.theme-dark .markdown-body code {
-    background: #e9edf3;
-    color: #b31d28;
+    background: #221b10;
+    color: #f0c76a;
+    border: 1px solid #3a2f1b;
+}
+
+body.theme-dark .markdown-body pre {
+    background: #1b170f;
+    border: 1px solid #3a2f1b;
+}
+
+body.theme-dark .markdown-body blockquote {
+    background: #1a1712;
+    border-left: 3px solid #f0c76a;
+    color: #e6cf99;
+}
+
+body.theme-dark .markdown-body table {
+    background: #151311;
 }
 
 body.theme-dark .markdown-body table th {
-    background: #2d3748;
-    color: #e2e8f0;
-    border-color: #4a5568;
+    background: #2a2215;
+    color: #f5d88a;
+    border-color: #4a3b20;
 }
 
 body.theme-dark .markdown-body table td {
-    background: #1e2530;
-    border-color: #374151;
+    background: #1b1712;
+    color: #e7d8a9;
+    border-color: #3a2f1b;
 }
 
 body.theme-dark .markdown-body table td:first-child {
-    background: #252d3d;
-    color: #cbd5e0;
+    background: #211b12;
+    color: #f0c76a;
 }
 
 body.theme-dark .markdown-body table tbody tr:hover td {
-    background: #2a3344;
+    background: #241d12;
 }
 
 body.theme-dark .markdown-body table tbody tr:hover td:first-child {
-    background: #2f3b4f;
+    background: #2a2215;
 }
 
-/* Markdown metadata keeps light style */
 body.theme-dark .markdown-metadata {
-    background: #fafafa;
-    border: 1px solid #e0e0e0;
+    background: #151311;
+    border: 1px solid #3a2f1b;
+    color: #e7d8a9;
 }
 
 body.theme-dark .markdown-metadata .metadata-header {
-    color: #666;
+    color: #d1b874;
 }
 
 body.theme-dark .markdown-metadata .metadata-header:hover {
-    background: #f0f0f0;
+    background: #211b12;
 }
 
 body.theme-dark .markdown-metadata .metadata-table {
@@ -750,12 +776,12 @@ body.theme-dark .markdown-metadata .metadata-table {
 
 body.theme-dark .markdown-metadata .metadata-table td {
     background: transparent;
-    border-bottom-color: #f0f0f0;
+    border-bottom-color: #3a2f1b;
 }
 
 body.theme-dark .markdown-metadata .metadata-table td:first-child {
     background: transparent;
-    color: #333;
+    color: #f0c76a;
 }
 
 body.theme-dark .markdown-metadata .metadata-table tbody tr:hover td {
@@ -767,11 +793,31 @@ body.theme-dark .markdown-metadata .metadata-table tbody tr:hover td:first-child
 }
 
 body.theme-dark .markdown-metadata .meta-key {
-    color: #333;
+    color: #f0c76a;
 }
 
 body.theme-dark .markdown-metadata .meta-value {
-    color: #555;
+    color: #e7d8a9;
+}
+
+body.theme-dark .doi-link,
+body.theme-dark .wos-query-link,
+body.theme-dark .bib-fetch-btn {
+    color: #f0c76a;
+    border-color: transparent;
+}
+
+body.theme-dark .doi-link:hover,
+body.theme-dark .wos-query-link:hover,
+body.theme-dark .bib-fetch-btn:hover:not(:disabled) {
+    background: #221b10;
+    border-color: #4a3b20;
+}
+
+body.theme-dark .doi-link:focus,
+body.theme-dark .wos-query-link:focus,
+body.theme-dark .bib-fetch-btn:focus {
+    border-color: #4a3b20;
 }
 
 /* 项目详情面板 - 深色主题 */
