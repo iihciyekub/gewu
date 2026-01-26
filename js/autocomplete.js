@@ -12,7 +12,9 @@ class AutocompleteManager {
         this.filteredCommands = [];
         this.triggerChar = options.triggerChar || '\\';
         this.minChars = options.minChars || 1;
-        this.maxSuggestions = options.maxSuggestions || 10;
+        this.maxSuggestions = Number.isFinite(options.maxSuggestions) ? options.maxSuggestions : 10;
+        this.pathProvider = options.pathProvider || null;
+        this.activeProvider = null;
         
         // UI 元素
         this.dropdown = null;
@@ -93,35 +95,24 @@ class AutocompleteManager {
         const cursorPos = this.textarea.selectionStart;
         const text = this.textarea.value;
         
-        // 查找触发字符
-        const beforeCursor = text.substring(0, cursorPos);
-        const lastTriggerIndex = beforeCursor.lastIndexOf(this.triggerChar);
-        
-        if (lastTriggerIndex === -1) {
-            this.hide();
+        const commandContext = this.getCommandContext(text, cursorPos);
+        if (commandContext) {
+            this.activeProvider = 'command';
+            this.applyCompletionContext(commandContext);
+            const suggestions = this.getCommandSuggestions(commandContext.searchText);
+            this.showSuggestions(suggestions);
             return;
         }
-        
-        // 检查触发字符后是否有空白或其他特殊字符
-        const afterTrigger = beforeCursor.substring(lastTriggerIndex + 1);
-        if (/[\s\n\r]/.test(afterTrigger)) {
-            this.hide();
+
+        const pathContext = this.getPathContext(text, cursorPos);
+        if (pathContext) {
+            this.activeProvider = 'path';
+            this.applyCompletionContext(pathContext);
+            const suggestions = this.getPathSuggestions(pathContext);
+            this.showSuggestions(suggestions);
             return;
         }
-        
-        // 更新补全状态
-        this.completionStart = lastTriggerIndex;
-        this.completionEnd = cursorPos;
-        this.searchText = this.triggerChar + afterTrigger;
-        
-        // 过滤命令
-        this.filterCommands();
-        
-        if (this.filteredCommands.length > 0) {
-            this.show();
-        } else {
-            this.hide();
-        }
+        this.hide();
     }
     
     onKeyDown(e) {
@@ -156,6 +147,96 @@ class AutocompleteManager {
             .slice(0, this.maxSuggestions);
         
         this.selectedIndex = 0;
+    }
+
+    getCommandContext(text, cursorPos) {
+        const beforeCursor = text.substring(0, cursorPos);
+        const lastTriggerIndex = beforeCursor.lastIndexOf(this.triggerChar);
+
+        if (lastTriggerIndex === -1) {
+            return null;
+        }
+
+        const afterTrigger = beforeCursor.substring(lastTriggerIndex + 1);
+        if (/[\s\n\r]/.test(afterTrigger)) {
+            return null;
+        }
+
+        if (afterTrigger.length < this.minChars) {
+            return null;
+        }
+
+        return {
+            completionStart: lastTriggerIndex,
+            completionEnd: cursorPos,
+            searchText: this.triggerChar + afterTrigger
+        };
+    }
+
+    getCommandSuggestions(searchText) {
+        const search = (searchText || '').toLowerCase();
+        return this.limitSuggestions(
+            this.commands.filter(cmd => cmd.trigger.toLowerCase().startsWith(search))
+        );
+    }
+
+    getPathContext(text, cursorPos) {
+        if (!this.pathProvider || typeof this.pathProvider.getSuggestions !== 'function') {
+            return null;
+        }
+
+        const beforeCursor = text.substring(0, cursorPos);
+        const match = beforeCursor.match(/(^|[^A-Za-z0-9_.])([A-Za-z0-9_]+(?:\.[A-Za-z0-9_]*)*\.?)$/);
+        if (!match) return null;
+
+        const token = match[2] || '';
+        if (!token) return null;
+
+        const lastDot = token.lastIndexOf('.');
+        const basePath = lastDot >= 0 ? token.slice(0, lastDot) : '';
+        const prefix = lastDot >= 0 ? token.slice(lastDot + 1) : token;
+
+        return {
+            completionStart: cursorPos - prefix.length,
+            completionEnd: cursorPos,
+            searchText: prefix,
+            basePath,
+            prefix
+        };
+    }
+
+    getPathSuggestions(context) {
+        const rawSuggestions = this.pathProvider.getSuggestions(context) || [];
+        const suggestions = rawSuggestions.map((item) => {
+            if (typeof item === 'string') {
+                return { label: item, insertText: item, detail: '' };
+            }
+            return item;
+        });
+        return this.limitSuggestions(suggestions);
+    }
+
+    limitSuggestions(list) {
+        if (!Number.isFinite(this.maxSuggestions) || this.maxSuggestions <= 0) {
+            return list;
+        }
+        return list.slice(0, this.maxSuggestions);
+    }
+
+    applyCompletionContext(context) {
+        this.completionStart = context.completionStart;
+        this.completionEnd = context.completionEnd;
+        this.searchText = context.searchText || '';
+    }
+
+    showSuggestions(suggestions) {
+        this.filteredCommands = suggestions;
+        this.selectedIndex = 0;
+        if (this.filteredCommands.length > 0) {
+            this.show();
+        } else {
+            this.hide();
+        }
     }
     
     show() {
@@ -197,6 +278,7 @@ class AutocompleteManager {
                 this.insertSelected();
             });
         });
+        this.scrollSelectionIntoView();
     }
     
     positionDropdown() {
@@ -287,11 +369,29 @@ class AutocompleteManager {
     selectNext() {
         this.selectedIndex = (this.selectedIndex + 1) % this.filteredCommands.length;
         this.renderDropdown();
+        this.scrollSelectionIntoView();
     }
     
     selectPrevious() {
         this.selectedIndex = (this.selectedIndex - 1 + this.filteredCommands.length) % this.filteredCommands.length;
         this.renderDropdown();
+        this.scrollSelectionIntoView();
+    }
+
+    scrollSelectionIntoView() {
+        if (!this.dropdown) return;
+        const selected = this.dropdown.querySelector('.autocomplete-item.selected');
+        if (!selected) return;
+        const list = this.dropdown;
+        const itemTop = selected.offsetTop;
+        const itemBottom = itemTop + selected.offsetHeight;
+        const viewTop = list.scrollTop;
+        const viewBottom = viewTop + list.clientHeight;
+        if (itemTop < viewTop) {
+            list.scrollTop = itemTop;
+        } else if (itemBottom > viewBottom) {
+            list.scrollTop = itemBottom - list.clientHeight;
+        }
     }
     
     insertSelected() {
@@ -306,7 +406,7 @@ class AutocompleteManager {
         
         // 处理插入文本中的占位符 $1, $2 等
         let insertText = selected.insertText;
-        let cursorOffset = 0;
+        let cursorOffset = insertText.length;
         
         // 找到第一个占位符位置
         const placeholderMatch = insertText.match(/\$(\d+)/);

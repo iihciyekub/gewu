@@ -1601,7 +1601,10 @@ class PaperStatsApp {
                 this.autocompleteManager = new AutocompleteManager(mdTextarea, {
                     triggerChar: '\\',
                     minChars: 1,
-                    maxSuggestions: 10
+                    maxSuggestions: 0,
+                    pathProvider: {
+                        getSuggestions: (context) => this.getJsonPathAutocompleteSuggestions(context)
+                    }
                 });
                 console.log('✓ Autocomplete initialized for markdown editor');
             }
@@ -11983,6 +11986,55 @@ class PaperStatsApp {
 
     escapeAttr(text) {
         return this.escapeHtml(text || '').replace(/`/g, '&#96;');
+    }
+
+    getJsonNodeByPath(pathStr) {
+        if (!pathStr) return this.currentData;
+        const parts = String(pathStr).split('.').filter(Boolean);
+        let current = this.currentData;
+        for (const part of parts) {
+            if (current === null || current === undefined) return null;
+            if (Array.isArray(current)) {
+                const idx = Number(part);
+                if (!Number.isInteger(idx) || idx < 0 || idx >= current.length) {
+                    return null;
+                }
+                current = current[idx];
+                continue;
+            }
+            if (typeof current !== 'object') return null;
+            if (!Object.prototype.hasOwnProperty.call(current, part)) {
+                return null;
+            }
+            current = current[part];
+        }
+        return current;
+    }
+
+    getJsonPathAutocompleteSuggestions(context) {
+        if (!context || !this.currentData) return [];
+        const basePath = context.basePath || '';
+        const prefix = context.prefix || '';
+        const node = this.getJsonNodeByPath(basePath);
+        if (!node || (typeof node !== 'object')) return [];
+
+        let keys = [];
+        if (Array.isArray(node)) {
+            keys = node.map((_, idx) => String(idx));
+        } else {
+            keys = Object.keys(node);
+        }
+
+        const prefixLower = prefix.toLowerCase();
+        const filtered = keys.filter((key) => key.toLowerCase().startsWith(prefixLower));
+        return filtered.map((key) => {
+            const fullPath = basePath ? `${basePath}.${key}` : key;
+            return {
+                label: key,
+                insertText: key,
+                detail: fullPath
+            };
+        });
     }
 
     renderGotoLinks(rawText, valuePath = '') {
