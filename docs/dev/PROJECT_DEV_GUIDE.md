@@ -42,11 +42,10 @@ Keep it updated as features change.
 - `/list-json-files`: view discovery for JSON/MD
 
 ## Data Assets
-- `src/schema/code.json`: autocomplete commands
+- `src/schema/autocomplete-commands.json`: autocomplete commands
 - `src/schema/WosFieldTags.json`: WOS field mapping
 
 ## Update Checklist
 - When adding or removing APIs, update `server.js` section
 - When UI flows change, update the Core Flows section
 - When assets move, update Data Assets section
-

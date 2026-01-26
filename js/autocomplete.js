@@ -1,6 +1,6 @@
 /**
  * Markdown 编辑器自动补全功能
- * 支持 LaTeX 风格命令补全，从 src/schema/code.json 加载命令
+ * 支持 LaTeX 风格命令补全，从 src/schema/autocomplete-commands.json 加载命令
  */
 
 class AutocompleteManager {
@@ -11,7 +11,7 @@ class AutocompleteManager {
         this.selectedIndex = 0;
         this.filteredCommands = [];
         this.triggerChar = options.triggerChar || '\\';
-        this.minChars = options.minChars || 1;
+        this.minChars = Number.isFinite(options.minChars) ? options.minChars : 1;
         this.maxSuggestions = Number.isFinite(options.maxSuggestions) ? options.maxSuggestions : 10;
         this.pathProvider = options.pathProvider || null;
         this.onSelect = typeof options.onSelect === 'function' ? options.onSelect : null;
@@ -40,7 +40,7 @@ class AutocompleteManager {
         this.bindEvents();
     }
     
-    async loadCommands(url = '/src/schema/code.json') {
+    async loadCommands(url = '/src/schema/autocomplete-commands.json') {
         try {
             const response = await fetch(url);
             if (!response.ok) {

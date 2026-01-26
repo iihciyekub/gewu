@@ -1276,6 +1276,10 @@ class PaperStatsApp {
         // 如果没有当前项目，显示项目选择器
         if (!this.currentProject) {
             this.showProjectSelector();
+            const fileListEl = document.getElementById('fileList');
+            if (fileListEl) {
+                fileListEl.innerHTML = '<div class="empty-state"><p>Please load a project first</p></div>';
+            }
         } else {
             // 有项目则正常初始化
             await this.initializeProject();
@@ -1629,7 +1633,7 @@ class PaperStatsApp {
             if (typeof AutocompleteManager !== 'undefined') {
                 this.autocompleteManager = new AutocompleteManager(mdTextarea, {
                     triggerChar: '\\',
-                    minChars: 1,
+                    minChars: 0,
                     maxSuggestions: 0,
                     pathProvider: {
                         getSuggestions: (context) => this.getJsonPathAutocompleteSuggestions(context)
@@ -10863,7 +10867,8 @@ class PaperStatsApp {
         const escFields = this.escapeAttr(cleanFields);
         const groupLabel = cleanGroups || 'all';
         const title = `Groups: ${groupLabel}\nFields: ${cleanFields || '(none)'}`;
-        return `<div class="groupby-inline" data-groupby-groups="${escGroups}" data-groupby-fields="${escFields}"><button class="bib-fetch-btn groupby-render-btn" type="button" title="${this.escapeAttr(title)}"><i class="fas fa-play"></i><span>Waiting for groupby...</span></button></div>`;
+        const hint = cleanFields ? `await groupby (${groupLabel} → ${cleanFields})...` : `await groupby (${groupLabel})...`;
+        return `<div class="groupby-inline" data-groupby-groups="${escGroups}" data-groupby-fields="${escFields}"><button class="bib-fetch-btn groupby-render-btn inline-syntax" type="button" title="${this.escapeAttr(title)}"><i class="fas fa-play"></i><span>${this.escapeHtml(hint)}</span></button></div>`;
     }
 
     async applyCitationRendering(renderRoot) {

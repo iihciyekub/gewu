@@ -34,6 +34,13 @@
       "insertText": "\\doi{$1}",
       "detail": "DOI link",
       "documentation": "Create a link to open DOI in publisher website"
+    },
+    {
+      "trigger": "\\groupby",
+      "label": "\\groupby{groups}{fields}",
+      "insertText": "\\groupby{$1}{$2}",
+      "detail": "Groupby table",
+      "documentation": "Insert a groupby placeholder that renders a stats table on demand"
     }
   ]
 }
