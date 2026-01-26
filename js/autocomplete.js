@@ -14,6 +14,8 @@ class AutocompleteManager {
         this.minChars = options.minChars || 1;
         this.maxSuggestions = Number.isFinite(options.maxSuggestions) ? options.maxSuggestions : 10;
         this.pathProvider = options.pathProvider || null;
+        this.onSelect = typeof options.onSelect === 'function' ? options.onSelect : null;
+        this.onConfirm = typeof options.onConfirm === 'function' ? options.onConfirm : null;
         this.activeProvider = null;
         
         // UI 元素
@@ -128,6 +130,15 @@ class AutocompleteManager {
                 this.selectPrevious();
                 break;
             case 'Enter':
+                if (this.onConfirm && this.onConfirm(this.filteredCommands[this.selectedIndex]) === true) {
+                    e.preventDefault();
+                    this.hide();
+                    this.textarea.focus();
+                    break;
+                }
+                e.preventDefault();
+                this.insertSelected();
+                break;
             case 'Tab':
                 e.preventDefault();
                 this.insertSelected();
@@ -399,6 +410,12 @@ class AutocompleteManager {
         
         const selected = this.filteredCommands[this.selectedIndex];
         if (!selected) return;
+
+        if (this.onSelect && this.onSelect(selected) === true) {
+            this.hide();
+            this.textarea.focus();
+            return;
+        }
         
         const text = this.textarea.value;
         const before = text.substring(0, this.completionStart);

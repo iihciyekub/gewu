@@ -476,8 +476,25 @@
             <input type="file" id="importPdfInput" accept=".pdf" multiple style="display: none;">
             <input type="file" id="importWosInput" accept=".txt" multiple style="display: none;">
             <div class="file-filter" id="fileFilterContainer">
-                <i class="fas fa-search"></i>
-                <input type="text" id="fileFilterInput" placeholder="Filter files..." autocomplete="off">
+                <div class="file-filter-row">
+                    <button class="file-filter-icon-btn" type="button" aria-label="Search">
+                        <i class="fas fa-search"></i>
+                    </button>
+                    <div class="file-filter-chip-row" id="fileFilterChipRow">
+                        <span class="file-filter-chip" id="fileFilterFieldChip" hidden>
+                            <span class="file-filter-chip-text" id="fileFilterFieldChipText"></span>
+                            <button type="button" class="file-filter-chip-remove" id="fileFilterFieldChipRemove" aria-label="Remove field filter">
+                                <i class="fas fa-times"></i>
+                            </button>
+                        </span>
+                    </div>
+                </div>
+                <div class="file-filter-input-row">
+                    <button class="file-filter-run-btn" id="fileFilterRunBtn" type="button" title="Run filter" aria-label="Run filter">
+                        <i class="fas fa-play"></i>
+                    </button>
+                    <input type="text" id="fileFilterInput" placeholder="Filter files..." autocomplete="off">
+                </div>
             </div>
             <div class="file-list" id="fileList">
                 <div class="loading">

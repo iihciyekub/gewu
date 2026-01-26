@@ -41,6 +41,11 @@ class PaperStatsApp {
         this.selectedItem = null; // { type: 'row' | 'section', path: string[], key: string }
         this.isMiddleActive = false; // 鼠标是否在中间栏，用于键盘上下移动的激活判定
         this.isLeftActive = false; // 鼠标是否在左侧栏，用于键盘左右移动文件顺序
+        this.fileFilterField = '';
+        this.fileFilterValue = '';
+        this.fileFilterMatches = null;
+        this.fileFilterComputeToken = 0;
+        this.fileFilterAutocomplete = null;
         this.fileFilter = '';
         this.fileFilterVisible = false;
         this.debugEnabled = this.loadDebugEnabled();
@@ -2052,10 +2057,85 @@ class PaperStatsApp {
         // 文件过滤
         const fileFilterInput = document.getElementById('fileFilterInput');
         if (fileFilterInput) {
-            fileFilterInput.value = this.fileFilter;
+            fileFilterInput.value = this.fileFilterField ? (this.fileFilterValue || '') : this.fileFilter;
+            if (!this.fileFilterAutocomplete && window.AutocompleteManager) {
+                this.fileFilterAutocomplete = new AutocompleteManager(fileFilterInput, {
+                    minChars: 1,
+                    maxSuggestions: 12,
+                    pathProvider: {
+                        getSuggestions: (context) => {
+                            if (this.fileFilterField) return [];
+                            return this.getFileFilterPathSuggestions(context);
+                        }
+                    },
+                    onConfirm: (item) => {
+                        let field = item?.detail || item?.insertText || item?.label || '';
+                        const rawInput = (fileFilterInput.value || '').trim();
+                        if (!field && rawInput) field = rawInput;
+                        if (rawInput.includes('.') && !field.includes('.')) {
+                            const base = rawInput.slice(0, rawInput.lastIndexOf('.'));
+                            if (base) field = `${base}.${field}`;
+                        }
+                        if (field) {
+                            this.selectFileFilterField(field);
+                            return true;
+                        }
+                        return false;
+                    },
+                    onSelect: () => true
+                });
+            }
             fileFilterInput.addEventListener('input', (e) => {
-                this.fileFilter = (e.target.value || '').trim();
-                this.renderFileList(this.currentFileList || [], this.currentFile, true);
+                const val = (e.target.value || '').trim();
+                if (this.fileFilterField) {
+                    this.fileFilterValue = val;
+                } else {
+                    this.fileFilter = val;
+                }
+            });
+            fileFilterInput.addEventListener('keydown', (e) => {
+                if (this.fileFilterAutocomplete?.visible && (e.key === 'ArrowDown' || e.key === 'ArrowUp' || e.key === 'Enter' || e.key === 'Tab')) {
+                    return;
+                }
+                if (e.key === 'Enter' && e.shiftKey) {
+                    e.preventDefault();
+                    this.runFileFilter();
+                    return;
+                }
+                if (this.fileFilterField) {
+                    if (e.key === 'Backspace' && !fileFilterInput.value) {
+                        e.preventDefault();
+                        this.clearFileFilterField();
+                    }
+                    if (e.key === 'Enter') {
+                        e.preventDefault();
+                        this.runFileFilter();
+                    }
+                    return;
+                }
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    this.runFileFilter();
+                } else if (e.key === 'Escape') {
+                    this.fileFilterAutocomplete?.hide?.();
+                }
+            });
+            fileFilterInput.addEventListener('focus', () => {
+                if (!this.fileFilterField) {
+                    if (!this.queryFieldOptions.length) {
+                        this.refreshQueryFieldOptions().catch(() => {});
+                    }
+                }
+            });
+            fileFilterInput.addEventListener('blur', () => {
+                setTimeout(() => this.fileFilterAutocomplete?.hide?.(), 120);
+            });
+        }
+        const fileFilterChipRemove = document.getElementById('fileFilterFieldChipRemove');
+        if (fileFilterChipRemove) {
+            fileFilterChipRemove.addEventListener('click', (e) => {
+                e.preventDefault();
+                this.clearFileFilterField();
             });
         }
         const fileFilterToggleBtn = document.getElementById('fileFilterToggleBtn');
@@ -2064,6 +2144,11 @@ class PaperStatsApp {
                 e.preventDefault();
                 this.toggleFileFilter();
             });
+        }
+        this.updateFileFilterUi();
+        const fileFilterRunBtn = document.getElementById('fileFilterRunBtn');
+        if (fileFilterRunBtn) {
+            fileFilterRunBtn.addEventListener('click', () => this.runFileFilter());
         }
         const addGroupBtn = document.getElementById('addGroupBtn');
         if (addGroupBtn) {
@@ -3690,10 +3775,20 @@ class PaperStatsApp {
 
         // Calculate flattened visible files for this view
         const filterText = (this.fileFilter || '').toLowerCase();
+        const shouldFieldFilter = !!(this.fileFilterField && this.fileFilterValue);
+        if (shouldFieldFilter && !this.fileFilterMatches) {
+            this.updateFieldFilterMatches();
+        }
+        const filterSet = this.fileFilterMatches instanceof Set ? this.fileFilterMatches : null;
         const groupsView = groups.map(g => {
-            const filtered = filterText
-                ? (g.files || []).filter(f => f.toLowerCase().includes(filterText))
-                : [...(g.files || [])];
+            let filtered = [...(g.files || [])];
+            if (shouldFieldFilter) {
+                if (filterSet) {
+                    filtered = filtered.filter(f => filterSet.has(f));
+                }
+            } else if (filterText) {
+                filtered = filtered.filter(f => f.toLowerCase().includes(filterText));
+            }
             const visible = g.collapsed ? [] : filtered;
             return {
                 ...g,
@@ -3829,7 +3924,9 @@ class PaperStatsApp {
             const count = document.createElement('span');
             count.className = 'file-group-count';
             const totalCount = (group.files || []).length;
-            count.textContent = `${totalCount}`;
+            const filteredCount = (group.filteredCount ?? (group.visible || []).length ?? totalCount);
+            const hasFilter = !!(this.fileFilter || (this.fileFilterField && this.fileFilterValue));
+            count.textContent = hasFilter ? `${filteredCount}/${totalCount}` : `${totalCount}`;
 
             header.appendChild(toggle);
             header.appendChild(title);
@@ -3847,7 +3944,8 @@ class PaperStatsApp {
                 body.addEventListener('dragleave', () => this.clearAllFileDragHighlights());
                 const placeholder = document.createElement('div');
                 placeholder.className = 'file-group-empty';
-                placeholder.textContent = this.fileFilter ? 'No matching files' : 'Drag files/pdf onto this group';
+                const hasFilter = !!(this.fileFilter || (this.fileFilterField && this.fileFilterValue));
+                placeholder.textContent = hasFilter ? 'No matching files' : 'Drag files/pdf onto this group';
                 body.appendChild(placeholder);
             } else {
                 this.setupVirtualGroupBody(body, group, group.visible);
@@ -8758,6 +8856,212 @@ class PaperStatsApp {
         if (next && input) {
             setTimeout(() => input.focus({ preventScroll: true }), 0);
         }
+    }
+
+    updateFileFilterUi() {
+        const chip = document.getElementById('fileFilterFieldChip');
+        const chipText = document.getElementById('fileFilterFieldChipText');
+        const input = document.getElementById('fileFilterInput');
+        const hasField = !!this.fileFilterField;
+        if (chip) chip.hidden = !hasField;
+        if (chipText) {
+            chipText.textContent = this.fileFilterField || '';
+            chipText.title = this.fileFilterField || '';
+        }
+        if (chip) chip.title = this.fileFilterField || '';
+        if (input) {
+            input.placeholder = hasField ? 'Type field value...' : 'Filter files...';
+        }
+    }
+
+    runFileFilter() {
+        if (this.fileFilterField) {
+            this.updateFieldFilterMatches();
+            return;
+        }
+        this.fileFilterMatches = null;
+        this.renderFileList(this.currentFileList || [], this.currentFile, true);
+    }
+
+    getFileFilterFieldOptions() {
+        const options = new Set();
+        (this.queryFieldOptions || []).forEach(f => options.add(String(f)));
+        Object.keys(this.wosFieldTagsByKey || {}).forEach((f) => {
+            const key = String(f);
+            options.add(key);
+            options.add(`wos_data.${key}`);
+        });
+        if (this.currentData) {
+            this.getFieldUnionFromData(this.currentData).forEach(f => options.add(String(f)));
+        }
+        return Array.from(options).sort();
+    }
+
+    getFileFilterPathSuggestions(context) {
+        if (!context) return [];
+        const options = this.getFileFilterFieldOptions();
+        const basePath = context.basePath || '';
+        const prefix = context.prefix || '';
+        const prefixLower = prefix.toLowerCase();
+        const baseLower = basePath.toLowerCase();
+        const seen = new Map();
+
+        options.forEach((path) => {
+            const clean = String(path || '');
+            if (!clean) return;
+            if (basePath) {
+                if (!clean.toLowerCase().startsWith(`${baseLower}.`)) return;
+                const remainder = clean.slice(basePath.length + 1);
+                const seg = remainder.split('.')[0];
+                if (!seg) return;
+                if (prefix && !seg.toLowerCase().startsWith(prefixLower)) return;
+                if (!seen.has(seg)) {
+                    seen.set(seg, `${basePath}.${seg}`);
+                }
+                return;
+            }
+            const seg = clean.split('.')[0];
+            if (!seg) return;
+            if (prefix && !seg.toLowerCase().startsWith(prefixLower)) return;
+            if (!seen.has(seg)) {
+                seen.set(seg, seg);
+            }
+        });
+
+        return Array.from(seen.entries()).map(([seg, fullPath]) => ({
+            label: seg,
+            insertText: seg,
+            detail: fullPath
+        }));
+    }
+
+    selectFileFilterField(field) {
+        const raw = String(field || '').trim().replace(/^[\]\.\s]+/, '').replace(/[.\s]+$/, '');
+        const keyOnly = raw && !raw.includes('.') ? raw : '';
+        const expanded = keyOnly && this.wosFieldTagsByKey?.[keyOnly] ? `wos_data.${keyOnly}` : raw;
+        this.fileFilterField = expanded;
+        this.fileFilterValue = '';
+        this.fileFilterMatches = null;
+        this.fileFilter = '';
+        const input = document.getElementById('fileFilterInput');
+        if (input) input.value = '';
+        this.fileFilterAutocomplete?.hide?.();
+        this.updateFileFilterUi();
+        this.renderFileList(this.currentFileList || [], this.currentFile, true);
+        if (input) input.focus();
+    }
+
+    clearFileFilterField() {
+        this.fileFilterField = '';
+        this.fileFilterValue = '';
+        this.fileFilterMatches = null;
+        this.fileFilter = '';
+        const input = document.getElementById('fileFilterInput');
+        if (input) input.value = '';
+        this.fileFilterAutocomplete?.hide?.();
+        this.updateFileFilterUi();
+        this.renderFileList(this.currentFileList || [], this.currentFile, true);
+    }
+
+    async updateFieldFilterMatches() {
+        const field = String(this.fileFilterField || '').trim();
+        const value = String(this.fileFilterValue || '').trim();
+        if (!field || !value) {
+            this.fileFilterMatches = null;
+            this.renderFileList(this.currentFileList || [], this.currentFile, true);
+            return;
+        }
+        const token = ++this.fileFilterComputeToken;
+        const bases = Array.isArray(this.currentFileList) ? this.currentFileList : [];
+        const view = this.currentJsonView || 'view1';
+        const matchValue = value.toLowerCase();
+        const matches = new Set();
+        const tracker = (typeof this.createStatusProgressTracker === 'function')
+            ? this.createStatusProgressTracker('Filtering files')
+            : null;
+        if (tracker) tracker.update('Filtering files (0%)', 0);
+
+        let cursor = 0;
+        const limit = Math.min(8, bases.length || 0) || 1;
+        let processed = 0;
+        const worker = async () => {
+            while (cursor < bases.length) {
+                const base = bases[cursor];
+                cursor += 1;
+                if (token !== this.fileFilterComputeToken) return;
+                const path = this.getViewPathForBase(base, view);
+                if (!path) continue;
+                let data = this.tempDataCache[path];
+                if (!data) {
+                    try {
+                        data = await this.readProjectFile(path);
+                    } catch (_err) {
+                        continue;
+                    }
+                }
+                const values = this.getFieldValuesForFilter(data, field);
+                if (!values || !values.length) continue;
+                const found = values.some(v => String(v).toLowerCase().includes(matchValue));
+                if (found) matches.add(base);
+                processed += 1;
+                if (tracker) {
+                    const percent = bases.length ? Math.round((processed / bases.length) * 100) : 100;
+                    tracker.update(`Filtering files (${processed}/${bases.length})`, percent);
+                }
+            }
+        };
+
+        const workers = Array.from({ length: limit }, () => worker());
+        try {
+            await Promise.all(workers);
+            if (tracker) tracker.finish('Filtering files done');
+        } catch (err) {
+            if (tracker) tracker.fail('Filtering files failed');
+            throw err;
+        }
+
+        if (token !== this.fileFilterComputeToken) return;
+        this.fileFilterMatches = matches;
+        this.renderFileList(this.currentFileList || [], this.currentFile, true);
+    }
+
+    getFieldValuesForFilter(data, fieldPath) {
+        if (!fieldPath) return [];
+        const normalizedPath = String(fieldPath || '').trim().replace(/^[\]\.\s]+/, '');
+        if (!normalizedPath) return [];
+        if (!normalizedPath.includes('[]')) {
+            if (typeof this.extractFieldValuesFromData === 'function') {
+                return this.extractFieldValuesFromData(data, normalizedPath);
+            }
+            return [];
+        }
+        const parts = normalizedPath.split('.').filter(Boolean);
+        const collect = (node, idx) => {
+            if (idx >= parts.length) return [node];
+            const part = parts[idx];
+            const isArrayKey = part.endsWith('[]');
+            const key = isArrayKey ? part.slice(0, -2) : part;
+            if (!node || typeof node !== 'object') return [];
+            if (!Object.prototype.hasOwnProperty.call(node, key)) return [];
+            const nextVal = node[key];
+            if (isArrayKey) {
+                if (!Array.isArray(nextVal)) return [];
+                const out = [];
+                nextVal.forEach((item) => {
+                    collect(item, idx + 1).forEach(v => out.push(v));
+                });
+                return out;
+            }
+            return collect(nextVal, idx + 1);
+        };
+        const raw = collect(data, 0).flatMap((val) => Array.isArray(val) ? val : [val]);
+        if (typeof this.normalizeFieldValues === 'function') {
+            return this.normalizeFieldValues(raw);
+        }
+        return raw
+            .filter(v => v !== undefined && v !== null)
+            .map(v => (typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean') ? String(v).trim() : '')
+            .filter(Boolean);
     }
 
     closeHeaderMenus(except = '') {

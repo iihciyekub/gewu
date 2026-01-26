@@ -294,6 +294,34 @@ body.theme-dark .file-filter input {
     border-color: var(--vscode-border);
 }
 
+body.theme-dark .file-filter-chip {
+    background: #5b1026;
+    color: #fff;
+}
+
+body.theme-dark .file-filter-chip-remove {
+    color: #fff;
+}
+
+body.theme-dark .autocomplete-dropdown {
+    background: var(--vscode-panel);
+    border-color: var(--vscode-border);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+}
+
+body.theme-dark .autocomplete-item:hover,
+body.theme-dark .autocomplete-item.selected {
+    background: #2a2a2a;
+}
+
+body.theme-dark .autocomplete-label {
+    color: #8fb8ff;
+}
+
+body.theme-dark .autocomplete-detail {
+    color: #9aa4b2;
+}
+
 body.theme-dark .json-table td:nth-child(2) {
     color: #e3c07b;
     background: #1f1f1f;

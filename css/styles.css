@@ -295,18 +295,49 @@ body {
     display: none;
     align-items: center;
     gap: 6px;
-    padding: 6px 8px;
+    padding: 0px 8px 6px 8px;
     border-bottom: 1px solid var(--wos-border);
     background: white;
+    position: relative;
+    flex-direction: column;
+    align-items: stretch;
 }
 
 .file-filter.visible {
     display: flex;
 }
 
-.file-filter i {
+.file-filter-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.file-filter-input-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.file-filter-icon-btn {
+    border: none;
+    background: transparent;
     color: var(--gray-500);
+    cursor: default;
+    padding: 2px 4px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.file-filter-icon-btn i {
     font-size: 12px;
+}
+
+.file-filter-chip-row {
+    flex: 1;
+    min-height: 16px;
+    min-width: 0;
 }
 
 .file-filter input {
@@ -316,12 +347,68 @@ body {
     padding: 4px 6px;
     font-size: 11px;
     outline: none;
+    min-width: 0;
 }
 
 .file-filter input:focus {
     border-color: var(--wos-blue-light);
     box-shadow: 0 0 0 2px rgba(0, 62, 116, 0.08);
 }
+
+.file-filter-chip {
+    display: inline-flex;
+    height: 100%;
+    width: 100%;
+    gap: 4px;
+    border-radius: 4px;
+    align-items: center;
+    padding: 2px 6px;
+    background: var(--wos-blue);
+    color: #fff;
+    font-size: 10px;
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+}
+
+.file-filter-chip-text {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.file-filter-chip-remove {
+    margin-left: auto;
+    border: none;
+    background: transparent;
+    color: #fff;
+    cursor: pointer;
+    padding: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.file-filter-chip-remove i {
+    font-size: 10px;
+}
+
+.file-filter-run-btn {
+    border: none;
+    background: transparent;
+    color: var(--gray-500);
+    cursor: pointer;
+    padding: 2px 4px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.file-filter-run-btn:hover {
+    color: var(--wos-blue);
+}
+
 
 
 .file-list {
@@ -3174,7 +3261,7 @@ ol.json-array {
 
 .collapsible-header {
     background: var(--gray-100);
-    padding: 2px 10px 2px 6px;
+    padding: 0px 10px 0px 8px;
     cursor: pointer;
     display: flex;
     justify-content: flex-start;
