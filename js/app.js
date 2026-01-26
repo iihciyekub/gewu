@@ -9499,11 +9499,11 @@ class PaperStatsApp {
                     const containsCitation = /\\citep?\{|\\bib\{/.test(content);
                     const containsMath = hasMath(content);
                     if (!containsGoto && !containsMath && !containsCitation) return defaultText(tokens, idx, options, env, self);
-                    const segments = containsGoto ? content.split(/(\\goto\{[^}]+\})/g).filter(Boolean) : [content];
+                    const segments = containsGoto ? content.split(/(\\goto\{[\s\S]*?\})/g).filter(Boolean) : [content];
                     const rendered = segments.map(seg => {
-                        const match = seg.match(/^\\goto\{([^}]+)\}$/);
+                        const match = seg.match(/^\\goto\{([\s\S]*?)\}$/);
                         if (match) {
-                            const q = match[1].trim();
+                            const q = match[1].replace(/[\r\n]+/g, ' ').replace(/\s+/g, ' ').trim();
                             if (!q) return md.utils.escapeHtml(seg);
                             const esc = md.utils.escapeHtml(q).replace(/`/g, '&#96;');
                             return `<a href="#" class="location-link goto-link" data-page="" data-quote-text="${esc}" data-open-params="" data-quote-index="0" data-value-path="" title="Jump to PDF search"><i class="fa-solid fa-quote-right"></i></a>`;
@@ -10378,7 +10378,13 @@ class PaperStatsApp {
                 return `\\bib{${parts.join(',')}}`;
             });
         };
-        const html = md.render(normalizeMath(normalizeBibBlocks(contentToRender)));
+        const normalizeGotoBlocks = (src = '') => {
+            return src.replace(/\\goto\{([\s\S]*?)\}/g, (m, inner) => {
+                const merged = inner.replace(/[\r\n]+/g, ' ').replace(/\s+/g, ' ').trim();
+                return `\\goto{${merged}}`;
+            });
+        };
+        const html = md.render(normalizeMath(normalizeBibBlocks(normalizeGotoBlocks(contentToRender))));
 
         // 如果有 metadata，在内容前显示
         let metadataHtml = '';
@@ -11686,6 +11692,9 @@ class PaperStatsApp {
                 // 退出编辑时同步当前文本到内存，便于渲染新内容
                 this.currentMarkdownText = textarea.value;
             }
+        }
+        if (!editing && (this.currentView || 'structured') === 'markdown') {
+            this.renderMarkdownView(this.currentMarkdownText || '');
         }
         this.updateMarkdownToolbar();
         this.updateMarkdownDirtyUI();

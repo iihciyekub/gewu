@@ -27,7 +27,7 @@ class SpecialSyntaxManager {
                 renderer: (matches, fullMatch) => this.renderBibliography(matches, fullMatch)
             },
             'goto': {
-                pattern: /\\goto\{([^}]+)\}/g,
+                pattern: /\\goto\{([\s\S]*?)\}/g,
                 description: 'PDF jump link',
                 renderer: (matches, fullMatch) => this.renderGotoLink(matches, fullMatch)
             },
@@ -200,7 +200,7 @@ class SpecialSyntaxManager {
      * 渲染跳转链接 (goto)
      */
     renderGotoLink(content, fullMatch) {
-        const query = content.trim();
+        const query = content.replace(/[\r\n]+/g, ' ').replace(/\s+/g, ' ').trim();
         if (!query) {
             return this.app.escapeHtml(fullMatch);
         }
