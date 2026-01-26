@@ -955,6 +955,30 @@ class PaperStatsApp {
         this.updateFileSelectionDom();
     }
 
+    jumpFileSelectionToEdge(direction = 'start', extend = false) {
+        const order = this.visibleFileOrder || [];
+        if (!order.length) return;
+        const targetIndex = direction === 'end' ? order.length - 1 : 0;
+        const target = order[targetIndex];
+        if (!target) return;
+        let nextSelection = [target];
+        if (extend) {
+            const selected = this.getSelectedFilesArray();
+            const anchor = (this.lastFileSelectionAnchor && order.includes(this.lastFileSelectionAnchor))
+                ? this.lastFileSelectionAnchor
+                : (selected.length ? selected[selected.length - 1] : (this.currentFile || target));
+            const startIdx = order.indexOf(anchor);
+            if (startIdx >= 0) {
+                const [s, e] = startIdx <= targetIndex ? [startIdx, targetIndex] : [targetIndex, startIdx];
+                nextSelection = order.slice(s, e + 1);
+            }
+        }
+        this.setSelectedFiles(nextSelection, target);
+        this.scrollFileIntoView(target, { align: direction === 'end' ? 'end' : 'start' });
+        const targetEl = this.getRenderedFileItem(target);
+        this.loadFile(target, targetEl);
+    }
+
     updateFileSelectionDom() {
         const selected = this.selectedFiles || new Set();
         document.querySelectorAll('.file-item').forEach(el => {
@@ -1869,6 +1893,13 @@ class PaperStatsApp {
                 e.preventDefault();
                 const offset = e.key === 'ArrowUp' ? -1 : 1;
                 this.moveSelectedItem(offset);
+            } else if (!middleActive && this.isLeftActive && mod && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
+                if (['INPUT', 'TEXTAREA'].includes(e.target.tagName) || e.target.isContentEditable) return;
+                if (this.groupMenuState) return;
+                e.preventDefault();
+                const direction = e.key === 'ArrowUp' ? 'start' : 'end';
+                const extend = !!e.shiftKey;
+                this.jumpFileSelectionToEdge(direction, extend);
             } else if (!middleActive && !mod && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
                 // 全局上下键控制左侧文件列表（无需鼠标悬停）
                 if (['INPUT', 'TEXTAREA'].includes(e.target.tagName) || e.target.isContentEditable) return;
