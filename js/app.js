@@ -2,7 +2,7 @@
 // VERSION: 2026-01-12-15:30 - Fixed MD DOI generation (basename only)
 console.log('✅ app.js 已加载 - 版本: 2026-01-12-15:30 (MD DOI修复版)');
 
-class PaperReviewerApp {
+class PaperStatsApp {
     constructor() {
         this.currentFile = null;
         this.currentData = null;
@@ -2135,6 +2135,15 @@ class PaperReviewerApp {
             });
         }
 
+        // PDF 自动加载开关
+        const pdfAutoLoadBtn = document.getElementById('btnPdfAutoLoad');
+        if (pdfAutoLoadBtn) {
+            pdfAutoLoadBtn.addEventListener('click', () => {
+                this.setAutoLoadPdf(!this.autoLoadPdf);
+            });
+            this.updatePdfAutoLoadButtonState();
+        }
+
         // PDF 独立窗口按钮
         const btnPdfPopup = document.getElementById('btnPdfPopup');
         if (btnPdfPopup) {
@@ -3889,7 +3898,7 @@ class PaperReviewerApp {
             const item = e.target.closest('.file-item');
             if (!item) return;
             e.preventDefault();
-            window.paperReviewerApp.showFileContextMenu(e, item.dataset.filename, item);
+            window.paperStats.showFileContextMenu(e, item.dataset.filename, item);
         });
         body.addEventListener('dragstart', (e) => {
             const item = e.target.closest('.file-item');
@@ -5317,11 +5326,11 @@ class PaperReviewerApp {
             // Update filename reference in click event handler (rebind)
             const newFileItem = fileItem.cloneNode(true);
             newFileItem.addEventListener('click', function () {
-                window.paperReviewerApp.loadFile(finalFilename, this);
+                window.paperStats.loadFile(finalFilename, this);
             });
             newFileItem.addEventListener('contextmenu', (e) => {
                 e.preventDefault();
-                window.paperReviewerApp.showFileContextMenu(e, finalFilename, newFileItem);
+                window.paperStats.showFileContextMenu(e, finalFilename, newFileItem);
             });
             fileItem.replaceWith(newFileItem);
 
@@ -8843,6 +8852,20 @@ class PaperReviewerApp {
         const offItem = document.getElementById('autoLoadOffItem');
         if (onItem) onItem.classList.toggle('checked', !!this.autoLoadPdf);
         if (offItem) offItem.classList.toggle('checked', !this.autoLoadPdf);
+        this.updatePdfAutoLoadButtonState();
+    }
+
+    updatePdfAutoLoadButtonState() {
+        const btn = document.getElementById('btnPdfAutoLoad');
+        if (!btn) return;
+        const icon = btn.querySelector('i');
+        const isOn = !!this.autoLoadPdf;
+        btn.classList.toggle('is-on', isOn);
+        btn.setAttribute('aria-pressed', String(isOn));
+        btn.title = isOn ? 'Auto-load PDF: On' : 'Auto-load PDF: Off';
+        if (icon) {
+            icon.className = isOn ? 'fas fa-toggle-on' : 'fas fa-toggle-off';
+        }
     }
 
     async loadPromptShortcuts() {
@@ -9008,12 +9031,10 @@ class PaperReviewerApp {
             console.log('🔍 fileMetaByPath content:', Object.entries(this.fileMetaByPath).map(([path, meta]) => ({ path, kind: meta?.kind })));
             Object.values(this.fileMetaByPath).forEach(meta => {
                 if (meta && meta.kind === 'pdf') {
-                    console.log(`✓ Counting PDF: ${meta.path}`);
                     pdfCount++;
                 }
             });
         }
-        console.log(`📊 Statistics - JSON: ${jsonCount}, MD: ${mdCount}, PDF: ${pdfCount}`);
 
         // 构建HTML内容
         const html = `
@@ -9032,7 +9053,7 @@ class PaperReviewerApp {
                 <div class="detail-item">
                 <label>Project Path:</label>
                 <span class="detail-value detail-path" title="${this.escapeAttr(projectPath)}">${this.escapeHtml(projectPath)}</span>
-                <button class="detail-copy-btn" type="button" title="Copy Project Path" aria-label="Copy Project Path" onclick="window.paperReviewerApp.copyProjectPathToClipboard()">
+                <button class="detail-copy-btn" type="button" title="Copy Project Path" aria-label="Copy Project Path" onclick="window.paperStats.copyProjectPathToClipboard()">
                     <i class="fas fa-copy"></i>
                 </button>
                 </div>
@@ -9057,10 +9078,10 @@ class PaperReviewerApp {
 
             <div class="detail-section">
                 <div class="detail-actions">
-                <button class="detail-action-btn" onclick="window.paperReviewerApp.openProjectModal()">
+                <button class="detail-action-btn" onclick="window.paperStats.openProjectModal()">
                     <i class="fas fa-exchange-alt"></i> Create or Switch Project
                 </button>
-                <button class="detail-action-btn detail-action-btn-danger" onclick="window.paperReviewerApp.exitProject()">
+                <button class="detail-action-btn detail-action-btn-danger" onclick="window.paperStats.exitProject()">
                     <i class="fas fa-sign-out-alt"></i> Exit Project
                 </button>
                 </div>
@@ -9447,7 +9468,7 @@ class PaperReviewerApp {
                             out += renderMathText(txt.slice(last, m.index));
                         }
                         const raw = m[0];
-                        const app = window.paperReviewerApp;
+                        const app = window.paperStats;
                         if (raw.startsWith('\\bib{')) {
                             // 处理 \bib{} - 只创建容器，实际渲染由 applyBibliographyRendering 完成
                             const inside = raw.slice(5, -1);
@@ -10097,11 +10118,9 @@ class PaperReviewerApp {
 
             // 检查是否需要修复
             if (currentDoi === correctDoi) {
-                console.log('DOI is correct, no need to fix:', mdFilename);
                 return false;
             }
 
-            console.log(`Fixing DOI: ${currentDoi} -> ${correctDoi}`);
             // 替换DOI
             const newFrontmatter = frontmatter.replace(
                 /^doi:\s*(.+)$/m,
@@ -10147,7 +10166,6 @@ class PaperReviewerApp {
 
         const message = `Fix completed! Fixed: ${fixed}, Skipped: ${skipped}, Errors: ${errors}`;
         this.showNotification(message, fixed > 0 ? 'success' : 'info');
-        console.log(message);
 
         // 如果当前文件的MD被修复了，重新加载
         if (fixed > 0 && this.currentFile) {
@@ -15238,10 +15256,10 @@ class PaperReviewerApp {
 
 // Initialize app when DOM is ready
 document.addEventListener('DOMContentLoaded', () => {
-    const app = new PaperReviewerApp();
+    const app = new PaperStatsApp();
 
     // Make app globally accessible for debugging
-    window.paperReviewerApp = app;
+    window.paperStats = app;
     window.testCite = async (dois, mode = 'citep') => {
         const list = Array.isArray(dois) ? dois : [dois];
         return app.formatCitation(list, mode === 'cite' ? 'cite' : 'citep');
@@ -15488,7 +15506,7 @@ document.addEventListener('DOMContentLoaded', () => {
 document.addEventListener('click', (e) => {
     if (e.target.classList.contains('tab-btn')) {
         setTimeout(() => {
-            const app = window.paperReviewerApp;
+            const app = window.paperStats;
             if (app && typeof app.setupEditableListeners === 'function') {
                 app.setupEditableListeners();
             }

@@ -2,8 +2,8 @@
     if (typeof window === 'undefined') return;
 
     const attachStats = () => {
-        const proto = window.PaperReviewerApp?.prototype
-            || (window.paperReviewerApp ? Object.getPrototypeOf(window.paperReviewerApp) : null);
+        const proto = window.PaperStatsApp?.prototype
+            || (window.paperStats ? Object.getPrototypeOf(window.paperStats) : null);
         if (!proto || proto.__statsAttached) return false;
         proto.__statsAttached = true;
 
@@ -40,108 +40,208 @@
             return this.normalizeFieldValues(raw);
         };
 
-        proto.getFieldStatsForCurrentView = async function ({ fields, view = '', log = true, table = true, mode = '' } = {}) {
+        proto.groupByFields = async function ({
+            fields,
+            view = '',
+            log = true,
+            table = true,
+            mode = '',
+            concurrency = 12,
+            progress = true,
+            groupByGroupName = false,
+            groupNames = null
+        } = {}) {
             if (!this.currentProject) {
                 this.showNotification('Project not selected', 'error');
                 return null;
-        }
-        const targetView = view || this.currentJsonView || 'view1';
-        if (!this.fileMetaByBase || !Object.keys(this.fileMetaByBase).length) {
-            await this.loadFileList(true);
-        }
-
-        const fieldList = Array.isArray(fields)
-            ? fields.filter(Boolean).map(f => String(f))
-            : [fields || 'wos_data.publication_year'].filter(Boolean).map(f => String(f));
-
-        const bases = Object.keys(this.fileMetaByBase || {}).filter((base) => {
-            const entry = this.fileMetaByBase?.[base];
-            return !!(entry?.views && entry.views[targetView]);
-        });
-
-        const aggregated = {};
-        const byField = {};
-        const missingByField = {};
-        let missingAll = 0;
-        let readErrors = 0;
-
-        const useMode = mode || (fieldList.length > 1 ? 'grouped' : 'merged');
-        fieldList.forEach((field) => {
-            byField[field] = {};
-            missingByField[field] = 0;
-        });
-
-        await Promise.all(bases.map(async (base) => {
-            const path = this.getViewPathForBase(base, targetView);
-            if (!path) {
-                missingAll += 1;
-                fieldList.forEach((field) => { missingByField[field] += 1; });
-                return;
             }
-            try {
-                const data = await this.readProjectFile(path);
-                let hasAny = false;
-                const groupValues = [];
-                fieldList.forEach((field) => {
-                    const values = this.extractFieldValuesFromData(data, field);
-                    if (!values.length) {
-                        missingByField[field] += 1;
-                        groupValues.push('');
-                        return;
-                    }
-                    hasAny = true;
-                    groupValues.push(values[0]);
-                    values.forEach((value) => {
-                        const key = String(value);
-                        byField[field][key] = (byField[field][key] || 0) + 1;
-                        if (useMode === 'merged') {
-                            aggregated[key] = (aggregated[key] || 0) + 1;
+
+            const targetView = view || this.currentJsonView || 'view1';
+            if (!this.fileMetaByBase || !Object.keys(this.fileMetaByBase).length) {
+                await this.loadFileList(true);
+            }
+
+            const fieldList = Array.isArray(fields)
+                ? fields.filter(Boolean).map(f => String(f))
+                : [fields || 'wos_data.publication_year'].filter(Boolean).map(f => String(f));
+            const requestedGroups = Array.isArray(groupNames)
+                ? groupNames.filter(Boolean).map(g => String(g))
+                : (groupNames ? [String(groupNames)] : []);
+            const groupsAll = (typeof this.getCurrentGroups === 'function') ? (this.getCurrentGroups() || []) : [];
+            const groupNameMatchSet = new Set(requestedGroups.map(g => g.toLowerCase()));
+            const matchedGroups = requestedGroups.length
+                ? groupsAll.filter(g => groupNameMatchSet.has(String(g.name || '').toLowerCase())
+                    || groupNameMatchSet.has(String(g.id || '').toLowerCase()))
+                : [];
+            const activeGroups = matchedGroups.length ? matchedGroups : groupsAll;
+            const groupLabel = requestedGroups.length
+                ? (matchedGroups.length ? matchedGroups.map(g => String(g.name || g.id || 'group')).join(' + ') : 'all')
+                : 'all';
+            const baseGroupMap = {};
+            if (groupsAll.length) {
+                groupsAll.forEach((g) => {
+                    (g.files || []).forEach((base) => {
+                        if (!baseGroupMap[base]) {
+                            baseGroupMap[base] = String(g.name || g.id || 'group');
                         }
                     });
                 });
-                if (useMode === 'grouped' && hasAny) {
-                    const key = groupValues.map(v => String(v)).join(' | ');
-                    aggregated[key] = (aggregated[key] || 0) + 1;
+            }
+
+            const allowedBaseSet = activeGroups.length
+                ? new Set(activeGroups.flatMap(g => (g.files || []).map(String)))
+                : null;
+            const bases = Object.keys(this.fileMetaByBase || {}).filter((base) => {
+                const entry = this.fileMetaByBase?.[base];
+                const inView = !!(entry?.views && entry.views[targetView]);
+                const inGroup = allowedBaseSet ? allowedBaseSet.has(base) : true;
+                return inView && inGroup;
+            });
+
+            const includeGroup = !!groupByGroupName;
+            const groupedFields = includeGroup ? ['group', ...fieldList] : fieldList;
+            const aggregated = {};
+            const groupedValueMap = {};
+            const byField = {};
+            const missingByField = {};
+            let missingAll = 0;
+            let readErrors = 0;
+
+            const useMode = includeGroup ? 'grouped' : (mode || (fieldList.length > 1 ? 'grouped' : 'merged'));
+            fieldList.forEach((field) => {
+                byField[field] = {};
+                missingByField[field] = 0;
+            });
+
+            const safeConcurrency = Number.isFinite(Number(concurrency)) ? Math.max(1, Number(concurrency)) : 12;
+            const tracker = (progress && typeof this.createStatusProgressTracker === 'function')
+                ? this.createStatusProgressTracker('Grouping fields')
+                : null;
+            let processed = 0;
+            if (tracker) {
+                tracker.update('Grouping fields (0%)', 0);
+            }
+            let cursor = 0;
+            const worker = async () => {
+                while (cursor < bases.length) {
+                    const base = bases[cursor];
+                    cursor += 1;
+                    const path = this.getViewPathForBase(base, targetView);
+                    if (!path) {
+                        missingAll += 1;
+                        fieldList.forEach((field) => { missingByField[field] += 1; });
+                        continue;
+                    }
+                    try {
+                        const data = await this.readProjectFile(path);
+                        let hasAny = false;
+                        const groupValues = [];
+                        if (includeGroup) {
+                            groupValues.push(baseGroupMap[base] || 'ungrouped');
+                        }
+                        fieldList.forEach((field) => {
+                            const values = this.extractFieldValuesFromData(data, field);
+                            if (!values.length) {
+                                missingByField[field] += 1;
+                                groupValues.push('');
+                                return;
+                            }
+                            hasAny = true;
+                            groupValues.push(values[0]);
+                            values.forEach((value) => {
+                                const key = String(value);
+                                byField[field][key] = (byField[field][key] || 0) + 1;
+                                if (useMode === 'merged') {
+                                    aggregated[key] = (aggregated[key] || 0) + 1;
+                                }
+                            });
+                        });
+                        if (useMode === 'grouped' && hasAny) {
+                            const key = groupValues.map(v => String(v)).join(' | ');
+                            aggregated[key] = (aggregated[key] || 0) + 1;
+                            if (!groupedValueMap[key]) groupedValueMap[key] = groupValues.map(v => String(v));
+                        }
+                        if (!hasAny) missingAll += 1;
+                    } catch (err) {
+                        console.warn('Field stats read failed for', base, err);
+                        readErrors += 1;
+                    } finally {
+                        processed += 1;
+                        if (tracker) {
+                            const percent = bases.length ? Math.round((processed / bases.length) * 100) : 100;
+                            tracker.update(`Grouping fields (${processed}/${bases.length})`, percent);
+                        }
+                    }
                 }
-                if (!hasAny) missingAll += 1;
+            };
+            const workers = Array.from({ length: Math.min(safeConcurrency, bases.length) }, () => worker());
+            try {
+                await Promise.all(workers);
+                if (tracker) tracker.finish('Grouping fields done');
             } catch (err) {
-                console.warn('Field stats read failed for', base, err);
-                readErrors += 1;
+                if (tracker) tracker.fail('Grouping fields failed');
+                throw err;
             }
-        }));
 
-        const result = {
-            view: targetView,
-            fields: fieldList,
-            totalFiles: bases.length,
-            missingAll,
-            missingByField,
-            readErrors,
-            aggregated,
-            byField
-        };
-
-        if (log) {
-            console.log(`Field stats for view "${targetView}"`, { fields: fieldList, mode: useMode });
-            const sorted = Object.keys(aggregated)
-                .map(k => ({ value: k, count: aggregated[k] }))
-                .sort((a, b) => b.count - a.count || a.value.localeCompare(b.value));
-            if (sorted.length) {
-                if (table) {
-                    console.table(sorted);
-                } else {
-                    console.log(sorted);
-                }
-            } else {
-                console.log('No values found for fields.');
-            }
-            console.log('Summary:', {
+            const result = {
+                view: targetView,
+                fields: fieldList,
+                groupedFields,
+                groupByGroupName: includeGroup,
+                groupLabel,
+                groupNames: requestedGroups,
+                matchedGroupNames: matchedGroups.map(g => String(g.name || g.id || 'group')),
                 totalFiles: bases.length,
                 missingAll,
                 missingByField,
-                readErrors
-            });
-        }
+                readErrors,
+                aggregated,
+                byField,
+                groupedRows: useMode === 'grouped'
+                    ? Object.keys(aggregated)
+                        .map((key) => {
+                            const values = groupedValueMap[key] || [];
+                            const row = {};
+                            groupedFields.forEach((field, idx) => {
+                                row[field] = values[idx] || '';
+                            });
+                            row.count = aggregated[key];
+                            if (!includeGroup) row.group = groupLabel;
+                            return row;
+                        })
+                        .sort((a, b) => b.count - a.count)
+                    : null
+            };
+
+            if (log) {
+                console.log(`Field stats for view "${targetView}"`, { fields: fieldList, mode: useMode, groupLabel });
+                const sorted = Object.keys(aggregated)
+                    .map(k => ({ value: k, count: aggregated[k], group: groupLabel }))
+                    .sort((a, b) => b.count - a.count || a.value.localeCompare(b.value));
+                if (sorted.length) {
+                    if (table) {
+                        if (useMode === 'grouped') {
+                            const rows = Array.isArray(result.groupedRows) ? [...result.groupedRows] : [];
+                            const total = rows.reduce((sum, row) => sum + (Number(row.count) || 0), 0);
+                            rows.push({ ...Object.fromEntries(groupedFields.map(f => [f, 'TOTAL'])), count: total });
+                            console.table(rows);
+                        } else {
+                            const total = sorted.reduce((sum, row) => sum + (Number(row.count) || 0), 0);
+                            console.table([...sorted, { value: 'TOTAL', count: total, group: groupLabel }]);
+                        }
+                    } else {
+                        console.log(sorted);
+                    }
+                } else {
+                    console.log('No values found for fields.');
+                }
+                console.log('Summary:', {
+                    totalFiles: bases.length,
+                    missingAll,
+                    missingByField,
+                    readErrors
+                });
+            }
 
             return result;
         };

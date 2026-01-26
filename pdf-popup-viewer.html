@@ -81,7 +81,7 @@
                     }
                     
                     // 检查父窗口是否还有我们的应用实例
-                    if (!window.opener.paperReviewerApp) {
+                    if (!window.opener.paperStats) {
                         console.log('🔄 父窗口已重新加载，独立PDF窗口将关闭');
                         localStorage.removeItem('pdfPopupWindowActive');
                         clearInterval(checkInterval);

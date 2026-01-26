@@ -214,7 +214,7 @@
     <script src="js/core/markdown-it-github-alerts.js"></script>
     <script src="js/core/frontmatter-parser.js"></script>
     <script src="js/core/citation.js"></script>
-    <script src="js/core/special-syntax-manager.js"></script>
+    <script src="js/special-syntax-manager.js"></script>
     <script src="js/core/project-storage-manager.js"></script>
     <script src="js/core/autocomplete.js"></script>
     <link rel="stylesheet" href="js/core/highlight/styles/github.min.css">
@@ -244,7 +244,7 @@
         <div class="modal-content project-selector-content">
             <div class="modal-header">
                 <span>Select Project Folder</span>
-                <button class="close-btn" onclick="window.paperReviewerApp.closeProjectSelector()">
+                <button class="close-btn" onclick="window.paperStats.closeProjectSelector()">
                     <i class="fas fa-times"></i>
                 </button>
             </div>
@@ -263,7 +263,7 @@
                     <label for="projectPathInput">Load Existing Project:</label>
                     <div class="path-input-group">
                         <input type="text" id="projectPathInput" placeholder="Enter full path, e.g.: /path/to/project">
-                        <button class="btn btn-browse" onclick="window.paperReviewerApp.browseAndFillPath()" title="Browse to select directory">
+                        <button class="btn btn-browse" onclick="window.paperStats.browseAndFillPath()" title="Browse to select directory">
                             <i class="fas fa-folder-open"></i> Browse
                         </button>
                     </div>
@@ -279,7 +279,7 @@
                 </div>
             </div>
             <div class="modal-footer">
-                <button class="btn btn-cancel" onclick="window.paperReviewerApp.closeProjectSelector()">Cancel</button>
+                <button class="btn btn-cancel" onclick="window.paperStats.closeProjectSelector()">Cancel</button>
                 <button class="btn" id="initProjectBtn">Create or Open Project</button>
                 <button class="btn btn-primary" id="loadProjectBtn" style="display: none;">Load Project</button>
             </div>
@@ -291,7 +291,7 @@
         <div class="modal-content small-modal">
             <div class="modal-header">
                 <span>DOI List Processing</span>
-                <button class="close-btn" onclick="window.paperReviewerApp.closeDoiModal()">
+                <button class="close-btn" onclick="window.paperStats.closeDoiModal()">
                     <i class="fas fa-times"></i>
                 </button>
             </div>
@@ -311,7 +311,7 @@
                 </div>
             </div>
             <div class="modal-footer">
-                <button class="btn btn-cancel" onclick="window.paperReviewerApp.closeDoiModal()">Cancel</button>
+                <button class="btn btn-cancel" onclick="window.paperStats.closeDoiModal()">Cancel</button>
                 <button class="btn btn-primary" id="doiCreateBtn">
                     <i class="fas fa-list"></i> Create DOI List Files
                 </button>
@@ -324,7 +324,7 @@
         <div class="modal-content mode-selector-content">
             <div class="modal-header">
                 <span>Select Import Mode</span>
-                <button class="close-btn" onclick="window.paperReviewerApp.closeImportModeDialog()">
+                <button class="close-btn" onclick="window.paperStats.closeImportModeDialog()">
                     <i class="fas fa-times"></i>
                 </button>
             </div>
@@ -338,7 +338,7 @@
                         <p>Only processes JSON files with the same name that already exist in the current view. Updates existing fields by intersection, without adding new files or fields.</p>
                     </div>
                     <div class="mode-action">
-                        <button class="btn btn-primary" onclick="window.paperReviewerApp.selectImportMode('join')">
+                        <button class="btn btn-primary" onclick="window.paperStats.selectImportMode('join')">
                             Select
                         </button>
                     </div>
@@ -352,14 +352,14 @@
                         <p>Merges files with the same name and adds missing fields, while importing non-existent files to the target directory.</p>
                     </div>
                     <div class="mode-action">
-                        <button class="btn btn-primary" onclick="window.paperReviewerApp.selectImportMode('union')">
+                        <button class="btn btn-primary" onclick="window.paperStats.selectImportMode('union')">
                             Select
                         </button>
                     </div>
                 </div>
             </div>
             <div class="modal-footer">
-                <button class="btn btn-cancel" onclick="window.paperReviewerApp.closeImportModeDialog()">Cancel</button>
+                <button class="btn btn-cancel" onclick="window.paperStats.closeImportModeDialog()">Cancel</button>
             </div>
         </div>
     </div>
@@ -369,7 +369,7 @@
         <div class="modal-content json-target-content">
             <div class="modal-header">
                 <span>Select JSON Import Subdirectory</span>
-                <button class="close-btn" onclick="window.paperReviewerApp.closeJsonTargetDialog()">
+                <button class="close-btn" onclick="window.paperStats.closeJsonTargetDialog()">
                     <i class="fas fa-times"></i>
                 </button>
             </div>
@@ -388,7 +388,7 @@
                 </div>
             </div>
             <div class="modal-footer">
-                <button class="btn btn-cancel" onclick="window.paperReviewerApp.closeJsonTargetDialog()">Cancel</button>
+                <button class="btn btn-cancel" onclick="window.paperStats.closeJsonTargetDialog()">Cancel</button>
                 <button class="btn btn-primary" id="confirmJsonTargetBtn">Next</button>
             </div>
         </div>
@@ -399,7 +399,7 @@
         <div class="modal-content create-group-content">
             <div class="modal-header">
                 <span>Create File Group</span>
-                <button class="close-btn" onclick="window.paperReviewerApp.closeCreateGroupDialog()">
+                <button class="close-btn" onclick="window.paperStats.closeCreateGroupDialog()">
                     <i class="fas fa-times"></i>
                 </button>
             </div>
@@ -424,7 +424,7 @@
                 </div>
             </div>
             <div class="modal-footer">
-                <button class="btn btn-cancel" onclick="window.paperReviewerApp.closeCreateGroupDialog()">Cancel</button>
+                <button class="btn btn-cancel" onclick="window.paperStats.closeCreateGroupDialog()">Cancel</button>
                 <button class="btn btn-primary" id="confirmCreateGroupBtn">
                     <i class="fas fa-check"></i> Create Groups
                 </button>
@@ -633,6 +633,9 @@
             </div>
             </div>
             <!-- PDF.js fullscreen shortcut button -->
+            <button class="btn-pdf-autoload" id="btnPdfAutoLoad" title="Auto-load PDF: Off" aria-pressed="false">
+            <i class="fas fa-toggle-off"></i>
+            </button>
             <button class="btn-pdfjs-fullscreen" id="btnPdfJsFullscreen" title="Enter PDF fullscreen mode">
             <i class="fas fa-expand"></i>
             </button>
@@ -724,7 +727,7 @@
         <div class="modal-content">
             <div class="modal-header">
                 <span id="modalTitle">Edit Value</span>
-                <button class="close-btn" onclick="window.paperReviewerApp.closeEditModal()">
+                <button class="close-btn" onclick="window.paperStats.closeEditModal()">
                     <i class="fas fa-times"></i>
                 </button>
             </div>
@@ -752,7 +755,7 @@
         <div class="modal-content">
             <div class="modal-header">
                 <span>Edit Reference Text</span>
-                <button class="close-btn" onclick="window.paperReviewerApp.closeGotoEditModal(false)">
+                <button class="close-btn" onclick="window.paperStats.closeGotoEditModal(false)">
                     <i class="fas fa-times"></i>
                 </button>
             </div>
@@ -772,7 +775,7 @@
         <div class="modal-content">
             <div class="modal-header">
                 <span>Add New Item</span>
-                <button class="close-btn" onclick="window.paperReviewerApp.closeAddItemModal()">
+                <button class="close-btn" onclick="window.paperStats.closeAddItemModal()">
                     <i class="fas fa-times"></i>
                 </button>
             </div>
@@ -815,7 +818,7 @@
         <div class="modal-content" style="max-width: 960px; width: 90%;">
             <div class="modal-header">
                 <span>Query & Export (DOI keyed)</span>
-                <button class="close-btn" onclick="window.paperReviewerApp.closeQueryExportModal()">
+                <button class="close-btn" onclick="window.paperStats.closeQueryExportModal()">
                     <i class="fas fa-times"></i>
                 </button>
             </div>
