@@ -9558,6 +9558,52 @@ class PaperStatsApp {
             };
             md.use(specialLinkPlugin);
 
+            // 添加 \groupby{}{} 的 inline 规则处理
+            const groupByPlugin = (mdInstance) => {
+                const groupByRule = (state, silent) => {
+                    const max = state.posMax;
+                    const start = state.pos;
+                    const prefix = '\\groupby{';
+                    if (state.src.charCodeAt(start) !== 0x5C /* \ */) return false;
+                    if (state.src.slice(start, start + prefix.length) !== prefix) return false;
+
+                    let pos = start + prefix.length;
+                    while (pos < max && state.src.charCodeAt(pos) !== 0x7D /* } */) {
+                        pos++;
+                    }
+                    if (pos >= max) return false;
+                    if (pos + 1 >= max || state.src.charCodeAt(pos + 1) !== 0x7B /* { */) return false;
+
+                    const groups = state.src.slice(start + prefix.length, pos);
+                    let pos2 = pos + 2;
+                    while (pos2 < max && state.src.charCodeAt(pos2) !== 0x7D /* } */) {
+                        pos2++;
+                    }
+                    if (pos2 >= max) return false;
+
+                    const fields = state.src.slice(pos + 2, pos2);
+                    if (!silent) {
+                        const token = state.push('groupby_inline', '', 0);
+                        token.meta = { groups, fields };
+                    }
+
+                    state.pos = pos2 + 1;
+                    return true;
+                };
+
+                mdInstance.inline.ruler.before('escape', 'groupby_inline', groupByRule);
+                mdInstance.renderer.rules.groupby_inline = (tokens, idx) => {
+                    const meta = tokens[idx].meta || {};
+                    const app = window.paperStats;
+                    if (app && typeof app.renderGroupByPlaceholder === 'function') {
+                        return app.renderGroupByPlaceholder(meta.groups || '', meta.fields || '');
+                    }
+                    const fallback = `\\groupby{${meta.groups || ''}}{${meta.fields || ''}}`;
+                    return mdInstance.utils.escapeHtml(fallback);
+                };
+            };
+            md.use(groupByPlugin);
+
             // contentReference inline渲染
             const contentRefPlugin = (mdInstance) => {
                 mdInstance.core.ruler.after('inline', 'content-ref', (state) => {
@@ -10402,6 +10448,7 @@ class PaperStatsApp {
         this.highlightCodeBlocks(render);
         this.applyCitationRendering(render);
         this.applyBibliographyRendering(render);
+        this.applyGroupByRendering(render);
         this.adjustReferenceFont(render);
         this.updateMarkdownUndoButtonState();
         this.applyEditLockState();
@@ -10474,6 +10521,16 @@ class PaperStatsApp {
         return `<span class="citation-inline ${cls}" data-citation-type="${type}" data-citation-dois="${escDois}">[${escLabel}]</span>`;
     }
 
+    renderGroupByPlaceholder(groups = '', fields = '') {
+        const cleanGroups = String(groups || '').replace(/[\r\n]+/g, ' ').trim();
+        const cleanFields = String(fields || '').replace(/[\r\n]+/g, ' ').trim();
+        const escGroups = this.escapeAttr(cleanGroups);
+        const escFields = this.escapeAttr(cleanFields);
+        const groupLabel = cleanGroups || 'all';
+        const title = `Groups: ${groupLabel}\nFields: ${cleanFields || '(none)'}`;
+        return `<div class="groupby-inline" data-groupby-groups="${escGroups}" data-groupby-fields="${escFields}"><button class="bib-fetch-btn groupby-render-btn" type="button" title="${this.escapeAttr(title)}"><i class="fas fa-play"></i><span>Waiting for groupby...</span></button></div>`;
+    }
+
     async applyCitationRendering(renderRoot) {
         if (!renderRoot) return;
         const spans = Array.from(renderRoot.querySelectorAll('.citation-inline'));
@@ -10522,6 +10579,303 @@ class PaperStatsApp {
 
         // 绑定点击事件
         this.bindBibFetchButtons(renderRoot);
+    }
+
+    async applyGroupByRendering(renderRoot) {
+        if (!renderRoot) return;
+        const blocks = Array.from(renderRoot.querySelectorAll('.groupby-inline'));
+        if (!blocks.length) return;
+
+        blocks.forEach((block) => {
+            if (block.dataset.groupbyBound === '1') return;
+            block.dataset.groupbyBound = '1';
+            const btn = block.querySelector('.groupby-render-btn');
+            if (btn) {
+                btn.addEventListener('click', () => this.renderGroupByBlock(block));
+            }
+        });
+    }
+
+    async renderGroupByBlock(block) {
+        if (!block || block.dataset.groupbyRendered === '1') return;
+        block.dataset.groupbyRendered = '1';
+
+        const groupsRaw = (block.dataset.groupbyGroups || '').trim();
+        const fieldsRaw = (block.dataset.groupbyFields || '').trim();
+        const fields = fieldsRaw.split(/[,，]+/).map(v => v.trim()).filter(Boolean);
+        const groupTokens = groupsRaw.split(/[,，]+/).map(v => v.trim()).filter(Boolean);
+        const useAllGroups = !groupsRaw || groupsRaw.toLowerCase() === 'all';
+        const groupNames = useAllGroups ? null : groupTokens;
+
+        if (!fields.length) {
+            block.innerHTML = '<div class="groupby-error">No fields specified for \\groupby{}{}.</div>';
+            return;
+        }
+        if (typeof this.groupByFields !== 'function') {
+            block.innerHTML = '<div class="groupby-error">groupByFields() is unavailable.</div>';
+            return;
+        }
+
+        block.innerHTML = '<div class="groupby-loading">Grouping...</div>';
+
+        try {
+            const result = await this.groupByFields({
+                fields,
+                groupNames,
+                log: false,
+                table: false,
+                progress: true
+            });
+            if (!result) {
+                block.innerHTML = '<div class="groupby-error">No data returned for groupby.</div>';
+                return;
+            }
+
+            const tableData = this.buildGroupByTableData(result, fields);
+            const mdTable = this.buildGroupByMarkdown(tableData.headers, tableData.rows);
+            const csvTable = this.buildGroupByCsv(tableData.headers, tableData.rows);
+
+            const wrapper = document.createElement('div');
+            wrapper.className = 'groupby-box';
+
+            const header = document.createElement('div');
+            header.className = 'groupby-header';
+
+            const actions = document.createElement('div');
+            actions.className = 'groupby-actions';
+
+            const toggleBtn = document.createElement('button');
+            toggleBtn.className = 'groupby-toggle-btn';
+            toggleBtn.type = 'button';
+            toggleBtn.setAttribute('aria-label', 'Collapse table');
+            toggleBtn.innerHTML = '<i class="fas fa-chevron-up"></i>';
+            header.appendChild(toggleBtn);
+
+            const title = document.createElement('span');
+            title.className = 'groupby-title';
+            const groupLabel = result.groupLabel || (useAllGroups ? 'all' : groupTokens.join(','));
+            title.textContent = `GroupBy: ${fields.join(', ')} (${groupLabel})`;
+            header.appendChild(title);
+
+            const mdBtn = document.createElement('button');
+            mdBtn.className = 'groupby-copy-btn';
+            mdBtn.type = 'button';
+            mdBtn.innerHTML = '<i class="fas fa-copy"></i><span>Copy MD</span>';
+            mdBtn.addEventListener('click', async () => {
+                try {
+                    await this.writeTextToClipboard(mdTable);
+                    this.showNotification('Markdown table copied', 'success');
+                } catch (err) {
+                    this.showNotification(`Copy failed: ${err.message}`, 'error');
+                }
+            });
+
+            const csvBtn = document.createElement('button');
+            csvBtn.className = 'groupby-copy-btn';
+            csvBtn.type = 'button';
+            csvBtn.innerHTML = '<i class="fas fa-file-csv"></i><span>Copy CSV</span>';
+            csvBtn.addEventListener('click', async () => {
+                try {
+                    await this.writeTextToClipboard(csvTable);
+                    this.showNotification('CSV copied', 'success');
+                } catch (err) {
+                    this.showNotification(`Copy failed: ${err.message}`, 'error');
+                }
+            });
+
+            actions.appendChild(mdBtn);
+            actions.appendChild(csvBtn);
+            header.appendChild(actions);
+            wrapper.appendChild(header);
+
+            const table = document.createElement('table');
+            table.className = 'groupby-table';
+            const thead = document.createElement('thead');
+            const headRow = document.createElement('tr');
+            tableData.headers.forEach((h) => {
+                const th = document.createElement('th');
+                th.textContent = h;
+                headRow.appendChild(th);
+            });
+            thead.appendChild(headRow);
+            table.appendChild(thead);
+
+            const tbody = document.createElement('tbody');
+            tableData.rows.forEach((row) => {
+                const tr = document.createElement('tr');
+                row.forEach((cell) => {
+                    const td = document.createElement('td');
+                    td.textContent = String(cell ?? '');
+                    tr.appendChild(td);
+                });
+                tbody.appendChild(tr);
+            });
+            table.appendChild(tbody);
+
+            wrapper.appendChild(table);
+            this.enableGroupByTableSort(table, tableData.headers, tableData.rows);
+            this.enableGroupByTableResize(table);
+            toggleBtn.addEventListener('click', () => {
+                wrapper.classList.toggle('groupby-collapsed');
+                const collapsed = wrapper.classList.contains('groupby-collapsed');
+                toggleBtn.innerHTML = collapsed
+                    ? '<i class="fas fa-chevron-down"></i>'
+                    : '<i class="fas fa-chevron-up"></i>';
+                toggleBtn.setAttribute('aria-label', collapsed ? 'Expand table' : 'Collapse table');
+            });
+            block.innerHTML = '';
+            block.appendChild(wrapper);
+        } catch (err) {
+            console.warn('GroupBy render failed:', err);
+            block.innerHTML = `<div class="groupby-error">GroupBy failed: ${this.escapeHtml(err.message || String(err))}</div>`;
+        }
+    }
+
+    buildGroupByTableData(result, fields) {
+        let headers = [];
+        let rows = [];
+        if (Array.isArray(result.groupedRows) && result.groupedRows.length) {
+            headers = [...(result.groupedFields || fields), 'count'];
+            rows = result.groupedRows.map((row) => headers.map(h => row[h] ?? ''));
+        } else {
+            const label = fields.length === 1 ? fields[0] : 'value';
+            headers = [label, 'count'];
+            rows = Object.keys(result.aggregated || {})
+                .map(key => [key, result.aggregated[key]])
+                .sort((a, b) => (Number(b[1]) || 0) - (Number(a[1]) || 0) || String(a[0]).localeCompare(String(b[0])));
+        }
+
+        if (rows.length) {
+            const total = rows.reduce((sum, row) => sum + (Number(row[headers.length - 1]) || 0), 0);
+            const totalRow = headers.map((_, idx) => {
+                if (idx === headers.length - 1) return total;
+                return idx === 0 ? 'TOTAL' : '';
+            });
+            rows.push(totalRow);
+        }
+
+        return { headers, rows };
+    }
+
+    buildGroupByMarkdown(headers, rows) {
+        const safe = (val) => String(val ?? '').replace(/\|/g, '\\|').replace(/\r?\n/g, ' ');
+        const headLine = `| ${headers.map(safe).join(' | ')} |`;
+        const sepLine = `| ${headers.map(() => '---').join(' | ')} |`;
+        const body = rows.map(row => `| ${row.map(safe).join(' | ')} |`).join('\n');
+        return [headLine, sepLine, body].filter(Boolean).join('\n');
+    }
+
+    buildGroupByCsv(headers, rows) {
+        const delimiter = '\t';
+        const lineBreak = '\r\n';
+        const esc = (val) => {
+            const text = String(val ?? '');
+            if (/[\t"\r\n]/.test(text)) {
+                return `"${text.replace(/"/g, '""')}"`;
+            }
+            return text;
+        };
+        const head = headers.map(esc).join(delimiter);
+        const body = rows.map(row => row.map(esc).join(delimiter)).join(lineBreak);
+        return [head, body].filter(Boolean).join(lineBreak);
+    }
+
+    enableGroupByTableResize(table) {
+        if (!table) return;
+        const headers = Array.from(table.querySelectorAll('th'));
+        if (!headers.length) return;
+        headers.forEach((th) => {
+            if (th.querySelector('.groupby-col-resizer')) return;
+            const resizer = document.createElement('div');
+            resizer.className = 'groupby-col-resizer';
+            th.appendChild(resizer);
+
+            resizer.addEventListener('mousedown', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                const startX = e.clientX;
+                const startWidth = th.getBoundingClientRect().width;
+
+                const onMove = (evt) => {
+                    const delta = evt.clientX - startX;
+                    const next = Math.max(60, Math.round(startWidth + delta));
+                    th.style.width = `${next}px`;
+                };
+
+                const onUp = () => {
+                    document.body.style.cursor = '';
+                    document.removeEventListener('mousemove', onMove);
+                    document.removeEventListener('mouseup', onUp);
+                };
+
+                document.body.style.cursor = 'col-resize';
+                document.addEventListener('mousemove', onMove);
+                document.addEventListener('mouseup', onUp);
+            });
+        });
+    }
+
+    enableGroupByTableSort(table, headers, rows) {
+        if (!table || !Array.isArray(headers) || !Array.isArray(rows)) return;
+        const thead = table.querySelector('thead');
+        const tbody = table.querySelector('tbody');
+        if (!thead || !tbody) return;
+        const headCells = Array.from(thead.querySelectorAll('th'));
+        if (!headCells.length) return;
+
+        const originalRows = rows.map(row => row.slice());
+        let sortState = { index: -1, dir: 'asc' };
+
+        const renderRows = (nextRows) => {
+            tbody.innerHTML = '';
+            nextRows.forEach((row) => {
+                const tr = document.createElement('tr');
+                row.forEach((cell) => {
+                    const td = document.createElement('td');
+                    td.textContent = String(cell ?? '');
+                    tr.appendChild(td);
+                });
+                tbody.appendChild(tr);
+            });
+        };
+
+        const getSortableValue = (value) => {
+            const text = String(value ?? '').trim();
+            const num = Number(text);
+            return Number.isFinite(num) && text !== '' ? num : text.toLowerCase();
+        };
+
+        headCells.forEach((th, idx) => {
+            th.classList.add('groupby-sortable');
+            const label = headers[idx] || th.textContent || '';
+            th.setAttribute('role', 'button');
+            th.setAttribute('aria-label', `Sort by ${label}`);
+            th.addEventListener('click', () => {
+                const nextDir = (sortState.index === idx && sortState.dir === 'asc') ? 'desc' : 'asc';
+                sortState = { index: idx, dir: nextDir };
+                headCells.forEach((cell) => {
+                    cell.classList.remove('is-sorted-asc', 'is-sorted-desc');
+                });
+                th.classList.add(nextDir === 'asc' ? 'is-sorted-asc' : 'is-sorted-desc');
+
+                const totalRows = originalRows.filter(row => String(row[0] ?? '').toUpperCase() === 'TOTAL');
+                const sortableRows = originalRows.filter(row => String(row[0] ?? '').toUpperCase() !== 'TOTAL');
+                const sorted = sortableRows.slice().sort((a, b) => {
+                    const va = getSortableValue(a[idx]);
+                    const vb = getSortableValue(b[idx]);
+                    if (va === vb) return 0;
+                    if (typeof va === 'number' && typeof vb === 'number') {
+                        return nextDir === 'asc' ? va - vb : vb - va;
+                    }
+                    if (typeof va === 'number') return nextDir === 'asc' ? -1 : 1;
+                    if (typeof vb === 'number') return nextDir === 'asc' ? 1 : -1;
+                    return nextDir === 'asc'
+                        ? String(va).localeCompare(String(vb))
+                        : String(vb).localeCompare(String(va));
+                });
+                renderRows(sorted.concat(totalRows));
+            });
+        });
     }
 
     bindBibFetchButtons(renderRoot) {

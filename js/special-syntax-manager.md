@@ -8,6 +8,7 @@ Manages special inline syntax used in Markdown or text fields, including LaTeX-s
 - `\\citep{}`
 - `\\bib{}`
 - `\\goto{}`
+- `\\groupby{}{}`
 - `\\doi{}`
 
 It provides helpers to detect, extract, render, and update these syntaxes, and exposes the class on `window.SpecialSyntaxManager`.
@@ -25,4 +26,5 @@ It provides helpers to detect, extract, render, and update these syntaxes, and e
 
 ## Notes
 - Rendering relies on methods provided by the app instance (e.g. `normalizeDoiString`, `renderCitationPlaceholder`).
+- `\\groupby{groups}{fields}` uses the app to render a grouped stats table via `groupByFields()`.
 - Caches are kept per syntax type in `renderCache` and can be cleared with `clearCache()`.

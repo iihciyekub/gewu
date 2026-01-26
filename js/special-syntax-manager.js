@@ -1,6 +1,6 @@
 /**
  * 特殊语法管理器
- * 统一管理 cite{}, citep{}, bib{}, goto{} 等特殊文本组合
+ * 统一管理 cite{}, citep{}, bib{}, goto{}, groupby{}{} 等特殊文本组合
  * 方便扩展、维护、增加和删除
  */
 
@@ -9,7 +9,7 @@ class SpecialSyntaxManager {
         this.app = app;
         
         // 注册所有支持的语法类型
-        // 仅支持 LaTeX 标准格式：\cite{} \citep{} \bib{} \goto{}
+        // 仅支持 LaTeX 标准格式：\cite{} \citep{} \bib{} \goto{} \groupby{}{}
         this.syntaxTypes = {
             'cite': {
                 pattern: /\\cite\{([^}]+)\}/g,
@@ -30,6 +30,11 @@ class SpecialSyntaxManager {
                 pattern: /\\goto\{([\s\S]*?)\}/g,
                 description: 'PDF jump link',
                 renderer: (matches, fullMatch) => this.renderGotoLink(matches, fullMatch)
+            },
+            'groupby': {
+                pattern: /\\groupby\{[\s\S]*?\}\{[\s\S]*?\}/g,
+                description: 'Group by fields table',
+                renderer: (matches, fullMatch) => this.renderGroupBy(matches, fullMatch)
             },
             'doi': {
                 pattern: /\\doi\{([^}]+)\}/g,
@@ -207,6 +212,25 @@ class SpecialSyntaxManager {
         
         const escQuery = this.app.escapeAttr(query);
         return `<a href="#" class="location-link goto-link" data-page="" data-quote-text="${escQuery}" data-open-params="" data-quote-index="0" data-value-path="" title="跳转PDF搜索"><i class="fa-solid fa-quote-right"></i></a>`;
+    }
+
+    /**
+     * 渲染 groupby 表格占位 (groupby)
+     */
+    renderGroupBy(_content, fullMatch) {
+        const match = fullMatch.match(/\\groupby\{([\s\S]*?)\}\{([\s\S]*?)\}/);
+        if (!match) {
+            return this.app.escapeHtml(fullMatch);
+        }
+        const groups = match[1];
+        const fields = match[2];
+        if (!String(fields || '').trim()) {
+            return this.app.escapeHtml(fullMatch);
+        }
+        if (typeof this.app.renderGroupByPlaceholder === 'function') {
+            return this.app.renderGroupByPlaceholder(groups, fields);
+        }
+        return this.app.escapeHtml(fullMatch);
     }
     
     /**
