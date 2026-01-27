@@ -2138,14 +2138,11 @@ body.theme-vscode .nested-index-cell {
     background: var(--wos-blue-light);
     color: #fff;
     cursor: pointer;
-    box-shadow: 0 3px 8px rgba(0, 102, 204, 0.2);
-    transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+    transition: background 0.15s ease;
 }
 
 .groupby-copy-btn:hover {
     background: var(--wos-blue);
-    transform: translateY(-1px);
-    box-shadow: 0 5px 10px rgba(0, 62, 116, 0.28);
 }
 
 .groupby-loading,

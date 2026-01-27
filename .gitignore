@@ -11,3 +11,5 @@ logs
 user/
 *.code-workspace
 dev-tools
+docker-compose.yml
+Dockerfile

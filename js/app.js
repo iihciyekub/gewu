@@ -959,18 +959,34 @@ class PaperStatsApp {
     }
 
     jumpFileSelectionToEdge(direction = 'start', extend = false) {
-        const order = this.visibleFileOrder || [];
+        const fullOrder = this.visibleFileOrder || [];
+        if (!fullOrder.length) return;
+        let order = fullOrder;
+        const selected = this.getSelectedFilesArray();
+        const anchor = (this.lastFileSelectionAnchor && fullOrder.includes(this.lastFileSelectionAnchor))
+            ? this.lastFileSelectionAnchor
+            : (selected.length ? selected[selected.length - 1] : (this.currentFile || fullOrder[0]));
+        if (anchor) {
+            const groups = this.getCurrentGroups();
+            const group = groups.find(g => (g.files || []).includes(anchor));
+            if (group && Array.isArray(group.files)) {
+                const groupSet = new Set(group.files);
+                const scoped = fullOrder.filter(f => groupSet.has(f));
+                if (scoped.length) order = scoped;
+            }
+        }
         if (!order.length) return;
         const targetIndex = direction === 'end' ? order.length - 1 : 0;
         const target = order[targetIndex];
         if (!target) return;
         let nextSelection = [target];
         if (extend) {
-            const selected = this.getSelectedFilesArray();
-            const anchor = (this.lastFileSelectionAnchor && order.includes(this.lastFileSelectionAnchor))
-                ? this.lastFileSelectionAnchor
-                : (selected.length ? selected[selected.length - 1] : (this.currentFile || target));
-            const startIdx = order.indexOf(anchor);
+            const resolvedAnchor = (anchor && order.includes(anchor))
+                ? anchor
+                : ((this.lastFileSelectionAnchor && order.includes(this.lastFileSelectionAnchor))
+                    ? this.lastFileSelectionAnchor
+                    : (selected.length ? selected[selected.length - 1] : (this.currentFile || target)));
+            const startIdx = order.indexOf(resolvedAnchor);
             if (startIdx >= 0) {
                 const [s, e] = startIdx <= targetIndex ? [startIdx, targetIndex] : [targetIndex, startIdx];
                 nextSelection = order.slice(s, e + 1);
@@ -1811,6 +1827,11 @@ class PaperStatsApp {
         document.addEventListener('keydown', (e) => {
             const mod = e.metaKey || e.ctrlKey;
             const key = (e.key || '').toLowerCase();
+            if (mod && !e.shiftKey && key === 'f' && this.isLeftActive) {
+                e.preventDefault();
+                this.toggleFileFilter();
+                return;
+            }
             if (mod && !e.shiftKey && key === 's') {
                 e.preventDefault();
                 this.handleSaveShortcut();
@@ -9763,6 +9784,20 @@ class PaperStatsApp {
         if (!ok) throw new Error('Fallback copy failed');
     }
 
+    flashCopyButton(btn, label = 'Copied', duration = 3000) {
+        if (!btn) return;
+        if (!btn.dataset.originalHtml) {
+            btn.dataset.originalHtml = btn.innerHTML;
+        }
+        if (btn._copyFlashTimer) {
+            clearTimeout(btn._copyFlashTimer);
+        }
+        btn.innerHTML = `<i class="fas fa-check"></i><span>${label}</span>`;
+        btn._copyFlashTimer = setTimeout(() => {
+            btn.innerHTML = btn.dataset.originalHtml || btn.innerHTML;
+        }, duration);
+    }
+
     renderFlatView() {
         const container = document.getElementById('flatView');
         if (!container) return;
@@ -11373,13 +11408,20 @@ class PaperStatsApp {
         title.textContent = `Query (${dois.length} / ${result?.total || 0})`;
         const actions = document.createElement('div');
         actions.className = 'groupby-actions';
+        const toggleBtn = document.createElement('button');
+        toggleBtn.className = 'groupby-toggle-btn';
+        toggleBtn.type = 'button';
+        toggleBtn.setAttribute('aria-label', 'Collapse results');
+        toggleBtn.innerHTML = '<i class="fas fa-chevron-up"></i>';
         const copyBtn = document.createElement('button');
         copyBtn.className = 'groupby-copy-btn';
         copyBtn.innerHTML = '<i class="fas fa-copy"></i><span>Copy DOI</span>';
         copyBtn.addEventListener('click', async () => {
             await this.writeTextToClipboard(list);
+            this.flashCopyButton(copyBtn);
             this.showNotification('DOI list copied', 'success');
         });
+        header.appendChild(toggleBtn);
         actions.appendChild(copyBtn);
         header.appendChild(title);
         header.appendChild(actions);
@@ -11388,6 +11430,14 @@ class PaperStatsApp {
         body.className = 'groupby-table';
         body.innerHTML = `<pre>${this.escapeHtml(list || '')}</pre>`;
         wrapper.appendChild(body);
+        toggleBtn.addEventListener('click', () => {
+            wrapper.classList.toggle('groupby-collapsed');
+            const collapsed = wrapper.classList.contains('groupby-collapsed');
+            toggleBtn.innerHTML = collapsed
+                ? '<i class="fas fa-chevron-down"></i>'
+                : '<i class="fas fa-chevron-up"></i>';
+            toggleBtn.setAttribute('aria-label', collapsed ? 'Expand results' : 'Collapse results');
+        });
         block.innerHTML = '';
         block.appendChild(wrapper);
     }
@@ -11415,13 +11465,20 @@ class PaperStatsApp {
         title.textContent = `JSON (${items.length} / ${result?.total || 0})`;
         const actions = document.createElement('div');
         actions.className = 'groupby-actions';
+        const toggleBtn = document.createElement('button');
+        toggleBtn.className = 'groupby-toggle-btn';
+        toggleBtn.type = 'button';
+        toggleBtn.setAttribute('aria-label', 'Collapse results');
+        toggleBtn.innerHTML = '<i class="fas fa-chevron-up"></i>';
         const copyBtn = document.createElement('button');
         copyBtn.className = 'groupby-copy-btn';
         copyBtn.innerHTML = '<i class="fas fa-copy"></i><span>Copy JSON</span>';
         copyBtn.addEventListener('click', async () => {
             await this.writeTextToClipboard(jsonText);
+            this.flashCopyButton(copyBtn);
             this.showNotification('JSON copied', 'success');
         });
+        header.appendChild(toggleBtn);
         actions.appendChild(copyBtn);
         header.appendChild(title);
         header.appendChild(actions);
@@ -11430,6 +11487,14 @@ class PaperStatsApp {
         body.className = 'groupby-table';
         body.innerHTML = `<pre>${this.escapeHtml(jsonText || '')}</pre>`;
         wrapper.appendChild(body);
+        toggleBtn.addEventListener('click', () => {
+            wrapper.classList.toggle('groupby-collapsed');
+            const collapsed = wrapper.classList.contains('groupby-collapsed');
+            toggleBtn.innerHTML = collapsed
+                ? '<i class="fas fa-chevron-down"></i>'
+                : '<i class="fas fa-chevron-up"></i>';
+            toggleBtn.setAttribute('aria-label', collapsed ? 'Expand results' : 'Collapse results');
+        });
         block.innerHTML = '';
         block.appendChild(wrapper);
     }
@@ -11502,6 +11567,7 @@ class PaperStatsApp {
             mdBtn.addEventListener('click', async () => {
                 try {
                     await this.writeTextToClipboard(mdTable);
+                    this.flashCopyButton(mdBtn);
                     this.showNotification('Markdown table copied', 'success');
                 } catch (err) {
                     this.showNotification(`Copy failed: ${err.message}`, 'error');
@@ -11515,6 +11581,7 @@ class PaperStatsApp {
             csvBtn.addEventListener('click', async () => {
                 try {
                     await this.writeTextToClipboard(csvTable);
+                    this.flashCopyButton(csvBtn);
                     this.showNotification('CSV copied', 'success');
                 } catch (err) {
                     this.showNotification(`Copy failed: ${err.message}`, 'error');
