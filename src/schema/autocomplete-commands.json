@@ -41,6 +41,20 @@
       "insertText": "\\groupby{$1}{$2}",
       "detail": "Groupby table",
       "documentation": "Insert a groupby placeholder that renders a stats table on demand"
+    },
+    {
+      "trigger": "\\query",
+      "label": "\\query{groups}{fields}{value}",
+      "insertText": "\\query{$1}{$2}{$3}",
+      "detail": "Query DOI list",
+      "documentation": "Query DOIs by fields/values (case-insensitive contains)"
+    },
+    {
+      "trigger": "\\json",
+      "label": "\\json{groups}{fields}",
+      "insertText": "\\json{$1}{$2}",
+      "detail": "Query JSON items",
+      "documentation": "Query JSON items by fields (requires meta_info.doi)"
     }
   ]
 }

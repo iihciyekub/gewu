@@ -9,6 +9,8 @@ Manages special inline syntax used in Markdown or text fields, including LaTeX-s
 - `\\bib{}`
 - `\\goto{}`
 - `\\groupby{}{}`
+- `\\query{}{}{}`
+- `\\json{}{}`
 - `\\doi{}`
 
 It provides helpers to detect, extract, render, and update these syntaxes, and exposes the class on `window.SpecialSyntaxManager`.
@@ -27,4 +29,6 @@ It provides helpers to detect, extract, render, and update these syntaxes, and e
 ## Notes
 - Rendering relies on methods provided by the app instance (e.g. `normalizeDoiString`, `renderCitationPlaceholder`).
 - `\\groupby{groups}{fields}` uses the app to render a grouped stats table via `groupByFields()`.
+- `\\query{groups}{fields}{value}` queries matching files and returns a DOI list from `meta_info.doi`.
+- `\\json{groups}{fields}` queries matching files and returns JSON items `{doi, field...}` (requires `meta_info.doi`).
 - Caches are kept per syntax type in `renderCache` and can be cleared with `clearCache()`.

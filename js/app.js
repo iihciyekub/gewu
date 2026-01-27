@@ -181,6 +181,9 @@ class PaperStatsApp {
 
         // PDF标注数据缓存
         this._pdfAnnotationsCache = {};
+        this._pdfHighlightTimer = null;
+        this._pdfHighlightClickHandler = null;
+        this._pdfHighlightBoundWindow = null;
 
         // 跟踪鼠标是否在pdfViewer上（用于ESC键判断）
         this._isMouseOverPdfViewer = false;
@@ -1536,7 +1539,7 @@ class PaperStatsApp {
                     const ok = this.applyRawJsonFromTextarea({ notifyOnError: true, updateStatus: true });
                     if (!ok) return;
                 }
-                if (!this.hasUnsavedChanges) return;
+                if (!this.hasUnsavedChanges && !(this.currentFile && this.tempDataCache[this.currentFile])) return;
                 await this.saveToFile();
                 this.toggleJsonMenu(false);
             });
@@ -2095,29 +2098,14 @@ class PaperStatsApp {
             fileFilterInput.value = this.fileFilterField ? (this.fileFilterValue || '') : this.fileFilter;
             if (!this.fileFilterAutocomplete && window.AutocompleteManager) {
                 this.fileFilterAutocomplete = new AutocompleteManager(fileFilterInput, {
-                    minChars: 1,
+                    minChars: 0,
                     maxSuggestions: 12,
                     pathProvider: {
                         getSuggestions: (context) => {
                             if (this.fileFilterField) return [];
                             return this.getFileFilterPathSuggestions(context);
                         }
-                    },
-                    onConfirm: (item) => {
-                        let field = item?.detail || item?.insertText || item?.label || '';
-                        const rawInput = (fileFilterInput.value || '').trim();
-                        if (!field && rawInput) field = rawInput;
-                        if (rawInput.includes('.') && !field.includes('.')) {
-                            const base = rawInput.slice(0, rawInput.lastIndexOf('.'));
-                            if (base) field = `${base}.${field}`;
-                        }
-                        if (field) {
-                            this.selectFileFilterField(field);
-                            return true;
-                        }
-                        return false;
-                    },
-                    onSelect: () => true
+                    }
                 });
             }
             fileFilterInput.addEventListener('input', (e) => {
@@ -2129,8 +2117,20 @@ class PaperStatsApp {
                 }
             });
             fileFilterInput.addEventListener('keydown', (e) => {
-                if (this.fileFilterAutocomplete?.visible && (e.key === 'ArrowDown' || e.key === 'ArrowUp' || e.key === 'Enter' || e.key === 'Tab')) {
-                    return;
+                if (this.fileFilterAutocomplete?.visible) {
+                    if (e.key === 'ArrowDown' || e.key === 'ArrowUp' || e.key === 'Tab') {
+                        return;
+                    }
+                    if (e.key === 'ArrowRight') {
+                        e.preventDefault();
+                        this.fileFilterAutocomplete.insertSelected();
+                        return;
+                    }
+                    if (e.key === 'Enter') {
+                        e.preventDefault();
+                        this.fileFilterAutocomplete.insertSelected();
+                        return;
+                    }
                 }
                 if (e.key === 'Enter' && e.shiftKey) {
                     e.preventDefault();
@@ -2150,6 +2150,13 @@ class PaperStatsApp {
                 }
                 if (e.key === 'Enter') {
                     e.preventDefault();
+                    if (!this.fileFilterField) {
+                        const rawField = (fileFilterInput.value || '').trim();
+                        if (rawField) {
+                            this.selectFileFilterField(rawField);
+                            return;
+                        }
+                    }
                     this.runFileFilter();
                 } else if (e.key === 'Escape') {
                     this.fileFilterAutocomplete?.hide?.();
@@ -2203,6 +2210,7 @@ class PaperStatsApp {
         const autoLoadOnItem = document.getElementById('autoLoadOnItem');
         const autoLoadOffItem = document.getElementById('autoLoadOffItem');
         const fixAllMdDoisBtn = document.getElementById('fixAllMdDoisBtn');
+        const fixAllJsonDoisBtn = document.getElementById('fixAllJsonDoisBtn');
         if (settingsToggleBtn && settingsMenu) {
             settingsToggleBtn.addEventListener('click', (e) => {
                 e.preventDefault();
@@ -2233,6 +2241,14 @@ class PaperStatsApp {
                 this.toggleSettingsMenu(false);
                 if (confirm('Are you sure you want to batch fix DOIs in all MD files?\n\nThis will correct the DOI field in the frontmatter of all MD files to only include the filename (removing the path portion).')) {
                     await this.fixAllMarkdownDois();
+                }
+            });
+        }
+        if (fixAllJsonDoisBtn) {
+            fixAllJsonDoisBtn.addEventListener('click', async () => {
+                this.toggleSettingsMenu(false);
+                if (confirm('Are you sure you want to batch fix meta_info.doi in all JSON files?\n\nThis will extract a valid DOI via regex and normalize the field.')) {
+                    await this.fixAllJsonDois();
                 }
             });
         }
@@ -3125,7 +3141,7 @@ class PaperStatsApp {
     }
 
     extractDoisFromText(text = '') {
-        const regex = /10\.\d{4,9}\/[^\s"<>]+/gi;
+        const regex = /10\.\d{4,9}\/[^\s"<>{}]+/gi;
         const matches = (text || '').match(regex) || [];
         const seen = new Set();
         const out = [];
@@ -3374,7 +3390,16 @@ class PaperStatsApp {
                 throw new Error('Project validation failed');
             }
 
-            const result = await response.json();
+            let result = null;
+            try {
+                result = await response.json();
+            } catch (_err) {
+                result = null;
+            }
+
+            if (result && result.success === false) {
+                throw new Error(result.error || 'Save failed');
+            }
             console.log('Validation result:', result);
 
             if (!result.valid) {
@@ -7053,6 +7078,14 @@ class PaperStatsApp {
             if (e.target.closest('.header-delete') || e.target.closest('.header-add') || e.target.closest('.collapsible-toggle')) {
                 return;
             }
+            if (e.shiftKey) {
+                this.isCollapseAll = true;
+                this.updateAllSectionsCollapseState(true);
+            } else {
+                const isActive = header.classList.toggle('active');
+                content.classList.toggle('active');
+                this.setSectionExpanded(title, isActive);
+            }
             this.setSelectedItem({ type: 'section', path: [], key: title });
         });
 
@@ -8873,7 +8906,7 @@ class PaperStatsApp {
             const ok = this.applyRawJsonFromTextarea({ notifyOnError: true });
             if (!ok) return;
         }
-        if (this.hasUnsavedChanges) {
+        if (this.hasUnsavedChanges || (this.currentFile && this.tempDataCache[this.currentFile])) {
             await this.saveToFile();
             this.renderStructuredView();
             this.renderFlatView();
@@ -9943,6 +9976,92 @@ class PaperStatsApp {
             };
             md.use(groupByPlugin);
 
+            // 添加 \query{}{}{} 的 inline 规则处理
+            const queryPlugin = (mdInstance) => {
+                const queryRule = (state, silent) => {
+                    const max = state.posMax;
+                    const start = state.pos;
+                    const prefix = '\\query{';
+                    if (state.src.charCodeAt(start) !== 0x5C /* \ */) return false;
+                    if (state.src.slice(start, start + prefix.length) !== prefix) return false;
+
+                    let pos = start + prefix.length;
+                    while (pos < max && state.src.charCodeAt(pos) !== 0x7D /* } */) pos++;
+                    if (pos >= max) return false;
+                    if (pos + 1 >= max || state.src.charCodeAt(pos + 1) !== 0x7B /* { */) return false;
+                    const groups = state.src.slice(start + prefix.length, pos);
+
+                    let pos2 = pos + 2;
+                    while (pos2 < max && state.src.charCodeAt(pos2) !== 0x7D /* } */) pos2++;
+                    if (pos2 >= max) return false;
+                    if (pos2 + 1 >= max || state.src.charCodeAt(pos2 + 1) !== 0x7B /* { */) return false;
+                    const fields = state.src.slice(pos + 2, pos2);
+
+                    let pos3 = pos2 + 2;
+                    while (pos3 < max && state.src.charCodeAt(pos3) !== 0x7D /* } */) pos3++;
+                    if (pos3 >= max) return false;
+                    const value = state.src.slice(pos2 + 2, pos3);
+
+                    if (!silent) {
+                        const token = state.push('query_inline', '', 0);
+                        token.meta = { groups, fields, value };
+                    }
+                    state.pos = pos3 + 1;
+                    return true;
+                };
+                mdInstance.inline.ruler.before('escape', 'query_inline', queryRule);
+                mdInstance.renderer.rules.query_inline = (tokens, idx) => {
+                    const meta = tokens[idx].meta || {};
+                    const app = window.paperStats;
+                    if (app && typeof app.renderQueryPlaceholder === 'function') {
+                        return app.renderQueryPlaceholder(meta.groups || '', meta.fields || '', meta.value || '');
+                    }
+                    const fallback = `\\query{${meta.groups || ''}}{${meta.fields || ''}}{${meta.value || ''}}`;
+                    return mdInstance.utils.escapeHtml(fallback);
+                };
+            };
+            md.use(queryPlugin);
+
+            // 添加 \json{}{} 的 inline 规则处理
+            const jsonQueryPlugin = (mdInstance) => {
+                const jsonRule = (state, silent) => {
+                    const max = state.posMax;
+                    const start = state.pos;
+                    const prefix = '\\json{';
+                    if (state.src.charCodeAt(start) !== 0x5C /* \ */) return false;
+                    if (state.src.slice(start, start + prefix.length) !== prefix) return false;
+
+                    let pos = start + prefix.length;
+                    while (pos < max && state.src.charCodeAt(pos) !== 0x7D /* } */) pos++;
+                    if (pos >= max) return false;
+                    if (pos + 1 >= max || state.src.charCodeAt(pos + 1) !== 0x7B /* { */) return false;
+                    const groups = state.src.slice(start + prefix.length, pos);
+
+                    let pos2 = pos + 2;
+                    while (pos2 < max && state.src.charCodeAt(pos2) !== 0x7D /* } */) pos2++;
+                    if (pos2 >= max) return false;
+                    const fields = state.src.slice(pos + 2, pos2);
+
+                    if (!silent) {
+                        const token = state.push('json_inline', '', 0);
+                        token.meta = { groups, fields };
+                    }
+                    state.pos = pos2 + 1;
+                    return true;
+                };
+                mdInstance.inline.ruler.before('escape', 'json_inline', jsonRule);
+                mdInstance.renderer.rules.json_inline = (tokens, idx) => {
+                    const meta = tokens[idx].meta || {};
+                    const app = window.paperStats;
+                    if (app && typeof app.renderJsonQueryPlaceholder === 'function') {
+                        return app.renderJsonQueryPlaceholder(meta.groups || '', meta.fields || '');
+                    }
+                    const fallback = `\\json{${meta.groups || ''}}{${meta.fields || ''}}`;
+                    return mdInstance.utils.escapeHtml(fallback);
+                };
+            };
+            md.use(jsonQueryPlugin);
+
             // contentReference inline渲染
             const contentRefPlugin = (mdInstance) => {
                 mdInstance.core.ruler.after('inline', 'content-ref', (state) => {
@@ -10561,6 +10680,91 @@ class PaperStatsApp {
         }
     }
 
+    // 批量修复所有 JSON 文件的 meta_info.doi
+    async fixAllJsonDois() {
+        if (!this.currentProject) {
+            this.showNotification('Please load a project first', 'warning');
+            return;
+        }
+        if (!this.fileMetaByBase || !Object.keys(this.fileMetaByBase).length) {
+            await this.loadFileList(true);
+        }
+
+        const bases = Object.keys(this.fileMetaByBase || {});
+        const jsonPaths = new Set();
+        bases.forEach((base) => {
+            this.getAllJsonPathsForBase(base).forEach((p) => jsonPaths.add(p));
+        });
+        if (!jsonPaths.size) {
+            this.showNotification('No JSON files to fix', 'info');
+            return;
+        }
+
+        let fixed = 0;
+        let skipped = 0;
+        let errors = 0;
+        const tracker = (typeof this.createStatusProgressTracker === 'function')
+            ? this.createStatusProgressTracker('Fix JSON DOI')
+            : null;
+        if (tracker) tracker.update('Fixing JSON DOI (0%)', 0);
+
+        const paths = Array.from(jsonPaths);
+        for (let i = 0; i < paths.length; i++) {
+            const path = paths[i];
+            try {
+                const data = await this.readProjectFile(path);
+                if (!data || typeof data !== 'object') {
+                    skipped++;
+                    continue;
+                }
+                if (!data.meta_info || typeof data.meta_info !== 'object') {
+                    skipped++;
+                    continue;
+                }
+                const raw = data.meta_info.doi;
+                const rawText = Array.isArray(raw) ? raw.join(' ') : (raw !== undefined && raw !== null ? String(raw) : '');
+                const extracted = this.extractDoisFromText(rawText);
+                if (!extracted.length) {
+                    skipped++;
+                    continue;
+                }
+                const normalized = this.normalizeDoi(extracted[0]);
+                if (!normalized) {
+                    skipped++;
+                    continue;
+                }
+                const current = (rawText || '').trim();
+                if (current === normalized) {
+                    skipped++;
+                    continue;
+                }
+                data.meta_info.doi = normalized;
+                await this.saveJsonPayload(path, data);
+                fixed++;
+                if (path === this.currentFile) {
+                    this.currentData = data;
+                    this.hasUnsavedChanges = false;
+                    delete this.tempDataCache[this.currentFile];
+                    this.updateSaveButtonState();
+                    this.renderStructuredView();
+                    this.renderFlatView();
+                }
+            } catch (err) {
+                errors++;
+                console.error('Fix JSON DOI failed:', path, err);
+            } finally {
+                if (tracker) {
+                    const percent = Math.round(((i + 1) / paths.length) * 100);
+                    tracker.update(`Fixing JSON DOI (${i + 1}/${paths.length})`, percent);
+                }
+            }
+        }
+        if (tracker) tracker.finish('Fix JSON DOI done');
+
+        const message = `Fix JSON DOI completed! Fixed: ${fixed}, Skipped: ${skipped}, Errors: ${errors}`;
+        this.showNotification(message, fixed > 0 ? 'success' : 'info');
+    }
+
     updateMarkdownToolbar() {
         const statusEl = document.getElementById('markdownStatus');
         const editor = document.getElementById('markdownEditor');
@@ -10788,6 +10992,8 @@ class PaperStatsApp {
         this.applyCitationRendering(render);
         this.applyBibliographyRendering(render);
         this.applyGroupByRendering(render);
+        this.applyQueryRendering(render);
+        this.applyJsonQueryRendering(render);
         this.adjustReferenceFont(render);
         this.updateMarkdownUndoButtonState();
         this.applyEditLockState();
@@ -10871,6 +11077,30 @@ class PaperStatsApp {
         return `<div class="groupby-inline" data-groupby-groups="${escGroups}" data-groupby-fields="${escFields}"><button class="bib-fetch-btn groupby-render-btn inline-syntax" type="button" title="${this.escapeAttr(title)}"><i class="fas fa-play"></i><span>${this.escapeHtml(hint)}</span></button></div>`;
     }
 
+    renderQueryPlaceholder(groups = '', fields = '', value = '') {
+        const cleanGroups = String(groups || '').replace(/[\r\n]+/g, ' ').trim();
+        const cleanFields = String(fields || '').replace(/[\r\n]+/g, ' ').trim();
+        const cleanValue = String(value || '').replace(/[\r\n]+/g, ' ').trim();
+        const escGroups = this.escapeAttr(cleanGroups);
+        const escFields = this.escapeAttr(cleanFields);
+        const escValue = this.escapeAttr(cleanValue);
+        const groupLabel = cleanGroups || 'all';
+        const title = `Groups: ${groupLabel}\nFields: ${cleanFields || '(none)'}\nValue: ${cleanValue || '(none)'}`;
+        const hint = `await query (${groupLabel} → ${cleanFields}${cleanValue ? ` = ${cleanValue}` : ''})...`;
+        return `<div class="query-inline" data-query-groups="${escGroups}" data-query-fields="${escFields}" data-query-value="${escValue}"><button class="bib-fetch-btn query-render-btn inline-syntax" type="button" title="${this.escapeAttr(title)}"><i class="fas fa-play"></i><span>${this.escapeHtml(hint)}</span></button></div>`;
+    }
+
+    renderJsonQueryPlaceholder(groups = '', fields = '') {
+        const cleanGroups = String(groups || '').replace(/[\r\n]+/g, ' ').trim();
+        const cleanFields = String(fields || '').replace(/[\r\n]+/g, ' ').trim();
+        const escGroups = this.escapeAttr(cleanGroups);
+        const escFields = this.escapeAttr(cleanFields);
+        const groupLabel = cleanGroups || 'all';
+        const title = `Groups: ${groupLabel}\nFields: ${cleanFields || '(none)'}`;
+        const hint = `await json (${groupLabel} → ${cleanFields})...`;
+        return `<div class="json-inline" data-json-groups="${escGroups}" data-json-fields="${escFields}"><button class="bib-fetch-btn json-render-btn inline-syntax" type="button" title="${this.escapeAttr(title)}"><i class="fas fa-play"></i><span>${this.escapeHtml(hint)}</span></button></div>`;
+    }
+
     async applyCitationRendering(renderRoot) {
         if (!renderRoot) return;
         const spans = Array.from(renderRoot.querySelectorAll('.citation-inline'));
@@ -10934,6 +11164,274 @@ class PaperStatsApp {
                 btn.addEventListener('click', () => this.renderGroupByBlock(block));
             }
         });
+    }
+
+    async applyQueryRendering(renderRoot) {
+        if (!renderRoot) return;
+        const blocks = Array.from(renderRoot.querySelectorAll('.query-inline'));
+        if (!blocks.length) return;
+        blocks.forEach((block) => {
+            if (block.dataset.queryBound === '1') return;
+            block.dataset.queryBound = '1';
+            const btn = block.querySelector('.query-render-btn');
+            if (btn) {
+                btn.addEventListener('click', () => this.renderQueryBlock(block));
+            }
+        });
+    }
+
+    async applyJsonQueryRendering(renderRoot) {
+        if (!renderRoot) return;
+        const blocks = Array.from(renderRoot.querySelectorAll('.json-inline'));
+        if (!blocks.length) return;
+        blocks.forEach((block) => {
+            if (block.dataset.jsonBound === '1') return;
+            block.dataset.jsonBound = '1';
+            const btn = block.querySelector('.json-render-btn');
+            if (btn) {
+                btn.addEventListener('click', () => this.renderJsonQueryBlock(block));
+            }
+        });
+    }
+
+    parseGroupTokens(groupsRaw = '') {
+        const raw = String(groupsRaw || '').trim();
+        const tokens = raw.split(/[,，]+/).map(v => v.trim()).filter(Boolean);
+        const useAll = !raw || raw.toLowerCase() === 'all';
+        return { tokens, useAll };
+    }
+
+    getGroupsByTokens(tokens = [], useAll = false) {
+        const groupsAll = (typeof this.getCurrentGroups === 'function') ? (this.getCurrentGroups() || []) : [];
+        if (useAll || !tokens.length) return groupsAll;
+        const lowerSet = new Set(tokens.map(t => t.toLowerCase()));
+        return groupsAll.filter(g => lowerSet.has(String(g.name || '').toLowerCase())
+            || lowerSet.has(String(g.id || '').toLowerCase()));
+    }
+
+    async queryDoisByFields({ groupsRaw = '', fieldsRaw = '', valueRaw = '' } = {}) {
+        const { tokens, useAll } = this.parseGroupTokens(groupsRaw);
+        const groups = this.getGroupsByTokens(tokens, useAll);
+        const allowedBases = groups.length ? new Set(groups.flatMap(g => (g.files || []).map(String))) : null;
+        const fields = String(fieldsRaw || '')
+            .split(/[,，]+/)
+            .map(v => v.trim())
+            .filter(Boolean);
+        const matchValue = String(valueRaw || '').trim().toLowerCase();
+        if (!fields.length || !matchValue) {
+            return { dois: [], total: 0, matched: 0 };
+        }
+        const view = this.currentJsonView || 'view1';
+        const bases = Object.keys(this.fileMetaByBase || {}).filter((base) => {
+            const entry = this.fileMetaByBase?.[base];
+            const inView = !!(entry?.views && entry.views[view]);
+            const inGroup = allowedBases ? allowedBases.has(base) : true;
+            return inView && inGroup;
+        });
+        const dois = [];
+        let matched = 0;
+        const token = ++this.fileFilterComputeToken;
+        const tracker = (typeof this.createStatusProgressTracker === 'function')
+            ? this.createStatusProgressTracker('Query DOI')
+            : null;
+        if (tracker) tracker.update('Querying DOI (0%)', 0);
+
+        let cursor = 0;
+        const limit = Math.min(8, bases.length || 0) || 1;
+        let processed = 0;
+        const worker = async () => {
+            while (cursor < bases.length) {
+                const base = bases[cursor];
+                cursor += 1;
+                if (token !== this.fileFilterComputeToken) return;
+                const path = this.getViewPathForBase(base, view);
+                if (!path) continue;
+                let data = this.tempDataCache[path];
+                if (!data) {
+                    try {
+                        data = await this.readProjectFile(path);
+                    } catch (_err) {
+                        continue;
+                    }
+                }
+                const doiRaw = data?.meta_info?.doi;
+                const doi = doiRaw ? String(doiRaw).trim() : '';
+                if (!doi) {
+                    processed += 1;
+                    continue;
+                }
+                const values = fields.flatMap((f) => this.getFieldValuesForFilter(data, f));
+                const found = values.some(v => String(v).toLowerCase().includes(matchValue));
+                if (found) {
+                    matched += 1;
+                    dois.push(doi);
+                }
+                processed += 1;
+                if (tracker) {
+                    const percent = bases.length ? Math.round((processed / bases.length) * 100) : 100;
+                    tracker.update(`Querying DOI (${processed}/${bases.length})`, percent);
+                }
+            }
+        };
+        const workers = Array.from({ length: limit }, () => worker());
+        await Promise.all(workers);
+        if (tracker) tracker.finish('Query DOI done');
+        return { dois, total: bases.length, matched };
+    }
+
+    async queryJsonItems({ groupsRaw = '', fieldsRaw = '' } = {}) {
+        const { tokens, useAll } = this.parseGroupTokens(groupsRaw);
+        const groups = this.getGroupsByTokens(tokens, useAll);
+        const allowedBases = groups.length ? new Set(groups.flatMap(g => (g.files || []).map(String))) : null;
+        const fields = String(fieldsRaw || '')
+            .split(/[,，]+/)
+            .map(v => v.trim())
+            .filter(Boolean);
+        if (!fields.length) {
+            return { items: [], total: 0 };
+        }
+        const view = this.currentJsonView || 'view1';
+        const bases = Object.keys(this.fileMetaByBase || {}).filter((base) => {
+            const entry = this.fileMetaByBase?.[base];
+            const inView = !!(entry?.views && entry.views[view]);
+            const inGroup = allowedBases ? allowedBases.has(base) : true;
+            return inView && inGroup;
+        });
+        const items = [];
+        const token = ++this.fileFilterComputeToken;
+        const tracker = (typeof this.createStatusProgressTracker === 'function')
+            ? this.createStatusProgressTracker('Query JSON')
+            : null;
+        if (tracker) tracker.update('Querying JSON (0%)', 0);
+
+        let cursor = 0;
+        const limit = Math.min(8, bases.length || 0) || 1;
+        let processed = 0;
+        const worker = async () => {
+            while (cursor < bases.length) {
+                const base = bases[cursor];
+                cursor += 1;
+                if (token !== this.fileFilterComputeToken) return;
+                const path = this.getViewPathForBase(base, view);
+                if (!path) continue;
+                let data = this.tempDataCache[path];
+                if (!data) {
+                    try {
+                        data = await this.readProjectFile(path);
+                    } catch (_err) {
+                        continue;
+                    }
+                }
+                const doiRaw = data?.meta_info?.doi;
+                const doi = doiRaw ? this.normalizeDoiString(doiRaw) : '';
+                if (!doi) {
+                    processed += 1;
+                    continue;
+                }
+                const item = { doi };
+                fields.forEach((field) => {
+                    const vals = this.getFieldValuesForFilter(data, field);
+                    if (vals && vals.length) {
+                        item[field] = vals.length === 1 ? vals[0] : vals.join('; ');
+                    }
+                });
+                items.push(item);
+                processed += 1;
+                if (tracker) {
+                    const percent = bases.length ? Math.round((processed / bases.length) * 100) : 100;
+                    tracker.update(`Querying JSON (${processed}/${bases.length})`, percent);
+                }
+            }
+        };
+        const workers = Array.from({ length: limit }, () => worker());
+        await Promise.all(workers);
+        if (tracker) tracker.finish('Query JSON done');
+        return { items, total: bases.length };
+    }
+
+    async renderQueryBlock(block) {
+        if (!block || block.dataset.queryRendered === '1') return;
+        block.dataset.queryRendered = '1';
+        const groupsRaw = (block.dataset.queryGroups || '').trim();
+        const fieldsRaw = (block.dataset.queryFields || '').trim();
+        const valueRaw = (block.dataset.queryValue || '').trim();
+        const fields = fieldsRaw.split(/[,，]+/).map(v => v.trim()).filter(Boolean);
+        if (!fields.length || !valueRaw) {
+            block.innerHTML = '<div class="groupby-error">No fields/value specified for \\query{}{}{}.</div>';
+            return;
+        }
+        block.innerHTML = '<div class="groupby-loading">Querying...</div>';
+        const result = await this.queryDoisByFields({ groupsRaw, fieldsRaw, valueRaw });
+        const dois = result?.dois || [];
+        const list = dois.join('\n');
+        const wrapper = document.createElement('div');
+        wrapper.className = 'groupby-box';
+        const header = document.createElement('div');
+        header.className = 'groupby-header';
+        const title = document.createElement('div');
+        title.className = 'groupby-title';
+        title.textContent = `Query (${dois.length} / ${result?.total || 0})`;
+        const actions = document.createElement('div');
+        actions.className = 'groupby-actions';
+        const copyBtn = document.createElement('button');
+        copyBtn.className = 'groupby-copy-btn';
+        copyBtn.innerHTML = '<i class="fas fa-copy"></i><span>Copy DOI</span>';
+        copyBtn.addEventListener('click', async () => {
+            await this.writeTextToClipboard(list);
+            this.showNotification('DOI list copied', 'success');
+        });
+        actions.appendChild(copyBtn);
+        header.appendChild(title);
+        header.appendChild(actions);
+        wrapper.appendChild(header);
+        const body = document.createElement('div');
+        body.className = 'groupby-table';
+        body.innerHTML = `<pre>${this.escapeHtml(list || '')}</pre>`;
+        wrapper.appendChild(body);
+        block.innerHTML = '';
+        block.appendChild(wrapper);
+    }
+
+    async renderJsonQueryBlock(block) {
+        if (!block || block.dataset.jsonRendered === '1') return;
+        block.dataset.jsonRendered = '1';
+        const groupsRaw = (block.dataset.jsonGroups || '').trim();
+        const fieldsRaw = (block.dataset.jsonFields || '').trim();
+        const fields = fieldsRaw.split(/[,，]+/).map(v => v.trim()).filter(Boolean);
+        if (!fields.length) {
+            block.innerHTML = '<div class="groupby-error">No fields specified for \\json{}{}.</div>';
+            return;
+        }
+        block.innerHTML = '<div class="groupby-loading">Querying...</div>';
+        const result = await this.queryJsonItems({ groupsRaw, fieldsRaw });
+        const items = result?.items || [];
+        const jsonText = JSON.stringify(items, null, 2);
+        const wrapper = document.createElement('div');
+        wrapper.className = 'groupby-box';
+        const header = document.createElement('div');
+        header.className = 'groupby-header';
+        const title = document.createElement('div');
+        title.className = 'groupby-title';
+        title.textContent = `JSON (${items.length} / ${result?.total || 0})`;
+        const actions = document.createElement('div');
+        actions.className = 'groupby-actions';
+        const copyBtn = document.createElement('button');
+        copyBtn.className = 'groupby-copy-btn';
+        copyBtn.innerHTML = '<i class="fas fa-copy"></i><span>Copy JSON</span>';
+        copyBtn.addEventListener('click', async () => {
+            await this.writeTextToClipboard(jsonText);
+            this.showNotification('JSON copied', 'success');
+        });
+        actions.appendChild(copyBtn);
+        header.appendChild(title);
+        header.appendChild(actions);
+        wrapper.appendChild(header);
+        const body = document.createElement('div');
+        body.className = 'groupby-table';
+        body.innerHTML = `<pre>${this.escapeHtml(jsonText || '')}</pre>`;
+        wrapper.appendChild(body);
+        block.innerHTML = '';
+        block.appendChild(wrapper);
     }
 
     async renderGroupByBlock(block) {
@@ -11434,7 +11932,7 @@ class PaperStatsApp {
         }
 
         // 提取裸 DOI
-        const doiRe = /10\.\d{4,9}[^\s"'\)>\]},;]+/gi;
+        const doiRe = /10\.\d{4,9}[^\s"'\)>\]},;{]+/gi;
         while ((m = doiRe.exec(text)) !== null) {
             dois.add(this.normalizeDoiString(m[0]));
         }
@@ -12745,13 +13243,14 @@ class PaperStatsApp {
         const re = /goto\{([^}]+)\}/g;
         let lastIndex = 0;
         let out = '';
+        const jsonPath = this.currentFile || '';
         let m;
         while ((m = re.exec(rawText)) !== null) {
             const pre = rawText.slice(lastIndex, m.index);
             const query = (m[1] || '').trim();
             out += this.escapeHtml(pre);
             if (query) {
-                out += `<a href="#" class="location-link goto-link" data-page="" data-quote-text="${this.escapeAttr(query)}" data-open-params="" data-quote-index="0" data-value-path="${this.escapeAttr(valuePath)}" title="跳转PDF搜索"><i class="fa-solid fa-quote-right"></i></a>`;
+                out += `<a href="#" class="location-link goto-link" data-page="" data-quote-text="${this.escapeAttr(query)}" data-open-params="" data-quote-index="0" data-value-path="${this.escapeAttr(valuePath)}" data-json-path="${this.escapeAttr(jsonPath)}" title="跳转PDF搜索"><i class="fa-solid fa-quote-right"></i></a>`;
             } else {
                 out += this.escapeHtml(m[0]);
             }
@@ -12795,28 +13294,148 @@ class PaperStatsApp {
         cur[last] = value;
     }
 
-    updateGotoText(pathStr, newText, targetIndex = 0) {
-        if (!pathStr || !this.currentData) return;
-        const pathArr = pathStr.split('.').filter(Boolean);
-        const oldVal = this.getValueByPath(pathArr);
-        if (typeof oldVal !== 'string') {
-            this.showNotification('Target field is not text, cannot update reference', 'error');
-            return;
-        }
-        let count = 0;
-        const updated = oldVal.replace(/goto\{[^}]*\}/g, (m) => {
-            if (count === targetIndex) {
-                count++;
-                return `goto{${newText}}`;
+    getValueByPathFromData(data, pathArr) {
+        let cur = data;
+        for (const seg of pathArr) {
+            if (cur && Object.prototype.hasOwnProperty.call(cur, seg)) {
+                cur = cur[seg];
+            } else {
+                return undefined;
             }
-            count++;
-            return m;
-        });
-        if (updated === oldVal) {
-            this.showNotification('No updatable goto references found', 'info');
-            return;
         }
-        this.setValueByPath(pathArr, updated);
+        return cur;
+    }
+
+    setValueByPathOnData(data, pathArr, value) {
+        if (!data || !pathArr || !pathArr.length) return;
+        let cur = data;
+        for (let i = 0; i < pathArr.length - 1; i++) {
+            const seg = pathArr[i];
+            if (!cur || typeof cur !== 'object') return;
+            const isIndex = /^\d+$/.test(seg);
+            if (!Object.prototype.hasOwnProperty.call(cur, seg)) {
+                cur[seg] = isIndex ? [] : {};
+            }
+            if (isIndex && Array.isArray(cur)) {
+                const idx = parseInt(seg, 10);
+                if (!Array.isArray(cur[idx]) && typeof cur[idx] !== 'object') {
+                    cur[idx] = {};
+                }
+            }
+            cur = cur[seg];
+        }
+        const last = pathArr[pathArr.length - 1];
+        cur[last] = value;
+    }
+
+    replaceGotoInValue(value, newText, targetIndex = 0) {
+        const replaceInString = (text) => {
+            let count = 0;
+            let changed = false;
+            const updated = text.replace(/goto\{[^}]*\}/g, (m) => {
+                if (count === targetIndex && !changed) {
+                    changed = true;
+                    count++;
+                    return `goto{${newText}}`;
+                }
+                count++;
+                return m;
+            });
+            return { updated, changed, count };
+        };
+        if (typeof value === 'string') {
+            const { updated, changed, count } = replaceInString(value);
+            return { value: updated, replaced: changed, count };
+        }
+        if (Array.isArray(value)) {
+            let globalCount = 0;
+            let replaced = false;
+            const next = value.map((item) => {
+                const res = this.replaceGotoInValue(item, newText, targetIndex);
+                if (res.count) globalCount += res.count;
+                if (res.replaced) replaced = true;
+                return res.value;
+            });
+            return { value: next, replaced, count: globalCount };
+        }
+        if (value && typeof value === 'object') {
+            let globalCount = 0;
+            let replaced = false;
+            const next = Array.isArray(value) ? [] : {};
+            Object.entries(value).forEach(([k, v]) => {
+                const res = this.replaceGotoInValue(v, newText, targetIndex);
+                if (res.count) globalCount += res.count;
+                if (res.replaced) replaced = true;
+                next[k] = res.value;
+            });
+            return { value: next, replaced, count: globalCount };
+        }
+        return { value, replaced: false, count: 0 };
+    }
+
+    replaceGotoByTextInValue(value, oldText, newText, state) {
+        if (!state) return { value, replaced: false };
+        if (typeof value === 'string') {
+            if (state.replaced) return { value, replaced: false };
+            const escapeReg = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            const target = `goto{${oldText}}`;
+            const reg = new RegExp(escapeReg(target), 'g');
+            let replaced = false;
+            const next = value.replace(reg, (m) => {
+                if (!state.replaced && !replaced) {
+                    replaced = true;
+                    state.replaced = true;
+                    return `goto{${newText}}`;
+                }
+                return m;
+            });
+            return { value: next, replaced };
+        }
+        if (Array.isArray(value)) {
+            const next = value.map((item) => this.replaceGotoByTextInValue(item, oldText, newText, state).value);
+            return { value: next, replaced: state.replaced };
+        }
+        if (value && typeof value === 'object') {
+            const next = Array.isArray(value) ? [] : {};
+            Object.entries(value).forEach(([k, v]) => {
+                next[k] = this.replaceGotoByTextInValue(v, oldText, newText, state).value;
+            });
+            return { value: next, replaced: state.replaced };
+        }
+        return { value, replaced: false };
+    }
+
+    updateGotoText(pathStr, newText, targetIndex = 0) {
+        if (!pathStr || !this.currentData) return false;
+        const normalizedPath = String(pathStr || '').replace(/\[(\d+)\]/g, '.$1');
+        const pathArr = normalizedPath.split('.').map(seg => seg.trim()).filter(Boolean);
+        const oldVal = this.getValueByPath(pathArr);
+        if (oldVal === undefined || oldVal === null) {
+            this.showNotification(`Target field not found: ${pathArr.join('.')}`, 'error');
+            return false;
+        }
+
+        let updatedValue = null;
+        let replaced = false;
+        if (typeof oldVal === 'string') {
+            const res = this.replaceGotoInValue(oldVal, newText, targetIndex);
+            updatedValue = res.value;
+            replaced = res.replaced;
+        } else if (oldVal && typeof oldVal === 'object') {
+            const res = this.replaceGotoInValue(oldVal, newText, targetIndex);
+            updatedValue = res.value;
+            replaced = res.replaced;
+        } else {
+            this.showNotification('Target field is not text, cannot update reference', 'error');
+            return false;
+        }
+
+        if (!replaced) {
+            this.showNotification('No updatable goto references found', 'info');
+            return false;
+        }
+
+        this.setValueByPath(pathArr, updatedValue);
         this.hasUnsavedChanges = true;
         if (this.currentFile) this.tempDataCache[this.currentFile] = this.currentData;
         this.updateSaveButtonState();
@@ -12827,6 +13446,60 @@ class PaperStatsApp {
         }
         this.setupEditableListeners();
         this.showNotification('Reference text updated', 'success');
+        // Fire-and-forget save to persist goto edits in JSON
+        this.saveToFile({ silent: true, force: true }).catch((err) => {
+            this.showNotification(`✗ Save failed: ${err.message}`, 'error');
+        });
+        return true;
+    }
+
+    async updateGotoTextInFile(jsonPath, valuePath, newText, targetIndex = 0, oldText = '') {
+        if (!jsonPath || !valuePath) return false;
+        try {
+            const data = await this.readProjectFile(jsonPath);
+            const normalizedPath = String(valuePath || '').replace(/\[(\d+)\]/g, '.$1');
+            const pathArr = normalizedPath.split('.').map(seg => seg.trim()).filter(Boolean);
+            const oldVal = this.getValueByPathFromData(data, pathArr);
+            let replaced = false;
+            if (oldVal !== undefined && oldVal !== null) {
+                const res = this.replaceGotoInValue(oldVal, newText, targetIndex);
+                if (res.replaced) {
+                    this.setValueByPathOnData(data, pathArr, res.value);
+                    replaced = true;
+                }
+            }
+
+            if (!replaced && oldText) {
+                const state = { replaced: false };
+                const res = this.replaceGotoByTextInValue(data, oldText, newText, state);
+                if (res.replaced) {
+                    replaced = true;
+                }
+            }
+
+            if (!replaced) {
+                this.showNotification(`No updatable goto references found in ${jsonPath}`, 'info');
+                return false;
+            }
+
+            await this.saveJsonPayload(jsonPath, data);
+            if (jsonPath === this.currentFile) {
+                this.currentData = data;
+                this.hasUnsavedChanges = false;
+                delete this.tempDataCache[this.currentFile];
+                this.updateSaveButtonState();
+                this.renderStructuredView();
+                this.renderFlatView();
+                if (this.currentMarkdownExists && typeof this.currentMarkdownText === 'string') {
+                    this.renderMarkdownView(this.currentMarkdownText);
+                }
+                this.setupEditableListeners();
+            }
+            return true;
+        } catch (err) {
+            this.showNotification(`✗ Save failed: ${err.message}`, 'error');
+            return false;
+        }
     }
 
     async updateMarkdownGotoText(oldText = '', newText, targetIndex = 0, opts = {}) {
@@ -14334,7 +15007,7 @@ class PaperStatsApp {
 
                         // 执行搜索或跳转
                         if (cleanText) {
-                            this.executeSearchAndScroll(pdfApp, cleanText, valuePath);
+                            this.executeSearchAndScroll(pdfApp, cleanText, valuePath, pdfJsWindow);
                         } else if (page) {
                             this.smoothScrollToPage(pdfApp, parseInt(page));
                         }
@@ -14381,7 +15054,7 @@ class PaperStatsApp {
 
             // 如果有搜索文本，执行全文搜索并滚动
             if (cleanText) {
-                this.executeSearchAndScroll(pdfApp, cleanText, valuePath);
+                this.executeSearchAndScroll(pdfApp, cleanText, valuePath, pdfWindow);
             } else if (page) {
                 // 如果没有搜索文本，丝滑跳转到页码
                 this.smoothScrollToPage(pdfApp, parseInt(page));
@@ -14468,7 +15141,7 @@ class PaperStatsApp {
     }
 
     // 执行搜索并滚动到第一个结果（独立方法）
-    executeSearchAndScroll(pdfApp, searchText, valuePath = null) {
+    executeSearchAndScroll(pdfApp, searchText, valuePath = null, pdfWindow = null) {
         if (!pdfApp || !pdfApp.eventBus) {
             console.error('❌ EventBus不可用');
             this._isSearching = false;
@@ -14495,12 +15168,14 @@ class PaperStatsApp {
             });
             setTimeout(() => {
                 this.scrollToCurrentMatch(pdfApp);
+                this.schedulePdfHighlightAutoClear(pdfWindow);
                 this._isSearching = false;
             }, 300);
             return;
         } else if (isSameSearch && this.searchMatchCount === 1) {
             setTimeout(() => {
                 this.scrollToCurrentMatch(pdfApp);
+                this.schedulePdfHighlightAutoClear(pdfWindow);
                 this._isSearching = false;
             }, 100);
             return;
@@ -14527,16 +15202,29 @@ class PaperStatsApp {
                     // 首次未找到，开始深度检索
                     this.showNotification('Deep searching in PDF...', 'info');
                     const variants = this.buildSearchVariants(searchText);
+                    const tracker = (typeof this.createStatusProgressTracker === 'function')
+                        ? this.createStatusProgressTracker('Deep searching in PDF')
+                        : null;
+                    if (tracker) {
+                        tracker.update('Deep searching in PDF...', 0);
+                    }
 
                     for (let i = 1; i < variants.length; i++) {
                         const query = variants[i];
                         const result = await this.runPdfSearch(pdfApp, query, valuePath);
+                        if (tracker) {
+                            const percent = Math.round((i / Math.max(1, variants.length - 1)) * 100);
+                            tracker.update(`Deep searching in PDF (${i}/${variants.length - 1})`, percent);
+                        }
                         if (result.total > 0) {
                             usedQuery = query;
                             total = result.total;
                             matchedVariant = query;
                             break;
                         }
+                    }
+                    if (tracker) {
+                        tracker.finish(total > 0 ? 'Deep search match found' : 'Deep search finished');
                     }
                 }
 
@@ -14546,22 +15234,34 @@ class PaperStatsApp {
                     this.searchMatchCount = total;
                     this.currentMatchIndex = 0;
                     if (matchedVariant && matchedVariant !== (this.lastGotoAttemptText || variants[0])) {
-                        // 替换 goto 文本：链接自身 & 对应 markdown 源
+                        // 替换 goto 文本：链接自身 & 对应数据源
                         const link = this.lastGotoLink;
+                        const oldText = this.lastGotoAttemptText || variants[0];
                         if (link) {
                             link.dataset.quoteText = matchedVariant;
                             if (link.classList.contains('goto-link') && link.textContent) {
                                 link.textContent = matchedVariant;
                             }
-                        }
-                        // 更新 markdown 源中的 goto{...} 文本
-                        const oldText = this.lastGotoAttemptText || variants[0];
-                        if (oldText) {
+                            const linkValuePath = link.dataset.valuePath || '';
+                            const linkJsonPath = link.dataset.jsonPath || '';
+                            if (linkValuePath) {
+                                if (linkJsonPath) {
+                                    await this.updateGotoTextInFile(linkJsonPath, linkValuePath, matchedVariant, 0, oldText);
+                                } else {
+                                    this.updateGotoText(linkValuePath, matchedVariant, 0);
+                                }
+                            } else if (oldText) {
+                                await this.updateMarkdownGotoText(oldText, matchedVariant, 0, { replaceAllMatches: false, valuePath });
+                            }
+                        } else if (oldText) {
                             await this.updateMarkdownGotoText(oldText, matchedVariant, 0, { replaceAllMatches: false, valuePath });
                         }
                         this.showNotification(`Adjusted goto text to: ${matchedVariant}`, 'success');
                     }
-                    setTimeout(() => this.scrollToCurrentMatch(pdfApp), 200);
+                    setTimeout(() => {
+                        this.scrollToCurrentMatch(pdfApp);
+                        this.schedulePdfHighlightAutoClear(pdfWindow);
+                    }, 200);
                 } else {
                     this.lastSearchText = variants[0];
                     this.lastSearchValuePath = valuePath;
@@ -14919,6 +15619,7 @@ class PaperStatsApp {
         // 处理Cmd/Ctrl+点击goto链接进入编辑模式
         const current = link.dataset.quoteText || (link.textContent || '').trim() || '';
         const valuePath = link.dataset.valuePath || '';
+        const jsonPath = link.dataset.jsonPath || '';
         const allGotoLinks = Array.from(document.querySelectorAll('.goto-link'));
         const samePathLinks = allGotoLinks.filter(l => (l.dataset.valuePath || '') === valuePath);
         const idxInPath = samePathLinks.indexOf(link);
@@ -14930,7 +15631,11 @@ class PaperStatsApp {
 
         // 更新文本（不触发搜索）
         if (valuePath) {
-            await this.updateGotoText(valuePath, next, isNaN(idx) ? 0 : idx);
+            if (jsonPath) {
+                await this.updateGotoTextInFile(jsonPath, valuePath, next, isNaN(idx) ? 0 : idx, current);
+            } else {
+                this.updateGotoText(valuePath, next, isNaN(idx) ? 0 : idx);
+            }
         } else {
             await this.updateMarkdownGotoText(current, next, isNaN(idx) ? 0 : idx);
         }
@@ -15928,18 +16633,58 @@ class PaperStatsApp {
     }
 
     clearPdfHighlights() {
+        const iframe = document.getElementById('pdfViewer');
+        const pdfWindow = iframe?.contentWindow;
+        this.clearPdfHighlightsForWindow(pdfWindow);
+    }
+
+    clearPdfHighlightsForWindow(pdfWindow) {
         try {
-            const iframe = document.getElementById('pdfViewer');
-            const pdfApp = iframe?.contentWindow?.PDFViewerApplication;
+            if (this._pdfHighlightTimer) {
+                clearTimeout(this._pdfHighlightTimer);
+                this._pdfHighlightTimer = null;
+            }
+            const pdfApp = pdfWindow?.PDFViewerApplication;
             if (pdfApp?.eventBus) {
                 pdfApp.eventBus.dispatch('findbarclose');
             }
-            const pdfDoc = iframe?.contentWindow?.document;
+            const pdfDoc = pdfWindow?.document;
             if (pdfDoc?.getSelection) {
                 pdfDoc.getSelection().removeAllRanges();
             }
         } catch (err) {
             console.warn('清除 PDF 高亮失败:', err);
+        }
+    }
+
+    schedulePdfHighlightAutoClear(pdfWindow) {
+        if (!pdfWindow) return;
+        if (this._pdfHighlightTimer) {
+            clearTimeout(this._pdfHighlightTimer);
+        }
+        this._pdfHighlightTimer = setTimeout(() => {
+            this.clearPdfHighlightsForWindow(pdfWindow);
+        }, 3000);
+
+        const doc = pdfWindow.document;
+        if (!doc) return;
+        if (!this._pdfHighlightClickHandler) {
+            this._pdfHighlightClickHandler = () => {
+                if (this._pdfHighlightBoundWindow) {
+                    this.clearPdfHighlightsForWindow(this._pdfHighlightBoundWindow);
+                }
+            };
+        }
+        if (this._pdfHighlightBoundWindow && this._pdfHighlightBoundWindow !== pdfWindow) {
+            try {
+                this._pdfHighlightBoundWindow.document.removeEventListener('click', this._pdfHighlightClickHandler, true);
+            } catch (_err) {
+                // ignore detach errors
+            }
+        }
+        if (this._pdfHighlightBoundWindow !== pdfWindow) {
+            this._pdfHighlightBoundWindow = pdfWindow;
+            doc.addEventListener('click', this._pdfHighlightClickHandler, true);
         }
     }
 
@@ -15950,9 +16695,14 @@ class PaperStatsApp {
 
     async saveToFile(options = {}) {
         const { silent = false, force = false } = options;
+        if (!this.currentFile && this.currentFileBase) {
+            const fallback = this.getPathsForBase(this.currentFileBase)?.json || '';
+            if (fallback) this.currentFile = fallback;
+        }
         if (!this.currentFile || !this.currentData) return;
+        const hasPendingChanges = this.hasUnsavedChanges || !!this.tempDataCache[this.currentFile];
         // Only save when there are pending changes; avoid touching lastupdate otherwise
-        if (!this.hasUnsavedChanges && !force) {
+        if (!hasPendingChanges && !force) {
             if (!silent) {
                 this.showNotification('No changes to save', 'info');
             }

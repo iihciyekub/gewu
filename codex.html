@@ -1,0 +1,52 @@
+
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Open Termius -> Codex</title>
+  <style>
+    body { font-family: -apple-system, system-ui, Segoe UI, Roboto, Arial; padding: 20px; line-height: 1.5; }
+    .btn { display: inline-block; padding: 12px 16px; border-radius: 10px; border: 1px solid #ccc; text-decoration: none; }
+    .row { margin: 12px 0; }
+    code { background: #f6f6f6; padding: 2px 6px; border-radius: 6px; }
+  </style>
+</head>
+<body>
+  <h2>一键打开 Termius 并连接（然后跑 Codex）</h2>
+
+  <!-- 1) 直接用 ssh:// 触发 Termius（或系统默认 SSH 处理器） -->
+  <div class="row">
+    <a class="btn" href="ssh://YOUR_USER@YOUR_HOST:22">打开 Termius 连接主机</a>
+  </div>
+
+  <!-- 2) 如果你用非 22 端口，也可以写在 URL 里 -->
+  <div class="row">
+    <a class="btn" href="ssh://YOUR_USER@YOUR_HOST:2222">打开 Termius（端口 2222）</a>
+  </div>
+
+  <hr/>
+
+  <h3>连接后自动进入 Codex（推荐做法）</h3>
+  <p>浏览器/URL 通常<strong>不能可靠地把“要执行的命令”</strong>传给终端 App，所以建议你在远端做“登录后自动进入 codex 会话”。</p>
+
+  <p>在远端服务器上（或你的 Mac mini 上）把下面这一段加到 <code>~/.zshrc</code> 或 <code>~/.bashrc</code>：</p>
+
+  <pre><code># 仅在 SSH 登录时自动进入 codex（避免本地终端也被影响）
+if [ -n "$SSH_CONNECTION" ]; then
+  # 方式A：如果有 tmux，自动进入/创建一个叫 codex 的会话并运行 codex
+  if command -v tmux >/dev/null 2>&1; then
+    tmux new -A -s codex "codex"
+  else
+    # 方式B：没有 tmux 就直接启动 codex
+    codex
+  fi
+fi
+</code></pre>
+
+  <p>这样你点上面的链接 → Termius 连上去后，就会自动进入 codex。</p>
+
+  <hr/>
+  <p style="opacity:.7">提示：首次点击 <code>ssh://</code> 链接，浏览器通常会弹窗问你是否允许打开 Termius（或其他 SSH 应用）。</p>
+</body>
+</html>

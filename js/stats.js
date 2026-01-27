@@ -135,19 +135,19 @@
                     try {
                         const data = await this.readProjectFile(path);
                         let hasAny = false;
-                        const groupValues = [];
+                        const groupValueSets = [];
                         if (includeGroup) {
-                            groupValues.push(baseGroupMap[base] || 'ungrouped');
+                            groupValueSets.push([baseGroupMap[base] || 'ungrouped']);
                         }
                         fieldList.forEach((field) => {
                             const values = this.extractFieldValuesFromData(data, field);
                             if (!values.length) {
                                 missingByField[field] += 1;
-                                groupValues.push('');
+                                groupValueSets.push(['']);
                                 return;
                             }
                             hasAny = true;
-                            groupValues.push(values[0]);
+                            groupValueSets.push(values);
                             values.forEach((value) => {
                                 const key = String(value);
                                 byField[field][key] = (byField[field][key] || 0) + 1;
@@ -157,9 +157,20 @@
                             });
                         });
                         if (useMode === 'grouped' && hasAny) {
-                            const key = groupValues.map(v => String(v)).join(' | ');
-                            aggregated[key] = (aggregated[key] || 0) + 1;
-                            if (!groupedValueMap[key]) groupedValueMap[key] = groupValues.map(v => String(v));
+                            const combinations = groupValueSets.reduce((acc, list) => {
+                                const next = [];
+                                acc.forEach((prev) => {
+                                    list.forEach((val) => {
+                                        next.push([...prev, String(val)]);
+                                    });
+                                });
+                                return next;
+                            }, [[]]);
+                            combinations.forEach((combo) => {
+                                const key = combo.join(' | ');
+                                aggregated[key] = (aggregated[key] || 0) + 1;
+                                if (!groupedValueMap[key]) groupedValueMap[key] = combo;
+                            });
                         }
                         if (!hasAny) missingAll += 1;
                     } catch (err) {

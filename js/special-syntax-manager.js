@@ -9,7 +9,7 @@ class SpecialSyntaxManager {
         this.app = app;
         
         // 注册所有支持的语法类型
-        // 仅支持 LaTeX 标准格式：\cite{} \citep{} \bib{} \goto{} \groupby{}{}
+        // 仅支持 LaTeX 标准格式：\cite{} \citep{} \bib{} \goto{} \groupby{}{} \query{}{}{} \json{}{}
         this.syntaxTypes = {
             'cite': {
                 pattern: /\\cite\{([^}]+)\}/g,
@@ -35,6 +35,16 @@ class SpecialSyntaxManager {
                 pattern: /\\groupby\{[\s\S]*?\}\{[\s\S]*?\}/g,
                 description: 'Group by fields table',
                 renderer: (matches, fullMatch) => this.renderGroupBy(matches, fullMatch)
+            },
+            'query': {
+                pattern: /\\query\{[\s\S]*?\}\{[\s\S]*?\}\{[\s\S]*?\}/g,
+                description: 'Query DOI list by fields',
+                renderer: (matches, fullMatch) => this.renderQuery(matches, fullMatch)
+            },
+            'json': {
+                pattern: /\\json\{[\s\S]*?\}\{[\s\S]*?\}/g,
+                description: 'Query JSON items by fields',
+                renderer: (matches, fullMatch) => this.renderJsonQuery(matches, fullMatch)
             },
             'doi': {
                 pattern: /\\doi\{([^}]+)\}/g,
@@ -229,6 +239,45 @@ class SpecialSyntaxManager {
         }
         if (typeof this.app.renderGroupByPlaceholder === 'function') {
             return this.app.renderGroupByPlaceholder(groups, fields);
+        }
+        return this.app.escapeHtml(fullMatch);
+    }
+
+    /**
+     * 渲染 query DOI 占位 (query)
+     */
+    renderQuery(_content, fullMatch) {
+        const match = fullMatch.match(/\\query\{([\s\S]*?)\}\{([\s\S]*?)\}\{([\s\S]*?)\}/);
+        if (!match) {
+            return this.app.escapeHtml(fullMatch);
+        }
+        const groups = match[1];
+        const fields = match[2];
+        const value = match[3];
+        if (!String(fields || '').trim()) {
+            return this.app.escapeHtml(fullMatch);
+        }
+        if (typeof this.app.renderQueryPlaceholder === 'function') {
+            return this.app.renderQueryPlaceholder(groups, fields, value);
+        }
+        return this.app.escapeHtml(fullMatch);
+    }
+
+    /**
+     * 渲染 json 查询占位 (json)
+     */
+    renderJsonQuery(_content, fullMatch) {
+        const match = fullMatch.match(/\\json\{([\s\S]*?)\}\{([\s\S]*?)\}/);
+        if (!match) {
+            return this.app.escapeHtml(fullMatch);
+        }
+        const groups = match[1];
+        const fields = match[2];
+        if (!String(fields || '').trim()) {
+            return this.app.escapeHtml(fullMatch);
+        }
+        if (typeof this.app.renderJsonQueryPlaceholder === 'function') {
+            return this.app.renderJsonQueryPlaceholder(groups, fields);
         }
         return this.app.escapeHtml(fullMatch);
     }

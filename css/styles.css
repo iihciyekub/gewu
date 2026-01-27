@@ -4386,6 +4386,23 @@ body.theme-vscode .autocomplete-detail {
     font-size: 11px;
 }
 
+.bib-fetch-btn,
+.bib-fetch-btn.inline-syntax,
+.groupby-render-btn.inline-syntax,
+.query-render-btn.inline-syntax,
+.json-render-btn.inline-syntax {
+    max-width: 100%;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    vertical-align: middle;
+}
+
+.bib-fetch-btn span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
 .bib-fetch-btn:disabled {
     opacity: 0.6;
     cursor: not-allowed;
