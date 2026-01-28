@@ -1,7 +1,7 @@
-# Stats Module (js/groupby-fields.js)
+# GroupBy Fields Module (js/groupby-fields.js)
 
 This module adds field-based aggregation helpers to the PaperStatsApp instance.
-It is loaded after `js/app.js` and extends `PaperStatsApp.prototype`.
+It is loaded after `js/app.js` and extends `PaperStatsApp.prototype` with `groupByFields()`.
 
 ## Load
 
@@ -10,7 +10,7 @@ It is loaded after `js/app.js` and extends `PaperStatsApp.prototype`.
 - `js/app.js`
 - `js/groupby-fields.js`
 
-## Main APIs
+## Main API
 
 ### groupByFields(options)
 
@@ -58,7 +58,7 @@ await window.paperStats.groupByFields({
 });
 ```
 
-Grouped mode table output uses multiple columns (one per field plus `count`).
+Grouped mode output uses multiple columns (one per field plus `count`).
 
 Disable console.table output:
 
@@ -132,5 +132,5 @@ await window.paperStats.groupByFields({
 ## Notes
 
 - Counts are aggregated per value string.
-- If a field returns an array of values, the first value is used for grouped aggregation; all values are counted in merged mode.
+- If a field returns multiple values, grouped mode combines all values into Cartesian combinations; merged mode counts all values.
 - Only JSON files in the current view are scanned.
