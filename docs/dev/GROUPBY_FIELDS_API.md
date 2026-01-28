@@ -67,7 +67,8 @@ Merged mode (single field):
 ```bash
 curl -X POST http://127.0.0.1:8000/groupby-fields \
   -H "Content-Type: application/json" \
-  -d '{"projectPath":"/path/to/project","fields":"wos_data.publication_year"}'
+  -d '{"projectPath":"/path/to/project",
+  "fields":"wos_data.publication_year"}'
 ```
 
 Grouped mode (multiple fields):
@@ -75,15 +76,20 @@ Grouped mode (multiple fields):
 ```bash
 curl -X POST http://127.0.0.1:8000/groupby-fields \
   -H "Content-Type: application/json" \
-  -d '{"projectPath":"/path/to/project","fields":["wos_data.publication_year","wos_data.issn"],"mode":"grouped"}'
+  -d '{"projectPath":"/Users/yjli/Desktop/user","view":"DID_315_forChecklist","groupNames":["test"],"fields":["wos_data.publication_year","wos_data.issn"],"mode":"grouped"}'
 ```
 
 Grouped mode with group names (uses `.file_order.json`):
 
 ```bash
-curl -X POST http://127.0.0.1:8000/groupby-fields \\
-  -H "Content-Type: application/json" \\
-  -d '{\"projectPath\":\"/path/to/project\",\"fields\":[\"wos_data.publication_year\"],\"groupByGroupName\":true,\"groupNames\":[\"init\"]}'\n```
+curl -X POST http://127.0.0.1:8000/groupby-fields \
+  -H "Content-Type: application/json" \
+  -d '{"projectPath":"/Users/yjli/Desktop/user",
+  "view":"DID_315_forChecklist",
+  "groupNames":"test",
+  "fields":["wos_data.publication_year","wos_data.issn"],
+  "mode":"grouped"}'
+```
 
 ## Notes
 

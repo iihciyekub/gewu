@@ -547,6 +547,10 @@
                                 title="Format JSON">
                                 <i class="fas fa-align-left"></i><span>Format</span>
                             </button>
+                            <button class="header-dropdown-item" id="jsonAddFieldItem" type="button" role="menuitem"
+                                title="Add Field">
+                                <i class="fas fa-plus"></i><span>Add Field</span>
+                            </button>
                             <button class="header-dropdown-item" id="jsonSaveItem" type="button" role="menuitem"
                                 title="Save JSON (Ctrl+S)">
                                 <i class="fas fa-save"></i><span>Save JSON</span>
@@ -601,11 +605,6 @@
                             <p>Select a JSON file from the left panel to start editing</p>
                         </div>
                     </div>
-                    <div class="structured-footer">
-                        <button id="addSectionBtn" class="btn-add-section" style="display: none;">
-                            <i class="fas fa-plus"></i> Add Field
-                        </button>
-                    </div>
                 </div>
                 <div class="markdown-view" id="markdownView">
                     <div class="markdown-body" id="markdownRender">
@@ -623,10 +622,31 @@
                     <div class="empty-state">
                         <i class="fas fa-code"></i>
                         <h3>No File Selected</h3>
-                        <p>Select a JSON file from the left panel to view raw JSON</p>
+                    <p>Select a JSON file from the left panel to view raw JSON</p>
+                </div>
+            </div>
+            <div class="md-chat-panel" id="mdChatPanel">
+                <div class="md-chat-resizer" id="mdChatResizer" title="Drag to resize"></div>
+                <div class="md-chat-shell">
+                    <div class="md-chat-top">
+                        <div class="md-chat-actions">
+                            <button class="md-chat-btn" type="button" title="Close"><i class="far fa-comment"></i></button>
+                            <button class="md-chat-btn" type="button" title="Expand"><i class="fa-solid fa-arrow-right-from-bracket"></i></button>
+                            <button class="md-chat-btn" type="button" title="Collapse"><i class="fas fa-chevron-down"></i></button>
+                        </div>
+                    </div>
+                    <div class="md-chat-body"></div>
+                    <div class="md-chat-input">
+                        <textarea class="md-chat-input-text" rows="1" placeholder="Ask anything" aria-label="Ask anything"></textarea>
+                        <div class="md-chat-input-actions">
+                            <button class="md-chat-btn" type="button" title="Add image"><i class="far fa-image"></i></button>
+                            <button class="md-chat-btn" type="button" title="Audio"><i class="fas fa-wave-square"></i></button>
+                            <button class="md-chat-btn" type="button" title="Send"><i class="fas fa-paper-plane"></i></button>
+                        </div>
                     </div>
                 </div>
             </div>
+        </div>
         </div>
 
         <!-- Resizer -->
@@ -679,6 +699,14 @@
             </div>
         </div>
         <div class="status-right">
+            <button class="status-btn" id="openCodexCliBtn" type="button"
+                title="Open Codex CLI" aria-label="Open Codex CLI">
+                <i class="fas fa-terminal"></i>
+            </button>
+            <button class="status-btn" id="mdChatToggleBtn" type="button"
+                title="Toggle MD Chat Panel" aria-label="Toggle MD Chat Panel">
+                <i class="far fa-comment-dots"></i>
+            </button>
             <button class="status-btn" id="aideCopyToggleBtn" type="button"
                 title="Open Tools Panel (Cmd+Shift+G)" aria-label="Open Tools Panel">
                 <i class="fas fa-code-branch"></i>
@@ -899,6 +927,7 @@
     <script src="js/core/jquery-3.7.0.js"></script>
     <script src="js/core/jquery.json-viewer.js"></script>
     <script src="js/app.js?v=20260112-1530"></script>
+    <script src="js/json-query.js?v=20260112-1530"></script>
     <script src="js/bib-download.js?v=20260112-1530"></script>
     <script src="js/groupby-fields.js?v=20260112-1530"></script>
 </body>

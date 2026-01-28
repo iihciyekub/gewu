@@ -1485,6 +1485,11 @@ class PaperStatsApp {
         if (statusToggleSourceBtn) {
             statusToggleSourceBtn.addEventListener('click', () => this.toggleJsonMdSource());
         }
+        const openCodexCliBtn = document.getElementById('openCodexCliBtn');
+        if (openCodexCliBtn) {
+            openCodexCliBtn.addEventListener('click', () => this.openCodexCli());
+        }
+        this.initMarkdownChatPanel();
         // 快捷键：Cmd/Ctrl + E 正向切换，Cmd/Ctrl + Shift + E 反向切换
         document.addEventListener('keydown', (e) => {
             const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
@@ -1505,6 +1510,7 @@ class PaperStatsApp {
         const jsonViewStructuredItem = document.getElementById('jsonViewStructuredItem');
         const jsonViewFlatItem = document.getElementById('jsonViewFlatItem');
         const jsonFormatItem = document.getElementById('jsonFormatItem');
+        const jsonAddFieldItem = document.getElementById('jsonAddFieldItem');
         const jsonSaveItem = document.getElementById('jsonSaveItem');
         const jsonMenuDropdown = document.getElementById('jsonMenuDropdown');
         if (jsonMenuToggleBtn && jsonMenu) {
@@ -1544,6 +1550,25 @@ class PaperStatsApp {
                 this.formatRawJson();
                 // 格式化后同步解析状态与保存状态
                 this.applyRawJsonFromTextarea({ notifyOnError: false, updateStatus: true });
+                this.toggleJsonMenu(false);
+            });
+        }
+        if (jsonAddFieldItem) {
+            jsonAddFieldItem.addEventListener('click', async (e) => {
+                e.preventDefault();
+                if (this.isEditLocked) {
+                    this.showLockedNotification('添加字段');
+                    return;
+                }
+                if (!this.currentFile || !this.currentData) {
+                    this.showNotification('Please load a JSON file first', 'error');
+                    return;
+                }
+                if ((this.currentView || 'structured') !== 'structured') {
+                    await this.switchToView('structured');
+                }
+                this.hideSectionPreview();
+                this.createEmptySectionTemplate();
                 this.toggleJsonMenu(false);
             });
         }
@@ -2022,6 +2047,11 @@ class PaperStatsApp {
                 e.preventDefault();
                 e.stopPropagation();
                 projectNameBtn.click();
+            });
+            statusProject.addEventListener('contextmenu', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                this.showStatusProjectContextMenu(e);
             });
         }
         const shortcutsInfoBtn = document.getElementById('shortcutsInfoBtn');
@@ -7009,8 +7039,6 @@ class PaperStatsApp {
 
         // 渲染完成后触发MathJax
         this.renderMath(container);
-        this.deferShowAddSectionButton();
-        this.attachAddSectionHover();
     }
 
     createCollapsibleSection(title, data, path) {
@@ -9198,8 +9226,9 @@ class PaperStatsApp {
         const structuredItem = document.getElementById('jsonViewStructuredItem');
         const flatItem = document.getElementById('jsonViewFlatItem');
         const formatItem = document.getElementById('jsonFormatItem');
+        const addFieldItem = document.getElementById('jsonAddFieldItem');
         const saveItem = document.getElementById('jsonSaveItem');
-        if (!dropdown || !structuredItem || !flatItem || !formatItem || !saveItem) return;
+        if (!dropdown || !structuredItem || !flatItem || !formatItem || !saveItem || !addFieldItem) return;
 
         const hasFile = !!this.currentFile;
         dropdown.style.display = 'inline-flex';
@@ -9207,6 +9236,7 @@ class PaperStatsApp {
         structuredItem.disabled = view === 'structured';
         flatItem.disabled = view === 'flat';
         formatItem.disabled = !(hasFile && view === 'flat');
+        addFieldItem.disabled = !(hasFile && !this.isEditLocked);
         const inFlat = view === 'flat';
         const canSave = hasFile && this.hasUnsavedChanges && (!inFlat || this.rawJsonParseOk);
         saveItem.disabled = !canSave;
@@ -9517,6 +9547,207 @@ class PaperStatsApp {
             .catch(err => this.showNotification(`Copy failed: ${err.message}`, 'error'));
     }
 
+    initMarkdownChatPanel() {
+        if (this._mdChatPanelBound) return;
+        const panel = document.getElementById('mdChatPanel');
+        const resizer = document.getElementById('mdChatResizer');
+        const shell = panel?.querySelector('.md-chat-shell');
+        const body = panel?.querySelector('.md-chat-body');
+        const input = panel?.querySelector('.md-chat-input');
+        const top = panel?.querySelector('.md-chat-top');
+        const textarea = panel?.querySelector('.md-chat-input-text');
+        const collapseBtn = panel?.querySelector('.md-chat-btn[title="Collapse"]');
+        const expandBtn = panel?.querySelector('.md-chat-btn[title="Expand"]');
+        const closeBtn = panel?.querySelector('.md-chat-btn[title="Close"]');
+        const editorContainer = document.querySelector('.editor-container');
+        const chatToggleBtn = document.getElementById('mdChatToggleBtn');
+        if (!panel || !resizer) return;
+        this._mdChatPanelBound = true;
+
+        const stored = Number(localStorage.getItem('mdChatHeight'));
+        if (Number.isFinite(stored) && stored > 80) {
+            panel.style.height = `${stored}px`;
+        }
+        const storedHidden = localStorage.getItem('mdChatHidden') === '1';
+        const storedDocked = localStorage.getItem('mdChatDocked') === '1';
+        if (storedHidden) {
+            panel.classList.add('is-hidden');
+        }
+        if (storedDocked) {
+            panel.classList.add('is-docked');
+        }
+        if (editorContainer && storedDocked && !storedHidden) {
+            editorContainer.classList.add('chat-docked');
+            panel.style.height = '100%';
+            if (shell) shell.style.height = '100%';
+        }
+
+        const minHeight = 140;
+        const onMouseDown = (e) => {
+            e.preventDefault();
+            const startY = e.clientY;
+            const startHeight = panel.getBoundingClientRect().height;
+            const container = panel.parentElement;
+            const maxHeight = container ? Math.max(minHeight, container.getBoundingClientRect().height - 120) : 480;
+
+            const onMove = (evt) => {
+                const delta = evt.clientY - startY;
+                const next = Math.max(minHeight, Math.min(maxHeight, Math.round(startHeight - delta)));
+                panel.style.height = `${next}px`;
+            };
+
+            const onUp = () => {
+                const height = Math.round(panel.getBoundingClientRect().height);
+                localStorage.setItem('mdChatHeight', String(height));
+                document.removeEventListener('mousemove', onMove);
+                document.removeEventListener('mouseup', onUp);
+            };
+
+            document.addEventListener('mousemove', onMove);
+            document.addEventListener('mouseup', onUp);
+        };
+
+        resizer.addEventListener('mousedown', onMouseDown);
+
+        if (shell && body && input && top && collapseBtn) {
+            collapseBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                const collapsed = shell.classList.toggle('is-collapsed');
+                body.style.display = collapsed ? 'none' : '';
+                const icon = collapseBtn.querySelector('i');
+                if (icon) {
+                    icon.className = collapsed ? 'fas fa-chevron-up' : 'fas fa-chevron-down';
+                }
+                if (collapsed) {
+                    const prev = panel.getBoundingClientRect().height;
+                    panel.dataset.prevHeight = String(Math.round(prev));
+                    const topHeight = top.getBoundingClientRect().height || 36;
+                    const inputHeight = input.getBoundingClientRect().height || 60;
+                    const target = Math.max(0, Math.round(topHeight + inputHeight + 8));
+                    panel.style.height = `${target}px`;
+                    shell.style.height = `${target - 8}px`;
+                } else {
+                    const prevHeight = Number(panel.dataset.prevHeight);
+                    if (Number.isFinite(prevHeight) && prevHeight > 0) {
+                        panel.style.height = `${prevHeight}px`;
+                    }
+                    shell.style.height = '';
+                }
+            });
+        }
+
+        if (shell && panel && editorContainer && expandBtn) {
+            expandBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                const docked = panel.classList.toggle('is-docked');
+                editorContainer.classList.toggle('chat-docked', docked);
+                const icon = expandBtn.querySelector('i');
+                if (icon) {
+                    icon.className = docked
+                        ? 'fa-solid fa-arrow-right-from-bracket fa-rotate-90'
+                        : 'fa-solid fa-arrow-right-from-bracket';
+                }
+                if (docked) {
+                    const prev = panel.getBoundingClientRect().height;
+                    panel.dataset.prevHeight = String(Math.round(prev));
+                    panel.style.height = '100%';
+                    shell.style.height = '100%';
+                    localStorage.setItem('mdChatDocked', '1');
+                } else {
+                    const prevHeight = Number(panel.dataset.prevHeight);
+                    if (Number.isFinite(prevHeight) && prevHeight > 0) {
+                        panel.style.height = `${prevHeight}px`;
+                    }
+                    shell.style.height = '';
+                    localStorage.setItem('mdChatDocked', '0');
+                }
+            });
+        }
+
+        if (panel && closeBtn) {
+            closeBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                panel.classList.add('is-hidden');
+                if (editorContainer) editorContainer.classList.remove('chat-docked');
+                localStorage.setItem('mdChatHidden', '1');
+            });
+        }
+
+        if (panel && chatToggleBtn) {
+            chatToggleBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                const isHidden = panel.classList.toggle('is-hidden');
+                if (editorContainer) {
+                    if (isHidden) {
+                        editorContainer.classList.remove('chat-docked');
+                    } else if (panel.classList.contains('is-docked')) {
+                        editorContainer.classList.add('chat-docked');
+                    }
+                }
+                localStorage.setItem('mdChatHidden', isHidden ? '1' : '0');
+            });
+        }
+
+        if (textarea) {
+            const resizeInput = () => {
+                const minHeight = 24;
+                const maxHeight = 96;
+                if (!textarea.value) {
+                    textarea.style.height = `${minHeight}px`;
+                    return;
+                }
+                textarea.style.height = 'auto';
+                const next = Math.min(maxHeight, textarea.scrollHeight);
+                textarea.style.height = `${Math.max(minHeight, next)}px`;
+            };
+            textarea.addEventListener('input', resizeInput);
+            resizeInput();
+        }
+    }
+
+    showStatusProjectContextMenu(e) {
+        const oldMenu = document.querySelector('.context-menu');
+        if (oldMenu) oldMenu.remove();
+
+        const menu = document.createElement('div');
+        menu.className = 'context-menu';
+        menu.style.left = `${e.pageX}px`;
+        menu.style.top = `${e.pageY}px`;
+        menu.innerHTML = `
+            <div class="context-menu-item" data-action="copyProjectPath">
+                <i class="fas fa-copy"></i> Copy Project Path
+            </div>
+        `;
+
+        document.body.appendChild(menu);
+
+        const margin = 8;
+        const rect = menu.getBoundingClientRect();
+        const maxLeft = window.innerWidth - rect.width - margin;
+        const maxTop = window.innerHeight - rect.height - margin;
+        const nextLeft = Math.max(margin, Math.min(e.pageX, maxLeft));
+        const nextTop = Math.max(margin, Math.min(e.pageY, maxTop));
+        menu.style.left = `${nextLeft}px`;
+        menu.style.top = `${nextTop}px`;
+
+        menu.addEventListener('click', (ev) => {
+            const item = ev.target.closest('.context-menu-item');
+            if (!item) return;
+            const action = item.dataset.action;
+            if (action === 'copyProjectPath') {
+                this.copyProjectPathToClipboard();
+            }
+            menu.remove();
+        });
+
+        setTimeout(() => {
+            document.addEventListener('click', function closeMenu() {
+                menu.remove();
+                document.removeEventListener('click', closeMenu);
+            });
+        }, 0);
+    }
+
     openProjectModal({ openCreate = false } = {}) {
         document.getElementById('projectSelectorModal')?.classList.add('active');
         this.projectInfoVisible = false;
@@ -9530,6 +9761,24 @@ class PaperStatsApp {
         this.openProjectModal();
     }
 
+    async openCodexCli() {
+        const projectPath = this.getRequiredProjectPath();
+        if (!projectPath) return;
+        try {
+            const response = await fetch('/open-codex-cli', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ projectPath })
+            });
+            if (!response.ok) {
+                const text = await response.text();
+                throw new Error(text || `HTTP ${response.status}`);
+            }
+            this.showNotification('Codex CLI opened', 'success');
+        } catch (err) {
+            this.showNotification(`Failed to open Codex CLI: ${err.message}`, 'error');
+        }
+    }
     openCreateProjectDialog() {
         this.openProjectModal({ openCreate: true });
     }
@@ -11125,17 +11374,6 @@ class PaperStatsApp {
         return `<div class="query-inline" data-query-groups="${escGroups}" data-query-fields="${escFields}" data-query-value="${escValue}"><button class="bib-fetch-btn query-render-btn inline-syntax" type="button" title="${this.escapeAttr(title)}"><i class="fas fa-play"></i><span>${this.escapeHtml(hint)}</span></button></div>`;
     }
 
-    renderJsonQueryPlaceholder(groups = '', fields = '') {
-        const cleanGroups = String(groups || '').replace(/[\r\n]+/g, ' ').trim();
-        const cleanFields = String(fields || '').replace(/[\r\n]+/g, ' ').trim();
-        const escGroups = this.escapeAttr(cleanGroups);
-        const escFields = this.escapeAttr(cleanFields);
-        const groupLabel = cleanGroups || 'all';
-        const title = `Groups: ${groupLabel}\nFields: ${cleanFields || '(none)'}`;
-        const hint = `await json (${groupLabel} → ${cleanFields})...`;
-        return `<div class="json-inline" data-json-groups="${escGroups}" data-json-fields="${escFields}"><button class="bib-fetch-btn json-render-btn inline-syntax" type="button" title="${this.escapeAttr(title)}"><i class="fas fa-play"></i><span>${this.escapeHtml(hint)}</span></button></div>`;
-    }
-
     async applyCitationRendering(renderRoot) {
         if (!renderRoot) return;
         const spans = Array.from(renderRoot.querySelectorAll('.citation-inline'));
@@ -11182,20 +11420,6 @@ class PaperStatsApp {
             const btn = block.querySelector('.query-render-btn');
             if (btn) {
                 btn.addEventListener('click', () => this.renderQueryBlock(block));
-            }
-        });
-    }
-
-    async applyJsonQueryRendering(renderRoot) {
-        if (!renderRoot) return;
-        const blocks = Array.from(renderRoot.querySelectorAll('.json-inline'));
-        if (!blocks.length) return;
-        blocks.forEach((block) => {
-            if (block.dataset.jsonBound === '1') return;
-            block.dataset.jsonBound = '1';
-            const btn = block.querySelector('.json-render-btn');
-            if (btn) {
-                btn.addEventListener('click', () => this.renderJsonQueryBlock(block));
             }
         });
     }
@@ -11285,76 +11509,6 @@ class PaperStatsApp {
         return { dois, total: bases.length, matched };
     }
 
-    async queryJsonItems({ groupsRaw = '', fieldsRaw = '' } = {}) {
-        const { tokens, useAll } = this.parseGroupTokens(groupsRaw);
-        const groups = this.getGroupsByTokens(tokens, useAll);
-        const allowedBases = groups.length ? new Set(groups.flatMap(g => (g.files || []).map(String))) : null;
-        const fields = String(fieldsRaw || '')
-            .split(/[,，]+/)
-            .map(v => v.trim())
-            .filter(Boolean);
-        if (!fields.length) {
-            return { items: [], total: 0 };
-        }
-        const view = this.currentJsonView || 'view1';
-        const bases = Object.keys(this.fileMetaByBase || {}).filter((base) => {
-            const entry = this.fileMetaByBase?.[base];
-            const inView = !!(entry?.views && entry.views[view]);
-            const inGroup = allowedBases ? allowedBases.has(base) : true;
-            return inView && inGroup;
-        });
-        const items = [];
-        const token = ++this.fileFilterComputeToken;
-        const tracker = (typeof this.createStatusProgressTracker === 'function')
-            ? this.createStatusProgressTracker('Query JSON')
-            : null;
-        if (tracker) tracker.update('Querying JSON (0%)', 0);
-
-        let cursor = 0;
-        const limit = Math.min(8, bases.length || 0) || 1;
-        let processed = 0;
-        const worker = async () => {
-            while (cursor < bases.length) {
-                const base = bases[cursor];
-                cursor += 1;
-                if (token !== this.fileFilterComputeToken) return;
-                const path = this.getViewPathForBase(base, view);
-                if (!path) continue;
-                let data = this.tempDataCache[path];
-                if (!data) {
-                    try {
-                        data = await this.readProjectFile(path);
-                    } catch (_err) {
-                        continue;
-                    }
-                }
-                const doiRaw = data?.meta_info?.doi;
-                const doi = doiRaw ? this.normalizeDoiString(doiRaw) : '';
-                if (!doi) {
-                    processed += 1;
-                    continue;
-                }
-                const item = { doi };
-                fields.forEach((field) => {
-                    const vals = this.getFieldValuesForFilter(data, field);
-                    if (vals && vals.length) {
-                        item[field] = vals.length === 1 ? vals[0] : vals.join('; ');
-                    }
-                });
-                items.push(item);
-                processed += 1;
-                if (tracker) {
-                    const percent = bases.length ? Math.round((processed / bases.length) * 100) : 100;
-                    tracker.update(`Querying JSON (${processed}/${bases.length})`, percent);
-                }
-            }
-        };
-        const workers = Array.from({ length: limit }, () => worker());
-        await Promise.all(workers);
-        if (tracker) tracker.finish('Query JSON done');
-        return { items, total: bases.length };
-    }
-
     async renderQueryBlock(block) {
         if (!block || block.dataset.queryRendered === '1') return;
         block.dataset.queryRendered = '1';
@@ -11400,63 +11554,6 @@ class PaperStatsApp {
         const body = document.createElement('div');
         body.className = 'groupby-table';
         body.innerHTML = `<pre>${this.escapeHtml(list || '')}</pre>`;
-        wrapper.appendChild(body);
-        toggleBtn.addEventListener('click', () => {
-            wrapper.classList.toggle('groupby-collapsed');
-            const collapsed = wrapper.classList.contains('groupby-collapsed');
-            toggleBtn.innerHTML = collapsed
-                ? '<i class="fas fa-chevron-down"></i>'
-                : '<i class="fas fa-chevron-up"></i>';
-            toggleBtn.setAttribute('aria-label', collapsed ? 'Expand results' : 'Collapse results');
-        });
-        block.innerHTML = '';
-        block.appendChild(wrapper);
-    }
-
-    async renderJsonQueryBlock(block) {
-        if (!block || block.dataset.jsonRendered === '1') return;
-        block.dataset.jsonRendered = '1';
-        const groupsRaw = (block.dataset.jsonGroups || '').trim();
-        const fieldsRaw = (block.dataset.jsonFields || '').trim();
-        const fields = fieldsRaw.split(/[,，]+/).map(v => v.trim()).filter(Boolean);
-        if (!fields.length) {
-            block.innerHTML = '<div class="groupby-error">No fields specified for \\json{}{}.</div>';
-            return;
-        }
-        block.innerHTML = '<div class="groupby-loading">Querying...</div>';
-        const result = await this.queryJsonItems({ groupsRaw, fieldsRaw });
-        const items = result?.items || [];
-        const jsonText = JSON.stringify(items, null, 2);
-        const wrapper = document.createElement('div');
-        wrapper.className = 'groupby-box';
-        const header = document.createElement('div');
-        header.className = 'groupby-header';
-        const title = document.createElement('div');
-        title.className = 'groupby-title';
-        title.textContent = `JSON (${items.length} / ${result?.total || 0})`;
-        const actions = document.createElement('div');
-        actions.className = 'groupby-actions';
-        const toggleBtn = document.createElement('button');
-        toggleBtn.className = 'groupby-toggle-btn';
-        toggleBtn.type = 'button';
-        toggleBtn.setAttribute('aria-label', 'Collapse results');
-        toggleBtn.innerHTML = '<i class="fas fa-chevron-up"></i>';
-        const copyBtn = document.createElement('button');
-        copyBtn.className = 'groupby-copy-btn';
-        copyBtn.innerHTML = '<i class="fas fa-copy"></i><span>Copy JSON</span>';
-        copyBtn.addEventListener('click', async () => {
-            await this.writeTextToClipboard(jsonText);
-            this.flashCopyButton(copyBtn);
-            this.showNotification('JSON copied', 'success');
-        });
-        header.appendChild(toggleBtn);
-        actions.appendChild(copyBtn);
-        header.appendChild(title);
-        header.appendChild(actions);
-        wrapper.appendChild(header);
-        const body = document.createElement('div');
-        body.className = 'groupby-table';
-        body.innerHTML = `<pre>${this.escapeHtml(jsonText || '')}</pre>`;
         wrapper.appendChild(body);
         toggleBtn.addEventListener('click', () => {
             wrapper.classList.toggle('groupby-collapsed');
@@ -16009,9 +16106,9 @@ class PaperStatsApp {
                 const isSameLink = this._lastClickedLink === link;
                 const timeSinceLastClick = now - this._lastClickTime;
 
-                if (isSameLink && timeSinceLastClick < 5000) {
+                if (isSameLink && timeSinceLastClick < 2000) {
                     // 5秒内重复点击同一个链接，忽略
-                    this.showNotification('Please wait 5 seconds before clicking again', 'info');
+                    this.showNotification('Please wait 2 seconds before clicking again', 'info');
                     return;
                 }
 
