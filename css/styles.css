@@ -2094,9 +2094,13 @@ body.theme-vscode .nested-index-cell {
 
 .groupby-title {
     flex: 1;
+    min-width: 0;
     font-size: 12px;
     font-weight: 600;
     color: #2c3e50;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .groupby-actions {
@@ -3468,6 +3472,24 @@ ol.json-array {
 /* Bibliography inline container - 只作为容器，实际样式在 .bib-fetch-btn */
 .bibliography-inline {
     display: inline;
+}
+
+.groupby-inline {
+    display: inline-flex;
+    max-width: 100%;
+    vertical-align: middle;
+}
+
+.groupby-inline .groupby-render-btn {
+    max-width: 100%;
+    min-width: 0;
+}
+
+.groupby-inline .groupby-render-btn span {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .bib-result {

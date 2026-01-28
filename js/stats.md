@@ -1,4 +1,4 @@
-# Stats Module (js/stats.js)
+# Stats Module (js/groupby-fields.js)
 
 This module adds field-based aggregation helpers to the PaperStatsApp instance.
 It is loaded after `js/app.js` and extends `PaperStatsApp.prototype`.
@@ -8,7 +8,7 @@ It is loaded after `js/app.js` and extends `PaperStatsApp.prototype`.
 `index.html` includes:
 
 - `js/app.js`
-- `js/stats.js`
+- `js/groupby-fields.js`
 
 ## Main APIs
 
