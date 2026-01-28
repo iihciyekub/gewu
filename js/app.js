@@ -9648,16 +9648,12 @@ class PaperStatsApp {
                         : 'fa-solid fa-arrow-right-from-bracket';
                 }
                 if (docked) {
-                    const prev = panel.getBoundingClientRect().height;
-                    panel.dataset.prevHeight = String(Math.round(prev));
+                    panel.dataset.prevHeight = String(Math.round(panel.getBoundingClientRect().height));
                     panel.style.height = '100%';
                     shell.style.height = '100%';
                     localStorage.setItem('mdChatDocked', '1');
                 } else {
-                    const prevHeight = Number(panel.dataset.prevHeight);
-                    if (Number.isFinite(prevHeight) && prevHeight > 0) {
-                        panel.style.height = `${prevHeight}px`;
-                    }
+                    panel.style.height = `${minHeight}px`;
                     shell.style.height = '';
                     localStorage.setItem('mdChatDocked', '0');
                 }
@@ -9762,8 +9758,15 @@ class PaperStatsApp {
     }
 
     async openCodexCli() {
+        if (this._openCodexCliPending) return;
         const projectPath = this.getRequiredProjectPath();
         if (!projectPath) return;
+        this._openCodexCliPending = true;
+        const btn = document.getElementById('openCodexCliBtn');
+        if (btn) {
+            btn.disabled = true;
+            btn.classList.add('is-busy');
+        }
         try {
             const response = await fetch('/open-codex-cli', {
                 method: 'POST',
@@ -9777,6 +9780,14 @@ class PaperStatsApp {
             this.showNotification('Codex CLI opened', 'success');
         } catch (err) {
             this.showNotification(`Failed to open Codex CLI: ${err.message}`, 'error');
+        } finally {
+            setTimeout(() => {
+                this._openCodexCliPending = false;
+                if (btn) {
+                    btn.disabled = false;
+                    btn.classList.remove('is-busy');
+                }
+            }, 1200);
         }
     }
     openCreateProjectDialog() {
