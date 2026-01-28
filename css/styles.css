@@ -2583,6 +2583,12 @@ body.theme-vscode .qa-bubble {
     width: 100%;
     box-sizing: border-box;
     height: 220px;
+    transition: height 0.2s ease;
+}
+
+.md-chat-panel.is-dragging,
+.md-chat-panel.is-dragging .md-chat-shell {
+    transition: none;
 }
 
 .md-chat-panel.is-docked {
@@ -2614,12 +2620,13 @@ body.theme-vscode .qa-bubble {
 .md-chat-shell {
     height: calc(100% - 8px);
     border: 1px solid #d7d7d7;
-    border-radius: 4px;
+    border-radius: 20px;
     background: #fff;
     box-shadow: 0 6px 16px rgba(0, 0, 0, 0.12);
     display: flex;
     flex-direction: column;
     overflow: hidden;
+    transition: height 0.2s ease, box-shadow 0.2s ease;
 }
 
 .md-chat-panel.is-docked .md-chat-resizer {
@@ -2639,6 +2646,8 @@ body.theme-vscode .qa-bubble {
     align-items: center;
     justify-content: space-between;
     padding: 8px 16px;
+    transition: opacity 0.2s ease, max-height 0.2s ease;
+    max-height: 40px;
 }
 
 .md-chat-handle {
@@ -2659,28 +2668,38 @@ body.theme-vscode .qa-bubble {
 .md-chat-body {
     flex: 1;
     background: #fff;
+    transition: opacity 0.2s ease;
+}
+
+.md-chat-shell.is-collapsed .md-chat-top,
+.md-chat-shell.is-collapsed .md-chat-body {
+    opacity: 0;
+    max-height: 0;
 }
 
 .md-chat-input {
-    padding: 10px 14px;
+    padding: 2px 10px 10px 16px;
     display: flex;
-    align-items: flex-end;
+    align-items: stretch;
     gap: 10px;
     border-top: 1px solid #e6e6e6;
+    position: relative;
 }
 
 .md-chat-input-text {
     flex: 1;
+    align-self: stretch;
     border: none;
+    padding: 4px 8px;
     outline: none;
-    font-size: 12px;
+    font-size: 13px;
     color: #333;
     resize: none;
-    min-height: 24px;
+    min-height: 50px;
     height: 24px;
-    max-height: 96px;
     line-height: 1.4;
     font-family: inherit;
+    padding-right: 56px;
 }
 
 .md-chat-input-text::placeholder {
@@ -2688,9 +2707,27 @@ body.theme-vscode .qa-bubble {
 }
 
 .md-chat-input-actions {
+    position: absolute;
+    right: 14px;
+    bottom: 10px;
     display: inline-flex;
     gap: 12px;
+    height: 24px;
+    align-items: center;
+    flex: 0 0 auto;
+}
+
+.md-chat-shell.is-collapsed .md-chat-input {
+    align-items: flex-end;
+}
+
+.md-chat-shell.is-collapsed .md-chat-input-text {
     align-self: flex-end;
+}
+
+.md-chat-shell.is-collapsed .md-chat-input-actions {
+    align-self: flex-end;
+    padding-bottom: 0;
 }
 
 .md-chat-btn {
@@ -3767,6 +3804,12 @@ ol.json-array {
 /* Citation links */
 .citation-link {
     text-decoration: none;
+    border: none;
+    background: transparent;
+    padding: 0;
+    font: inherit;
+    color: #0400fb;
+    cursor: pointer;
 }
 
 .citation-link:hover {

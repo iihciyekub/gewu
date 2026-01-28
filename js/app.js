@@ -3693,6 +3693,8 @@ class PaperStatsApp {
         const fileListEl = document.getElementById('fileList');
         const currentSelected = this.currentFileBase || (this.currentFile ? this.currentFile.split('/').pop()?.replace(/\.[^.]+$/, '') : null); // 保存当前选中的文件（基名）
         const loadId = ++this.currentLoadToken;
+        this._doiIndex = null;
+        this._doiIndexBuilding = null;
 
         // 检查是否有当前项目
         if (!this.currentProject) {
@@ -9556,7 +9558,7 @@ class PaperStatsApp {
         const input = panel?.querySelector('.md-chat-input');
         const top = panel?.querySelector('.md-chat-top');
         const textarea = panel?.querySelector('.md-chat-input-text');
-        const collapseBtn = panel?.querySelector('.md-chat-btn[title="Collapse"]');
+        const collapseBtn = null;
         const expandBtn = panel?.querySelector('.md-chat-btn[title="Expand"]');
         const closeBtn = panel?.querySelector('.md-chat-btn[title="Close"]');
         const editorContainer = document.querySelector('.editor-container');
@@ -9583,8 +9585,31 @@ class PaperStatsApp {
         }
 
         const minHeight = 140;
+        const collapseThreshold = 150;
+        const updateCollapsedHeight = () => {
+            if (!panel || !shell) return;
+            const target = getCollapsedTargetHeight();
+            panel.style.height = `${target}px`;
+            shell.style.height = `${target - 8}px`;
+        };
+        const getCollapsedTargetHeight = () => {
+            const inputHeight = input?.getBoundingClientRect().height || 60;
+            return Math.max(0, Math.round(inputHeight + 8));
+        };
+        const setCollapsedState = (collapsed) => {
+            if (!shell || !body || !top) return;
+            shell.classList.toggle('is-collapsed', collapsed);
+            body.style.display = collapsed ? 'none' : '';
+            top.style.display = collapsed ? 'none' : '';
+            const icon = collapseBtn?.querySelector('i');
+            if (icon) icon.className = collapsed ? 'fas fa-chevron-up' : 'fas fa-chevron-down';
+            if (collapsed) {
+                updateCollapsedHeight();
+            }
+        };
         const onMouseDown = (e) => {
             e.preventDefault();
+            panel.classList.add('is-dragging');
             const startY = e.clientY;
             const startHeight = panel.getBoundingClientRect().height;
             const container = panel.parentElement;
@@ -9593,12 +9618,20 @@ class PaperStatsApp {
             const onMove = (evt) => {
                 const delta = evt.clientY - startY;
                 const next = Math.max(minHeight, Math.min(maxHeight, Math.round(startHeight - delta)));
-                panel.style.height = `${next}px`;
+                if (next <= collapseThreshold) {
+                    setCollapsedState(true);
+                    updateCollapsedHeight();
+                } else {
+                    setCollapsedState(false);
+                    panel.style.height = `${next}px`;
+                    if (shell) shell.style.height = '';
+                }
             };
 
             const onUp = () => {
                 const height = Math.round(panel.getBoundingClientRect().height);
                 localStorage.setItem('mdChatHeight', String(height));
+                panel.classList.remove('is-dragging');
                 document.removeEventListener('mousemove', onMove);
                 document.removeEventListener('mouseup', onUp);
             };
@@ -9608,33 +9641,27 @@ class PaperStatsApp {
         };
 
         resizer.addEventListener('mousedown', onMouseDown);
+        resizer.addEventListener('dblclick', (e) => {
+            e.preventDefault();
+            if (!shell || !body || !top) return;
+            const isCollapsed = shell.classList.contains('is-collapsed');
+            if (isCollapsed) {
+                setCollapsedState(false);
+                const prevHeight = Number(panel.dataset.prevHeight);
+                const nextHeight = Number.isFinite(prevHeight) && prevHeight > 0 ? prevHeight : minHeight;
+                panel.style.height = `${nextHeight}px`;
+                if (shell) shell.style.height = '';
+            } else {
+                panel.dataset.prevHeight = String(Math.round(panel.getBoundingClientRect().height));
+                setCollapsedState(true);
+                const target = getCollapsedTargetHeight();
+                panel.style.height = `${target}px`;
+                if (shell) shell.style.height = `${target - 8}px`;
+            }
+            localStorage.setItem('mdChatHeight', String(Math.round(panel.getBoundingClientRect().height)));
+        });
 
-        if (shell && body && input && top && collapseBtn) {
-            collapseBtn.addEventListener('click', (e) => {
-                e.preventDefault();
-                const collapsed = shell.classList.toggle('is-collapsed');
-                body.style.display = collapsed ? 'none' : '';
-                const icon = collapseBtn.querySelector('i');
-                if (icon) {
-                    icon.className = collapsed ? 'fas fa-chevron-up' : 'fas fa-chevron-down';
-                }
-                if (collapsed) {
-                    const prev = panel.getBoundingClientRect().height;
-                    panel.dataset.prevHeight = String(Math.round(prev));
-                    const topHeight = top.getBoundingClientRect().height || 36;
-                    const inputHeight = input.getBoundingClientRect().height || 60;
-                    const target = Math.max(0, Math.round(topHeight + inputHeight + 8));
-                    panel.style.height = `${target}px`;
-                    shell.style.height = `${target - 8}px`;
-                } else {
-                    const prevHeight = Number(panel.dataset.prevHeight);
-                    if (Number.isFinite(prevHeight) && prevHeight > 0) {
-                        panel.style.height = `${prevHeight}px`;
-                    }
-                    shell.style.height = '';
-                }
-            });
-        }
+        // Collapse button removed; collapse/expand is controlled via drag/dblclick on the resizer.
 
         if (shell && panel && editorContainer && expandBtn) {
             expandBtn.addEventListener('click', (e) => {
@@ -9690,11 +9717,19 @@ class PaperStatsApp {
                 const maxHeight = 96;
                 if (!textarea.value) {
                     textarea.style.height = `${minHeight}px`;
+                    textarea.style.overflowY = 'hidden';
+                    if (shell?.classList.contains('is-collapsed')) {
+                        updateCollapsedHeight();
+                    }
                     return;
                 }
                 textarea.style.height = 'auto';
                 const next = Math.min(maxHeight, textarea.scrollHeight);
                 textarea.style.height = `${Math.max(minHeight, next)}px`;
+                textarea.style.overflowY = textarea.scrollHeight > maxHeight ? 'auto' : 'hidden';
+                if (shell?.classList.contains('is-collapsed')) {
+                    updateCollapsedHeight();
+                }
             };
             textarea.addEventListener('input', resizeInput);
             resizeInput();
@@ -11398,6 +11433,16 @@ class PaperStatsApp {
                 const links = this.buildCitationLinks(text, dois);
                 span.innerHTML = links;
                 span.title = text;
+                span.querySelectorAll('.citation-link').forEach((btn) => {
+                    if (btn.dataset.bound === '1') return;
+                    btn.dataset.bound = '1';
+                    btn.addEventListener('click', async (e) => {
+                        e.preventDefault();
+                        const doi = btn.dataset.citationDoi || '';
+                        if (!doi) return;
+                        await this.openFileByCitationDoi(doi);
+                    });
+                });
             } catch (err) {
                 console.warn('渲染引文失败:', err);
                 span.textContent = `[${dois.join('; ')}]`;
@@ -11887,10 +11932,82 @@ class PaperStatsApp {
         const parts = [];
         dois.forEach((doi, idx) => {
             const label = this.escapeHtml(labels[idx] || safeLabel || this.normalizeDoiString(doi));
-            const href = `https://doi.org/${encodeURIComponent(this.normalizeDoiString(doi))}`;
-            parts.push(`<a class="citation-link" href="${href}" target="_blank" rel="noopener">${label}</a>`);
+            const escDoi = this.escapeAttr(this.normalizeDoiString(doi));
+            parts.push(`<button class="citation-link" type="button" data-citation-doi="${escDoi}" title="Open PDF for ${this.escapeAttr(doi)}">${label}</button>`);
         });
         return parts.join('; ');
+    }
+
+    async openFileByCitationDoi(rawDoi = '') {
+        const doi = this.normalizeDoiString(rawDoi);
+        if (!doi) {
+            this.showNotification('Invalid DOI', 'warning');
+            return;
+        }
+        const base = await this.findFileBaseByDoi(doi);
+        if (!base) {
+            this.showNotification(`No matching file for DOI: ${doi}`, 'warning');
+            return;
+        }
+        await this.loadFile(base);
+        await this.ensurePdfLoaded();
+    }
+
+    async findFileBaseByDoi(rawDoi = '') {
+        const doi = (rawDoi || '').trim().toLowerCase();
+        if (!doi) return null;
+        const index = await this.buildDoiIndex();
+        if (!index) return null;
+        const keys = this.getDoiKeyVariants(doi);
+        for (const key of keys) {
+            const hit = index.get(key);
+            if (hit) return hit;
+        }
+        return null;
+    }
+
+    async buildDoiIndex() {
+        if (this._doiIndex) return this._doiIndex;
+        if (this._doiIndexBuilding) return this._doiIndexBuilding;
+        this._doiIndexBuilding = (async () => {
+            const index = new Map();
+            const bases = Object.keys(this.fileMetaByBase || {});
+            const view = this.currentJsonView || 'view1';
+            for (const base of bases) {
+                let data = null;
+                if (this.currentFileBase === base && this.currentData) {
+                    data = this.currentData;
+                } else {
+                    const paths = [];
+                    const primary = this.getViewPathForBase(base, view);
+                    if (primary) paths.push(primary);
+                    this.getAllJsonPathsForBase(base).forEach((p) => {
+                        if (p && !paths.includes(p)) paths.push(p);
+                    });
+                    for (const path of paths) {
+                        try {
+                            const loaded = await this.readProjectFile(path);
+                            if (loaded) {
+                                data = loaded;
+                                break;
+                            }
+                        } catch (err) {
+                            continue;
+                        }
+                    }
+                }
+                if (!data) continue;
+                const doiRaw = (data.meta_info && data.meta_info.doi) || this.findFirstDoiInData(data) || '';
+                if (!doiRaw) continue;
+                this.getDoiKeyVariants(doiRaw).forEach((key) => {
+                    if (!index.has(key)) index.set(key, base);
+                });
+            }
+            this._doiIndex = index;
+            this._doiIndexBuilding = null;
+            return index;
+        })();
+        return this._doiIndexBuilding;
     }
 
     async formatCitation(dois = [], mode = 'citep') {
