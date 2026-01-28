@@ -10,6 +10,8 @@ const path = require('path');
 const url = require('url');
 const os = require('os');
 const { execFileSync } = require('child_process');
+const { handleBibDownload } = require('./server/api/bib-download');
+const { handleGroupByFields } = require('./server/api/groupby-fields');
 
 const PORT = process.env.PORT ? Number(process.env.PORT) : 8000;
 const HOST = process.env.HOST || '127.0.0.1';
@@ -601,6 +603,23 @@ const server = http.createServer((req, res) => {
             }
         });
         
+        return;
+    }
+
+    // Download BibTeX file for DOI list
+    if (req.method === 'POST' && pathname === '/bib-download') {
+        handleBibDownload(req, res, { formatDate });
+        return;
+    }
+
+    // Group by fields for JSON view
+    if (req.method === 'POST' && pathname === '/groupby-fields') {
+        handleGroupByFields(req, res, {
+            normalizeProjectPath,
+            ensureProjectStructure,
+            normalizeGroupList,
+            fileOrderName: FILE_ORDER_NAME
+        });
         return;
     }
 
@@ -2042,5 +2061,7 @@ server.listen(PORT, HOST, () => {
     console.log('   - POST /delete-group-start (delete)');
     console.log('   - GET  /delete-group-status (delete)');
     console.log('   - POST /file-exists');
+    console.log('   - POST /bib-download (download BibTeX by DOI list)');
+    console.log('   - POST /groupby-fields (aggregate field values by view)');
     console.log('Press Ctrl+C to stop\n');
 });

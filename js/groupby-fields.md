@@ -134,3 +134,15 @@ await window.paperStats.groupByFields({
 - Counts are aggregated per value string.
 - If a field returns multiple values, grouped mode combines all values into Cartesian combinations; merged mode counts all values.
 - Only JSON files in the current view are scanned.
+
+## API (server)
+
+`server.js` exposes a JSON API for terminal usage:
+
+```bash
+curl -X POST http://127.0.0.1:8000/groupby-fields \\
+  -H "Content-Type: application/json" \\
+  -d '{\"projectPath\":\"/path/to/project\",\"fields\":[\"wos_data.publication_year\",\"wos_data.issn\"],\"mode\":\"grouped\"}'
+```
+
+To group by custom group labels, pass `groupByGroupName: true` and `groups` in the request body.

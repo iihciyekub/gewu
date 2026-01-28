@@ -50,3 +50,21 @@ await window.paperStats.applyBibliographyRendering(renderRoot);
 - Requires citation-js (loaded via `ensureCiteLib()` in `js/app.js`).
 - The downloaded filename is derived from the first DOI or `references_<timestamp>.bib`.
 - Cache is stored in project storage under `citation-meta` when available.
+
+## API (server)
+
+`server.js` exposes a download API for terminal usage:
+
+```bash
+curl -X POST http://127.0.0.1:8000/bib-download \\
+  -H "Content-Type: application/json" \\
+  -d '{\"dois\":[\"10.1000/xyz123\",\"10.5555/abc987\"],\"filename\":\"refs.bib\"}' \\
+  -o refs.bib
+```
+
+Request body fields:
+
+- `dois`: array of DOI strings (required)
+- `doi`: single DOI string (optional alternative to `dois`)
+- `filename`: output filename (optional; defaults to `references_YYYYMMDD.bib`)
+- `concurrency`: max concurrent DOI fetches (optional, default 3)
