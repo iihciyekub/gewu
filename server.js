@@ -1379,7 +1379,7 @@ const server = http.createServer((req, res) => {
     }
 
     // 处理获取PDF文件请求（支持任意项目路径）
-    if (req.method === 'GET' && pathname === '/get-pdf') {
+    if ((req.method === 'GET' || req.method === 'HEAD') && pathname === '/get-pdf') {
         try {
             const query = new URL(req.url, `http://${req.headers.host}`).searchParams;
             const projectPath = query.get('projectPath');
@@ -1418,12 +1418,77 @@ const server = http.createServer((req, res) => {
                 return;
             }
             
-            const content = fs.readFileSync(targetFile);
-            res.writeHead(200, { 
+            const stat = fs.statSync(targetFile);
+            const fileSize = stat.size;
+            const range = req.headers.range;
+            const mtime = stat.mtime.toUTCString();
+            const etag = `"${stat.size}-${stat.mtimeMs}"`;
+
+            const ifNoneMatch = req.headers['if-none-match'];
+            const ifModifiedSince = req.headers['if-modified-since'];
+            if (!range && ((ifNoneMatch && ifNoneMatch === etag) || (ifModifiedSince && ifModifiedSince === mtime))) {
+                res.writeHead(304, {
+                    'ETag': etag,
+                    'Last-Modified': mtime,
+                    'Accept-Ranges': 'bytes'
+                });
+                res.end();
+                return;
+            }
+
+            if (req.method === 'HEAD') {
+                res.writeHead(200, {
+                    'Content-Type': 'application/pdf',
+                    'Content-Length': fileSize,
+                    'Accept-Ranges': 'bytes',
+                    'ETag': etag,
+                    'Last-Modified': mtime,
+                    'Cache-Control': 'public, max-age=0'
+                });
+                res.end();
+                return;
+            }
+
+            if (range) {
+                const match = /bytes=(\d*)-(\d*)/.exec(range);
+                if (!match) {
+                    res.writeHead(416, { 'Content-Range': `bytes */${fileSize}` });
+                    res.end();
+                    return;
+                }
+                let start = match[1] ? parseInt(match[1], 10) : 0;
+                let end = match[2] ? parseInt(match[2], 10) : fileSize - 1;
+                if (Number.isNaN(start)) start = 0;
+                if (Number.isNaN(end)) end = fileSize - 1;
+                if (start > end || start >= fileSize) {
+                    res.writeHead(416, { 'Content-Range': `bytes */${fileSize}` });
+                    res.end();
+                    return;
+                }
+                end = Math.min(end, fileSize - 1);
+                const chunkSize = end - start + 1;
+                res.writeHead(206, {
+                    'Content-Type': 'application/pdf',
+                    'Content-Length': chunkSize,
+                    'Content-Range': `bytes ${start}-${end}/${fileSize}`,
+                    'Accept-Ranges': 'bytes',
+                    'ETag': etag,
+                    'Last-Modified': mtime,
+                    'Cache-Control': 'public, max-age=0'
+                });
+                fs.createReadStream(targetFile, { start, end }).pipe(res);
+                return;
+            }
+
+            res.writeHead(200, {
                 'Content-Type': 'application/pdf',
-                'Content-Length': content.length
+                'Content-Length': fileSize,
+                'Accept-Ranges': 'bytes',
+                'ETag': etag,
+                'Last-Modified': mtime,
+                'Cache-Control': 'public, max-age=0'
             });
-            res.end(content);
+            fs.createReadStream(targetFile).pipe(res);
             
             console.log('✅ PDF读取成功');
             

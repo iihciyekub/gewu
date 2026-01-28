@@ -3763,9 +3763,9 @@ ol.json-array {
 }
 
 .context-menu-item {
-    padding: 6px 12px;
+    padding: 4px 10px;
     cursor: pointer;
-    font-size: 11px;
+    font-size: 10px;
     display: flex;
     align-items: center;
     gap: 8px;

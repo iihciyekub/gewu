@@ -139,6 +139,7 @@ class PaperStatsApp {
         this.pdfViewModeRestored = false; // 标记是否已经恢复过PDF窗口模式
         this.pdfPopupAutoCollapsed = false;
         this.pdfPopupRightWasCollapsed = false;
+        this._pdfPrewarmCache = new Map();
         this.metaDefaultsPatched = false;
         this.addSectionShowTimer = null;
         this.addSectionHoverCleanup = null;
@@ -1395,6 +1396,7 @@ class PaperStatsApp {
 
         // 加载文件列表
         await this.loadFileList();
+        await this.applyCurrentView();
     }
 
     // 加载项目配置
@@ -1852,6 +1854,14 @@ class PaperStatsApp {
         document.addEventListener('keydown', (e) => {
             const mod = e.metaKey || e.ctrlKey;
             const key = (e.key || '').toLowerCase();
+            if (mod && e.code === 'Space') {
+                e.preventDefault();
+                const btn = document.getElementById('mdChatToggleBtn');
+                if (btn) {
+                    btn.click();
+                }
+                return;
+            }
             if (mod && !e.shiftKey && key === 'f' && this.isLeftActive) {
                 e.preventDefault();
                 this.toggleFileFilter();
@@ -6904,7 +6914,9 @@ class PaperStatsApp {
             this.renderFlatView();
             // 再次确认未切换文件
             if (loadId !== this.currentLoadToken) return;
-            await this.loadMarkdownForCurrentFile();
+            if (!this.isDraftViewActive) {
+                await this.loadMarkdownForCurrentFile();
+            }
             // 自动保存因默认 meta 补全产生的更改，避免频繁提示
             if (metaChanged && !hadTempCacheBefore) {
                 await this.autoSaveMetaDefaults();
@@ -6923,10 +6935,9 @@ class PaperStatsApp {
                 this.pendingPdfUrl = primaryUrl;
                 this.pendingPdfFallback = fallbackUrl;
                 this.currentPdfLoadToken++;
-                this.resetPdfViewerFrame();
-                this.lastPdfLoadedUrl = '';
                 this.lastPdfLoadedKey = '';
                 this.updatePdfPlaceholder('pending');
+                this.prewarmPdf(primaryUrl);
                 if (this.autoLoadPdf) {
                     await this.ensurePdfLoaded();
                 }
@@ -6940,7 +6951,9 @@ class PaperStatsApp {
                 this.lastPdfLoadedUrl = '';
                 this.lastPdfLoadedKey = '';
             }
-            await this.applyCurrentView();
+            if (!(this.isDraftViewActive && (this.currentView === 'markdown' || this.currentView === 'draft'))) {
+                await this.applyCurrentView();
+            }
         } catch (error) {
             console.error('Error loading file:', error);
             const spaceHint = /\s/.test(filename) ? ' (Hint: Filename contains spaces, please remove them and try again)' : '';
@@ -7007,7 +7020,7 @@ class PaperStatsApp {
 
         // 保持空白，不再显示“Loading”提示
         structuredView.innerHTML = '';
-        if (markdownView) markdownView.innerHTML = '';
+        if (markdownView && !this.isDraftViewActive) markdownView.innerHTML = '';
         if (flatView) flatView.innerHTML = '';
     }
 
@@ -14079,7 +14092,41 @@ class PaperStatsApp {
             // viewer.html在 js/pdfjs/web/ 目录
             // 使用完整的URL路径，确保iframe可以正确访问
             const absoluteUrl = window.location.origin + url;
-            const viewerUrl = `js/pdfjs/web/viewer.html?file=${encodeURIComponent(absoluteUrl)}&theme=${this.theme === 'dark' ? 'dark' : 'light'}#zoom=80`;
+            const themeParam = this.theme === 'dark' ? 'dark' : 'light';
+            const viewerUrl = `js/pdfjs/web/viewer.html?file=${encodeURIComponent(absoluteUrl)}&theme=${themeParam}#zoom=80`;
+
+            const tryReuseViewer = async () => {
+                if (!pdfViewer || !pdfViewer.contentWindow) return false;
+                if (pdfViewer.dataset.viewerTheme !== themeParam) return false;
+                const win = pdfViewer.contentWindow;
+                const app = win.PDFViewerApplication;
+                if (!app || !app.initializedPromise) return false;
+                try {
+                    await app.initializedPromise;
+                    if (loadToken !== this.currentPdfLoadToken) return true;
+                    await app.open({ url: absoluteUrl });
+                    pdfViewer.classList.add('pdf-loaded');
+                    this.lastPdfLoadedUrl = url;
+                    this.pendingPdfUrl = url;
+                    this.updatePdfPlaceholder('loaded');
+                    this.closePdfSidebarIfOpen(win);
+                    await this.restorePdfAnnotations(url);
+                    this.restorePdfViewMode();
+                    return true;
+                } catch (err) {
+                    console.warn('PDF viewer reuse failed:', err);
+                    return false;
+                }
+            };
+
+            if (pdfViewer && pdfViewer.src && pdfViewer.dataset.viewerReady === '1') {
+                const reused = await tryReuseViewer();
+                if (reused) return;
+            }
+
+            if (pdfViewer) {
+                delete pdfViewer.dataset.viewerReady;
+            }
             pdfViewer.src = viewerUrl;
 
             // 监听iframe加载完成（如需自定义滚动行为，可在此扩展）
@@ -14145,6 +14192,8 @@ class PaperStatsApp {
                         requestAnimationFrame(async () => {
                             if (loadToken !== this.currentPdfLoadToken) return;
                             pdfViewer.classList.add('pdf-loaded');
+                            pdfViewer.dataset.viewerReady = '1';
+                            pdfViewer.dataset.viewerTheme = themeParam;
                             this.lastPdfLoadedUrl = url;
                             this.pendingPdfUrl = url;
                             this.updatePdfPlaceholder('loaded');
@@ -14167,9 +14216,26 @@ class PaperStatsApp {
 
     async checkPdfAvailable(url) {
         try {
-            const resp = await fetch(url, { method: 'GET', cache: 'no-store' });
-            if (!resp.ok) return false;
-            const type = (resp.headers.get('content-type') || '').toLowerCase();
+            if (!this._pdfAvailabilityCache) this._pdfAvailabilityCache = new Map();
+            const cached = this._pdfAvailabilityCache.get(url);
+            const now = Date.now();
+            if (cached && (now - cached.ts) < 180000) {
+                return cached.ok;
+            }
+            const headResp = await fetch(url, { method: 'HEAD', cache: 'no-store' });
+            if (headResp.ok) {
+                const type = (headResp.headers.get('content-type') || '').toLowerCase();
+                const ok = !type || type.includes('application/pdf') || type.includes('pdf');
+                this._pdfAvailabilityCache.set(url, { ok, ts: now });
+                return ok;
+            }
+            const resp = await fetch(url, {
+                method: 'GET',
+                headers: { Range: 'bytes=0-0' },
+                cache: 'no-store'
+            });
+            const ok = resp.status === 206 || resp.status === 200;
+            this._pdfAvailabilityCache.set(url, { ok, ts: now });
             if (resp.body && typeof resp.body.cancel === 'function') {
                 try {
                     resp.body.cancel();
@@ -14177,8 +14243,7 @@ class PaperStatsApp {
                     // ignore cancel errors
                 }
             }
-            if (!type) return true;
-            return type.includes('application/pdf') || type.includes('pdf');
+            return ok;
         } catch (error) {
             console.warn('PDF availability check failed:', error);
             return false;
@@ -14230,6 +14295,31 @@ class PaperStatsApp {
         await this.loadPDF(availableUrl);
     }
 
+    prewarmPdf(url) {
+        if (!url) return;
+        const cache = this._pdfPrewarmCache || new Map();
+        this._pdfPrewarmCache = cache;
+        const now = Date.now();
+        const cached = cache.get(url);
+        if (cached && (now - cached) < 120000) return;
+        cache.set(url, now);
+        fetch(url, {
+            method: 'GET',
+            headers: { Range: 'bytes=0-2047' },
+            cache: 'default'
+        }).then((resp) => {
+            if (resp.body && typeof resp.body.cancel === 'function') {
+                try {
+                    resp.body.cancel();
+                } catch (_e) {
+                    // ignore
+                }
+            }
+        }).catch(() => {
+            // ignore prewarm errors
+        });
+    }
+
     updatePdfPlaceholder(state) {
         if (!this.pdfPlaceholderEl) return;
         const textEl = this.pdfPlaceholderEl.querySelector('.pdf-placeholder-text');
@@ -14255,6 +14345,17 @@ class PaperStatsApp {
             localStorage.setItem('pdfjs.sidebarViewOnLoad', '0');
         } catch (_e) {
             // ignore
+        }
+    }
+
+    closePdfSidebarIfOpen(pdfWindow) {
+        try {
+            const pdfApp = pdfWindow?.PDFViewerApplication;
+            if (pdfApp?.pdfSidebar?.isOpen) {
+                pdfApp.pdfSidebar.close();
+            }
+        } catch (err) {
+            console.warn('PDF sidebar close failed:', err);
         }
     }
 
