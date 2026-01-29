@@ -1263,7 +1263,7 @@ body.theme-dark .tab-btn.active {
     flex-direction: column;
     overflow: hidden;
     padding: 10px;
-    gap: 10px;
+    /* gap: 10px; */
     min-height: 0;
 }
 
@@ -2039,6 +2039,19 @@ body.theme-vscode .nested-index-cell {
     min-width: 0;
 }
 
+.editor-container.chat-docked .flat-view.active {
+    justify-content: center;
+}
+
+.editor-container.chat-docked .flat-view.active .flat-editor {
+    flex: 0 1 auto;
+    height: 80%;
+}
+
+.editor-container.chat-docked .flat-view.active .flat-editor textarea {
+    height: 100%;
+}
+
 .editor-container.chat-docked .markdown-body,
 .editor-container.chat-docked .markdown-editor {
     flex: 1 1 auto;
@@ -2613,6 +2626,32 @@ body.theme-vscode .qa-bubble {
     height: 100%;
 }
 
+.md-chat-dock-resizer {
+    display: none;
+    width: 6px;
+    height: 100%;
+    cursor: ew-resize;
+    align-self: stretch;
+    box-shadow: none;
+}
+
+.editor-container.chat-docked .md-chat-dock-resizer {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.md-chat-dock-resizer::before {
+    content: '';
+    display: block;
+    width: 5px;
+    height: 48px;
+    margin: 0;
+    background: #333;
+    border-radius: 999px;
+    opacity: 0.8;
+}
+
 .md-chat-panel.is-hidden {
     display: none;
 }
@@ -2686,6 +2725,7 @@ body.theme-vscode .qa-bubble {
     flex: 1;
     background: #fff;
     transition: opacity 0.2s ease;
+    overflow-y: auto;
 }
 
 .md-chat-shell.is-collapsed .md-chat-top,
@@ -2701,6 +2741,82 @@ body.theme-vscode .qa-bubble {
     gap: 10px;
     border-top: 1px solid #e6e6e6;
     position: relative;
+    flex-direction: column;
+}
+
+.md-chat-panel:not(.is-docked) .md-chat-input-stack {
+    flex-direction: column;
+}
+
+.md-chat-panel:not(.is-docked) .md-chat-field-chips {
+    order: -1;
+}
+
+.md-chat-input-stack {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    position: relative;
+}
+
+.md-chat-field-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    padding: 6px 0 0;
+}
+
+.md-chat-chip {
+    border: 1px solid #d6e4f2;
+    background: #f0f6ff;
+    color: #0b3a6f;
+    border-radius: 999px;
+    padding: 2px 8px;
+    font-size: 12px;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+}
+
+.md-chat-chip i {
+    font-size: 11px;
+}
+
+.md-chat-chip-hint {
+    color: #999;
+    font-size: 12px;
+}
+
+.md-chat-suggest {
+    display: none;
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: calc(100% + 6px);
+    background: #fff;
+    border: 1px solid #e0e0e0;
+    border-radius: 6px;
+    box-shadow: 0 8px 18px rgba(0, 0, 0, 0.08);
+    z-index: 2;
+    max-height: 180px;
+    overflow: auto;
+}
+
+.md-chat-suggest-item {
+    width: 100%;
+    text-align: left;
+    padding: 6px 10px;
+    border: none;
+    background: transparent;
+    font-size: 12px;
+    color: #333;
+    cursor: pointer;
+}
+
+.md-chat-suggest-item:hover,
+.md-chat-suggest-item.active {
+    background: #eef4ff;
 }
 
 .md-chat-input-text {
@@ -2712,8 +2828,8 @@ body.theme-vscode .qa-bubble {
     font-size: 13px;
     color: #333;
     resize: none;
-    min-height: 96px;
-    height: 96px;
+    min-height: 24px;
+    height: 24px;
     line-height: 1.4;
     font-family: inherit;
     padding-right: 56px;
@@ -2745,6 +2861,43 @@ body.theme-vscode .qa-bubble {
 .md-chat-shell.is-collapsed .md-chat-input-actions {
     align-self: flex-end;
     padding-bottom: 0;
+}
+
+.md-chat-shell.is-collapsed .md-chat-field-chips,
+.md-chat-shell.is-collapsed .md-chat-suggest {
+    display: none;
+}
+
+.md-chat-query-meta {
+    font-size: 10px;
+    font-weight: bold;
+    color: #6f7c88;
+    padding: 2px 12px;
+    border-bottom: 1px solid #edf1f6;
+}
+
+.md-chat-query-block {
+    padding: 10px 12px;
+    border-bottom: 1px dashed #e5e9f0;
+}
+
+.md-chat-query-title {
+    font-weight: 600;
+    font-size: 13px;
+    color: #1d2a39;
+    margin-bottom: 4px;
+}
+
+.md-chat-query-value {
+    font-size: 12px;
+    color: #2c3a47;
+    white-space: pre-wrap;
+}
+
+.md-chat-query-empty {
+    padding: 12px;
+    color: #8a8a8a;
+    font-size: 12px;
 }
 
 .md-chat-btn {

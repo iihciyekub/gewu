@@ -112,6 +112,9 @@ class PaperStatsApp {
         this._statusProgressState = { text: '', percent: 0 };
         this._statusProgressTagTimer = null;
         this.groupSortState = {};
+        this.mdChatQueryFields = new Set();
+        this.mdChatFieldOptions = [];
+        this.mdChatSuggestIndex = -1;
 
         // 项目管理
         this.currentProject = null; // { name, path }
@@ -385,6 +388,102 @@ class PaperStatsApp {
         this.persistGroupsAndRender(groups, this.currentFile);
         const label = nextDir === 'asc' ? 'A→Z' : 'Z→A';
         this.showNotification(`Sorted by journal (${label})`, 'success');
+    }
+
+    async sortGroupByTimesCitedWos(groupId) {
+        const view = this.currentJsonView || '';
+        const groups = this.getCurrentGroups();
+        const target = groups.find(g => g.id === groupId);
+        if (!target) return;
+        const files = (target.files || []).slice();
+        if (!files.length) return;
+
+        const prev = this.groupSortState[groupId]?.timesCitedWos || 'desc';
+        const nextDir = prev === 'asc' ? 'desc' : 'asc';
+        this.groupSortState[groupId] = { ...(this.groupSortState[groupId] || {}), timesCitedWos: nextDir };
+
+        const fetchCited = async (base) => {
+            const path = this.getViewPathForBase(base, view);
+            if (!path) return { cited: null, base };
+            try {
+                const data = await this.readProjectFile(path);
+                const wos = data?.wos_data || {};
+                const raw = wos.times_cited_wos ?? wos.timesCitedWos ?? wos.times_cited;
+                const val = Array.isArray(raw) ? raw[0] : raw;
+                const parsed = val !== undefined && val !== null ? Number(String(val).trim()) : NaN;
+                const cited = Number.isFinite(parsed) ? parsed : null;
+                return { cited, base };
+            } catch (err) {
+                console.warn('sortGroupByTimesCitedWos fetch failed for', base, err);
+                return { cited: null, base };
+            }
+        };
+
+        const results = await Promise.all(files.map(f => fetchCited(f)));
+        const dir = nextDir === 'asc' ? 1 : -1;
+        const order = results
+            .sort((a, b) => {
+                const aMissing = !Number.isFinite(a.cited);
+                const bMissing = !Number.isFinite(b.cited);
+                if (aMissing && bMissing) return a.base.localeCompare(b.base);
+                if (aMissing) return 1;
+                if (bMissing) return -1;
+                return (a.cited - b.cited) * dir || a.base.localeCompare(b.base);
+            })
+            .map(r => r.base);
+
+        target.files = order;
+        this.persistGroupsAndRender(groups, this.currentFile);
+        const label = nextDir === 'asc' ? 'ascending' : 'descending';
+        this.showNotification(`Sorted by times_cited_wos (${label})`, 'success');
+    }
+
+    async sortGroupByTimesCitedAll(groupId) {
+        const view = this.currentJsonView || '';
+        const groups = this.getCurrentGroups();
+        const target = groups.find(g => g.id === groupId);
+        if (!target) return;
+        const files = (target.files || []).slice();
+        if (!files.length) return;
+
+        const prev = this.groupSortState[groupId]?.timesCitedAll || 'desc';
+        const nextDir = prev === 'asc' ? 'desc' : 'asc';
+        this.groupSortState[groupId] = { ...(this.groupSortState[groupId] || {}), timesCitedAll: nextDir };
+
+        const fetchCited = async (base) => {
+            const path = this.getViewPathForBase(base, view);
+            if (!path) return { cited: null, base };
+            try {
+                const data = await this.readProjectFile(path);
+                const wos = data?.wos_data || {};
+                const raw = wos.times_cited_all_databases ?? wos.timesCitedAllDatabases ?? wos.times_cited_all;
+                const val = Array.isArray(raw) ? raw[0] : raw;
+                const parsed = val !== undefined && val !== null ? Number(String(val).trim()) : NaN;
+                const cited = Number.isFinite(parsed) ? parsed : null;
+                return { cited, base };
+            } catch (err) {
+                console.warn('sortGroupByTimesCitedAll fetch failed for', base, err);
+                return { cited: null, base };
+            }
+        };
+
+        const results = await Promise.all(files.map(f => fetchCited(f)));
+        const dir = nextDir === 'asc' ? 1 : -1;
+        const order = results
+            .sort((a, b) => {
+                const aMissing = !Number.isFinite(a.cited);
+                const bMissing = !Number.isFinite(b.cited);
+                if (aMissing && bMissing) return a.base.localeCompare(b.base);
+                if (aMissing) return 1;
+                if (bMissing) return -1;
+                return (a.cited - b.cited) * dir || a.base.localeCompare(b.base);
+            })
+            .map(r => r.base);
+
+        target.files = order;
+        this.persistGroupsAndRender(groups, this.currentFile);
+        const label = nextDir === 'asc' ? 'ascending' : 'descending';
+        this.showNotification(`Sorted by times_cited_all_databases (${label})`, 'success');
     }
 
     loadDebugEnabled() {
@@ -1884,6 +1983,11 @@ class PaperStatsApp {
             if (mod && !e.shiftKey && key === 'f' && this.isLeftActive) {
                 e.preventDefault();
                 this.toggleFileFilter();
+                return;
+            }
+            if (mod && !e.shiftKey && key === 'i') {
+                e.preventDefault();
+                this.openCodexCli();
                 return;
             }
             if (mod && (e.key === 'Delete' || e.key === 'Backspace') && this.isLeftActive) {
@@ -5008,6 +5112,10 @@ class PaperStatsApp {
         const yearIcon = yearDir === 'asc' ? 'fa-sort-amount-down-alt' : 'fa-sort-amount-up-alt';
         const titleDir = this.groupSortState?.[group?.id]?.sourceTitle || 'asc';
         const titleIcon = titleDir === 'asc' ? 'fa-sort-alpha-down' : 'fa-sort-alpha-up';
+        const citedWosDir = this.groupSortState?.[group?.id]?.timesCitedWos || 'desc';
+        const citedWosIcon = citedWosDir === 'asc' ? 'fa-sort-amount-down-alt' : 'fa-sort-amount-up-alt';
+        const citedAllDir = this.groupSortState?.[group?.id]?.timesCitedAll || 'desc';
+        const citedAllIcon = citedAllDir === 'asc' ? 'fa-sort-amount-down-alt' : 'fa-sort-amount-up-alt';
         menu.innerHTML = `
             <div class="context-menu-item" data-action="sortGroupByNo">
                 <i class="fas fa-sort-numeric-down-alt"></i> Sort by No
@@ -5017,6 +5125,12 @@ class PaperStatsApp {
             </div>
             <div class="context-menu-item" data-action="sortGroupBySourceTitle">
                 <i class="fas ${titleIcon}"></i> Sort by Journal
+            </div>
+            <div class="context-menu-item" data-action="sortGroupByTimesCitedWos">
+                <i class="fas ${citedWosIcon}"></i> Sort by times_cited_wos
+            </div>
+            <div class="context-menu-item" data-action="sortGroupByTimesCitedAll">
+                <i class="fas ${citedAllIcon}"></i> Sort by times_cited_all_databases
             </div>
             <div class="context-menu-divider"></div>
             <div class="context-menu-item" data-action="copyGroupDois">
@@ -5068,6 +5182,10 @@ class PaperStatsApp {
                     await this.sortGroupByPublicationYear(group.id);
                 } else if (action === 'sortGroupBySourceTitle') {
                     await this.sortGroupBySourceTitle(group.id);
+                } else if (action === 'sortGroupByTimesCitedWos') {
+                    await this.sortGroupByTimesCitedWos(group.id);
+                } else if (action === 'sortGroupByTimesCitedAll') {
+                    await this.sortGroupByTimesCitedAll(group.id);
                 } else if (action === 'deleteGroupFiles') {
                     await this.deleteAllFilesInGroup(group);
                 } else if (action === 'renameGroup') {
@@ -6960,6 +7078,8 @@ class PaperStatsApp {
             // Render data
             this.renderStructuredView();
             this.renderFlatView();
+            this.updateMdChatFieldOptionsFromCurrentData();
+            this.runMdChatFieldQuery();
             // 再次确认未切换文件
             if (loadId !== this.currentLoadToken) return;
             if (!this.isDraftViewActive) {
@@ -9653,6 +9773,7 @@ class PaperStatsApp {
         this._mdChatPanelBound = true;
 
         const stored = Number(localStorage.getItem('mdChatHeight'));
+        const storedDockWidth = Number(localStorage.getItem('mdChatDockWidth'));
         if (Number.isFinite(stored) && stored > 80) {
             panel.style.height = `${stored}px`;
         }
@@ -9669,10 +9790,14 @@ class PaperStatsApp {
             editorContainer.classList.add('chat-docked');
             panel.style.height = '100%';
             if (shell) shell.style.height = '100%';
+            if (Number.isFinite(storedDockWidth) && storedDockWidth > 180) {
+                panel.style.width = `${storedDockWidth}px`;
+            }
         }
 
         const minHeight = 140;
         const collapseThreshold = 150;
+        const dockMinWidth = 220;
         const updateCollapsedHeight = () => {
             if (!panel || !shell) return;
             const target = getCollapsedTargetHeight();
@@ -9696,7 +9821,7 @@ class PaperStatsApp {
             localStorage.setItem('mdChatCollapsed', collapsed ? '1' : '0');
         };
         if (!storedHidden && !storedDocked) {
-            setCollapsedState(true);
+            setCollapsedState(false);
         }
         const onMouseDown = (e) => {
             e.preventDefault();
@@ -9709,14 +9834,14 @@ class PaperStatsApp {
             const onMove = (evt) => {
                 const delta = evt.clientY - startY;
                 const next = Math.max(minHeight, Math.min(maxHeight, Math.round(startHeight - delta)));
-                if (next <= collapseThreshold) {
+                if (panel.classList.contains('is-docked') && next <= collapseThreshold) {
                     setCollapsedState(true);
                     updateCollapsedHeight();
-                } else {
-                    setCollapsedState(false);
-                    panel.style.height = `${next}px`;
-                    if (shell) shell.style.height = '';
+                    return;
                 }
+                setCollapsedState(false);
+                panel.style.height = `${next}px`;
+                if (shell) shell.style.height = '';
             };
 
             const onUp = () => {
@@ -9734,6 +9859,7 @@ class PaperStatsApp {
         resizer.addEventListener('mousedown', onMouseDown);
         resizer.addEventListener('dblclick', (e) => {
             e.preventDefault();
+            if (!panel.classList.contains('is-docked')) return;
             if (!shell || !body || !top) return;
             const isCollapsed = shell.classList.contains('is-collapsed');
             if (isCollapsed) {
@@ -9756,6 +9882,36 @@ class PaperStatsApp {
 
         // Collapse button removed; collapse/expand is controlled via drag/dblclick on the resizer.
 
+        if (editorContainer && panel) {
+            let dockResizer = editorContainer.querySelector('.md-chat-dock-resizer');
+            if (!dockResizer) {
+                dockResizer = document.createElement('div');
+                dockResizer.className = 'md-chat-dock-resizer';
+                editorContainer.insertBefore(dockResizer, panel);
+            }
+            dockResizer.addEventListener('mousedown', (e) => {
+                if (!panel.classList.contains('is-docked')) return;
+                e.preventDefault();
+                const startX = e.clientX;
+                const startWidth = panel.getBoundingClientRect().width;
+                const containerWidth = editorContainer.getBoundingClientRect().width || 1;
+                const maxWidth = Math.max(dockMinWidth, Math.round(containerWidth * 0.7));
+                const onMove = (evt) => {
+                    const delta = evt.clientX - startX;
+                    const next = Math.max(dockMinWidth, Math.min(maxWidth, Math.round(startWidth - delta)));
+                    panel.style.width = `${next}px`;
+                };
+                const onUp = () => {
+                    const next = Math.round(panel.getBoundingClientRect().width);
+                    localStorage.setItem('mdChatDockWidth', String(next));
+                    document.removeEventListener('mousemove', onMove);
+                    document.removeEventListener('mouseup', onUp);
+                };
+                document.addEventListener('mousemove', onMove);
+                document.addEventListener('mouseup', onUp);
+            });
+        }
+
         if (shell && panel && editorContainer && expandBtn) {
             expandBtn.addEventListener('click', (e) => {
                 e.preventDefault();
@@ -9772,12 +9928,18 @@ class PaperStatsApp {
                     panel.dataset.prevHeight = String(Math.round(panel.getBoundingClientRect().height));
                     panel.style.height = '100%';
                     shell.style.height = '100%';
+                    const width = Number(localStorage.getItem('mdChatDockWidth'));
+                    if (Number.isFinite(width) && width > 180) {
+                        panel.style.width = `${width}px`;
+                    }
                     localStorage.setItem('mdChatDocked', '1');
                 } else {
-                    setCollapsedState(true);
-                    const target = getCollapsedTargetHeight();
-                    panel.style.height = `${target}px`;
-                    shell.style.height = `${target - 8}px`;
+                    setCollapsedState(false);
+                    const prevHeight = Number(panel.dataset.prevHeight);
+                    const nextHeight = Number.isFinite(prevHeight) && prevHeight > 0 ? prevHeight : minHeight;
+                    panel.style.height = `${nextHeight}px`;
+                    shell.style.height = '';
+                    panel.style.width = '';
                     localStorage.setItem('mdChatDocked', '0');
                 }
             });
@@ -9802,7 +9964,7 @@ class PaperStatsApp {
                     } else if (panel.classList.contains('is-docked')) {
                         editorContainer.classList.add('chat-docked');
                     } else {
-                        setCollapsedState(true);
+                        setCollapsedState(false);
                     }
                 }
                 localStorage.setItem('mdChatHidden', isHidden ? '1' : '0');
@@ -9810,6 +9972,23 @@ class PaperStatsApp {
         }
 
         if (textarea) {
+            this._mdChatBody = body;
+            this._mdChatTextarea = textarea;
+            this._mdChatShell = shell;
+            const inputStack = document.createElement('div');
+            inputStack.className = 'md-chat-input-stack';
+            const chipRow = document.createElement('div');
+            chipRow.className = 'md-chat-field-chips';
+            const suggestBox = document.createElement('div');
+            suggestBox.className = 'md-chat-suggest';
+            suggestBox.style.display = 'none';
+            if (textarea.parentElement && !textarea.parentElement.classList.contains('md-chat-input-stack')) {
+                textarea.parentElement.insertBefore(inputStack, textarea);
+                inputStack.appendChild(chipRow);
+                inputStack.appendChild(textarea);
+                inputStack.appendChild(suggestBox);
+            }
+
             const resizeInput = () => {
                 const minHeight = 24;
                 const maxHeight = 96;
@@ -9829,9 +10008,212 @@ class PaperStatsApp {
                     updateCollapsedHeight();
                 }
             };
+
+            const renderSuggestions = (value = '') => {
+                if (!suggestBox) return;
+                const query = (value || '').trim().toLowerCase();
+                this.mdChatSuggestIndex = -1;
+                if (!query) {
+                    suggestBox.style.display = 'none';
+                    suggestBox.innerHTML = '';
+                    return;
+                }
+                const options = (this.mdChatFieldOptions || []).filter(f => f.toLowerCase().includes(query)).slice(0, 8);
+                if (!options.length) {
+                    suggestBox.style.display = 'none';
+                    suggestBox.innerHTML = '';
+                    return;
+                }
+                suggestBox.innerHTML = options.map((opt, idx) => (
+                    `<button type="button" class="md-chat-suggest-item" data-idx="${idx}" data-value="${this.escapeAttr(opt)}">${this.escapeHtml(opt)}</button>`
+                )).join('');
+                suggestBox.style.display = 'block';
+            };
+
+            const addFieldFromInput = (raw) => {
+                const field = (raw || '').trim();
+                if (!field) return false;
+                this.addMdChatQueryField(field);
+                textarea.value = '';
+                renderSuggestions('');
+                resizeInput();
+                return true;
+            };
+
+            const applySuggestionToInput = (value) => {
+                const next = (value || '').trim();
+                if (!next) return;
+                textarea.value = next;
+                renderSuggestions(next);
+                resizeInput();
+                textarea.focus();
+            };
+
+            suggestBox.addEventListener('click', (e) => {
+                const btn = e.target.closest('.md-chat-suggest-item');
+                if (!btn) return;
+                applySuggestionToInput(btn.dataset.value || '');
+            });
+
+            textarea.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    if (this.mdChatSuggestIndex >= 0 && suggestBox?.children?.length) {
+                        const btn = suggestBox.children[this.mdChatSuggestIndex];
+                        if (btn?.dataset?.value) {
+                            applySuggestionToInput(btn.dataset.value);
+                            return;
+                        }
+                    }
+                    addFieldFromInput(textarea.value);
+                    return;
+                }
+                if (e.key === 'Tab') {
+                    if (!suggestBox || suggestBox.style.display === 'none') return;
+                    const items = Array.from(suggestBox.querySelectorAll('.md-chat-suggest-item'));
+                    if (!items.length) return;
+                    e.preventDefault();
+                    const idx = this.mdChatSuggestIndex >= 0 ? this.mdChatSuggestIndex : 0;
+                    const btn = items[idx];
+                    if (btn?.dataset?.value) {
+                        applySuggestionToInput(btn.dataset.value);
+                    }
+                    return;
+                }
+                if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+                    if (!suggestBox || suggestBox.style.display === 'none') return;
+                    e.preventDefault();
+                    const items = Array.from(suggestBox.querySelectorAll('.md-chat-suggest-item'));
+                    if (!items.length) return;
+                    const delta = e.key === 'ArrowDown' ? 1 : -1;
+                    let next = this.mdChatSuggestIndex + delta;
+                    if (next < 0) next = items.length - 1;
+                    if (next >= items.length) next = 0;
+                    this.mdChatSuggestIndex = next;
+                    items.forEach((el, idx) => el.classList.toggle('active', idx === this.mdChatSuggestIndex));
+                }
+            });
+
+            textarea.addEventListener('input', () => {
+                renderSuggestions(textarea.value);
+            });
+
             textarea.addEventListener('input', resizeInput);
             resizeInput();
+            this.renderMdChatQueryChips();
         }
+    }
+
+    updateMdChatFieldOptionsFromCurrentData() {
+        if (!this.currentData || typeof this.currentData !== 'object') {
+            this.mdChatFieldOptions = [];
+            return;
+        }
+        this.mdChatFieldOptions = Array.from(this.getFieldUnionFromData(this.currentData)).sort();
+    }
+
+    addMdChatQueryField(field) {
+        const name = (field || '').trim();
+        if (!name) return;
+        if (!this.mdChatQueryFields) this.mdChatQueryFields = new Set();
+        this.mdChatQueryFields.add(name);
+        this.renderMdChatQueryChips();
+        this.runMdChatFieldQuery();
+    }
+
+    removeMdChatQueryField(field) {
+        if (!this.mdChatQueryFields) return;
+        this.mdChatQueryFields.delete(field);
+        this.renderMdChatQueryChips();
+        this.runMdChatFieldQuery();
+    }
+
+    renderMdChatQueryChips() {
+        const panel = document.getElementById('mdChatPanel');
+        const chipRow = panel?.querySelector('.md-chat-field-chips');
+        if (!chipRow) return;
+        chipRow.innerHTML = '';
+        const fields = Array.from(this.mdChatQueryFields || []);
+        if (!fields.length) {
+            chipRow.innerHTML = '<span class="md-chat-chip-hint">Enter field and press Enter to add</span>';
+            return;
+        }
+        fields.forEach((field) => {
+            const chip = document.createElement('button');
+            chip.type = 'button';
+            chip.className = 'md-chat-chip';
+            chip.innerHTML = `<span>${this.escapeHtml(field)}</span><i class="fas fa-times"></i>`;
+            chip.addEventListener('click', () => this.removeMdChatQueryField(field));
+            chipRow.appendChild(chip);
+        });
+    }
+
+    resolveMdChatFieldValues(data, fieldPath) {
+        if (!data || !fieldPath) return [];
+        const segments = String(fieldPath).split('.').filter(Boolean);
+        const walk = (node, idx) => {
+            if (idx >= segments.length) return [node];
+            if (!node || typeof node !== 'object') return [];
+            const raw = segments[idx];
+            const isArraySeg = raw.endsWith('[]');
+            const key = isArraySeg ? raw.slice(0, -2) : raw;
+            if (!Object.prototype.hasOwnProperty.call(node, key)) return [];
+            const nextVal = node[key];
+            if (isArraySeg) {
+                const arr = Array.isArray(nextVal) ? nextVal : [nextVal];
+                const out = [];
+                arr.forEach(item => out.push(...walk(item, idx + 1)));
+                return out;
+            }
+            return walk(nextVal, idx + 1);
+        };
+        return walk(data, 0).filter(v => v !== undefined && v !== null);
+    }
+
+    formatMdChatValue(value) {
+        if (value === null || value === undefined) return '';
+        if (Array.isArray(value)) {
+            return value.map(v => this.formatMdChatValue(v)).filter(Boolean).join('; ');
+        }
+        if (typeof value === 'object') {
+            try {
+                return JSON.stringify(value);
+            } catch (_err) {
+                return String(value);
+            }
+        }
+        return String(value);
+    }
+
+    runMdChatFieldQuery() {
+        const body = this._mdChatBody || document.querySelector('#mdChatPanel .md-chat-body');
+        if (!body) return;
+        const fields = Array.from(this.mdChatQueryFields || []);
+        if (!fields.length) {
+            body.innerHTML = '<div class="md-chat-query-empty">No query fields yet.</div>';
+            return;
+        }
+        if (!this.currentData) {
+            body.innerHTML = '<div class="md-chat-query-empty">No JSON loaded.</div>';
+            return;
+        }
+        const base = this.currentFileBase || this.currentFile || '';
+        const viewSelect = document.getElementById('jsonViewSelect');
+        const view = (viewSelect && viewSelect.value) ? viewSelect.value : (this.currentJsonView || this.currentView || 'structured');
+        const blocks = fields.map((field) => {
+            const values = this.resolveMdChatFieldValues(this.currentData, field);
+            const text = values.length ? values.map(v => this.formatMdChatValue(v)).filter(Boolean).join('\n') : '(not found)';
+            return `
+                <div class="md-chat-query-block">
+                    <div class="md-chat-query-title">${this.escapeHtml(field)}</div>
+                    <div class="md-chat-query-value">${this.escapeHtml(text)}</div>
+                </div>
+            `;
+        }).join('');
+        body.innerHTML = `
+            <div class="md-chat-query-meta">File: ${this.escapeHtml(base)} · View: ${this.escapeHtml(view)}</div>
+            ${blocks}
+        `;
     }
 
     showStatusProjectContextMenu(e) {
