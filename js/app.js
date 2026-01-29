@@ -115,6 +115,9 @@ class PaperStatsApp {
         this.mdChatQueryFields = new Set();
         this.mdChatFieldOptions = [];
         this.mdChatSuggestIndex = -1;
+        this.mdChatHistory = [];
+        this.mdChatHistoryIndex = -1;
+        this.mdChatHistoryDraft = '';
 
         // 项目管理
         this.currentProject = null; // { name, path }
@@ -183,6 +186,7 @@ class PaperStatsApp {
         this._isSearching = false;
         this._lastClickedLink = null;
         this._lastClickTime = 0;
+        this._lastClickTimer = null;
         this._currentSearchAbortController = null;
 
         // PDF标注数据缓存
@@ -10034,6 +10038,18 @@ class PaperStatsApp {
                 const field = (raw || '').trim();
                 if (!field) return false;
                 this.addMdChatQueryField(field);
+                this.mdChatHistoryDraft = '';
+                this.mdChatHistoryIndex = -1;
+                if (Array.isArray(this.mdChatHistory)) {
+                    const existingIdx = this.mdChatHistory.indexOf(field);
+                    if (existingIdx >= 0) this.mdChatHistory.splice(existingIdx, 1);
+                    this.mdChatHistory.push(field);
+                    if (this.mdChatHistory.length > 50) {
+                        this.mdChatHistory = this.mdChatHistory.slice(-50);
+                    }
+                } else {
+                    this.mdChatHistory = [field];
+                }
                 textarea.value = '';
                 renderSuggestions('');
                 resizeInput();
@@ -10081,16 +10097,38 @@ class PaperStatsApp {
                     return;
                 }
                 if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
-                    if (!suggestBox || suggestBox.style.display === 'none') return;
+                    if (suggestBox && suggestBox.style.display !== 'none') {
+                        e.preventDefault();
+                        const items = Array.from(suggestBox.querySelectorAll('.md-chat-suggest-item'));
+                        if (!items.length) return;
+                        const delta = e.key === 'ArrowDown' ? 1 : -1;
+                        let next = this.mdChatSuggestIndex + delta;
+                        if (next < 0) next = items.length - 1;
+                        if (next >= items.length) next = 0;
+                        this.mdChatSuggestIndex = next;
+                        items.forEach((el, idx) => el.classList.toggle('active', idx === this.mdChatSuggestIndex));
+                        return;
+                    }
+                    if (!textarea.value && !this.mdChatHistory.length) return;
                     e.preventDefault();
-                    const items = Array.from(suggestBox.querySelectorAll('.md-chat-suggest-item'));
-                    if (!items.length) return;
-                    const delta = e.key === 'ArrowDown' ? 1 : -1;
-                    let next = this.mdChatSuggestIndex + delta;
-                    if (next < 0) next = items.length - 1;
-                    if (next >= items.length) next = 0;
-                    this.mdChatSuggestIndex = next;
-                    items.forEach((el, idx) => el.classList.toggle('active', idx === this.mdChatSuggestIndex));
+                    if (this.mdChatHistoryIndex === -1) {
+                        this.mdChatHistoryDraft = textarea.value;
+                    }
+                    const lastIdx = this.mdChatHistory.length - 1;
+                    if (e.key === 'ArrowUp') {
+                        this.mdChatHistoryIndex = this.mdChatHistoryIndex < 0 ? lastIdx : Math.max(0, this.mdChatHistoryIndex - 1);
+                    } else {
+                        if (this.mdChatHistoryIndex < 0) return;
+                        this.mdChatHistoryIndex = Math.min(lastIdx + 1, this.mdChatHistoryIndex + 1);
+                    }
+                    if (this.mdChatHistoryIndex > lastIdx) {
+                        textarea.value = this.mdChatHistoryDraft || '';
+                        this.mdChatHistoryIndex = -1;
+                    } else {
+                        textarea.value = this.mdChatHistory[this.mdChatHistoryIndex] || '';
+                    }
+                    renderSuggestions(textarea.value);
+                    resizeInput();
                 }
             });
 
@@ -10203,10 +10241,11 @@ class PaperStatsApp {
         const blocks = fields.map((field) => {
             const values = this.resolveMdChatFieldValues(this.currentData, field);
             const text = values.length ? values.map(v => this.formatMdChatValue(v)).filter(Boolean).join('\n') : '(not found)';
+            const rendered = text === '(not found)' ? this.escapeHtml(text) : this.renderGotoLinks(text, field);
             return `
                 <div class="md-chat-query-block">
                     <div class="md-chat-query-title">${this.escapeHtml(field)}</div>
-                    <div class="md-chat-query-value">${this.escapeHtml(text)}</div>
+                    <div class="md-chat-query-value">${rendered}</div>
                 </div>
             `;
         }).join('');
@@ -15948,6 +15987,8 @@ class PaperStatsApp {
             } finally {
                 // 无论成功或失败，都要重置搜索标志
                 this._isSearching = false;
+                this._lastClickedLink = null;
+                this._lastClickTime = 0;
             }
         };
 
@@ -15962,6 +16003,8 @@ class PaperStatsApp {
 
         // 重置搜索标志
         this._isSearching = false;
+        this._lastClickedLink = null;
+        this._lastClickTime = 0;
 
         // 如果使用了 AbortController，可以在这里取消请求
         // if (this._currentSearchAbortController) {
@@ -16822,9 +16865,8 @@ class PaperStatsApp {
                 const isSameLink = this._lastClickedLink === link;
                 const timeSinceLastClick = now - this._lastClickTime;
 
-                if (isSameLink && timeSinceLastClick < 2000) {
-                    // 5秒内重复点击同一个链接，忽略
-                    this.showNotification('Please wait 2 seconds before clicking again', 'info');
+                if (isSameLink && timeSinceLastClick < 300) {
+                    // 过快的重复点击，忽略
                     return;
                 }
 
@@ -16837,6 +16879,10 @@ class PaperStatsApp {
                 this._lastClickedLink = link;
                 this._lastClickTime = now;
                 this._isSearching = true;
+                if (this._lastClickTimer) {
+                    clearTimeout(this._lastClickTimer);
+                    this._lastClickTimer = null;
+                }
 
                 // 正常点击：执行跳转搜索
                 this.lastGotoLink = link;
@@ -17337,10 +17383,7 @@ class PaperStatsApp {
             if (pdfApp?.eventBus) {
                 pdfApp.eventBus.dispatch('findbarclose');
             }
-            const pdfDoc = pdfWindow?.document;
-            if (pdfDoc?.getSelection) {
-                pdfDoc.getSelection().removeAllRanges();
-            }
+            // 不清除用户的文本选择，避免影响手动选中
         } catch (err) {
             console.warn('清除 PDF 高亮失败:', err);
         }
@@ -17360,6 +17403,10 @@ class PaperStatsApp {
         if (!this._pdfHighlightClickHandler) {
             this._pdfHighlightClickHandler = () => {
                 if (this._pdfHighlightBoundWindow) {
+                    const sel = this._pdfHighlightBoundWindow?.getSelection?.();
+                    if (sel && !sel.isCollapsed) {
+                        return;
+                    }
                     this.clearPdfHighlightsForWindow(this._pdfHighlightBoundWindow);
                 }
             };
