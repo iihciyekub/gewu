@@ -39,8 +39,10 @@ class PaperStatsApp {
         this.blankDragImage = null;
         this.keywordTooltipEl = null;
         this.selectedItem = null; // { type: 'row' | 'section', path: string[], key: string }
-        this.isMiddleActive = false; // 鼠标是否在中间栏，用于键盘上下移动的激活判定
-        this.isLeftActive = false; // 鼠标是否在左侧栏，用于键盘左右移动文件顺序
+        this.activePanel = null; // left | middle | right | null
+        this.isMiddleActive = false; // 中间栏是否激活，用于键盘上下移动的激活判定
+        this.isLeftActive = false; // 左侧栏是否激活，用于键盘左右移动文件顺序
+        this.isRightActive = false; // 右侧栏是否激活
         this.fileFilterField = '';
         this.fileFilterValue = '';
         this.fileFilterMatches = null;
@@ -1397,6 +1399,7 @@ class PaperStatsApp {
         // 加载文件列表
         await this.loadFileList();
         await this.applyCurrentView();
+        this.setupEditableListeners();
     }
 
     // 加载项目配置
@@ -1446,6 +1449,20 @@ class PaperStatsApp {
             nameEl.textContent = 'Click to create or switch project';
             nameEl.title = 'Click to create or switch project';
         }
+    }
+
+    setActivePanel(panel) {
+        if (this.activePanel === panel) return;
+        this.activePanel = panel;
+        this.isLeftActive = panel === 'left';
+        this.isMiddleActive = panel === 'middle';
+        this.isRightActive = panel === 'right';
+        const leftPanel = document.querySelector('.left-panel');
+        const middlePanel = document.querySelector('.middle-panel');
+        const rightPanel = document.querySelector('.right-panel');
+        if (leftPanel) leftPanel.classList.toggle('panel-active', this.isLeftActive);
+        if (middlePanel) middlePanel.classList.toggle('panel-active', this.isMiddleActive);
+        if (rightPanel) rightPanel.classList.toggle('panel-active', this.isRightActive);
     }
 
     setupEventListeners() {
@@ -1760,16 +1777,18 @@ class PaperStatsApp {
             });
         }
 
-        // 中间栏激活检测（鼠标进入/离开）
+        // 面板激活状态（点击左/中/右）
         const middlePanel = document.querySelector('.middle-panel');
         if (middlePanel) {
-            middlePanel.addEventListener('mouseenter', () => { this.isMiddleActive = true; });
-            middlePanel.addEventListener('mouseleave', () => { this.isMiddleActive = false; });
+            middlePanel.addEventListener('mousedown', () => this.setActivePanel('middle'));
         }
         const leftPanel = document.querySelector('.left-panel');
         if (leftPanel) {
-            leftPanel.addEventListener('mouseenter', () => { this.isLeftActive = true; });
-            leftPanel.addEventListener('mouseleave', () => { this.isLeftActive = false; });
+            leftPanel.addEventListener('mousedown', () => this.setActivePanel('left'));
+        }
+        const rightPanelEl = document.querySelector('.right-panel');
+        if (rightPanelEl) {
+            rightPanelEl.addEventListener('mousedown', () => this.setActivePanel('right'));
         }
 
         // Modal controls
@@ -1867,6 +1886,21 @@ class PaperStatsApp {
                 this.toggleFileFilter();
                 return;
             }
+            if (mod && (e.key === 'Delete' || e.key === 'Backspace') && this.isLeftActive) {
+                if (['INPUT', 'TEXTAREA'].includes(e.target.tagName) || e.target.isContentEditable) return;
+                if (this.groupMenuState) return;
+                const selected = this.getSelectedFilesArray();
+                const single = selected.length ? selected[selected.length - 1] : this.currentFile;
+                if (!selected.length && !single) return;
+                e.preventDefault();
+                if (selected.length > 1) {
+                    this.deleteSelectedFilesAll();
+                } else if (single) {
+                    const fileItem = this.getRenderedFileItem(single);
+                    this.deleteFile(single, fileItem, true);
+                }
+                return;
+            }
             if (mod && !e.shiftKey && key === 's') {
                 e.preventDefault();
                 this.handleSaveShortcut();
@@ -1887,6 +1921,7 @@ class PaperStatsApp {
             }
             // 锁定时，仅当鼠标在中间栏时才拦截结构区的排序/移动
             const middleActive = !!this.isMiddleActive;
+            const leftActive = !!this.isLeftActive;
             if (this.isEditLocked && middleActive && (key === 'k' || e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
                 // 锁定时禁止排序模式切换和上下移动
                 if (mod && !e.shiftKey && key === 'k') {
@@ -1931,7 +1966,7 @@ class PaperStatsApp {
                 this.showNotification(msg, 'info');
                 return;
             }
-            if (this.isLeftActive && !mod && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) {
+            if (leftActive && !mod && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) {
                 if (['INPUT', 'TEXTAREA'].includes(e.target.tagName) || e.target.isContentEditable) return;
                 if (this.groupMenuState) return;
                 const selected = this.getSelectedFilesArray();
@@ -1942,29 +1977,33 @@ class PaperStatsApp {
                 this.reorderFileItem(target, offset);
                 return;
             }
-            if (this.isReorderMode && this.reorderSelected && middleActive && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
+            if (this.isReorderMode && this.reorderSelected && middleActive && mod && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
                 // 调整顺序需按下 Cmd/Ctrl + 上/下，且鼠标需在中间栏
-                if (!mod) return;
                 e.preventDefault();
                 const offset = e.key === 'ArrowUp' ? -1 : 1;
                 this.moveKey(this.reorderSelected.path, this.reorderSelected.key, offset);
-            } else if (!this.isReorderMode && this.selectedItem && middleActive && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
+            } else if (!this.isReorderMode && this.selectedItem && middleActive && mod && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
                 // 调整选中项顺序需 Cmd/Ctrl + 上/下，且鼠标需在中间栏
-                if (!mod) return;
                 if (['INPUT', 'TEXTAREA'].includes(e.target.tagName) || e.target.isContentEditable) return;
-                if (!this.isMiddleActive) return; // 仅当鼠标在中间栏时允许键盘上下移动
+                if (!this.isMiddleActive) return; // 仅当中间栏激活时允许键盘上下移动
                 e.preventDefault();
                 const offset = e.key === 'ArrowUp' ? -1 : 1;
                 this.moveSelectedItem(offset);
-            } else if (!middleActive && this.isLeftActive && mod && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
+            } else if (!this.isReorderMode && middleActive && !mod && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
+                if (['INPUT', 'TEXTAREA'].includes(e.target.tagName) || e.target.isContentEditable) return;
+                if ((this.currentView || 'structured') !== 'structured') return;
+                const offset = e.key === 'ArrowUp' ? -1 : 1;
+                this.moveSectionSelection(offset);
+                e.preventDefault();
+            } else if (!middleActive && leftActive && mod && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
                 if (['INPUT', 'TEXTAREA'].includes(e.target.tagName) || e.target.isContentEditable) return;
                 if (this.groupMenuState) return;
                 e.preventDefault();
                 const direction = e.key === 'ArrowUp' ? 'start' : 'end';
                 const extend = !!e.shiftKey;
                 this.jumpFileSelectionToEdge(direction, extend);
-            } else if (!middleActive && !mod && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
-                // 全局上下键控制左侧文件列表（无需鼠标悬停）
+            } else if (!middleActive && leftActive && !mod && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
+                // 仅当左侧栏激活时，允许上下键控制左侧文件列表
                 if (['INPUT', 'TEXTAREA'].includes(e.target.tagName) || e.target.isContentEditable) return;
                 if (this.groupMenuState) return;
                 const order = this.visibleFileOrder || [];
@@ -1985,6 +2024,15 @@ class PaperStatsApp {
                     const target = this.getRenderedFileItem(fname);
                     this.loadFile(fname, target);
                 }
+            }
+            if (middleActive && !mod && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) {
+                if (['INPUT', 'TEXTAREA'].includes(e.target.tagName) || e.target.isContentEditable) return;
+                if (this.isReorderMode) return;
+                if (!this.selectedItem || this.selectedItem.type !== 'section') return;
+                const shouldExpand = e.key === 'ArrowRight';
+                this.toggleSectionByKey(this.selectedItem.key, shouldExpand);
+                e.preventDefault();
+                return;
             }
             if (e.key === 'Escape') {
                 this.closeEditModal();
@@ -7155,20 +7203,6 @@ class PaperStatsApp {
 
         // Section drag sorting logic removed, changed to click selection + keyboard up/down adjustment
 
-        // Hover 700ms auto-select this section for keyboard navigation
-        let hoverTimer = null;
-        header.addEventListener('mouseenter', () => {
-            hoverTimer = setTimeout(() => {
-                this.setSelectedItem({ type: 'section', path: [], key: title });
-            }, 700);
-        });
-        header.addEventListener('mouseleave', () => {
-            if (hoverTimer) {
-                clearTimeout(hoverTimer);
-                hoverTimer = null;
-            }
-        });
-
         wrapper.appendChild(header);
         wrapper.appendChild(content);
 
@@ -8713,6 +8747,45 @@ class PaperStatsApp {
         }
     }
 
+    moveSectionSelection(offset = 0) {
+        if (!offset) return;
+        const sections = Array.from(document.querySelectorAll('.collapsible-section'));
+        if (!sections.length) return;
+        let selectedKey = this.selectedItem?.type === 'section' ? this.selectedItem.key : null;
+        if (!selectedKey && this.selectedItem?.type === 'row') {
+            const tablePath = (this.selectedItem.path || []).join('.');
+            const rowEl = document.querySelector(`table.json-table[data-path="${CSS.escape(tablePath)}"] tr[data-key="${CSS.escape(this.selectedItem.key)}"]`);
+            const sectionEl = rowEl?.closest('.collapsible-section');
+            selectedKey = sectionEl?.dataset?.sectionKey || null;
+        }
+        let idx = selectedKey ? sections.findIndex(sec => sec.dataset.sectionKey === selectedKey) : -1;
+        if (idx < 0) {
+            idx = offset > 0 ? -1 : sections.length;
+        }
+        idx += offset;
+        if (idx < 0) idx = 0;
+        if (idx >= sections.length) idx = sections.length - 1;
+        const next = sections[idx];
+        if (!next) return;
+        const key = next.dataset.sectionKey;
+        if (!key) return;
+        this.setSelectedItem({ type: 'section', path: [], key });
+        next.scrollIntoView({ block: 'nearest' });
+    }
+
+    toggleSectionByKey(key, expand) {
+        if (!key) return;
+        const sectionEl = document.querySelector(`.collapsible-section[data-section-key="${CSS.escape(key)}"]`);
+        if (!sectionEl) return;
+        const header = sectionEl.querySelector('.collapsible-header');
+        const content = sectionEl.querySelector('.collapsible-content');
+        if (!header || !content) return;
+        const shouldExpand = typeof expand === 'boolean' ? expand : !header.classList.contains('active');
+        header.classList.toggle('active', shouldExpand);
+        content.classList.toggle('active', shouldExpand);
+        this.setSectionExpanded(key, shouldExpand);
+    }
+
     moveSelectedItem(offset) {
         if (this.isEditLocked) {
             this.showLockedNotification('Adjust order');
@@ -9585,6 +9658,7 @@ class PaperStatsApp {
         }
         const storedHidden = localStorage.getItem('mdChatHidden') === '1';
         const storedDocked = localStorage.getItem('mdChatDocked') === '1';
+        const storedCollapsed = localStorage.getItem('mdChatCollapsed') === '1';
         if (storedHidden) {
             panel.classList.add('is-hidden');
         }
@@ -9619,7 +9693,11 @@ class PaperStatsApp {
             if (collapsed) {
                 updateCollapsedHeight();
             }
+            localStorage.setItem('mdChatCollapsed', collapsed ? '1' : '0');
         };
+        if (!storedHidden && !storedDocked) {
+            setCollapsedState(true);
+        }
         const onMouseDown = (e) => {
             e.preventDefault();
             panel.classList.add('is-dragging');
@@ -9661,7 +9739,9 @@ class PaperStatsApp {
             if (isCollapsed) {
                 setCollapsedState(false);
                 const prevHeight = Number(panel.dataset.prevHeight);
-                const nextHeight = Number.isFinite(prevHeight) && prevHeight > 0 ? prevHeight : minHeight;
+                const nextHeight = Number.isFinite(prevHeight) && prevHeight > 0
+                    ? Math.max(prevHeight, minHeight * 1.6)
+                    : Math.round(minHeight * 1.8);
                 panel.style.height = `${nextHeight}px`;
                 if (shell) shell.style.height = '';
             } else {
@@ -9688,13 +9768,16 @@ class PaperStatsApp {
                         : 'fa-solid fa-arrow-right-from-bracket';
                 }
                 if (docked) {
+                    setCollapsedState(false);
                     panel.dataset.prevHeight = String(Math.round(panel.getBoundingClientRect().height));
                     panel.style.height = '100%';
                     shell.style.height = '100%';
                     localStorage.setItem('mdChatDocked', '1');
                 } else {
-                    panel.style.height = `${minHeight}px`;
-                    shell.style.height = '';
+                    setCollapsedState(true);
+                    const target = getCollapsedTargetHeight();
+                    panel.style.height = `${target}px`;
+                    shell.style.height = `${target - 8}px`;
                     localStorage.setItem('mdChatDocked', '0');
                 }
             });
@@ -9718,6 +9801,8 @@ class PaperStatsApp {
                         editorContainer.classList.remove('chat-docked');
                     } else if (panel.classList.contains('is-docked')) {
                         editorContainer.classList.add('chat-docked');
+                    } else {
+                        setCollapsedState(true);
                     }
                 }
                 localStorage.setItem('mdChatHidden', isHidden ? '1' : '0');
@@ -11984,6 +12069,13 @@ class PaperStatsApp {
         if (this._doiIndexBuilding) return this._doiIndexBuilding;
         this._doiIndexBuilding = (async () => {
             const index = new Map();
+            if (!this.fileMetaByBase || !Object.keys(this.fileMetaByBase).length) {
+                try {
+                    await this.loadFileBasesFromServer();
+                } catch (_err) {
+                    // ignore and continue with whatever is available
+                }
+            }
             const bases = Object.keys(this.fileMetaByBase || {});
             const view = this.currentJsonView || 'view1';
             for (const base of bases) {
@@ -14136,6 +14228,14 @@ class PaperStatsApp {
                     const win = pdfViewer.contentWindow;
                     if (win) {
                         const pdfDoc = win.document;
+                        try {
+                            if (!pdfDoc.__panelActiveBound) {
+                                pdfDoc.addEventListener('mousedown', () => this.setActivePanel('right'), { capture: true });
+                                pdfDoc.__panelActiveBound = true;
+                            }
+                        } catch (err) {
+                            console.warn('Failed to bind PDF panel activation:', err);
+                        }
                         // 添加自定义样式：保持0.8缩放但修正标注层坐标
                         const styleId = 'paperReviewerPdfScaleStyle';
                         if (!pdfDoc.getElementById(styleId)) {
@@ -14275,6 +14375,8 @@ class PaperStatsApp {
             this.updatePdfPlaceholder('loaded');
             return;
         }
+        const tracker = this.createStatusProgressTracker('Loading PDF');
+        tracker.update('Loading PDF...', 10);
         this.updatePdfPlaceholder('pending');
 
         const availableUrl = await this.resolvePdfUrl(url);
@@ -14287,12 +14389,15 @@ class PaperStatsApp {
             this.pendingPdfFallback = null;
             this.lastPdfLoadedUrl = '';
             this.updatePdfPlaceholder('empty');
+            tracker.fail('PDF not found');
             return;
         }
 
         this.currentPdfUrl = availableUrl;
         this.pendingPdfUrl = availableUrl;
+        tracker.update('Opening PDF...', 65);
         await this.loadPDF(availableUrl);
+        tracker.finish('PDF ready');
     }
 
     prewarmPdf(url) {
@@ -16435,6 +16540,19 @@ class PaperStatsApp {
             this.hideApaTooltip();
         };
         this._doiCopyBtnHandler = async (e) => {
+            const doiLink = e.target.closest('.doi-link');
+            if (doiLink) {
+                const href = doiLink.getAttribute('href') || '';
+                if (/doi\.org/i.test(href)) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    const doi = this.normalizeDoiString(href);
+                    if (doi) {
+                        await this.openFileByCitationDoi(doi);
+                        return;
+                    }
+                }
+            }
             // Check if it's a WoS or DOI URL button (using apa-fetch-btn style)
             let btn = e.target.closest('.apa-fetch-btn');
             if (btn) {

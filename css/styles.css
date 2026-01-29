@@ -160,6 +160,7 @@ body {
     position: relative;
 }
 
+
 .panel-header {
     padding: 6px 8px;
     background: var(--wos-blue);
@@ -833,6 +834,7 @@ body {
     padding: 1px;
     border-radius: 999px;
     border: 1px solid rgba(0, 62, 116, 0.18);
+    user-select: none;
 }
 
 .tab-btn {
@@ -854,6 +856,7 @@ body {
     justify-content: center;
     color: var(--gray-700);
     text-transform: uppercase;
+    user-select: none;
 }
 
 .tab-btn.active {
@@ -1063,7 +1066,7 @@ body {
 }
 
 .middle-header .status-btn:hover {
-    background: rgba(0, 0, 0, 0.06);
+    background: transparent;
 }
 
 .status-btn i {
@@ -1072,6 +1075,20 @@ body {
 
 .middle-tabs-left .status-btn i {
     font-size: 13px;
+}
+
+.middle-tabs-left .status-btn {
+    width: 26px;
+    height: 26px;
+    padding: 0;
+    border-radius: 999px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.middle-tabs-left .status-btn:hover i {
+    color: var(--wos-blue);
 }
 
 .status-bar .header-dropdown-menu {
@@ -2582,7 +2599,7 @@ body.theme-vscode .qa-bubble {
     flex: 0 0 auto;
     width: 100%;
     box-sizing: border-box;
-    height: 220px;
+    height: 260px;
     transition: height 0.2s ease;
 }
 
@@ -2695,8 +2712,8 @@ body.theme-vscode .qa-bubble {
     font-size: 13px;
     color: #333;
     resize: none;
-    min-height: 50px;
-    height: 24px;
+    min-height: 96px;
+    height: 96px;
     line-height: 1.4;
     font-family: inherit;
     padding-right: 56px;
