@@ -223,15 +223,6 @@
 </head>
 
 <body>
-    <div class="prompt-quick-panel" id="promptQuickPanel">
-        <div class="prompt-quick-header">
-            <span><i class="fas fa-magnet"></i> Tools Set (Cmd+Shift+G)</span>
-            <button class="prompt-close-btn" id="promptPanelClose" title="Hide (Cmd+Shift+G)">
-                <i class="fas fa-times"></i>
-            </button>
-        </div>
-        <div class="prompt-groups" id="promptGroupsContainer"></div>
-    </div>
 
     <!-- Project Selector Modal -->
     <div class="modal" id="projectSelectorModal">
@@ -658,16 +649,65 @@
                         </div>
                         <div class="info-body" id="shortcutsInfoBody">Loading...</div>
                     </div>
+                    <div class="settings-section settings-panel query-export-settings-panel" id="queryExportPanel">
+                        <div class="settings-panel-header">
+                            <span>Query & Export (DOI keyed)</span>
+                            <button class="btn btn-secondary" type="button" onclick="window.paperStats.toggleQueryExportPanel(false)">
+                                <i class="fas fa-eye-slash"></i> Hide
+                            </button>
+                        </div>
+                        <div class="form-group">
+                            <p>Select fields to export (dynamic from JSONs). If nothing is selected, only DOI is exported.</p>
+                        </div>
+                        <div class="form-group query-export-grid">
+                            <div class="query-card">
+                                <div class="query-actions" style="justify-content:space-between; width:100%;">
+                                    <div style="display:flex; gap:8px; align-items:center; justify-content:flex-end; flex:1; flex-wrap:nowrap;">
+                                        <input type="text" id="queryFieldFilterInput" placeholder="Filter fields..."
+                                            autocomplete="off" class="query-filter-input"
+                                            style="flex:1 1 auto; min-width:220px; max-width:none;">
+                                        <button class="btn btn-secondary" id="querySelectAllBtn" type="button">Select all</button>
+                                        <button class="btn btn-secondary" id="queryClearAllBtn" type="button">Clear</button>
+                                        <button class="btn btn-primary" id="queryRefreshFieldsBtn" type="button">Refresh fields</button>
+                                    </div>
+                                </div>
+                                <div class="query-fields query-field-list" id="queryFieldList">
+                                    <!-- dynamic checkboxes -->
+                                </div>
+                            </div>
+                            <div class="query-card" style="display:flex;flex-direction:column;gap:8px;">
+                                <div class="query-actions" style="justify-content:space-between; width:100%;">
+                                    <div style="display:flex; gap:8px; align-items:center; justify-content:flex-end; flex:1; flex-wrap:nowrap;">
+                                        <button class="btn btn-secondary" id="queryClearSelectedBtn" type="button">Clear selected list</button>
+                                    </div>
+                                </div>
+                                <div id="querySelectedSummary" class="query-selected-box"></div>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label for="queryDoiOrderInput">Export DOIs in order (optional, line-separated)</label>
+                            <textarea id="queryDoiOrderInput" rows="4" placeholder="Enter DOIs, one per line. Leave empty to export all DOIs in current file list order."></textarea>
+                            <div class="query-actions" style="margin-top:8px;">
+                                <button class="btn btn-secondary" id="queryUpdateNoBtn" type="button">Add/Update meta_info.No sequence</button>
+                                <div id="queryDoiStats" style="margin-top:6px;font-size:12px;color:#6b7280;">0 unique | 0 duplicates</div>
+                            </div>
+                            <p class="help-text">Leave empty: export all DOIs in current file list order; Fill in: only export matched DOIs in input order, unmatched DOIs will be ignored.</p>
+                        </div>
+                        <div class="modal-footer">
+                            <button class="btn btn-cancel" id="queryCancelBtn">Cancel</button>
+                            <button class="btn btn-primary" id="queryExportRunBtn">Export</button>
+                        </div>
+                    </div>
                 </div>
             </div>
             <div class="md-chat-panel" id="mdChatPanel">
                 <div class="md-chat-resizer" id="mdChatResizer" title="Drag to resize"></div>
                 <div class="md-chat-shell">
                     <div class="md-chat-top">
-                        <div class="md-chat-actions">
-                            <button class="md-chat-btn" type="button" title="Close"><i class="far fa-comment"></i></button>
-                            <button class="md-chat-btn" type="button" title="Expand"><i class="fa-solid fa-arrow-right-from-bracket"></i></button>
-                        </div>
+                    <div class="md-chat-actions">
+                        <button class="md-chat-btn" type="button" title="Close"><i class="far fa-comment"></i></button>
+                        <button class="md-chat-btn" type="button" title="Dock position" id="mdChatDockSideBtn"><i class="fa-solid fa-arrow-right-from-bracket fa-flip-horizontal"></i></button>
+                    </div>
                     </div>
                     <div class="md-chat-body"></div>
                     <div class="md-chat-input">
@@ -740,10 +780,6 @@
             <button class="status-btn" id="mdChatToggleBtn" type="button"
                 title="Toggle MD Chat Panel" aria-label="Toggle MD Chat Panel">
                 <i class="far fa-comment-dots"></i>
-            </button>
-            <button class="status-btn" id="aideCopyToggleBtn" type="button"
-                title="Open Tools Panel (Cmd+Shift+G)" aria-label="Open Tools Panel">
-                <i class="fas fa-code-branch"></i>
             </button>
             <button class="status-btn" id="themeToggleBtn" title="Toggle Theme (Light/Dark)"
                 aria-label="Toggle Theme">
@@ -892,67 +928,6 @@
             <div class="modal-footer">
                 <button class="btn btn-cancel" id="cancelAddItem">Cancel</button>
                 <button class="btn btn-primary" id="saveAddItem">Add</button>
-            </div>
-        </div>
-    </div>
-
-    <!-- Query & Export Modal -->
-    <div class="modal" id="queryExportModal">
-        <div class="modal-content" style="max-width: 960px; width: 90%;">
-            <div class="modal-header">
-                <span>Query & Export (DOI keyed)</span>
-                <button class="close-btn" onclick="window.paperStats.closeQueryExportModal()">
-                    <i class="fas fa-times"></i>
-                </button>
-            </div>
-            <div class="modal-body">
-                <div class="form-group">
-                    <p>Select fields to export (dynamic from JSONs). If nothing is selected, only DOI is exported.</p>
-                </div>
-                <div class="form-group query-export-grid">
-                    <div class="query-card">
-                        <div class="query-actions" style="justify-content:space-between; width:100%;">
-                            <div
-                                style="display:flex; gap:8px; align-items:center; justify-content:flex-end; flex:1; flex-wrap:nowrap;">
-                                <input type="text" id="queryFieldFilterInput" placeholder="Filter fields..."
-                                    autocomplete="off" class="query-filter-input"
-                                    style="flex:1 1 auto; min-width:220px; max-width:none;">
-                                <button class="btn btn-secondary" id="querySelectAllBtn" type="button">Select
-                                    all</button>
-                                <button class="btn btn-secondary" id="queryClearAllBtn" type="button">Clear</button>
-                                <button class="btn btn-primary" id="queryRefreshFieldsBtn" type="button">Refresh
-                                    fields</button>
-                            </div>
-                        </div>
-                        <div class="query-fields query-field-list" id="queryFieldList">
-                            <!-- dynamic checkboxes -->
-                        </div>
-                    </div>
-                    <div class="query-card" style="display:flex;flex-direction:column;gap:8px;">
-                        <div class="query-actions" style="justify-content:space-between; width:100%;">
-                            <div
-                                style="display:flex; gap:8px; align-items:center; justify-content:flex-end; flex:1; flex-wrap:nowrap;">
-                                <button class="btn btn-secondary" id="queryClearSelectedBtn" type="button">Clear
-                                    selected list</button>
-                            </div>
-                        </div>
-                        <div id="querySelectedSummary" class="query-selected-box"></div>
-                    </div>
-                </div>
-                <div class="form-group">
-                    <label for="queryDoiOrderInput">Export DOIs in order (optional, line-separated)</label>
-                    <textarea id="queryDoiOrderInput" rows="4" placeholder="Enter DOIs, one per line. Leave empty to export all DOIs in current file list order."></textarea>
-                    <div class="query-actions" style="margin-top:8px;">
-                        <button class="btn btn-secondary" id="queryUpdateNoBtn" type="button">Add/Update meta_info.No sequence</button>
-                        <div id="queryDoiStats" style="margin-top:6px;font-size:12px;color:#6b7280;">0 unique | 0
-                            duplicates</div>
-                    </div>
-                    <p class="help-text">Leave empty: export all DOIs in current file list order; Fill in: only export matched DOIs in input order, unmatched DOIs will be ignored.</p>
-                </div>
-            </div>
-            <div class="modal-footer">
-                <button class="btn btn-cancel" id="queryCancelBtn">Cancel</button>
-                <button class="btn btn-primary" id="queryExportRunBtn">Export</button>
             </div>
         </div>
     </div>

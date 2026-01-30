@@ -56,6 +56,7 @@ class PaperStatsApp {
         this.fileFilterHistory = [];
         this.createGroupVisible = false;
         this.settingsPanelsStateKey = '';
+        this.queryExportVisible = false;
         this.debugEnabled = this.loadDebugEnabled();
         try {
             const storedView = localStorage.getItem('lastViewMode');
@@ -87,11 +88,6 @@ class PaperStatsApp {
         this.dragPlaceholder = null;
         this.placeholderState = { scope: null, target: null, after: false };
         this.gotoEditResolver = null;
-        this.promptPanelVisible = false;
-        this.promptDataLoaded = false;
-        this.promptGroups = {};
-        this.promptPanelPos = this.loadPromptPanelPos();
-        this.promptSelectedByGroup = this.loadPromptSelectedByGroup();
         this.envInfo = { homeDir: '', desktopDir: '', rootDir: '', platform: '' };
         this.defaultProjectPathExample = '/path/to/project';
         this.isEditLocked = this.loadEditLockState();
@@ -587,17 +583,6 @@ class PaperStatsApp {
         this.currentJsonView = current;
     }
 
-    loadPromptSelectedByGroup() {
-        try {
-            const raw = localStorage.getItem('promptSelectedByGroup');
-            if (!raw) return {};
-            const parsed = JSON.parse(raw);
-            return parsed && typeof parsed === 'object' ? parsed : {};
-        } catch (_e) {
-            return {};
-        }
-    }
-
     loadLastJsonViewByProject() {
         try {
             const raw = localStorage.getItem('lastJsonViewByProject');
@@ -617,20 +602,6 @@ class PaperStatsApp {
         }
     }
 
-    loadPromptPanelPos() {
-        try {
-            const raw = localStorage.getItem('promptQuickPanelPos');
-            if (!raw) return null;
-            const pos = JSON.parse(raw);
-            if (pos && typeof pos.left === 'number' && typeof pos.top === 'number') {
-                return pos;
-            }
-        } catch (_e) {
-            return null;
-        }
-        return null;
-    }
-
     loadEditLockState() {
         try {
             return localStorage.getItem('reviewerEditLocked') === '1';
@@ -645,42 +616,6 @@ class PaperStatsApp {
         } catch (_e) {
             // ignore
         }
-    }
-
-    savePromptPanelPos(pos) {
-        if (!pos || typeof pos.left !== 'number' || typeof pos.top !== 'number') return;
-        try {
-            localStorage.setItem('promptQuickPanelPos', JSON.stringify(pos));
-        } catch (_e) {
-            // ignore
-        }
-    }
-
-    persistPromptSelectedByGroup() {
-        try {
-            localStorage.setItem('promptSelectedByGroup', JSON.stringify(this.promptSelectedByGroup || {}));
-        } catch (_e) {
-            // ignore
-        }
-    }
-
-    setPromptActive(groupKey, file) {
-        if (!groupKey) return;
-        const normalized = (file || '').trim();
-        if (!normalized) return;
-        this.promptSelectedByGroup[groupKey] = normalized;
-        this.persistPromptSelectedByGroup();
-
-        const esc = (window.CSS && typeof window.CSS.escape === 'function')
-            ? window.CSS.escape(groupKey)
-            : String(groupKey).replace(/"/g, '\\"');
-        const row = document.querySelector(`.prompt-button-row[data-group-key="${esc}"]`);
-        if (!row) return;
-        row.querySelectorAll('.prompt-chip').forEach(btn => {
-            const isActive = (btn.dataset.file || '') === normalized;
-            btn.classList.toggle('active', isActive);
-            btn.setAttribute('aria-pressed', String(isActive));
-        });
     }
 
     loadQaCollapsedState() {
@@ -1427,7 +1362,6 @@ class PaperStatsApp {
         this.applyTheme();
         this.setupResizers();
         this.setupDraggableModal();
-        this.loadPromptShortcuts();
     }
 
     async loadStatusVersion() {
@@ -1927,12 +1861,7 @@ class PaperStatsApp {
         const queryExportBtn = document.getElementById('queryExportBtn');
         if (queryExportBtn) {
             queryExportBtn.addEventListener('click', () => {
-                const modal = document.getElementById('queryExportModal');
-                if (modal && modal.classList.contains('active')) {
-                    this.closeQueryExportModal();
-                    return;
-                }
-                this.openQueryExportModal();
+                this.toggleQueryExportPanel();
             });
         }
         const queryCancelBtn = document.getElementById('queryCancelBtn');
@@ -2041,6 +1970,13 @@ class PaperStatsApp {
                     this.togglePdfPopup().catch(err => console.error('Toggle PDF popup failed:', err));
                     return;
                 }
+                if (this.handleSettingsPanelEscape()) {
+                    e.preventDefault();
+                    return;
+                }
+                if ((this.currentView || '') === 'settings') {
+                    return;
+                }
                 this.closeQueryExportModal();
                 this.closeImportModeDialog();
                 this.closeSyncModeDialog();
@@ -2060,11 +1996,6 @@ class PaperStatsApp {
                     e.preventDefault();
                     this.showLockedNotification('Adjust order');
                 }
-                return;
-            }
-            if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === 'g') {
-                e.preventDefault();
-                this.togglePromptPanel();
                 return;
             }
             if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === 'f') {
@@ -2194,15 +2125,6 @@ class PaperStatsApp {
             this.handleCreateProject();
         });
 
-        // 工具面板按钮（打开 Cmd+Shift+G 面板）
-        const aideCopyToggleBtn = document.getElementById('aideCopyToggleBtn');
-        if (aideCopyToggleBtn) {
-            aideCopyToggleBtn.addEventListener('click', (e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                this.togglePromptPanel();
-            });
-        }
         const thirdPartyInfoBtn = document.getElementById('thirdPartyInfoBtn');
         if (thirdPartyInfoBtn) {
             thirdPartyInfoBtn.addEventListener('click', (e) => {
@@ -2314,12 +2236,6 @@ class PaperStatsApp {
                 this.toggleImportMenu(false);
             });
         }
-        const promptCloseBtn = document.getElementById('promptPanelClose');
-        if (promptCloseBtn) {
-            promptCloseBtn.addEventListener('click', () => this.togglePromptPanel(false));
-        }
-        this.bindPromptPanelDrag();
-
         // 左侧文件列表：鼠标激活后可用上下键快速切换
         const fileListEl = document.getElementById('fileList');
         if (fileListEl) {
@@ -7938,21 +7854,11 @@ class PaperStatsApp {
 
     /* -------------------- Query & Export (DOI keyed) -------------------- */
     openQueryExportModal() {
-        const modal = document.getElementById('queryExportModal');
-        if (!modal) return;
-        this.activateModal('queryExportModal');
-        this.refreshQueryFieldOptions();
-        const queryDoiOrderInput = document.getElementById('queryDoiOrderInput');
-        if (queryDoiOrderInput) {
-            queryDoiOrderInput.value = this.queryDoiOrderText || '';
-        }
-        this.updateDoiStats();
+        this.toggleQueryExportPanel(true);
     }
 
     closeQueryExportModal() {
-        const modal = document.getElementById('queryExportModal');
-        if (!modal) return;
-        this.closeAllModals();
+        this.toggleQueryExportPanel(false);
     }
 
     getFieldUnionFromData(data) {
@@ -9188,7 +9094,7 @@ class PaperStatsApp {
 
     updateSettingsPanelsVisibility() {
         const settingsContent = document.getElementById('settingsContent');
-        const hasAny = !!(this.fileFilterVisible || this.createGroupVisible || this.projectInfoVisible || this.thirdPartyInfoVisible || this.shortcutsVisible);
+        const hasAny = !!(this.fileFilterVisible || this.createGroupVisible || this.projectInfoVisible || this.thirdPartyInfoVisible || this.shortcutsVisible || this.queryExportVisible);
         if (settingsContent) settingsContent.classList.toggle('is-empty', !hasAny);
     }
 
@@ -9196,6 +9102,61 @@ class PaperStatsApp {
         const settingsContent = document.getElementById('settingsContent');
         if (!panel || !settingsContent) return;
         settingsContent.appendChild(panel);
+    }
+
+    handleSettingsPanelEscape() {
+        if ((this.currentView || '') !== 'settings') return false;
+        const candidates = [
+            { id: 'queryExportPanel', flag: 'queryExportVisible' },
+            { id: 'shortcutsInfoPanel', flag: 'shortcutsVisible' },
+            { id: 'thirdPartyInfoPanel', flag: 'thirdPartyInfoVisible' },
+            { id: 'projectInfoPanel', flag: 'projectInfoVisible' },
+            { id: 'createGroupSettingsPanel', flag: 'createGroupVisible' },
+            { id: 'fileFilterSettingsPanel', flag: 'fileFilterVisible' }
+        ];
+        for (const item of candidates) {
+            if (!this[item.flag]) continue;
+            const panel = document.getElementById(item.id);
+            if (panel) {
+                panel.classList.remove('is-visible');
+            }
+            this[item.flag] = false;
+            const btnMap = {
+                fileFilterVisible: 'fileFilterToggleBtn',
+                createGroupVisible: 'addGroupBtn',
+                queryExportVisible: 'queryExportBtn'
+            };
+            const btnId = btnMap[item.flag];
+            if (btnId) {
+                const btn = document.getElementById(btnId);
+                if (btn) btn.classList.remove('active');
+            }
+            this.updateSettingsPanelsVisibility();
+            this.saveSettingsPanelsState();
+            return true;
+        }
+        return false;
+    }
+
+    toggleQueryExportPanel(forceVisible) {
+        const panel = document.getElementById('queryExportPanel');
+        const btn = document.getElementById('queryExportBtn');
+        const queryDoiOrderInput = document.getElementById('queryDoiOrderInput');
+        const next = typeof forceVisible === 'boolean' ? forceVisible : !this.queryExportVisible;
+        this.queryExportVisible = next;
+        if (panel) panel.classList.toggle('is-visible', next);
+        if (btn) btn.classList.toggle('active', next);
+        if (next) this.moveSettingsPanelToEnd(panel);
+        this.updateSettingsPanelsVisibility();
+        this.saveSettingsPanelsState();
+        if (next) {
+            this.switchToView('settings');
+            if (queryDoiOrderInput) {
+                queryDoiOrderInput.value = this.queryDoiOrderText || '';
+            }
+            this.refreshQueryFieldOptions();
+            this.updateDoiStats();
+        }
     }
 
     getSettingsPanelsStateKey() {
@@ -9222,7 +9183,8 @@ class PaperStatsApp {
             createGroupVisible: !!this.createGroupVisible,
             projectInfoVisible: !!this.projectInfoVisible,
             thirdPartyInfoVisible: !!this.thirdPartyInfoVisible,
-            shortcutsVisible: !!this.shortcutsVisible
+            shortcutsVisible: !!this.shortcutsVisible,
+            queryExportVisible: !!this.queryExportVisible
         };
         try {
             localStorage.setItem(key, JSON.stringify(payload));
@@ -9238,22 +9200,27 @@ class PaperStatsApp {
         this.projectInfoVisible = !!state.projectInfoVisible;
         this.thirdPartyInfoVisible = !!state.thirdPartyInfoVisible;
         this.shortcutsVisible = !!state.shortcutsVisible;
+        this.queryExportVisible = !!state.queryExportVisible;
 
         const fileFilterPanel = document.getElementById('fileFilterSettingsPanel');
         const createGroupPanel = document.getElementById('createGroupSettingsPanel');
         const projectInfoPanel = document.getElementById('projectInfoPanel');
         const thirdPartyPanel = document.getElementById('thirdPartyInfoPanel');
         const shortcutsPanel = document.getElementById('shortcutsInfoPanel');
+        const queryExportPanel = document.getElementById('queryExportPanel');
         const fileFilterBtn = document.getElementById('fileFilterToggleBtn');
         const addGroupBtn = document.getElementById('addGroupBtn');
+        const queryExportBtn = document.getElementById('queryExportBtn');
 
         if (fileFilterPanel) fileFilterPanel.classList.toggle('is-visible', this.fileFilterVisible);
         if (createGroupPanel) createGroupPanel.classList.toggle('is-visible', this.createGroupVisible);
         if (projectInfoPanel) projectInfoPanel.classList.toggle('is-visible', this.projectInfoVisible);
         if (thirdPartyPanel) thirdPartyPanel.classList.toggle('is-visible', this.thirdPartyInfoVisible);
         if (shortcutsPanel) shortcutsPanel.classList.toggle('is-visible', this.shortcutsVisible);
+        if (queryExportPanel) queryExportPanel.classList.toggle('is-visible', this.queryExportVisible);
         if (fileFilterBtn) fileFilterBtn.classList.toggle('active', this.fileFilterVisible);
         if (addGroupBtn) addGroupBtn.classList.toggle('active', this.createGroupVisible);
+        if (queryExportBtn) queryExportBtn.classList.toggle('active', this.queryExportVisible);
 
         this.updateSettingsPanelsVisibility();
         if (this.fileFilterVisible) {
@@ -9272,7 +9239,15 @@ class PaperStatsApp {
         if (this.shortcutsVisible) {
             this.loadShortcutsInfoContent();
         }
-        if (!skipView && (this.fileFilterVisible || this.createGroupVisible || this.projectInfoVisible || this.thirdPartyInfoVisible || this.shortcutsVisible)) {
+        if (this.queryExportVisible) {
+            const queryDoiOrderInput = document.getElementById('queryDoiOrderInput');
+            if (queryDoiOrderInput) {
+                queryDoiOrderInput.value = this.queryDoiOrderText || '';
+            }
+            this.refreshQueryFieldOptions();
+            this.updateDoiStats();
+        }
+        if (!skipView && (this.fileFilterVisible || this.createGroupVisible || this.projectInfoVisible || this.thirdPartyInfoVisible || this.shortcutsVisible || this.queryExportVisible)) {
             this.switchToView('settings');
         }
     }
@@ -9834,7 +9809,6 @@ class PaperStatsApp {
         if (keep !== 'md' && this.mdMenuVisible) this.toggleMdMenu(false);
         if (keep !== 'settings' && this.settingsMenuVisible) this.toggleSettingsMenu(false);
         if (keep !== 'import' && this.importMenuVisible) this.toggleImportMenu(false);
-        if (keep !== 'prompt' && this.promptPanelVisible) this.togglePromptPanel(false, { skipClose: true });
         if (keep !== 'info' && this.projectInfoVisible) {
             const panel = document.getElementById('projectInfoPanel');
             if (!(panel && panel.classList.contains('settings-panel'))) {
@@ -9957,128 +9931,6 @@ class PaperStatsApp {
         }
     }
 
-    async loadPromptShortcuts() {
-        try {
-            const response = await fetch('/prompt-files');
-            if (!response.ok) throw new Error(`HTTP ${response.status}`);
-            const data = await response.json();
-            this.promptGroups = this.normalizePromptGroups(data);
-            this.promptDataLoaded = true;
-
-            this.renderPromptShortcuts();
-        } catch (error) {
-            console.error('Failed to load prompt files:', error);
-            // fallback: try loading from static manifest
-            const ok = await this.loadPromptManifestFallback();
-            if (!ok) {
-                this.showNotification(`Failed to load prompt list: ${error.message}`, 'error');
-            }
-        }
-    }
-
-    async loadPromptManifestFallback() {
-        try {
-            const tryFetch = async (url) => {
-                const resp = await fetch(url);
-                if (!resp.ok) return null;
-                const data = await resp.json();
-                return data;
-            };
-            let data = await tryFetch('/manifest.json');
-            if (!data || typeof data !== 'object') return false;
-            this.promptGroups = this.normalizePromptGroups(data);
-            this.promptDataLoaded = true;
-            this.renderPromptShortcuts();
-            this.showNotification('Static manifest loaded successfully', 'info');
-            return true;
-        } catch (err) {
-            console.error('Failed to load static prompt manifest:', err);
-            return false;
-        }
-    }
-
-    renderPromptShortcuts() {
-        const container = document.getElementById('promptGroupsContainer');
-        if (!container) return;
-        container.innerHTML = '';
-
-        const keys = Object.keys(this.promptGroups || {}).sort();
-        if (!keys.length) {
-            const empty = document.createElement('div');
-            empty.className = 'prompt-empty';
-            empty.textContent = 'No prompt directories found';
-            container.appendChild(empty);
-            return;
-        }
-
-        keys.forEach((key) => {
-            const groupEl = document.createElement('div');
-            groupEl.className = 'prompt-group';
-            const info = this.promptGroups[key] || {};
-            const label = document.createElement('div');
-            label.className = 'prompt-group-label';
-            label.textContent = info.label || key;
-            groupEl.appendChild(label);
-
-            const row = document.createElement('div');
-            row.className = 'prompt-button-row';
-            row.dataset.groupKey = key;
-            groupEl.appendChild(row);
-
-            container.appendChild(groupEl);
-            this.renderPromptRow(row, key);
-        });
-    }
-
-    renderPromptRow(container, groupKey) {
-        if (!container) return;
-        container.innerHTML = '';
-
-        const groupData = this.promptGroups[groupKey] || {};
-        const files = groupData?.files || [];
-        const activeFile = (this.promptSelectedByGroup && this.promptSelectedByGroup[groupKey]) ? this.promptSelectedByGroup[groupKey] : '';
-        if (!files.length) {
-            const empty = document.createElement('span');
-            empty.className = 'prompt-empty';
-            empty.textContent = 'No files';
-            container.appendChild(empty);
-            return;
-        }
-
-        files.forEach((file) => {
-            const btn = document.createElement('button');
-            btn.className = 'prompt-chip';
-            btn.textContent = file.replace(/\.[^/.]+$/, '');
-            btn.title = file;
-            btn.dataset.file = file;
-            const isActive = activeFile && activeFile === file;
-            if (isActive) btn.classList.add('active');
-            btn.setAttribute('aria-pressed', String(!!isActive));
-            btn.addEventListener('click', () => {
-                this.setPromptActive(groupKey, file);
-                this.copyPromptFile(groupKey, file);
-            });
-            container.appendChild(btn);
-        });
-    }
-
-    togglePromptPanel(forceVisible, opts = {}) {
-        const panel = document.getElementById('promptQuickPanel');
-        if (!panel) return;
-        if (!this.promptDataLoaded) {
-            this.loadPromptShortcuts();
-        }
-        const nextState = typeof forceVisible === 'boolean' ? forceVisible : !this.promptPanelVisible;
-        if (nextState && !opts.skipClose) {
-            this.closeHeaderMenus('prompt');
-        }
-        this.promptPanelVisible = nextState;
-        if (nextState) {
-            this.applyPromptPanelPos();
-        }
-        panel.classList.toggle('visible', nextState);
-    }
-
     showProjectDetailsPanel() {
         if (!this.currentProject) {
             // 未加载项目时，打开项目选择器
@@ -10095,10 +9947,13 @@ class PaperStatsApp {
             document.removeEventListener('keydown', this._projectInfoEscHandler);
         }
         this._projectInfoEscHandler = (ev) => {
-            if (ev.key === 'Escape') {
-                ev.preventDefault();
-                this.toggleProjectInfoPanel(false, { skipClose: true });
+            if (ev.key !== 'Escape') return;
+            const panelEl = document.getElementById('projectInfoPanel');
+            if (panelEl && panelEl.classList.contains('settings-panel')) {
+                return;
             }
+            ev.preventDefault();
+            this.toggleProjectInfoPanel(false, { skipClose: true });
         };
         document.addEventListener('keydown', this._projectInfoEscHandler);
         this.projectInfoVisible = true;
@@ -10212,13 +10067,17 @@ class PaperStatsApp {
         const top = panel?.querySelector('.md-chat-top');
         const textarea = panel?.querySelector('.md-chat-input-text');
         const collapseBtn = null;
-        const expandBtn = panel?.querySelector('.md-chat-btn[title="Expand"]');
+        const dockSideBtn = panel?.querySelector('#mdChatDockSideBtn');
         const closeBtn = panel?.querySelector('.md-chat-btn[title="Close"]');
         const editorContainer = document.querySelector('.editor-container');
         const chatToggleBtn = document.getElementById('mdChatToggleBtn');
         if (!panel || !resizer) return;
         this._mdChatPanelBound = true;
+        this.ensureMdChatMetaEl();
 
+        const minHeight = 140;
+        const collapseThreshold = 150;
+        const dockMinWidth = 220;
         const stored = Number(localStorage.getItem('mdChatHeight'));
         const storedDockWidth = Number(localStorage.getItem('mdChatDockWidth'));
         if (Number.isFinite(stored) && stored > 80) {
@@ -10227,24 +10086,62 @@ class PaperStatsApp {
         const storedHidden = localStorage.getItem('mdChatHidden') === '1';
         const storedDocked = localStorage.getItem('mdChatDocked') === '1';
         const storedCollapsed = localStorage.getItem('mdChatCollapsed') === '1';
+        const storedDockSide = localStorage.getItem('mdChatDockSide') === 'left' ? 'left' : 'right';
+        const storedDockPos = localStorage.getItem('mdChatDockPos');
+        let dockSide = storedDockSide;
+        const updateDockButton = () => {
+            if (!dockSideBtn) return;
+            const icon = dockSideBtn.querySelector('i');
+            if (!icon) return;
+            if (!panel.classList.contains('is-docked')) {
+                icon.className = 'fa-solid fa-arrow-right-from-bracket fa-flip-horizontal';
+                dockSideBtn.title = 'Dock position';
+                return;
+            }
+            icon.className = dockSide === 'left'
+                ? 'fa-solid fa-right-left fa-rotate-180'
+                : 'fa-solid fa-right-left';
+            dockSideBtn.title = dockSide === 'left'
+                ? 'Docked left'
+                : 'Docked right';
+        };
+        const applyDockSide = (side) => {
+            dockSide = side === 'left' ? 'left' : 'right';
+            localStorage.setItem('mdChatDockSide', dockSide);
+            if (editorContainer) {
+                editorContainer.classList.toggle('chat-docked-left', dockSide === 'left' && panel.classList.contains('is-docked'));
+            }
+            updateDockButton();
+        };
+        applyDockSide(dockSide);
         if (storedHidden) {
             panel.classList.add('is-hidden');
         }
         if (storedDocked) {
             panel.classList.add('is-docked');
         }
-        if (editorContainer && storedDocked && !storedHidden) {
+        const applyDockedLayout = () => {
+            if (!panel || !editorContainer) return;
             editorContainer.classList.add('chat-docked');
+            applyDockSide(dockSide);
             panel.style.height = '100%';
             if (shell) shell.style.height = '100%';
             if (Number.isFinite(storedDockWidth) && storedDockWidth > 180) {
                 panel.style.width = `${storedDockWidth}px`;
             }
+        };
+        if (editorContainer && storedDocked && !storedHidden) {
+            applyDockedLayout();
         }
+        if (!storedDocked && storedDockPos === 'bottom') {
+            const container = panel.parentElement;
+            const baseHeight = container ? container.getBoundingClientRect().height : window.innerHeight;
+            const targetHeight = Math.max(minHeight, Math.round(baseHeight * 0.5));
+            panel.style.height = `${targetHeight}px`;
+            if (shell) shell.style.height = '';
+        }
+        updateDockButton();
 
-        const minHeight = 140;
-        const collapseThreshold = 150;
-        const dockMinWidth = 220;
         const updateCollapsedHeight = () => {
             if (!panel || !shell) return;
             const target = getCollapsedTargetHeight();
@@ -10345,7 +10242,9 @@ class PaperStatsApp {
                 const maxWidth = Math.max(dockMinWidth, Math.round(containerWidth * 0.7));
                 const onMove = (evt) => {
                     const delta = evt.clientX - startX;
-                    const next = Math.max(dockMinWidth, Math.min(maxWidth, Math.round(startWidth - delta)));
+                    const side = localStorage.getItem('mdChatDockSide') === 'left' ? 'left' : 'right';
+                    const raw = side === 'left' ? (startWidth + delta) : (startWidth - delta);
+                    const next = Math.max(dockMinWidth, Math.min(maxWidth, Math.round(raw)));
                     panel.style.width = `${next}px`;
                 };
                 const onUp = () => {
@@ -10359,36 +10258,52 @@ class PaperStatsApp {
             });
         }
 
-        if (shell && panel && editorContainer && expandBtn) {
-            expandBtn.addEventListener('click', (e) => {
+        const setDockState = (nextState) => {
+            if (!panel || !editorContainer) return;
+            if (nextState === 'bottom') {
+                panel.classList.remove('is-docked');
+                editorContainer.classList.remove('chat-docked');
+                setCollapsedState(false);
+                const container = panel.parentElement;
+                const baseHeight = container ? container.getBoundingClientRect().height : window.innerHeight;
+                const targetHeight = Math.max(minHeight, Math.round(baseHeight * 0.5));
+                panel.style.height = `${targetHeight}px`;
+                if (shell) shell.style.height = '';
+                panel.style.width = '';
+                localStorage.setItem('mdChatDocked', '0');
+                localStorage.setItem('mdChatDockPos', 'bottom');
+                editorContainer.classList.remove('chat-docked-left');
+                updateDockButton();
+                return;
+            }
+            panel.classList.add('is-docked');
+            editorContainer.classList.add('chat-docked');
+            applyDockSide(nextState);
+            setCollapsedState(false);
+            panel.dataset.prevHeight = String(Math.round(panel.getBoundingClientRect().height));
+            panel.style.height = '100%';
+            if (shell) shell.style.height = '100%';
+            const width = Number(localStorage.getItem('mdChatDockWidth'));
+            if (Number.isFinite(width) && width > 180) {
+                panel.style.width = `${width}px`;
+            }
+            localStorage.setItem('mdChatDocked', '1');
+            localStorage.setItem('mdChatDockPos', nextState);
+            updateDockButton();
+        };
+
+        if (dockSideBtn) {
+            dockSideBtn.addEventListener('click', (e) => {
                 e.preventDefault();
-                const docked = panel.classList.toggle('is-docked');
-                editorContainer.classList.toggle('chat-docked', docked);
-                const icon = expandBtn.querySelector('i');
-                if (icon) {
-                    icon.className = docked
-                        ? 'fa-solid fa-arrow-right-from-bracket fa-rotate-90'
-                        : 'fa-solid fa-arrow-right-from-bracket';
-                }
-                if (docked) {
-                    setCollapsedState(false);
-                    panel.dataset.prevHeight = String(Math.round(panel.getBoundingClientRect().height));
-                    panel.style.height = '100%';
-                    shell.style.height = '100%';
-                    const width = Number(localStorage.getItem('mdChatDockWidth'));
-                    if (Number.isFinite(width) && width > 180) {
-                        panel.style.width = `${width}px`;
-                    }
-                    localStorage.setItem('mdChatDocked', '1');
-                } else {
-                    setCollapsedState(false);
-                    const prevHeight = Number(panel.dataset.prevHeight);
-                    const nextHeight = Number.isFinite(prevHeight) && prevHeight > 0 ? prevHeight : minHeight;
-                    panel.style.height = `${nextHeight}px`;
-                    shell.style.height = '';
-                    panel.style.width = '';
-                    localStorage.setItem('mdChatDocked', '0');
-                }
+                const currentState = panel.classList.contains('is-docked')
+                    ? (dockSide === 'left' ? 'left' : 'right')
+                    : 'bottom';
+                const nextState = currentState === 'bottom'
+                    ? 'left'
+                    : currentState === 'left'
+                        ? 'right'
+                        : 'bottom';
+                setDockState(nextState);
             });
         }
 
@@ -10409,7 +10324,7 @@ class PaperStatsApp {
                     if (isHidden) {
                         editorContainer.classList.remove('chat-docked');
                     } else if (panel.classList.contains('is-docked')) {
-                        editorContainer.classList.add('chat-docked');
+                        applyDockedLayout();
                     } else {
                         setCollapsedState(false);
                     }
@@ -10585,6 +10500,19 @@ class PaperStatsApp {
         }
     }
 
+    ensureMdChatMetaEl() {
+        const panel = document.getElementById('mdChatPanel');
+        const top = panel?.querySelector('.md-chat-top');
+        if (!panel || !top) return null;
+        let meta = top.querySelector('.md-chat-query-meta');
+        if (!meta) {
+            meta = document.createElement('div');
+            meta.className = 'md-chat-query-meta';
+            top.insertBefore(meta, top.firstChild);
+        }
+        return meta;
+    }
+
     updateMdChatFieldOptionsFromCurrentData() {
         if (!this.currentData || typeof this.currentData !== 'object') {
             this.mdChatFieldOptions = [];
@@ -10692,10 +10620,12 @@ class PaperStatsApp {
                 </div>
             `;
         }).join('');
-        body.innerHTML = `
-            <div class="md-chat-query-meta">File: ${this.escapeHtml(base)} · View: ${this.escapeHtml(view)}</div>
-            ${blocks}
-        `;
+        body.innerHTML = blocks;
+        const meta = this.ensureMdChatMetaEl();
+        if (meta) {
+            meta.textContent = `File: ${base} · View: ${view}`;
+            meta.title = meta.textContent;
+        }
     }
 
     showStatusProjectContextMenu(e) {
@@ -10942,125 +10872,6 @@ class PaperStatsApp {
         } catch (err) {
             console.error('Failed to load shortcuts info', err);
             body.textContent = `Load failed: ${err.message}`;
-        }
-    }
-
-    normalizePromptGroups(raw) {
-        if (!raw) return {};
-        if (raw.groups && typeof raw.groups === 'object') return raw.groups;
-        const src = raw.src || {};
-        const groups = {};
-        Object.keys(src).forEach((category) => {
-            const catGroups = src[category] || {};
-            Object.entries(catGroups).forEach(([name, info]) => {
-                if (!info || !Array.isArray(info.files)) return;
-                const key = `${category}:${name}`;
-                const base = info.basePath || `/src/${category}/${name}/`;
-                const basePath = base.endsWith('/') ? base : `${base}/`;
-                groups[key] = {
-                    files: info.files,
-                    basePath,
-                    category,
-                    name,
-                    label: info.label || `${category} / ${name}`
-                };
-            });
-        });
-        return groups;
-    }
-
-    applyPromptPanelPos() {
-        const panel = document.getElementById('promptQuickPanel');
-        if (!panel) return;
-        const pos = this.promptPanelPos;
-        if (pos && typeof pos.left === 'number' && typeof pos.top === 'number') {
-            panel.style.left = `${pos.left}px`;
-            panel.style.top = `${pos.top}px`;
-            panel.style.transform = 'translate(0, 0)';
-        } else {
-            panel.style.left = '50%';
-            panel.style.top = '10px';
-            panel.style.transform = 'translateX(-50%)';
-        }
-    }
-
-    bindPromptPanelDrag() {
-        const panel = document.getElementById('promptQuickPanel');
-        const header = document.querySelector('#promptQuickPanel .prompt-quick-header');
-        if (!panel || !header) return;
-        let dragging = false;
-        let startX = 0;
-        let startY = 0;
-        let startLeft = 0;
-        let startTop = 0;
-
-        const onMouseMove = (e) => {
-            if (!dragging) return;
-            const dx = e.clientX - startX;
-            const dy = e.clientY - startY;
-            const left = startLeft + dx;
-            const top = startTop + dy;
-            panel.style.left = `${left}px`;
-            panel.style.top = `${top}px`;
-            panel.style.transform = 'translate(0, 0)';
-        };
-
-        const onMouseUp = () => {
-            if (!dragging) return;
-            dragging = false;
-            document.removeEventListener('mousemove', onMouseMove);
-            document.removeEventListener('mouseup', onMouseUp);
-            const rect = panel.getBoundingClientRect();
-            this.promptPanelPos = { left: rect.left, top: rect.top };
-            this.savePromptPanelPos(this.promptPanelPos);
-        };
-
-        header.addEventListener('mousedown', (e) => {
-            if (e.button !== 0) return;
-            dragging = true;
-            const rect = panel.getBoundingClientRect();
-            startX = e.clientX;
-            startY = e.clientY;
-            startLeft = rect.left;
-            startTop = rect.top;
-            panel.style.transform = 'translate(0, 0)';
-            document.addEventListener('mousemove', onMouseMove);
-            document.addEventListener('mouseup', onMouseUp);
-        });
-    }
-
-    async copyPromptFile(groupKey, file) {
-        try {
-            const params = new URLSearchParams({ group: groupKey, file });
-            const response = await fetch(`/prompt-file?${params.toString()}`);
-            if (!response.ok) throw new Error(`Read failed (${response.status})`);
-            const text = await response.text();
-            await this.writeTextToClipboard(text);
-            this.showNotification(`${file || 'File'} copied to clipboard`, 'success');
-        } catch (error) {
-            console.warn('API copy failed, trying static read:', error);
-            const fallbackOk = await this.copyPromptFileStatic(groupKey, file);
-            if (!fallbackOk) {
-                console.error('Copy prompt failed:', error);
-                this.showNotification(`Copy failed: ${error.message}`, 'error');
-            }
-        }
-    }
-
-    async copyPromptFileStatic(groupKey, file) {
-        try {
-            const groupData = this.promptGroups[groupKey] || {};
-            const base = groupData.basePath || `/src/prompts/${groupData.name || groupKey}/`;
-            const url = `${base}${file}`;
-            const response = await fetch(url);
-            if (!response.ok) return false;
-            const text = await response.text();
-            await this.writeTextToClipboard(text);
-            this.showNotification(`${file || 'File'} copied to clipboard (static)`, 'success');
-            return true;
-        } catch (err) {
-            console.error('Static copy failed:', err);
-            return false;
         }
     }
 
@@ -12396,8 +12207,16 @@ class PaperStatsApp {
     }
 
     renderCitationPlaceholder(dois = [], type = 'citep') {
-        const list = (dois || []).map(d => this.normalizeDoiString(d)).filter(Boolean);
-        const label = list.length ? list.join('; ') : 'citation';
+        const list = [];
+        const seen = new Set();
+        (dois || []).forEach((d) => {
+            const norm = this.normalizeDoiString(d);
+            if (!norm || seen.has(norm)) return;
+            seen.add(norm);
+            list.push(norm);
+        });
+        const joiner = ', ';
+        const label = list.length ? list.join(joiner) : 'citation';
         const cls = type === 'cite' ? 'citation-narrative' : 'citation-parenthetical';
         const escLabel = this.escapeHtml(label);
         const escDois = this.escapeHtml(list.join(','));
@@ -12926,7 +12745,8 @@ class PaperStatsApp {
     }
 
     parseDoiListFromLatex(raw = '') {
-        return (raw || '')
+        const normalized = (raw || '').replace(/[\r\n]+/g, ',');
+        return normalized
             .split(/[,，;；\s]+/)
             .map(d => d.trim())
             .filter(Boolean)
@@ -12936,11 +12756,20 @@ class PaperStatsApp {
 
     buildCitationLinks(text, dois = []) {
         const labels = (text || '').split(/;\s*/).filter(Boolean);
-        const safeLabel = this.escapeHtml(text || '');
+        const cleanDois = [];
+        const seen = new Set();
+        (dois || []).forEach((doi) => {
+            const norm = this.normalizeDoiString(doi);
+            if (!norm || seen.has(norm)) return;
+            seen.add(norm);
+            cleanDois.push(norm);
+        });
+        const useLabels = labels.length === cleanDois.length && labels.length > 0;
         const parts = [];
-        dois.forEach((doi, idx) => {
-            const label = this.escapeHtml(labels[idx] || safeLabel || this.normalizeDoiString(doi));
-            const escDoi = this.escapeAttr(this.normalizeDoiString(doi));
+        cleanDois.forEach((doi, idx) => {
+            const labelText = useLabels ? labels[idx] : (this.normalizeDoiString(doi) || 'citation');
+            const label = this.escapeHtml(labelText);
+            const escDoi = this.escapeAttr(doi);
             parts.push(`<button class="citation-link" type="button" data-citation-doi="${escDoi}" title="Open PDF for ${this.escapeAttr(doi)}">${label}</button>`);
         });
         return parts.join('; ');
@@ -12958,6 +12787,13 @@ class PaperStatsApp {
             return;
         }
         await this.loadFile(base);
+        const tryScroll = () => {
+            const el = this.scrollFileIntoView(base, { align: 'center' });
+            if (!el) {
+                requestAnimationFrame(() => this.scrollFileIntoView(base, { align: 'center' }));
+            }
+        };
+        tryScroll();
         await this.ensurePdfLoaded();
     }
 
@@ -13026,7 +12862,14 @@ class PaperStatsApp {
     }
 
     async formatCitation(dois = [], mode = 'citep') {
-        const clean = (dois || []).map(d => this.normalizeDoiString(d)).filter(Boolean);
+        const clean = [];
+        const seen = new Set();
+        (dois || []).forEach((d) => {
+            const norm = this.normalizeDoiString(d);
+            if (!norm || seen.has(norm)) return;
+            seen.add(norm);
+            clean.push(norm);
+        });
         const key = `${mode}:${clean.slice().sort().join(',')}`;
 
         // 优先从项目存储加载元数据
@@ -13861,10 +13704,27 @@ class PaperStatsApp {
         this.updateMarkdownDirtyUI();
     }
 
+    normalizeCitationBlocks(text = '') {
+        if (!text) return text;
+        return text.replace(/\\citep?\{[\s\S]*?\}/g, (match) => {
+            const start = match.indexOf('{');
+            if (start < 0) return match;
+            const inside = match.slice(start + 1, -1);
+            const list = this.parseDoiListFromLatex(inside);
+            if (!list.length) return match;
+            const cmd = match.startsWith('\\citep') ? '\\citep' : '\\cite';
+            return `${cmd}{${list.join(',')}}`;
+        });
+    }
+
     async saveCurrentMarkdownSilently() {
         if (!this.currentMarkdownExists) return;
         const textarea = document.getElementById('markdownTextarea');
-        const content = (this.isMarkdownEditing && textarea) ? textarea.value : (this.currentMarkdownText || '');
+        let content = (this.isMarkdownEditing && textarea) ? textarea.value : (this.currentMarkdownText || '');
+        content = this.normalizeCitationBlocks(content);
+        if (textarea && this.isMarkdownEditing) {
+            textarea.value = content;
+        }
         const mdFilename = this.getActiveMarkdownFilename();
         await this.persistMarkdown(mdFilename, content);
         this.currentMarkdownText = content;
@@ -13985,7 +13845,11 @@ class PaperStatsApp {
                 this.onMarkdownEditorInput();
             } else {
                 // 退出编辑时同步当前文本到内存，便于渲染新内容
-                this.currentMarkdownText = textarea.value;
+                const normalized = this.normalizeCitationBlocks(textarea.value);
+                this.currentMarkdownText = normalized;
+                if (normalized !== textarea.value) {
+                    textarea.value = normalized;
+                }
             }
         }
         if (!editing && (this.currentView || 'structured') === 'markdown') {
@@ -13998,7 +13862,11 @@ class PaperStatsApp {
     async saveMarkdownFromEditor() {
         const textarea = document.getElementById('markdownTextarea');
         if (!textarea) return;
-        const content = textarea.value;
+        let content = textarea.value;
+        content = this.normalizeCitationBlocks(content);
+        if (content !== textarea.value) {
+            textarea.value = content;
+        }
         if (!this.isDraftViewActive && !this.currentFile && !this.currentMarkdownFile) return;
         const mdFilename = this.getActiveMarkdownFilename();
         if (!mdFilename) return;

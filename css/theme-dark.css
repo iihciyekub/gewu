@@ -524,21 +524,6 @@ body.theme-dark .info-panel {
                 0 0 0 1px rgba(255, 255, 255, 0.1);
 }
 
-body.theme-dark .prompt-chip {
-    border-color: var(--vscode-border);
-}
-
-body.theme-dark .prompt-chip:hover {
-    background: var(--vscode-hover);
-    color: var(--vscode-text);
-}
-
-body.theme-dark .prompt-chip.active {
-    background: var(--vscode-accent);
-    border-color: var(--vscode-border);
-    color: #fff;
-}
-
 /* 项目信息 / 快捷键面板暗色适配 */
 body.theme-dark #projectInfoPanel,
 body.theme-dark #shortcutsInfoPanel {
@@ -630,14 +615,14 @@ body.theme-dark .resizer:hover {
 
 body.theme-dark .resizer-toggle {
     color: var(--vscode-text);
-    background: #3a3a3a;
+    background: #000000;
     border-radius: 10px;
     padding: 2px 6px;
     box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
 }
 
 body.theme-dark .resizer-toggle:hover {
-    background: #4a4a4a;
+    background: #1a1a1a;
     box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.12);
 }
 

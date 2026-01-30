@@ -2211,6 +2211,21 @@ body.theme-vscode .nested-index-cell {
     height: 100%;
 }
 
+.editor-container.chat-docked-left .md-chat-panel {
+    order: 0;
+}
+
+.editor-container.chat-docked-left .md-chat-dock-resizer {
+    order: 1;
+}
+
+.editor-container.chat-docked-left .structured-view,
+.editor-container.chat-docked-left .markdown-view,
+.editor-container.chat-docked-left .flat-view,
+.editor-container.chat-docked-left .settings-view {
+    order: 2;
+}
+
 .markdown-body h1,
 .markdown-body h2,
 .markdown-body h3,
@@ -2857,6 +2872,7 @@ body.theme-vscode .qa-bubble {
     padding: 8px 16px;
     transition: opacity 0.2s ease, max-height 0.2s ease;
     max-height: 40px;
+    gap: 12px;
 }
 
 .md-chat-handle {
@@ -2870,7 +2886,7 @@ body.theme-vscode .qa-bubble {
 
 .md-chat-actions {
     display: inline-flex;
-    gap: 12px;
+    gap: 2px;
     margin-left: auto;
 }
 
@@ -3022,11 +3038,14 @@ body.theme-vscode .qa-bubble {
 }
 
 .md-chat-query-meta {
-    font-size: 10px;
-    font-weight: bold;
+    font-size: 11px;
+    font-weight: 600;
     color: #6f7c88;
-    padding: 2px 12px;
-    border-bottom: 1px solid #edf1f6;
+    flex: 1;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .md-chat-query-block {
@@ -3062,7 +3081,7 @@ body.theme-vscode .qa-bubble {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    font-size: 16px;
+    font-size: 12px;
 }
 
 .md-chat-btn:hover {
@@ -3097,7 +3116,7 @@ body.theme-dark .markdown-editor textarea {
 }
 
 body.theme-dark .md-chat-resizer::before {
-    background: #cbcbcb;
+    background: #ffffff;
     opacity: 0.6;
 }
 
@@ -3755,7 +3774,7 @@ body.theme-dark .groupby-json-pre {
 }
 
 .resizer-toggle:hover {
-    background: #cfcfcf;
+    background: #e6e6e6;
 }
 
 .resizer-toggle i {
@@ -4529,28 +4548,6 @@ body.theme-dark .bib-collapse-btn:hover {
     font-size: 10px;
 }
 
-/* Prompt quick panel */
-.prompt-quick-panel {
-    position: fixed;
-    top: 10px;
-    left: 50%;
-    transform: translateX(-50%);
-    background: var(--wos-bg);
-    border: 1px solid var(--wos-border);
-    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.15);
-    border-radius: 6px;
-    padding: 8px 10px;
-    z-index: 3000;
-    display: none;
-    gap: 8px;
-    max-width: calc(100% - 30px);
-    min-width: 280px;
-}
-
-.prompt-quick-panel.visible {
-    display: flex;
-    flex-direction: column;
-}
 
 .info-panel {
     position: fixed;
@@ -4796,105 +4793,6 @@ body.theme-dark .bib-collapse-btn:hover {
     background: #c62828;
 }
 
-.prompt-quick-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 8px;
-    font-weight: 600;
-    color: var(--wos-blue);
-    font-size: 12px;
-    cursor: move;
-}
-
-.prompt-quick-header i {
-    margin-right: 6px;
-}
-
-.prompt-close-btn {
-    background: transparent;
-    border: none;
-    color: var(--gray-600);
-    cursor: pointer;
-    padding: 3px 6px;
-    border-radius: 4px;
-    transition: all 0.15s ease;
-    font-size: 12px;
-}
-
-.prompt-close-btn:hover {
-    background: var(--wos-hover);
-    color: var(--wos-blue-dark);
-}
-
-.prompt-group {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-}
-
-.prompt-groups {
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-    max-height: 240px;
-    overflow: auto;
-}
-
-.prompt-group-label {
-    font-size: 11px;
-    font-weight: 600;
-    color: var(--gray-700);
-    flex-shrink: 0;
-    min-width: 48px;
-}
-
-.prompt-button-row {
-    display: flex;
-    gap: 6px;
-    overflow-x: auto;
-    padding-bottom: 2px;
-}
-
-.prompt-chip {
-    background: var(--wos-hover);
-    color: var(--wos-text);
-    border: 1px solid var(--wos-border);
-    border-radius: 14px;
-    padding: 4px 10px;
-    font-size: 11px;
-    cursor: pointer;
-    white-space: nowrap;
-    transition: all 0.15s ease;
-}
-
-.prompt-chip:hover {
-    background: var(--wos-active);
-    border-color: var(--wos-blue-light);
-    color: var(--wos-blue-dark);
-}
-
-.prompt-chip.active {
-    background: var(--wos-blue);
-    border-color: var(--wos-blue-dark);
-    color: #fff;
-}
-
-body.theme-vscode .prompt-chip.active {
-    background: var(--wos-blue-dark);
-    border-color: var(--wos-blue-light);
-    color: #fff;
-}
-
-.prompt-chip:active {
-    transform: translateY(1px);
-}
-
-.prompt-empty {
-    color: var(--gray-500);
-    font-size: 11px;
-    white-space: nowrap;
-}
 
 /* Header dropdown (copy aide scripts) */
 .header-dropdown {
