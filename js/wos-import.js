@@ -197,12 +197,11 @@
             tracker.update(`WOS update: sending ${doiList.length} DOIs`, 70);
 
             const payload = {
-                type: 'WOS_EXTENSION_QUERY',
-                source: 'enlightenkey',
-                groupId: group?.id || '',
-                dois: doiList
+                type: 'ENLIGHTENKEY_DOI_LIST',
+                doiList: doiList
             };
 
+            // 只通过 window.postMessage 发送，content script 需监听并转发到插件后台
             let sent = false;
             try {
                 window.postMessage(payload, '*');
@@ -210,16 +209,6 @@
             } catch (_err) {
                 // ignore
             }
-
-            try {
-                if (window.chrome?.runtime?.sendMessage) {
-                    window.chrome.runtime.sendMessage(payload, () => {});
-                    sent = true;
-                }
-            } catch (_err) {
-                // ignore
-            }
-
             tracker.finish('WOS update: submitted', 800);
             const parts = [`submitted ${doiList.length}`];
             if (missingDoi) parts.push(`missing doi ${missingDoi}`);
