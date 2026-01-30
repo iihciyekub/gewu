@@ -2174,6 +2174,7 @@ class PaperStatsApp {
             });
         }
         const importJsonFolderInput = document.getElementById('importJsonFolderInput');
+        const importJsonFileInput = document.getElementById('importJsonFileInput');
         const importPdfInput = document.getElementById('importPdfInput');
         const importWosInput = document.getElementById('importWosInput');
         const importMenuToggleBtn = document.getElementById('importMenuToggleBtn');
@@ -2181,10 +2182,14 @@ class PaperStatsApp {
         const importMenuDropdown = document.getElementById('importMenuDropdown');
         const importDoiMenuItem = document.getElementById('importDoiMenuItem');
         const importJsonMenuItem = document.getElementById('importJsonMenuItem');
+        const importJsonFileMenuItem = document.getElementById('importJsonFileMenuItem');
         const importPdfMenuItem = document.getElementById('importPdfMenuItem');
         const importWosMenuItem = document.getElementById('importWosMenuItem');
         if (importJsonFolderInput) {
             importJsonFolderInput.addEventListener('change', (e) => this.handleJsonFolderImport(e));
+        }
+        if (importJsonFileInput) {
+            importJsonFileInput.addEventListener('change', (e) => this.handleJsonFileImport(e));
         }
         if (importPdfInput) {
             importPdfInput.addEventListener('change', (e) => this.handlePdfImportInput(e));
@@ -2212,6 +2217,13 @@ class PaperStatsApp {
             importJsonMenuItem.addEventListener('click', (e) => {
                 e.preventDefault();
                 this.startImportJsonFlow(importJsonFolderInput);
+                this.toggleImportMenu(false);
+            });
+        }
+        if (importJsonFileMenuItem && importJsonFileInput) {
+            importJsonFileMenuItem.addEventListener('click', (e) => {
+                e.preventDefault();
+                importJsonFileInput.click();
                 this.toggleImportMenu(false);
             });
         }
@@ -8483,6 +8495,125 @@ class PaperStatsApp {
         }
         if (summary.merged.length || summary.imported.length) {
             await this.loadFileList();
+        }
+    }
+
+    // 导入单个 JSON 文件，根据 DOI 合并到项目内对应文件
+    async handleJsonFileImport(event) {
+        const input = event?.target;
+        const files = Array.from(input?.files || []);
+        if (input) input.value = '';
+        if (!files.length) return;
+        if (!this.currentProject) {
+            this.showNotification('Please load a project before importing JSON', 'error');
+            return;
+        }
+        if (this.hasUnsavedChanges || this.hasUnsavedMarkdownChanges) {
+            const proceed = confirm('Current file has unsaved changes. Importing external JSON may overwrite them. Continue?');
+            if (!proceed) return;
+        }
+
+        const file = files.find(f => (f.name || '').toLowerCase().endsWith('.json'));
+        if (!file) {
+            this.showNotification('Please select a JSON file', 'info');
+            return;
+        }
+
+        try {
+            if (!this.currentFileList || !this.currentFileList.length) {
+                await this.loadFileList(true);
+            }
+            const incomingText = await file.text();
+            const incomingData = JSON.parse(incomingText);
+            const rawDoi = (incomingData?.meta_info && incomingData.meta_info.doi) || '';
+            const doiCandidates = this.extractDoisFromText(String(rawDoi || ''));
+            const doi = this.normalizeDoiString(doiCandidates[0] || rawDoi);
+            const view = this.currentJsonView || 'view1';
+            const baseFromFilename = (file.name || '').replace(/\.json$/i, '').replace(/[^a-zA-Z0-9._-]+/g, '_') || 'imported_json';
+            const hasDoiField = !!rawDoi;
+
+            if (doi) {
+                if (!incomingData.meta_info || typeof incomingData.meta_info !== 'object') {
+                    incomingData.meta_info = {};
+                }
+                incomingData.meta_info.doi = doi;
+            }
+
+            const baseByDoi = doi ? doi.replace(/\//g, '_') : '';
+            const hasDoiBaseInView = baseByDoi
+                ? ((this.currentFileList || []).includes(baseByDoi) || (this.fileMetaByBase?.[baseByDoi]?.views?.[view]))
+                : false;
+            const hasFilenameBaseInView = (this.currentFileList || []).includes(baseFromFilename)
+                || (this.fileMetaByBase?.[baseFromFilename]?.views?.[view]);
+
+            const targetBase = hasDoiBaseInView
+                ? baseByDoi
+                : (hasDoiField ? baseByDoi : (hasFilenameBaseInView ? baseFromFilename : baseFromFilename));
+            if (!targetBase) {
+                this.showNotification('No DOI or valid filename base found in selected JSON', 'warning');
+                return;
+            }
+
+            const targetFilename = this.getViewPathForBase(targetBase, view);
+            if (!targetFilename) {
+                this.showNotification('No JSON file path for import target', 'warning');
+                return;
+            }
+
+            let merged = null;
+            let hasExistingFile = hasDoiBaseInView || (!hasDoiField && hasFilenameBaseInView);
+            if (hasExistingFile) {
+                try {
+                    const currentData = await this.readProjectFile(targetFilename);
+                    merged = JSON.parse(JSON.stringify(currentData || {}));
+                    this.deepMerge(merged, incomingData || {});
+                } catch (_err) {
+                    merged = null;
+                }
+            }
+            if (!merged) {
+                merged = JSON.parse(JSON.stringify(incomingData || {}));
+            }
+            if (!merged.schema_version) {
+                merged.schema_version = this.generateSchemaVersion();
+            }
+            merged.lastupdate = this.generateLastUpdate();
+            const projectPath = this.getRequiredProjectPath();
+            if (!projectPath) return;
+
+            const saveResp = await fetch('/save-json', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    projectPath,
+                    filename: targetFilename,
+                    content: JSON.stringify(merged, null, 2)
+                })
+            });
+            if (!saveResp.ok) {
+                const text = await saveResp.text();
+                throw new Error(text || 'Save failed');
+            }
+
+            if (this.currentFile === targetFilename || this.currentFileBase === targetBase) {
+                this.currentData = merged;
+                this.hasUnsavedChanges = false;
+                delete this.tempDataCache[targetFilename];
+                this.updateSaveButtonState();
+                this.updateSchemaBadge();
+                this.renderStructuredView();
+                this.renderFlatView();
+                this.setupEditableListeners();
+                await this.applyCurrentView();
+            }
+            this.showNotification(`Import completed: ${hasExistingFile ? 'merged 1' : 'created 1'}`, 'success');
+            await this.loadFileList();
+            await new Promise(resolve => setTimeout(resolve, 30));
+            await this.loadFile(targetBase);
+            this.scrollFileIntoView(targetBase, { align: 'center' });
+        } catch (err) {
+            console.error('Failed to import JSON file:', err);
+            this.showNotification(`Import failed: ${err.message || 'Unknown error'}`, 'error');
         }
     }
 

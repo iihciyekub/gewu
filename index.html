@@ -404,8 +404,12 @@
                                 <i class="fas fa-link"></i><span>Import DOI</span>
                             </button>
                             <button class="header-dropdown-item" id="importJsonMenuItem" type="button" role="menuitem"
-                                title="Import and merge JSON from directory (same name files only)">
-                                <i class="fas fa-file-import"></i><span>Import JSON</span>
+                                title="Import and merge JSON directory (same name files only)">
+                                <i class="fas fa-file-import"></i><span>Import JSON Directory</span>
+                            </button>
+                            <button class="header-dropdown-item" id="importJsonFileMenuItem" type="button" role="menuitem"
+                                title="Import single JSON and merge by DOI">
+                                <i class="fas fa-file-import"></i><span>Import JSON File</span>
                             </button>
                             <button class="header-dropdown-item" id="importPdfMenuItem" type="button" role="menuitem"
                                 title="Import PDFs (extract DOI and create entries)">
@@ -420,6 +424,7 @@
                 </div>
             </div>
             <input type="file" id="importJsonFolderInput" webkitdirectory directory multiple style="display: none;">
+            <input type="file" id="importJsonFileInput" accept=".json" style="display: none;">
             <input type="file" id="importPdfInput" accept=".pdf" multiple style="display: none;">
             <input type="file" id="importWosInput" accept=".txt" multiple style="display: none;">
             <div class="file-list" id="fileList">
