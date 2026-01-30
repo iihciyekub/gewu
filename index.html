@@ -601,6 +601,29 @@
                             </div>
                         </div>
                     </div>
+                    <div class="settings-section settings-panel api-settings-panel" id="apiSettingsPanel">
+                        <div class="settings-panel-header">
+                            <span>API Settings</span>
+                            <button class="btn btn-secondary" type="button" onclick="window.paperStats.toggleApiSettingsPanel(false)">
+                                <i class="fas fa-eye-slash"></i> Hide
+                            </button>
+                        </div>
+                        <div class="settings-field-list">
+                            <div class="settings-field-row">
+                                <label for="wosSidInput">WOS SID</label>
+                                <input type="text" id="wosSidInput" placeholder="Enter WOS SID">
+                            </div>
+                            <div class="settings-field-row">
+                                <label for="easychoralApiInput">EasyChoral API</label>
+                                <input type="text" id="easychoralApiInput" placeholder="Enter EasyChoral API key">
+                            </div>
+                            <div class="settings-field-row">
+                                <label for="openaiApiInput">OpenAI API</label>
+                                <input type="text" id="openaiApiInput" placeholder="Enter OpenAI API key">
+                            </div>
+                            <div class="settings-field-hint">API values are stored locally and masked after editing.</div>
+                        </div>
+                    </div>
                     <div class="settings-section settings-panel create-group-settings-panel" id="createGroupSettingsPanel">
                         <div class="settings-panel-header">
                             <span>Create Group</span>
@@ -811,6 +834,12 @@
                         <span>Disable PDF Auto-load</span>
                     </button>
                     <div class="header-dropdown-divider"></div>
+                    <button class="header-dropdown-item" id="apiSettingsMenuItem" type="button" role="menuitem"
+                        title="API settings">
+                        <i class="fas fa-key"></i>
+                        <span>API Settings</span>
+                    </button>
+                    <div class="header-dropdown-divider"></div>
                     <button class="header-dropdown-item" id="fixAllMdDoisBtn" type="button" role="menuitem"
                         title="Batch fix DOIs in all MD files (remove path components)">
                         <i class="fas fa-wrench"></i>
@@ -941,6 +970,7 @@
     <script src="js/core/jquery-3.7.0.js"></script>
     <script src="js/core/jquery.json-viewer.js"></script>
     <script src="js/app.js?v=20260112-1530"></script>
+    <script src="js/wos-import.js"></script>
     <script src="js/json-query.js?v=20260112-1530"></script>
     <script src="js/bib-download.js?v=20260112-1530"></script>
     <script src="js/groupby-fields.js?v=20260112-1530"></script>

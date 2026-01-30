@@ -144,6 +144,7 @@ class PaperStatsApp {
         this.pdfPlaceholderEl = null;
         this.settingsMenuVisible = false;
         this.autoLoadPdf = false;
+        this.apiSettingsVisible = false;
         this.pdfPopupWindow = null;
         this.isPdfPopupMode = false;
         this.pdfPopupFocusInterval = null;
@@ -177,6 +178,8 @@ class PaperStatsApp {
         this.doiAutoNumberStart = null;
         this.lastGotoLink = null;
         this.lastGotoAttemptText = '';
+        this.globalSettings = this.loadGlobalSettings();
+        this.syncGlobalSettingsGlobals();
         this.completeGroupsForCurrentProject = null; // 存储完整的、未被view过滤的分组结构
         this.virtualGroupState = {};
         this.visibleFilePositions = {};
@@ -517,6 +520,103 @@ class PaperStatsApp {
             // ignore
         }
         return 'light';
+    }
+
+    getGlobalSettingsKey() {
+        return 'globalAppSettings';
+    }
+
+    loadGlobalSettings() {
+        const defaults = {
+            wosSid: '',
+            easychoralApi: '',
+            openaiApi: ''
+        };
+        try {
+            const raw = localStorage.getItem(this.getGlobalSettingsKey());
+            if (!raw) return { ...defaults };
+            const parsed = JSON.parse(raw);
+            return { ...defaults, ...(parsed || {}) };
+        } catch (_err) {
+            return { ...defaults };
+        }
+    }
+
+    saveGlobalSettings() {
+        try {
+            localStorage.setItem(this.getGlobalSettingsKey(), JSON.stringify(this.globalSettings || {}));
+        } catch (_err) {
+            // ignore
+        }
+        this.syncGlobalSettingsGlobals();
+    }
+
+    syncGlobalSettingsGlobals() {
+        const payload = { ...(this.globalSettings || {}) };
+        window.appSettings = payload;
+        window.APP_SETTINGS = payload;
+        window.WOS_SID = payload.wosSid || '';
+        window.EASYCHORAL_API = payload.easychoralApi || '';
+        window.OPENAI_API = payload.openaiApi || '';
+    }
+
+    maskApiValue(value = '') {
+        const raw = String(value || '').trim();
+        if (!raw) return '';
+        if (raw.length <= 4) return `${raw[0]}****`;
+        if (raw.length <= 8) return `${raw.slice(0, 2)}****${raw.slice(-2)}`;
+        return `${raw.slice(0, 4)}****${raw.slice(-4)}`;
+    }
+
+    applyApiSettingsInputs() {
+        const wosInput = document.getElementById('wosSidInput');
+        const easyInput = document.getElementById('easychoralApiInput');
+        const openaiInput = document.getElementById('openaiApiInput');
+        const setMasked = (input, raw) => {
+            if (!input) return;
+            const clean = String(raw || '');
+            input.dataset.raw = clean;
+            if (!clean) {
+                input.dataset.masked = '0';
+                input.value = '';
+                return;
+            }
+            input.dataset.masked = '1';
+            input.value = this.maskApiValue(clean);
+        };
+        setMasked(wosInput, this.globalSettings?.wosSid || '');
+        setMasked(easyInput, this.globalSettings?.easychoralApi || '');
+        setMasked(openaiInput, this.globalSettings?.openaiApi || '');
+    }
+
+    bindApiSettingsInputs() {
+        const wosInput = document.getElementById('wosSidInput');
+        const easyInput = document.getElementById('easychoralApiInput');
+        const openaiInput = document.getElementById('openaiApiInput');
+        if (!wosInput || !easyInput || !openaiInput) return;
+
+        const handleMaskedFocus = (input) => {
+            if (input.dataset.masked === '1') {
+                input.value = input.dataset.raw || '';
+                input.dataset.masked = '0';
+            }
+        };
+
+        const handleMaskedBlur = (key, input) => {
+            const raw = String(input.value || '').trim();
+            this.globalSettings[key] = raw;
+            this.saveGlobalSettings();
+            this.applyApiSettingsInputs();
+        };
+
+        wosInput.addEventListener('focus', () => handleMaskedFocus(wosInput));
+        wosInput.addEventListener('blur', () => handleMaskedBlur('wosSid', wosInput));
+        easyInput.addEventListener('focus', () => handleMaskedFocus(easyInput));
+        openaiInput.addEventListener('focus', () => handleMaskedFocus(openaiInput));
+        easyInput.addEventListener('blur', () => handleMaskedBlur('easychoralApi', easyInput));
+        openaiInput.addEventListener('blur', () => handleMaskedBlur('openaiApi', openaiInput));
+
+        this.applyApiSettingsInputs();
     }
 
     persistTheme() {
@@ -1354,6 +1454,7 @@ class PaperStatsApp {
         }
 
         this.setupEventListeners();
+        this.bindApiSettingsInputs();
         this.updateJsonMenuState();
         this.updateAutoLoadMenuState();
         this.updateMarkdownToolbar();
@@ -2185,6 +2286,7 @@ class PaperStatsApp {
         const importJsonFileMenuItem = document.getElementById('importJsonFileMenuItem');
         const importPdfMenuItem = document.getElementById('importPdfMenuItem');
         const importWosMenuItem = document.getElementById('importWosMenuItem');
+        const apiSettingsMenuItem = document.getElementById('apiSettingsMenuItem');
         if (importJsonFolderInput) {
             importJsonFolderInput.addEventListener('change', (e) => this.handleJsonFolderImport(e));
         }
@@ -2246,6 +2348,13 @@ class PaperStatsApp {
                 e.preventDefault();
                 importWosInput.click();
                 this.toggleImportMenu(false);
+            });
+        }
+        if (apiSettingsMenuItem) {
+            apiSettingsMenuItem.addEventListener('click', (e) => {
+                e.preventDefault();
+                this.toggleApiSettingsPanel(true);
+                this.toggleSettingsMenu(false);
             });
         }
         // 左侧文件列表：鼠标激活后可用上下键快速切换
@@ -5039,6 +5148,10 @@ class PaperStatsApp {
                 <i class="fas fa-book"></i> Export Group DOIs to BibTeX
             </div>
             <div class="context-menu-divider"></div>
+            <div class="context-menu-item" data-action="updateGroupFromWos">
+                <i class="fas fa-cloud-download-alt"></i> Submit to Chrome Extension
+            </div>
+            <div class="context-menu-divider"></div>
             <div class="context-menu-item danger" data-action="deleteGroupFiles">
                 <i class="fas fa-trash-alt"></i> Delete All Files in Group (JSON/MD/PDF)
             </div>
@@ -5085,6 +5198,8 @@ class PaperStatsApp {
                     await this.sortGroupByTimesCitedWos(group.id);
                 } else if (action === 'sortGroupByTimesCitedAll') {
                     await this.sortGroupByTimesCitedAll(group.id);
+                } else if (action === 'updateGroupFromWos') {
+                    await this.updateGroupFromWos(group);
                 } else if (action === 'deleteGroupFiles') {
                     await this.deleteAllFilesInGroup(group);
                 } else if (action === 'renameGroup') {
@@ -6412,489 +6527,7 @@ class PaperStatsApp {
         }
     }
 
-    async handleWosTxtImport(e) {
-        const input = e?.target;
-        const files = Array.from(input?.files || []);
-        if (!files.length) return;
-        if (!this.currentProject) {
-            this.showNotification('Please load a project first', 'warning');
-            if (input) input.value = '';
-            return;
-        }
-        const view = this.currentJsonView || 'view1';
-        let tracker = null;
-        try {
-            tracker = this.createStatusProgressTracker('WOS import');
-            const records = [];
-            let invalid = 0;
-            let empty = 0;
-            let readFailed = 0;
-            const totalFiles = files.length;
-            let processedFiles = 0;
-            const notifyFileStep = Math.max(1, Math.floor(totalFiles / 10));
-            const updateFileProgress = () => {
-                const percent = totalFiles ? Math.round((processedFiles / totalFiles) * 30) : 8;
-                tracker.update(`WOS import: reading ${processedFiles}/${totalFiles}`, percent);
-            };
-            updateFileProgress();
-
-            for (const file of files) {
-                try {
-                    const text = await this.readFileAsText(file);
-                    if (!this.isValidWosTxt(text)) {
-                        invalid += 1;
-                        continue;
-                    }
-                    const parsed = this.parseWosTxt(text);
-                    if (!parsed.length) {
-                        empty += 1;
-                        continue;
-                    }
-                    records.push(...parsed);
-                } catch (err) {
-                    console.warn('Failed to read WOS file:', file?.name, err);
-                    readFailed += 1;
-                } finally {
-                    processedFiles += 1;
-                    if (processedFiles % notifyFileStep === 0 || processedFiles === totalFiles) {
-                        updateFileProgress();
-                    }
-                }
-            }
-
-            if (!records.length) {
-                const parts = [];
-                if (invalid) parts.push(`invalid ${invalid}`);
-                if (empty) parts.push(`empty ${empty}`);
-                if (readFailed) parts.push(`failed ${readFailed}`);
-                const suffix = parts.length ? ` (${parts.join(', ')})` : '';
-                this.showNotification(`No WOS records found${suffix}`, 'warning');
-                tracker.finish('WOS import: no records', 800);
-                return;
-            }
-            const batches = new Map();
-            let skipped = 0;
-            const totalRecords = records.length;
-            let processedRecords = 0;
-            const notifyRecordStep = Math.max(1, Math.floor(totalRecords / 10));
-            const updateRecordProgress = () => {
-                const percent = totalRecords ? 30 + Math.round((processedRecords / totalRecords) * 30) : 30;
-                tracker.update(`WOS import: processing ${processedRecords}/${totalRecords}`, percent);
-            };
-            updateRecordProgress();
-
-            for (const rec of records) {
-                const doi = this.extractWosDoi(rec);
-                const wosid = this.extractWosId(rec);
-                const base = doi ? this.doiToFilenameBase(doi) : this.wosidToFilenameBase(wosid);
-                if (!base) {
-                    skipped += 1;
-                    processedRecords += 1;
-                    if (processedRecords % notifyRecordStep === 0 || processedRecords === totalRecords) {
-                        updateRecordProgress();
-                    }
-                    continue;
-                }
-                const entry = batches.get(base) || {
-                    records: [],
-                    doi: '',
-                    wosid: '',
-                    isWosidOnly: true
-                };
-                entry.records.push(rec);
-                if (doi && !entry.doi) entry.doi = doi;
-                if (wosid && !entry.wosid) entry.wosid = wosid;
-                if (doi) entry.isWosidOnly = false;
-                batches.set(base, entry);
-                processedRecords += 1;
-                if (processedRecords % notifyRecordStep === 0 || processedRecords === totalRecords) {
-                    updateRecordProgress();
-                }
-            }
-
-            const wosidBases = [];
-            let created = 0;
-            let updated = 0;
-            let failed = 0;
-            const totalBatches = batches.size;
-            let processedBatches = 0;
-            const notifyBatchStep = Math.max(1, Math.floor(totalBatches / 10));
-            const updateBatchProgress = () => {
-                const percent = totalBatches ? 60 + Math.round((processedBatches / totalBatches) * 40) : 60;
-                tracker.update(`WOS import: saving ${processedBatches}/${totalBatches}`, percent);
-            };
-            if (totalBatches) updateBatchProgress();
-
-            for (const [base, entry] of batches.entries()) {
-                try {
-                    const existingPath = this.fileMetaByBase?.[base]?.views?.[view] || null;
-                    const jsonFilename = existingPath || `json/${view}/${base}.json`;
-                    let payload = null;
-                    let existed = false;
-                    try {
-                        const exists = await this.projectFileExists(jsonFilename);
-                        if (exists) {
-                            payload = await this.readProjectFile(jsonFilename);
-                            existed = !!payload;
-                        }
-                    } catch (_err) {
-                        existed = false;
-                    }
-
-                    if (!payload || !existed) {
-                        payload = this.buildWosJsonPayload(entry.records[0], entry.doi, entry.wosid);
-                        this.mergeWosData(payload, entry.records.slice(1));
-                        await this.saveJsonPayload(jsonFilename, payload);
-                        if (entry.doi) {
-                            await this.ensureMarkdownExistsForFile(jsonFilename);
-                        }
-                        created += 1;
-                    } else {
-                        if (!payload.meta_info || typeof payload.meta_info !== 'object') {
-                            payload.meta_info = {};
-                        }
-                        if (entry.doi && !payload.meta_info.doi) {
-                            payload.meta_info.doi = this.normalizeDoi(entry.doi);
-                        }
-                        this.mergeWosData(payload, entry.records);
-                        await this.saveJsonPayload(jsonFilename, payload);
-                        updated += 1;
-                    }
-
-                    if (entry.isWosidOnly) wosidBases.push(base);
-                } catch (err) {
-                    console.warn('WOS import failed for base:', base, err);
-                    failed += 1;
-                } finally {
-                    processedBatches += 1;
-                    if (processedBatches % notifyBatchStep === 0 || processedBatches === totalBatches) {
-                        updateBatchProgress();
-                    }
-                }
-            }
-
-            if (created || updated) {
-                await this.loadFileList(true);
-            }
-
-            if (wosidBases.length) {
-                const groupId = this.ensureGroupByName('wosid');
-                this.moveFilesToGroup(wosidBases, groupId);
-            }
-
-            const parts = [];
-            if (created) parts.push(`created ${created}`);
-            if (updated) parts.push(`updated ${updated}`);
-            if (skipped) parts.push(`skipped ${skipped}`);
-            if (failed) parts.push(`failed ${failed}`);
-            if (invalid) parts.push(`invalid ${invalid}`);
-            if (empty) parts.push(`empty ${empty}`);
-            if (readFailed) parts.push(`read failed ${readFailed}`);
-            const type = failed ? 'error' : 'success';
-            tracker.finish('WOS import: finalizing...', 800);
-            this.showNotification(`WOS import: ${parts.join(', ')}`, type);
-        } catch (err) {
-            console.error('WOS txt import failed:', err);
-            if (tracker) {
-                tracker.fail(`WOS import failed: ${err.message}`);
-            }
-            this.showNotification(`WOS import failed: ${err.message}`, 'error');
-        } finally {
-            if (input) input.value = '';
-        }
-    }
-
-    mergeWosData(payload, records) {
-        if (!payload || !records || !records.length) return;
-        const ensureObject = (val) => {
-            if (!val) return {};
-            if (Array.isArray(val)) return val[0] && typeof val[0] === 'object' ? { ...val[0] } : {};
-            return typeof val === 'object' ? { ...val } : {};
-        };
-        let merged = ensureObject(payload.wos_data);
-        records.forEach((rec) => {
-            const next = this.normalizeWosRecord(rec);
-            Object.entries(next).forEach(([tag, value]) => {
-                if (value === undefined || value === null || value === '') return;
-                merged[tag] = value;
-            });
-        });
-        this.applyWosLinkFields(merged);
-        payload.wos_data = merged;
-    }
-
-    applyWosLinkFields(wosData) {
-        if (!wosData || typeof wosData !== 'object') return;
-        const legacyRaw = Array.isArray(wosData.wosid) ? wosData.wosid[0] : wosData.wosid;
-        const currentRaw = Array.isArray(wosData.wos_id) ? wosData.wos_id[0] : wosData.wos_id;
-        const raw = currentRaw || legacyRaw;
-        if (!raw) return;
-        if (!currentRaw && legacyRaw) {
-            wosData.wos_id = legacyRaw;
-            delete wosData.wosid;
-        }
-        const normalized = this.normalizeWosIdPrefix(raw);
-        if (!normalized) return;
-        wosData.wos_id = normalized;
-        const encoded = encodeURIComponent(normalized);
-        wosData.citations = `https://www.webofscience.com/wos/woscc/citing-summary/${encoded}?from=woscc&type=colluid&eventMode=timeCitedOnSummary`;
-        wosData.references = `https://www.webofscience.com/wos/woscc/cited-references-summary/${encoded}?type=colluid&from=woscc`;
-        wosData.related = `https://www.webofscience.com/wos/woscc/related-records-summary/${encoded}?type=colluid&from=woscc`;
-    }
-
-    getStatusProgressEls() {
-        if (this._statusProgressEls) return this._statusProgressEls;
-        const wrap = document.getElementById('statusProgress');
-        const bar = document.getElementById('statusProgressBar');
-        const text = document.getElementById('statusProgressText');
-        this._statusProgressEls = { wrap, bar, text };
-        return this._statusProgressEls;
-    }
-
-    setStatusProgress(text = '', percent = 0) {
-        const { wrap, bar, text: textEl } = this.getStatusProgressEls();
-        if (!wrap || !bar || !textEl) return;
-        if (this._statusProgressTagTimer) {
-            clearTimeout(this._statusProgressTagTimer);
-            this._statusProgressTagTimer = null;
-        }
-        wrap.classList.add('active');
-        wrap.dataset.mode = 'progress';
-        wrap.dataset.type = '';
-        bar.style.setProperty('--status-progress', `${Math.max(0, Math.min(100, percent))}%`);
-        textEl.textContent = text || '';
-        this._statusProgressState = { text: textEl.textContent, percent: Math.max(0, Math.min(100, percent)) };
-    }
-
-    clearStatusProgress() {
-        const { wrap, bar, text: textEl } = this.getStatusProgressEls();
-        if (!wrap || !bar || !textEl) return;
-        wrap.classList.remove('active');
-        wrap.dataset.mode = '';
-        wrap.dataset.type = '';
-        bar.style.setProperty('--status-progress', '0%');
-        textEl.textContent = '';
-        this._statusProgressState = { text: '', percent: 0 };
-        if (this._statusProgressTagTimer) {
-            clearTimeout(this._statusProgressTagTimer);
-            this._statusProgressTagTimer = null;
-        }
-    }
-
-    createStatusProgressTracker(label = 'Working', opts = {}) {
-        const minIntervalMs = Number.isFinite(opts.minIntervalMs) ? opts.minIntervalMs : 200;
-        let active = true;
-        let lastTs = 0;
-        let lastPercent = 0;
-        const update = (text = label, percent = 0) => {
-            if (!active) return;
-            const now = Date.now();
-            if (now - lastTs < minIntervalMs && percent < 100) return;
-            lastTs = now;
-            const next = Math.max(lastPercent, percent);
-            lastPercent = next;
-            this.setStatusProgress(text, next);
-        };
-        const finish = (text = `${label} done`, delayMs = 1200) => {
-            if (!active) return;
-            active = false;
-            this.setStatusProgress(text, 100);
-            setTimeout(() => this.clearStatusProgress(), delayMs);
-        };
-        const fail = (text = `${label} failed`, delayMs = 1600) => {
-            if (!active) return;
-            active = false;
-            this.setStatusProgress(text, 100);
-            setTimeout(() => this.clearStatusProgress(), delayMs);
-        };
-        return { update, finish, fail };
-    }
-
-    showStatusTag(message = '', type = 'info', durationMs = 2500) {
-        const { wrap, bar, text: textEl } = this.getStatusProgressEls();
-        if (!wrap || !bar || !textEl) return;
-        const prevMode = wrap.dataset.mode || '';
-        const prevState = { ...this._statusProgressState };
-        wrap.classList.add('active');
-        wrap.dataset.mode = 'tag';
-        wrap.dataset.type = type || 'info';
-        textEl.textContent = message;
-        if (prevMode === 'progress') {
-            bar.style.setProperty('--status-progress', `${prevState.percent}%`);
-        } else {
-            bar.style.setProperty('--status-progress', '0%');
-        }
-        if (this._statusProgressTagTimer) {
-            clearTimeout(this._statusProgressTagTimer);
-        }
-        this._statusProgressTagTimer = setTimeout(() => {
-            if (prevMode === 'progress') {
-                wrap.dataset.mode = 'progress';
-                wrap.dataset.type = '';
-                bar.style.setProperty('--status-progress', `${prevState.percent}%`);
-                textEl.textContent = prevState.text || '';
-            } else {
-                this.clearStatusProgress();
-            }
-        }, durationMs);
-    }
-
-    syncWosLinks(wosData) {
-        if (!wosData || typeof wosData !== 'object') return;
-        const legacyRaw = Array.isArray(wosData.wosid) ? wosData.wosid[0] : wosData.wosid;
-        const currentRaw = Array.isArray(wosData.wos_id) ? wosData.wos_id[0] : wosData.wos_id;
-        const raw = (currentRaw || legacyRaw || '').trim();
-        if (!raw) {
-            delete wosData.citations;
-            delete wosData.references;
-            delete wosData.related;
-            return;
-        }
-        this.applyWosLinkFields(wosData);
-    }
-
-    normalizeWosIdPrefix(value) {
-        const clean = String(value || '').trim();
-        if (!clean) return '';
-        return clean.includes(':') ? clean : `WOS:${clean}`;
-    }
-
-    parseWosTxt(text = '') {
-        const lines = String(text || '').split(/\r?\n/);
-        const records = [];
-        let current = null;
-        let currentTag = null;
-        for (const raw of lines) {
-            const line = raw || '';
-            if (!line.trim()) continue;
-            if (line.startsWith('EF')) break;
-            if (line.startsWith('ER')) {
-                if (current) records.push(current);
-                current = null;
-                currentTag = null;
-                continue;
-            }
-            const match = line.match(/^([A-Z0-9]{2})\s+(.*)$/);
-            if (match) {
-                const tag = match[1];
-                if (tag === 'FN' || tag === 'VR' || tag === 'EF') {
-                    currentTag = null;
-                    continue;
-                }
-                const value = match[2]?.trim() || '';
-                if (!current) current = {};
-                if (!current[tag]) current[tag] = [];
-                if (value) current[tag].push(value);
-                currentTag = tag;
-                continue;
-            }
-            if (current && currentTag && line.startsWith(' ')) {
-                const value = line.trim();
-                if (value) {
-                    if (!current[currentTag]) current[currentTag] = [];
-                    current[currentTag].push(value);
-                }
-            }
-        }
-        if (current) records.push(current);
-        return records;
-    }
-
-    isValidWosTxt(text = '') {
-        const lines = String(text || '').split(/\r?\n/).map(l => l.trim()).filter(Boolean);
-        if (!lines.length) return false;
-        const hasHeader = lines[0] === 'FN Clarivate Analytics Web of Science';
-        const hasVersion = lines[1] === 'VR 1.0';
-        const hasFooter = lines.some(l => l === 'EF');
-        return hasHeader && hasVersion && hasFooter;
-    }
-
-    extractWosDoi(record = {}) {
-        const di = record.DI || record.Do || record.DO || [];
-        const candidates = Array.isArray(di) ? di : [di];
-        const primary = candidates.find(Boolean) || '';
-        if (primary) return this.normalizeDoi(primary);
-        const allText = Object.values(record || {})
-            .flat()
-            .filter(Boolean)
-            .join(' ');
-        const fallback = this.extractDoisFromText(allText)[0];
-        return fallback || '';
-    }
-
-    extractWosId(record = {}) {
-        const ut = record.UT || [];
-        const value = Array.isArray(ut) ? ut.find(Boolean) : ut;
-        if (!value) return '';
-        const match = String(value).match(/WOS:(.+)/i);
-        return match ? match[1].trim() : String(value).trim();
-    }
-
-    wosidToFilenameBase(wosid = '') {
-        const clean = String(wosid || '').trim();
-        if (!clean) return '';
-        return clean.replace(/[^a-zA-Z0-9._-]+/g, '_') || 'wos_item';
-    }
-
-    buildWosJsonPayload(record = {}, doi = '', wosid = '') {
-        const cleanDoi = doi ? this.normalizeDoi(doi) : '';
-        const meta = {
-            doi: cleanDoi,
-            No: null
-        };
-        const wosData = this.normalizeWosRecord(record);
-        this.applyWosLinkFields(wosData);
-        return {
-            schema_version: '1.0',
-            meta_info: meta,
-            wos_data: wosData
-        };
-    }
-
-    normalizeWosRecord(record = {}) {
-        const out = {};
-        Object.entries(record || {}).forEach(([tag, values]) => {
-            const list = Array.isArray(values) ? values.filter(Boolean) : [values].filter(Boolean);
-            if (!list.length) return;
-            const meta = this.wosFieldTagsByTag?.[tag] || {};
-            const key = meta.normalized_key || tag;
-            const mergedText = list.join(' ').replace(/\s+/g, ' ').trim();
-            let value = this.splitWosFieldValue(tag, mergedText);
-            if (value === null) value = mergedText;
-            if (tag === 'PT' && this.wosFieldPtValueMap) {
-                const mapped = Array.isArray(value)
-                    ? value.map(v => this.wosFieldPtValueMap[v] || v)
-                    : (this.wosFieldPtValueMap[value] || value);
-                value = mapped;
-            }
-            out[key] = value;
-        });
-        return out;
-    }
-
-    splitWosFieldValue(tag, text) {
-        if (!text) return null;
-        const t = String(tag || '').toUpperCase();
-        if (t === 'C1') {
-            const out = [];
-            const re = /\[([^\]]+)\]\s*([^[]+)/g;
-            let match;
-            while ((match = re.exec(text)) !== null) {
-                const author = match[1]?.trim();
-                const address = match[2]?.trim();
-                if (author || address) {
-                    out.push({ author: author || '', address: address || '' });
-                }
-            }
-            if (out.length) return out;
-        }
-        const splitBySemicolon = new Set(['AU', 'AF', 'EM', 'RI', 'OI', 'DE', 'ID', 'SC', 'WC', 'WE', 'CR']);
-        if (splitBySemicolon.has(t)) {
-            const parts = text.split(/\s*;\s*/).map(v => v.trim()).filter(Boolean);
-            return parts.length ? parts : null;
-        }
-        return null;
-    }
+    // WOS import logic moved to js/wos-import.js
 
     coalesceRecordValue(record = {}, tag) {
         const val = record?.[tag];
@@ -9223,9 +8856,25 @@ class PaperStatsApp {
         }
     }
 
+    toggleApiSettingsPanel(forceVisible) {
+        const panel = document.getElementById('apiSettingsPanel');
+        const next = typeof forceVisible === 'boolean' ? forceVisible : !this.apiSettingsVisible;
+        this.apiSettingsVisible = next;
+        if (panel) panel.classList.toggle('is-visible', next);
+        if (next) this.moveSettingsPanelToEnd(panel);
+        this.updateSettingsPanelsVisibility();
+        this.saveSettingsPanelsState();
+        if (next) {
+            this.switchToView('settings');
+            this.applyApiSettingsInputs();
+            const wosInput = document.getElementById('wosSidInput');
+            if (wosInput) setTimeout(() => wosInput.focus({ preventScroll: true }), 0);
+        }
+    }
+
     updateSettingsPanelsVisibility() {
         const settingsContent = document.getElementById('settingsContent');
-        const hasAny = !!(this.fileFilterVisible || this.createGroupVisible || this.projectInfoVisible || this.thirdPartyInfoVisible || this.shortcutsVisible || this.queryExportVisible);
+        const hasAny = !!(this.fileFilterVisible || this.createGroupVisible || this.projectInfoVisible || this.thirdPartyInfoVisible || this.shortcutsVisible || this.queryExportVisible || this.apiSettingsVisible);
         if (settingsContent) settingsContent.classList.toggle('is-empty', !hasAny);
     }
 
@@ -9239,6 +8888,7 @@ class PaperStatsApp {
         if ((this.currentView || '') !== 'settings') return false;
         const candidates = [
             { id: 'queryExportPanel', flag: 'queryExportVisible' },
+            { id: 'apiSettingsPanel', flag: 'apiSettingsVisible' },
             { id: 'shortcutsInfoPanel', flag: 'shortcutsVisible' },
             { id: 'thirdPartyInfoPanel', flag: 'thirdPartyInfoVisible' },
             { id: 'projectInfoPanel', flag: 'projectInfoVisible' },
@@ -9315,7 +8965,8 @@ class PaperStatsApp {
             projectInfoVisible: !!this.projectInfoVisible,
             thirdPartyInfoVisible: !!this.thirdPartyInfoVisible,
             shortcutsVisible: !!this.shortcutsVisible,
-            queryExportVisible: !!this.queryExportVisible
+            queryExportVisible: !!this.queryExportVisible,
+            apiSettingsVisible: !!this.apiSettingsVisible
         };
         try {
             localStorage.setItem(key, JSON.stringify(payload));
@@ -9332,6 +8983,7 @@ class PaperStatsApp {
         this.thirdPartyInfoVisible = !!state.thirdPartyInfoVisible;
         this.shortcutsVisible = !!state.shortcutsVisible;
         this.queryExportVisible = !!state.queryExportVisible;
+        this.apiSettingsVisible = !!state.apiSettingsVisible;
 
         const fileFilterPanel = document.getElementById('fileFilterSettingsPanel');
         const createGroupPanel = document.getElementById('createGroupSettingsPanel');
@@ -9339,6 +8991,7 @@ class PaperStatsApp {
         const thirdPartyPanel = document.getElementById('thirdPartyInfoPanel');
         const shortcutsPanel = document.getElementById('shortcutsInfoPanel');
         const queryExportPanel = document.getElementById('queryExportPanel');
+        const apiSettingsPanel = document.getElementById('apiSettingsPanel');
         const fileFilterBtn = document.getElementById('fileFilterToggleBtn');
         const addGroupBtn = document.getElementById('addGroupBtn');
         const queryExportBtn = document.getElementById('queryExportBtn');
@@ -9349,6 +9002,7 @@ class PaperStatsApp {
         if (thirdPartyPanel) thirdPartyPanel.classList.toggle('is-visible', this.thirdPartyInfoVisible);
         if (shortcutsPanel) shortcutsPanel.classList.toggle('is-visible', this.shortcutsVisible);
         if (queryExportPanel) queryExportPanel.classList.toggle('is-visible', this.queryExportVisible);
+        if (apiSettingsPanel) apiSettingsPanel.classList.toggle('is-visible', this.apiSettingsVisible);
         if (fileFilterBtn) fileFilterBtn.classList.toggle('active', this.fileFilterVisible);
         if (addGroupBtn) addGroupBtn.classList.toggle('active', this.createGroupVisible);
         if (queryExportBtn) queryExportBtn.classList.toggle('active', this.queryExportVisible);
@@ -9378,7 +9032,10 @@ class PaperStatsApp {
             this.refreshQueryFieldOptions();
             this.updateDoiStats();
         }
-        if (!skipView && (this.fileFilterVisible || this.createGroupVisible || this.projectInfoVisible || this.thirdPartyInfoVisible || this.shortcutsVisible || this.queryExportVisible)) {
+        if (this.apiSettingsVisible) {
+            this.applyApiSettingsInputs();
+        }
+        if (!skipView && (this.fileFilterVisible || this.createGroupVisible || this.projectInfoVisible || this.thirdPartyInfoVisible || this.shortcutsVisible || this.queryExportVisible || this.apiSettingsVisible)) {
             this.switchToView('settings');
         }
     }
@@ -18007,6 +17664,8 @@ class PaperStatsApp {
         }
     }
 }
+
+window.PaperStatsApp = PaperStatsApp;
 
 // Initialize app when DOM is ready
 document.addEventListener('DOMContentLoaded', () => {

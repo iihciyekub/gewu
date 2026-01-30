@@ -2140,6 +2140,36 @@ body.theme-vscode .nested-index-cell {
     color: var(--gray-700);
 }
 
+.settings-field-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.settings-field-row {
+    display: grid;
+    grid-template-columns: 110px 1fr;
+    gap: 10px;
+    align-items: center;
+    font-size: 12px;
+}
+
+.settings-field-row label {
+    color: var(--gray-600);
+}
+
+.settings-field-row input {
+    padding: 6px 8px;
+    border: 1px solid var(--gray-300);
+    border-radius: 6px;
+    font-size: 12px;
+}
+
+.settings-field-hint {
+    font-size: 11px;
+    color: var(--gray-500);
+}
+
 #jsonViewer {
     font-family: 'Source Code Pro', 'Menlo', 'Monaco', 'Consolas', 'DejaVu Sans Mono', 'Courier New', monospace;
     font-size: 11px;
