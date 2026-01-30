@@ -293,19 +293,20 @@ body {
 }
 
 .file-filter {
-    display: none;
+    display: flex;
     align-items: center;
-    gap: 6px;
-    padding: 0px 8px 6px 8px;
-    border-bottom: 1px solid var(--wos-border);
+    gap: 8px;
+    padding: 4px 6px;
     background: white;
     position: relative;
     flex-direction: column;
     align-items: stretch;
 }
 
-.file-filter.visible {
-    display: flex;
+.file-filter-title {
+    font-size: 11px;
+    color: var(--gray-600);
+    font-weight: 500;
 }
 
 .file-filter-row {
@@ -335,13 +336,8 @@ body {
     font-size: 12px;
 }
 
-.file-filter-chip-row {
-    flex: 1;
-    min-height: 16px;
-    min-width: 0;
-}
-
-.file-filter input {
+.file-filter input,
+.file-filter select {
     flex: 1;
     border: 1px solid var(--wos-border);
     border-radius: 3px;
@@ -351,48 +347,10 @@ body {
     min-width: 0;
 }
 
-.file-filter input:focus {
+.file-filter input:focus,
+.file-filter select:focus {
     border-color: var(--wos-blue-light);
     box-shadow: 0 0 0 2px rgba(0, 62, 116, 0.08);
-}
-
-.file-filter-chip {
-    display: inline-flex;
-    height: 100%;
-    width: 100%;
-    gap: 4px;
-    border-radius: 4px;
-    align-items: center;
-    padding: 2px 6px;
-    background: var(--wos-blue);
-    color: #fff;
-    font-size: 10px;
-    font-weight: 600;
-    white-space: nowrap;
-    overflow: hidden;
-}
-
-.file-filter-chip-text {
-    flex: 1;
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-
-.file-filter-chip-remove {
-    margin-left: auto;
-    border: none;
-    background: transparent;
-    color: #fff;
-    cursor: pointer;
-    padding: 0;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-}
-
-.file-filter-chip-remove i {
-    font-size: 10px;
 }
 
 .file-filter-run-btn {
@@ -410,7 +368,140 @@ body {
     color: var(--wos-blue);
 }
 
+.file-filter-condition-panel {
+    border-top: 1px solid var(--gray-200);
+    margin-top: 8px;
+    padding-top: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
 
+.file-filter-condition-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 11px;
+    color: var(--gray-700);
+    font-weight: 600;
+}
+
+.file-filter-condition-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.file-filter-condition {
+    display: grid;
+    grid-template-columns: 20px 1fr 92px 1fr 28px;
+    gap: 6px;
+    align-items: center;
+}
+
+.file-filter-logic-placeholder {
+    font-size: 10px;
+    color: var(--gray-500);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.file-filter-remove-btn {
+    border: none;
+    background: var(--gray-100);
+    color: var(--gray-600);
+    cursor: pointer;
+    border-radius: 4px;
+    height: 24px;
+    width: 28px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.file-filter-remove-btn:hover {
+    background: var(--gray-200);
+    color: var(--gray-800);
+}
+
+.file-filter-condition-hint {
+    font-size: 10px;
+    color: var(--gray-500);
+}
+
+.file-filter-history {
+    margin-top: 10px;
+    border-top: 1px dashed var(--gray-200);
+    padding-top: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.file-filter-history-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--gray-700);
+}
+
+.file-filter-history-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.file-filter-history-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 6px 8px;
+    border: 1px solid var(--gray-200);
+    border-radius: 6px;
+    background: #fff;
+    font-size: 11px;
+    color: var(--gray-700);
+}
+
+.file-filter-history-text {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.file-filter-history-actions {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.file-filter-history-btn {
+    border: none;
+    background: var(--gray-100);
+    color: var(--gray-600);
+    cursor: pointer;
+    border-radius: 4px;
+    height: 22px;
+    width: 22px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.file-filter-history-btn:hover {
+    background: var(--gray-200);
+    color: var(--gray-800);
+}
+
+.file-filter-history-empty {
+    font-size: 10px;
+    color: var(--gray-500);
+}
 
 .file-list {
     flex: 1;
@@ -1987,6 +2078,70 @@ body.theme-vscode .nested-index-cell {
     overflow: hidden;
 }
 
+.settings-view {
+    display: none;
+}
+
+.settings-view.active {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: hidden;
+}
+
+.settings-content {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: auto;
+    background: #fff;
+    border: 1px solid var(--wos-border);
+    border-radius: 6px;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.settings-section {
+    font-size: 12px;
+    color: var(--gray-600);
+    line-height: 1.5;
+}
+
+.settings-content.is-empty {
+    display: none;
+}
+
+.settings-panel {
+    display: none;
+    flex-direction: column;
+    gap: 10px;
+    color: inherit;
+    padding-bottom: 12px;
+    margin-bottom: 12px;
+    border-bottom: 1px dashed var(--gray-300);
+}
+
+.settings-panel.is-visible {
+    display: flex;
+}
+
+.settings-panel:last-child {
+    border-bottom: none;
+    margin-bottom: 0;
+    padding-bottom: 0;
+}
+
+.settings-panel-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--gray-700);
+}
+
 #jsonViewer {
     font-family: 'Source Code Pro', 'Menlo', 'Monaco', 'Consolas', 'DejaVu Sans Mono', 'Courier New', monospace;
     font-size: 11px;
@@ -3438,6 +3593,16 @@ body.theme-dark .groupby-json-pre {
     border: 1px solid #e0e0e0;
     pointer-events: auto;
     /* 允许操作自身 */
+}
+
+.modal-content.file-filter-modal-content {
+    width: 520px;
+    max-width: none;
+    max-height: 70vh;
+    resize: horizontal;
+    overflow-x: auto;
+    overflow-y: auto;
+    min-width: 360px;
 }
 
 .modal-content.small-modal {

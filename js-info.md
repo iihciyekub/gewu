@@ -1,4 +1,3 @@
-@JS Info：
 - @jQuery
 - @PDF.js Web Viewer 
 - @markdown-it + footnote/deflist/sub/sup/github-alerts/mermaid 

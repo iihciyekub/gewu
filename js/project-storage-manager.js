@@ -18,7 +18,8 @@ class ProjectStorageManager {
             'qa-states': 'qa-states.json',
             'section-states': 'section-states.json',
             'prompt-config': 'prompt-config.json',
-            'ui-preferences': 'ui-preferences.json'
+            'ui-preferences': 'ui-preferences.json',
+            'file-filter-history': 'file-filter-history.json'
         };
     }
     

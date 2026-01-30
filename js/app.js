@@ -50,6 +50,12 @@ class PaperStatsApp {
         this.fileFilterAutocomplete = null;
         this.fileFilter = '';
         this.fileFilterVisible = false;
+        this.fileFilterConditions = [];
+        this.fileFilterConditionId = 0;
+        this.fileFilterFieldAutocompletes = new Map();
+        this.fileFilterHistory = [];
+        this.createGroupVisible = false;
+        this.settingsPanelsStateKey = '';
         this.debugEnabled = this.loadDebugEnabled();
         try {
             const storedView = localStorage.getItem('lastViewMode');
@@ -93,7 +99,8 @@ class PaperStatsApp {
         this.citationMetaCache = {}; // 缓存 DOI -> CSL
         this.citationMetaStoreKey = 'paperReviewerCitationMeta';
         this.projectInfoVisible = false;
-        this.projectInfoLoaded = false;
+        this.thirdPartyInfoVisible = false;
+        this.thirdPartyInfoLoaded = false;
         this.shortcutsVisible = false;
         this.shortcutsLoaded = false;
         this.jsonMenuVisible = false;
@@ -153,6 +160,7 @@ class PaperStatsApp {
         this.addSectionHoverCleanup = null;
         this.theme = this.loadTheme();
         this.queryFieldOptions = [];
+        this.queryFieldOptionsView = '';
         this.queryFieldSelected = new Set();
         this.queryFieldsLoading = false;
         this.importingExternal = false;
@@ -1498,6 +1506,9 @@ class PaperStatsApp {
         await this.loadUiPreferencesFromStorage();
         await this.loadProjectViewStatesFromStorage();
         this.updateViewTabs();
+        await this.loadFileFilterHistory();
+        this.renderFileFilterHistory();
+        this.applySettingsPanelsState(this.loadSettingsPanelsState(), { skipView: true });
 
         // 加载文件列表
         await this.loadFileList();
@@ -1612,13 +1623,18 @@ class PaperStatsApp {
             openCodexCliBtn.addEventListener('click', () => this.openCodexCli());
         }
         this.initMarkdownChatPanel();
-        // 快捷键：Cmd/Ctrl + E 正向切换，Cmd/Ctrl + Shift + E 反向切换
+        // 快捷键：Cmd/Ctrl + E 正向切换（JSON/MD/Draft），Cmd/Ctrl + Shift + E 反向切换
         document.addEventListener('keydown', (e) => {
             const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
             const mod = isMac ? e.metaKey : e.ctrlKey;
             if (mod && e.key.toLowerCase() === 'e') {
                 e.preventDefault();
                 this.toggleTableMarkdownView(e.shiftKey);
+                return;
+            }
+            if (mod && e.key === ',') {
+                e.preventDefault();
+                this.switchToView('settings');
                 return;
             }
             if (mod && e.key === '/') {
@@ -1830,6 +1846,10 @@ class PaperStatsApp {
                 // Ensure all files are assigned to groups, especially files that appear in the new view
                 const ensuredGroups = this.ensureInitGroupExists(filesToRender);
                 this.renderFileList(filesToRender, this.currentFileBase || null, true, ensuredGroups);
+                this.refreshQueryFieldOptions().catch(() => {});
+                if (this.fileFilterVisible) {
+                    this.renderFileFilterConditions();
+                }
 
                 // If the current file doesn't exist in the new view, clear it and show the view
                 if (changed && this.currentFileBase) {
@@ -2183,15 +2203,15 @@ class PaperStatsApp {
                 this.togglePromptPanel();
             });
         }
-        const projectInfoBtn = document.getElementById('projectInfoBtn');
-        if (projectInfoBtn) {
-            projectInfoBtn.addEventListener('click', (e) => {
+        const thirdPartyInfoBtn = document.getElementById('thirdPartyInfoBtn');
+        if (thirdPartyInfoBtn) {
+            thirdPartyInfoBtn.addEventListener('click', (e) => {
                 e.preventDefault();
                 e.stopPropagation();
                 if (this.settingsMenuVisible) {
                     this.toggleSettingsMenu(false);
                 }
-                this.toggleProjectInfoPanel();
+                this.toggleThirdPartyInfoPanel();
             });
         }
         const projectNameBtn = document.getElementById('currentProjectName');
@@ -2312,91 +2332,35 @@ class PaperStatsApp {
         // 文件过滤
         const fileFilterInput = document.getElementById('fileFilterInput');
         if (fileFilterInput) {
-            fileFilterInput.value = this.fileFilterField ? (this.fileFilterValue || '') : this.fileFilter;
-            if (!this.fileFilterAutocomplete && window.AutocompleteManager) {
-                this.fileFilterAutocomplete = new AutocompleteManager(fileFilterInput, {
-                    minChars: 0,
-                    maxSuggestions: 12,
-                    pathProvider: {
-                        getSuggestions: (context) => {
-                            if (this.fileFilterField) return [];
-                            return this.getFileFilterPathSuggestions(context);
-                        }
-                    }
-                });
-            }
+            fileFilterInput.value = this.fileFilter || '';
             fileFilterInput.addEventListener('input', (e) => {
                 const val = (e.target.value || '').trim();
-                if (this.fileFilterField) {
-                    this.fileFilterValue = val;
-                } else {
-                    this.fileFilter = val;
-                }
+                this.fileFilter = val;
             });
             fileFilterInput.addEventListener('keydown', (e) => {
-                if (this.fileFilterAutocomplete?.visible) {
-                    if (e.key === 'ArrowDown' || e.key === 'ArrowUp' || e.key === 'Tab') {
-                        return;
-                    }
-                    if (e.key === 'ArrowRight') {
-                        e.preventDefault();
-                        this.fileFilterAutocomplete.insertSelected();
-                        return;
-                    }
-                    if (e.key === 'Enter') {
-                        e.preventDefault();
-                        this.fileFilterAutocomplete.insertSelected();
-                        return;
-                    }
-                }
-                if (e.key === 'Enter' && e.shiftKey) {
-                    e.preventDefault();
-                    this.runFileFilter();
-                    return;
-                }
-                if (this.fileFilterField) {
-                    if (e.key === 'Backspace' && !fileFilterInput.value) {
-                        e.preventDefault();
-                        this.clearFileFilterField();
-                    }
-                    if (e.key === 'Enter') {
-                        e.preventDefault();
-                        this.runFileFilter();
-                    }
-                    return;
-                }
                 if (e.key === 'Enter') {
                     e.preventDefault();
-                    if (!this.fileFilterField) {
-                        const rawField = (fileFilterInput.value || '').trim();
-                        if (rawField) {
-                            this.selectFileFilterField(rawField);
-                            return;
-                        }
-                    }
                     this.runFileFilter();
-                } else if (e.key === 'Escape') {
-                    this.fileFilterAutocomplete?.hide?.();
                 }
-            });
-            fileFilterInput.addEventListener('focus', () => {
-                if (!this.fileFilterField) {
-                    if (!this.queryFieldOptions.length) {
-                        this.refreshQueryFieldOptions().catch(() => {});
-                    }
-                }
-            });
-            fileFilterInput.addEventListener('blur', () => {
-                setTimeout(() => this.fileFilterAutocomplete?.hide?.(), 120);
             });
         }
-        const fileFilterChipRemove = document.getElementById('fileFilterFieldChipRemove');
-        if (fileFilterChipRemove) {
-            fileFilterChipRemove.addEventListener('click', (e) => {
+        const fileFilterAddConditionBtn = document.getElementById('fileFilterAddConditionBtn');
+        if (fileFilterAddConditionBtn) {
+            fileFilterAddConditionBtn.addEventListener('click', (e) => {
                 e.preventDefault();
-                this.clearFileFilterField();
+                this.addFileFilterCondition();
             });
         }
+        const fileFilterHistoryClearBtn = document.getElementById('fileFilterHistoryClearBtn');
+        if (fileFilterHistoryClearBtn) {
+            fileFilterHistoryClearBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                this.clearFileFilterHistory();
+            });
+        }
+        this.ensureFileFilterConditions();
+        this.renderFileFilterConditions();
+        this.renderFileFilterHistory();
         const fileFilterToggleBtn = document.getElementById('fileFilterToggleBtn');
         if (fileFilterToggleBtn) {
             fileFilterToggleBtn.addEventListener('click', (e) => {
@@ -2404,7 +2368,6 @@ class PaperStatsApp {
                 this.toggleFileFilter();
             });
         }
-        this.updateFileFilterUi();
         const fileFilterRunBtn = document.getElementById('fileFilterRunBtn');
         if (fileFilterRunBtn) {
             fileFilterRunBtn.addEventListener('click', () => this.runFileFilter());
@@ -2413,7 +2376,7 @@ class PaperStatsApp {
         if (addGroupBtn) {
             addGroupBtn.addEventListener('click', (e) => {
                 e.preventDefault();
-                this.showCreateGroupDialog();
+                this.toggleCreateGroupPanel();
             });
         }
         const themeToggleBtn = document.getElementById('themeToggleBtn');
@@ -3195,41 +3158,46 @@ class PaperStatsApp {
     }
 
     setupDraggableModal() {
-        const modal = document.getElementById('editModal');
-        const content = modal?.querySelector('.modal-content');
-        const handle = modal?.querySelector('.modal-header');
-        if (!modal || !content || !handle) return;
+        const applyDraggable = (modalId) => {
+            const modal = document.getElementById(modalId);
+            const content = modal?.querySelector('.modal-content');
+            const handle = modal?.querySelector('.modal-header');
+            if (!modal || !content || !handle) return;
 
-        const onMouseDown = (e) => {
-            e.preventDefault();
-            const rect = content.getBoundingClientRect();
-            let startX = e.clientX;
-            let startY = e.clientY;
-            let startLeft = rect.left;
-            let startTop = rect.top;
+            const onMouseDown = (e) => {
+                if (e.target.closest('button')) return;
+                e.preventDefault();
+                const rect = content.getBoundingClientRect();
+                let startX = e.clientX;
+                let startY = e.clientY;
+                let startLeft = rect.left;
+                let startTop = rect.top;
 
-            content.style.position = 'fixed';
-            content.style.transform = 'none';
-            content.style.left = `${startLeft}px`;
-            content.style.top = `${startTop}px`;
+                content.style.position = 'fixed';
+                content.style.transform = 'none';
+                content.style.left = `${startLeft}px`;
+                content.style.top = `${startTop}px`;
 
-            const onMouseMove = (evt) => {
-                const dx = evt.clientX - startX;
-                const dy = evt.clientY - startY;
-                content.style.left = `${startLeft + dx}px`;
-                content.style.top = `${startTop + dy}px`;
+                const onMouseMove = (evt) => {
+                    const dx = evt.clientX - startX;
+                    const dy = evt.clientY - startY;
+                    content.style.left = `${startLeft + dx}px`;
+                    content.style.top = `${startTop + dy}px`;
+                };
+
+                const onMouseUp = () => {
+                    document.removeEventListener('mousemove', onMouseMove);
+                    document.removeEventListener('mouseup', onMouseUp);
+                };
+
+                document.addEventListener('mousemove', onMouseMove);
+                document.addEventListener('mouseup', onMouseUp);
             };
 
-            const onMouseUp = () => {
-                document.removeEventListener('mousemove', onMouseMove);
-                document.removeEventListener('mouseup', onMouseUp);
-            };
-
-            document.addEventListener('mousemove', onMouseMove);
-            document.addEventListener('mouseup', onMouseUp);
+            handle.addEventListener('mousedown', onMouseDown);
         };
 
-        handle.addEventListener('mousedown', onMouseDown);
+        applyDraggable('editModal');
     }
 
     async loadSelectedProject() {
@@ -4054,19 +4022,18 @@ class PaperStatsApp {
 
         // Calculate flattened visible files for this view
         const filterText = (this.fileFilter || '').toLowerCase();
-        const shouldFieldFilter = !!(this.fileFilterField && this.fileFilterValue);
+        const shouldFieldFilter = this.hasActiveFileFilterConditions();
         if (shouldFieldFilter && !this.fileFilterMatches) {
             this.updateFieldFilterMatches();
         }
         const filterSet = this.fileFilterMatches instanceof Set ? this.fileFilterMatches : null;
         const groupsView = groups.map(g => {
             let filtered = [...(g.files || [])];
-            if (shouldFieldFilter) {
-                if (filterSet) {
-                    filtered = filtered.filter(f => filterSet.has(f));
-                }
-            } else if (filterText) {
+            if (filterText) {
                 filtered = filtered.filter(f => f.toLowerCase().includes(filterText));
+            }
+            if (shouldFieldFilter && filterSet) {
+                filtered = filtered.filter(f => filterSet.has(f));
             }
             const visible = g.collapsed ? [] : filtered;
             return {
@@ -4204,7 +4171,7 @@ class PaperStatsApp {
             count.className = 'file-group-count';
             const totalCount = (group.files || []).length;
             const filteredCount = (group.filteredCount ?? (group.visible || []).length ?? totalCount);
-            const hasFilter = !!(this.fileFilter || (this.fileFilterField && this.fileFilterValue));
+            const hasFilter = !!(this.fileFilter || this.hasActiveFileFilterConditions());
             count.textContent = hasFilter ? `${filteredCount}/${totalCount}` : `${totalCount}`;
 
             header.appendChild(toggle);
@@ -4223,7 +4190,7 @@ class PaperStatsApp {
                 body.addEventListener('dragleave', () => this.clearAllFileDragHighlights());
                 const placeholder = document.createElement('div');
                 placeholder.className = 'file-group-empty';
-                const hasFilter = !!(this.fileFilter || (this.fileFilterField && this.fileFilterValue));
+                const hasFilter = !!(this.fileFilter || this.hasActiveFileFilterConditions());
                 placeholder.textContent = hasFilter ? 'No matching files' : 'Drag files/pdf onto this group';
                 body.appendChild(placeholder);
             } else {
@@ -4858,7 +4825,7 @@ class PaperStatsApp {
     }
 
     showCreateGroupDialog() {
-        this.activateModal('createGroupModal');
+        this.toggleCreateGroupPanel(true);
         const input = document.getElementById('groupNamesInput');
         if (input) {
             input.value = '';
@@ -4879,7 +4846,7 @@ class PaperStatsApp {
     }
 
     closeCreateGroupDialog() {
-        this.closeAllModals();
+        this.toggleCreateGroupPanel(false);
         const input = document.getElementById('groupNamesInput');
         if (input) {
             input.value = '';
@@ -8016,7 +7983,7 @@ class PaperStatsApp {
     async refreshQueryFieldOptions() {
         if (this.queryFieldsLoading) return;
         this.queryFieldsLoading = true;
-        const files = this.visibleFileOrder && this.visibleFileOrder.length ? this.visibleFileOrder : (this.currentFileList || []);
+        const files = this.currentFileList || [];
         const union = new Set();
         const prevSelected = new Set(this.queryFieldSelected);
         for (const filename of files) {
@@ -8031,6 +7998,7 @@ class PaperStatsApp {
             }
         }
         this.queryFieldOptions = Array.from(union).sort();
+        this.queryFieldOptionsView = this.currentJsonView || '';
         // 保留仍存在的选择
         this.queryFieldSelected = new Set([...prevSelected].filter(f => union.has(f)));
         this.renderQueryFieldList();
@@ -9175,44 +9143,465 @@ class PaperStatsApp {
     }
 
     toggleFileFilter(forceVisible) {
-        const box = document.getElementById('fileFilterContainer');
+        const panel = document.getElementById('fileFilterSettingsPanel');
         const btn = document.getElementById('fileFilterToggleBtn');
         const input = document.getElementById('fileFilterInput');
         const next = typeof forceVisible === 'boolean' ? forceVisible : !this.fileFilterVisible;
         this.fileFilterVisible = next;
-        if (box) box.classList.toggle('visible', next);
+        if (panel) panel.classList.toggle('is-visible', next);
         if (btn) btn.classList.toggle('active', next);
-        if (next && input) {
-            setTimeout(() => input.focus({ preventScroll: true }), 0);
+        if (next) this.moveSettingsPanelToEnd(panel);
+        this.updateSettingsPanelsVisibility();
+        this.saveSettingsPanelsState();
+        if (next) {
+            this.switchToView('settings');
+            if (!this.queryFieldOptions.length) {
+                this.refreshQueryFieldOptions().catch(() => {});
+            }
+            this.renderFileFilterConditions();
+            if (input) {
+                setTimeout(() => input.focus({ preventScroll: true }), 0);
+            }
         }
+    }
+
+    toggleCreateGroupPanel(forceVisible) {
+        const panel = document.getElementById('createGroupSettingsPanel');
+        const btn = document.getElementById('addGroupBtn');
+        const input = document.getElementById('groupNamesInput');
+        const next = typeof forceVisible === 'boolean' ? forceVisible : !this.createGroupVisible;
+        this.createGroupVisible = next;
+        if (panel) panel.classList.toggle('is-visible', next);
+        if (btn) btn.classList.toggle('active', next);
+        if (next) this.moveSettingsPanelToEnd(panel);
+        this.updateSettingsPanelsVisibility();
+        this.saveSettingsPanelsState();
+        if (next) {
+            this.switchToView('settings');
+            if (input) {
+                input.value = '';
+                setTimeout(() => input.focus({ preventScroll: true }), 0);
+            }
+            this.updateGroupPreview();
+        }
+    }
+
+    updateSettingsPanelsVisibility() {
+        const settingsContent = document.getElementById('settingsContent');
+        const hasAny = !!(this.fileFilterVisible || this.createGroupVisible || this.projectInfoVisible || this.thirdPartyInfoVisible || this.shortcutsVisible);
+        if (settingsContent) settingsContent.classList.toggle('is-empty', !hasAny);
+    }
+
+    moveSettingsPanelToEnd(panel) {
+        const settingsContent = document.getElementById('settingsContent');
+        if (!panel || !settingsContent) return;
+        settingsContent.appendChild(panel);
+    }
+
+    getSettingsPanelsStateKey() {
+        const projectKey = this.getProjectKey();
+        return projectKey ? `settingsPanelsState:${projectKey}` : '';
+    }
+
+    loadSettingsPanelsState() {
+        const key = this.getSettingsPanelsStateKey();
+        if (!key) return {};
+        try {
+            const raw = localStorage.getItem(key);
+            return raw ? JSON.parse(raw) : {};
+        } catch (_err) {
+            return {};
+        }
+    }
+
+    saveSettingsPanelsState() {
+        const key = this.getSettingsPanelsStateKey();
+        if (!key) return;
+        const payload = {
+            fileFilterVisible: !!this.fileFilterVisible,
+            createGroupVisible: !!this.createGroupVisible,
+            projectInfoVisible: !!this.projectInfoVisible,
+            thirdPartyInfoVisible: !!this.thirdPartyInfoVisible,
+            shortcutsVisible: !!this.shortcutsVisible
+        };
+        try {
+            localStorage.setItem(key, JSON.stringify(payload));
+        } catch (_err) {
+            // ignore
+        }
+    }
+
+    applySettingsPanelsState(state = {}, opts = {}) {
+        const skipView = !!opts.skipView;
+        this.fileFilterVisible = !!state.fileFilterVisible;
+        this.createGroupVisible = !!state.createGroupVisible;
+        this.projectInfoVisible = !!state.projectInfoVisible;
+        this.thirdPartyInfoVisible = !!state.thirdPartyInfoVisible;
+        this.shortcutsVisible = !!state.shortcutsVisible;
+
+        const fileFilterPanel = document.getElementById('fileFilterSettingsPanel');
+        const createGroupPanel = document.getElementById('createGroupSettingsPanel');
+        const projectInfoPanel = document.getElementById('projectInfoPanel');
+        const thirdPartyPanel = document.getElementById('thirdPartyInfoPanel');
+        const shortcutsPanel = document.getElementById('shortcutsInfoPanel');
+        const fileFilterBtn = document.getElementById('fileFilterToggleBtn');
+        const addGroupBtn = document.getElementById('addGroupBtn');
+
+        if (fileFilterPanel) fileFilterPanel.classList.toggle('is-visible', this.fileFilterVisible);
+        if (createGroupPanel) createGroupPanel.classList.toggle('is-visible', this.createGroupVisible);
+        if (projectInfoPanel) projectInfoPanel.classList.toggle('is-visible', this.projectInfoVisible);
+        if (thirdPartyPanel) thirdPartyPanel.classList.toggle('is-visible', this.thirdPartyInfoVisible);
+        if (shortcutsPanel) shortcutsPanel.classList.toggle('is-visible', this.shortcutsVisible);
+        if (fileFilterBtn) fileFilterBtn.classList.toggle('active', this.fileFilterVisible);
+        if (addGroupBtn) addGroupBtn.classList.toggle('active', this.createGroupVisible);
+
+        this.updateSettingsPanelsVisibility();
+        if (this.fileFilterVisible) {
+            if (!this.queryFieldOptions.length) {
+                this.refreshQueryFieldOptions().catch(() => {});
+            }
+            this.renderFileFilterConditions();
+            this.renderFileFilterHistory();
+        }
+        if (this.projectInfoVisible) {
+            this.renderProjectInfoPanelContent();
+        }
+        if (this.thirdPartyInfoVisible) {
+            this.loadThirdPartyInfoContent();
+        }
+        if (this.shortcutsVisible) {
+            this.loadShortcutsInfoContent();
+        }
+        if (!skipView && (this.fileFilterVisible || this.createGroupVisible || this.projectInfoVisible || this.thirdPartyInfoVisible || this.shortcutsVisible)) {
+            this.switchToView('settings');
+        }
+    }
+
+    async loadFileFilterHistory() {
+        const key = this.getProjectKey();
+        if (!key) {
+            this.fileFilterHistory = [];
+            return;
+        }
+        if (this.projectStorage && this.currentProject) {
+            try {
+                const stored = await this.projectStorage.load('file-filter-history');
+                if (Array.isArray(stored)) {
+                    this.fileFilterHistory = stored;
+                    return;
+                }
+                const legacy = localStorage.getItem(`fileFilterHistory:${key}`);
+                if (legacy) {
+                    const parsed = JSON.parse(legacy);
+                    this.fileFilterHistory = Array.isArray(parsed) ? parsed : [];
+                    await this.projectStorage.save('file-filter-history', this.fileFilterHistory);
+                    localStorage.removeItem(`fileFilterHistory:${key}`);
+                    return;
+                }
+            } catch (_err) {
+                this.fileFilterHistory = [];
+                return;
+            }
+        }
+        this.fileFilterHistory = [];
+    }
+
+    saveFileFilterHistory() {
+        const key = this.getProjectKey();
+        if (!key) return;
+        if (this.projectStorage && this.currentProject) {
+            this.projectStorage.update('file-filter-history', this.fileFilterHistory || []);
+            return;
+        }
+    }
+
+    buildFileFilterSnapshot() {
+        const quick = (this.fileFilter || '').trim();
+        const conditions = (this.fileFilterConditions || []).map((cond) => ({
+            logic: cond.logic || 'AND',
+            field: String(cond.field || '').trim(),
+            value: String(cond.value || '').trim(),
+            match: cond.match || 'contains'
+        })).filter(c => c.field && c.value);
+        if (!quick && !conditions.length) return null;
+        return {
+            id: `ff_${Date.now()}`,
+            ts: Date.now(),
+            quick,
+            conditions
+        };
+    }
+
+    saveFileFilterSnapshot() {
+        const snapshot = this.buildFileFilterSnapshot();
+        if (!snapshot) return;
+        const history = Array.isArray(this.fileFilterHistory) ? this.fileFilterHistory : [];
+        const last = history[0];
+        if (last) {
+            const lastSig = JSON.stringify({ quick: last.quick || '', conditions: last.conditions || [] });
+            const nextSig = JSON.stringify({ quick: snapshot.quick || '', conditions: snapshot.conditions || [] });
+            if (lastSig === nextSig) return;
+        }
+        history.unshift(snapshot);
+        this.fileFilterHistory = history.slice(0, 20);
+        this.saveFileFilterHistory();
+        this.renderFileFilterHistory();
+    }
+
+    clearFileFilterHistory() {
+        this.fileFilterHistory = [];
+        this.saveFileFilterHistory();
+        this.renderFileFilterHistory();
+    }
+
+    applyFileFilterSnapshot(snapshot) {
+        if (!snapshot) return;
+        this.fileFilter = snapshot.quick || '';
+        const input = document.getElementById('fileFilterInput');
+        if (input) input.value = this.fileFilter;
+        const conditions = Array.isArray(snapshot.conditions) ? snapshot.conditions : [];
+        this.fileFilterConditions = conditions.length
+            ? conditions.map((cond) => ({
+                id: `cond_${++this.fileFilterConditionId}`,
+                logic: cond.logic || 'AND',
+                field: cond.field || '',
+                value: cond.value || '',
+                match: cond.match || 'contains'
+            }))
+            : [this.createFileFilterCondition()];
+        this.fileFilterMatches = null;
+        this.renderFileFilterConditions();
+        this.runFileFilter();
+    }
+
+    renderFileFilterHistory() {
+        const list = document.getElementById('fileFilterHistoryList');
+        const empty = document.getElementById('fileFilterHistoryEmpty');
+        if (!list || !empty) return;
+        list.innerHTML = '';
+        const history = Array.isArray(this.fileFilterHistory) ? this.fileFilterHistory : [];
+        if (!history.length) {
+            empty.style.display = 'block';
+            return;
+        }
+        empty.style.display = 'none';
+        history.forEach((item) => {
+            const row = document.createElement('div');
+            row.className = 'file-filter-history-item';
+            const quick = item.quick ? `Quick: ${item.quick}` : '';
+            const conditions = Array.isArray(item.conditions) ? item.conditions : [];
+            const condCount = conditions.length;
+            const condPreview = conditions.slice(0, 2).map((cond) => {
+                const field = cond.field || '';
+                const value = cond.value || '';
+                const op = cond.match === 'regex' ? '~=' : 'contains';
+                return `${field} ${op} ${value}`;
+            }).filter(Boolean).join(' ; ');
+            const more = condCount > 2 ? ` +${condCount - 2}` : '';
+            const condLabel = condCount ? `Conditions: ${condPreview}${more}` : '';
+            const label = [quick, condLabel].filter(Boolean).join(' | ');
+            const text = document.createElement('span');
+            text.className = 'file-filter-history-text';
+            text.textContent = label || 'Saved filter';
+            text.title = label || 'Saved filter';
+            const actions = document.createElement('div');
+            actions.className = 'file-filter-history-actions';
+            const applyBtn = document.createElement('button');
+            applyBtn.type = 'button';
+            applyBtn.className = 'file-filter-history-btn';
+            applyBtn.title = 'Restore';
+            applyBtn.innerHTML = '<i class="fas fa-rotate-left"></i>';
+            applyBtn.addEventListener('click', () => this.applyFileFilterSnapshot(item));
+            const deleteBtn = document.createElement('button');
+            deleteBtn.type = 'button';
+            deleteBtn.className = 'file-filter-history-btn';
+            deleteBtn.title = 'Delete';
+            deleteBtn.innerHTML = '<i class="fas fa-trash"></i>';
+            deleteBtn.addEventListener('click', () => {
+                this.fileFilterHistory = this.fileFilterHistory.filter(h => h.id !== item.id);
+                this.saveFileFilterHistory();
+                this.renderFileFilterHistory();
+            });
+            actions.appendChild(applyBtn);
+            actions.appendChild(deleteBtn);
+            row.appendChild(text);
+            row.appendChild(actions);
+            list.appendChild(row);
+        });
     }
 
     updateFileFilterUi() {
-        const chip = document.getElementById('fileFilterFieldChip');
-        const chipText = document.getElementById('fileFilterFieldChipText');
-        const input = document.getElementById('fileFilterInput');
-        const hasField = !!this.fileFilterField;
-        if (chip) chip.hidden = !hasField;
-        if (chipText) {
-            chipText.textContent = this.fileFilterField || '';
-            chipText.title = this.fileFilterField || '';
-        }
-        if (chip) chip.title = this.fileFilterField || '';
-        if (input) {
-            input.placeholder = hasField ? 'Type field value...' : 'Filter files...';
-        }
+        this.renderFileFilterConditions();
     }
 
     runFileFilter() {
-        if (this.fileFilterField) {
+        if (this.hasActiveFileFilterConditions()) {
+            this.saveFileFilterSnapshot();
             this.updateFieldFilterMatches();
             return;
+        }
+        if ((this.fileFilter || '').trim()) {
+            this.saveFileFilterSnapshot();
         }
         this.fileFilterMatches = null;
         this.renderFileList(this.currentFileList || [], this.currentFile, true);
     }
 
+    ensureFileFilterConditions() {
+        if (!Array.isArray(this.fileFilterConditions) || !this.fileFilterConditions.length) {
+            this.fileFilterConditions = [this.createFileFilterCondition()];
+        }
+    }
+
+    createFileFilterCondition() {
+        this.fileFilterConditionId += 1;
+        return {
+            id: `cond_${this.fileFilterConditionId}`,
+            logic: 'AND',
+            field: '',
+            value: '',
+            match: 'contains'
+        };
+    }
+
+    addFileFilterCondition() {
+        this.fileFilterConditions.push(this.createFileFilterCondition());
+        this.fileFilterMatches = null;
+        this.renderFileFilterConditions();
+    }
+
+    removeFileFilterCondition(id) {
+        this.fileFilterConditions = (this.fileFilterConditions || []).filter(c => c.id !== id);
+        this.fileFilterFieldAutocompletes.delete(id);
+        if (!this.fileFilterConditions.length) {
+            this.fileFilterConditions.push(this.createFileFilterCondition());
+        }
+        this.fileFilterMatches = null;
+        this.renderFileFilterConditions();
+    }
+
+    getActiveFileFilterConditions() {
+        return (this.fileFilterConditions || []).filter(c => {
+            const field = String(c.field || '').trim();
+            const value = String(c.value || '').trim();
+            return field && value;
+        });
+    }
+
+    hasActiveFileFilterConditions() {
+        return this.getActiveFileFilterConditions().length > 0;
+    }
+
+    renderFileFilterConditions() {
+        const container = document.getElementById('fileFilterConditions');
+        if (!container) return;
+        this.ensureFileFilterConditions();
+        container.innerHTML = '';
+        (this.fileFilterConditions || []).forEach((cond, idx) => {
+            const row = document.createElement('div');
+            row.className = 'file-filter-condition';
+            row.dataset.id = cond.id;
+
+            if (idx === 0) {
+                const placeholder = document.createElement('span');
+                placeholder.className = 'file-filter-logic-placeholder';
+                placeholder.textContent = 'IF';
+                row.appendChild(placeholder);
+            } else {
+                const logicSelect = document.createElement('select');
+                logicSelect.className = 'file-filter-logic';
+                ['AND', 'OR'].forEach((opt) => {
+                    const option = document.createElement('option');
+                    option.value = opt;
+                    option.textContent = opt;
+                    if (cond.logic === opt) option.selected = true;
+                    logicSelect.appendChild(option);
+                });
+                logicSelect.addEventListener('change', (e) => {
+                    cond.logic = e.target.value;
+                    this.fileFilterMatches = null;
+                });
+                row.appendChild(logicSelect);
+            }
+
+            const fieldInput = document.createElement('input');
+            fieldInput.type = 'text';
+            fieldInput.className = 'file-filter-field-input';
+            fieldInput.placeholder = 'Field';
+            fieldInput.value = cond.field || '';
+            fieldInput.addEventListener('input', (e) => {
+                cond.field = e.target.value;
+                this.fileFilterMatches = null;
+            });
+            fieldInput.addEventListener('focus', () => {
+                if (!this.queryFieldOptions.length) {
+                    this.refreshQueryFieldOptions().catch(() => {});
+                }
+            });
+            row.appendChild(fieldInput);
+
+            if (window.AutocompleteManager) {
+                const auto = new AutocompleteManager(fieldInput, {
+                    minChars: 0,
+                    maxSuggestions: 12,
+                    pathProvider: {
+                        getSuggestions: (context) => this.getFileFilterPathSuggestions(context)
+                    }
+                });
+                this.fileFilterFieldAutocompletes.set(cond.id, auto);
+            }
+
+            const matchSelect = document.createElement('select');
+            matchSelect.className = 'file-filter-match';
+            [
+                { value: 'contains', label: 'Contains' },
+                { value: 'regex', label: 'Regex' }
+            ].forEach((opt) => {
+                const option = document.createElement('option');
+                option.value = opt.value;
+                option.textContent = opt.label;
+                if ((cond.match || 'contains') === opt.value) option.selected = true;
+                matchSelect.appendChild(option);
+            });
+            matchSelect.addEventListener('change', (e) => {
+                cond.match = e.target.value;
+                this.fileFilterMatches = null;
+            });
+            row.appendChild(matchSelect);
+
+            const valueInput = document.createElement('input');
+            valueInput.type = 'text';
+            valueInput.className = 'file-filter-value-input';
+            valueInput.placeholder = 'Value';
+            valueInput.value = cond.value || '';
+            valueInput.addEventListener('input', (e) => {
+                cond.value = e.target.value;
+                this.fileFilterMatches = null;
+            });
+            valueInput.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    this.runFileFilter();
+                }
+            });
+            row.appendChild(valueInput);
+
+            const removeBtn = document.createElement('button');
+            removeBtn.type = 'button';
+            removeBtn.className = 'file-filter-remove-btn';
+            removeBtn.title = 'Remove condition';
+            removeBtn.innerHTML = '<i class="fas fa-times"></i>';
+            removeBtn.addEventListener('click', () => this.removeFileFilterCondition(cond.id));
+            row.appendChild(removeBtn);
+
+            container.appendChild(row);
+        });
+    }
+
     getFileFilterFieldOptions() {
+        if ((this.queryFieldOptionsView || '') !== (this.currentJsonView || '')) {
+            this.refreshQueryFieldOptions().catch(() => {});
+        }
         const options = new Set();
         (this.queryFieldOptions || []).forEach(f => options.add(String(f)));
         Object.keys(this.wosFieldTagsByKey || {}).forEach((f) => {
@@ -9220,9 +9609,6 @@ class PaperStatsApp {
             options.add(key);
             options.add(`wos_data.${key}`);
         });
-        if (this.currentData) {
-            this.getFieldUnionFromData(this.currentData).forEach(f => options.add(String(f)));
-        }
         return Array.from(options).sort();
     }
 
@@ -9266,44 +9652,71 @@ class PaperStatsApp {
 
     selectFileFilterField(field) {
         const raw = String(field || '').trim().replace(/^[\]\.\s]+/, '').replace(/[.\s]+$/, '');
-        const keyOnly = raw && !raw.includes('.') ? raw : '';
-        const expanded = keyOnly && this.wosFieldTagsByKey?.[keyOnly] ? `wos_data.${keyOnly}` : raw;
-        this.fileFilterField = expanded;
-        this.fileFilterValue = '';
+        if (!raw) return;
+        this.ensureFileFilterConditions();
+        const target = this.fileFilterConditions[0];
+        if (target) {
+            target.field = raw;
+            target.value = '';
+        }
         this.fileFilterMatches = null;
-        this.fileFilter = '';
-        const input = document.getElementById('fileFilterInput');
-        if (input) input.value = '';
-        this.fileFilterAutocomplete?.hide?.();
-        this.updateFileFilterUi();
         this.renderFileList(this.currentFileList || [], this.currentFile, true);
-        if (input) input.focus();
+        this.updateFileFilterUi();
     }
 
     clearFileFilterField() {
-        this.fileFilterField = '';
-        this.fileFilterValue = '';
+        this.fileFilterConditions = [this.createFileFilterCondition()];
         this.fileFilterMatches = null;
-        this.fileFilter = '';
-        const input = document.getElementById('fileFilterInput');
-        if (input) input.value = '';
-        this.fileFilterAutocomplete?.hide?.();
-        this.updateFileFilterUi();
         this.renderFileList(this.currentFileList || [], this.currentFile, true);
+        this.updateFileFilterUi();
     }
 
     async updateFieldFilterMatches() {
-        const field = String(this.fileFilterField || '').trim();
-        const value = String(this.fileFilterValue || '').trim();
-        if (!field || !value) {
+        const activeConditions = this.getActiveFileFilterConditions();
+        if (!activeConditions.length) {
             this.fileFilterMatches = null;
             this.renderFileList(this.currentFileList || [], this.currentFile, true);
             return;
         }
+        const conditions = activeConditions.map((cond) => {
+            const raw = String(cond.field || '').trim().replace(/^[\]\.\s]+/, '').replace(/[.\s]+$/, '');
+            const keyOnly = raw && !raw.includes('.') ? raw : '';
+            const expanded = keyOnly && this.wosFieldTagsByKey?.[keyOnly] ? `wos_data.${keyOnly}` : raw;
+            const matchMode = cond.match || 'contains';
+            return {
+                logic: cond.logic || 'AND',
+                field: expanded,
+                value: String(cond.value || '').trim(),
+                match: matchMode
+            };
+        }).filter(c => c.field && c.value);
+
+        if (!conditions.length) {
+            this.fileFilterMatches = null;
+            this.renderFileList(this.currentFileList || [], this.currentFile, true);
+            return;
+        }
+
+        const compiledConditions = [];
+        for (const cond of conditions) {
+            if (cond.match === 'regex') {
+                try {
+                    const regex = new RegExp(cond.value, 'i');
+                    compiledConditions.push({ ...cond, regex });
+                } catch (_err) {
+                    this.showNotification?.(`Invalid regex: ${cond.value}`, 'warning');
+                    this.fileFilterMatches = null;
+                    this.renderFileList(this.currentFileList || [], this.currentFile, true);
+                    return;
+                }
+            } else {
+                compiledConditions.push({ ...cond, value: cond.value.toLowerCase() });
+            }
+        }
+
         const token = ++this.fileFilterComputeToken;
         const bases = Array.isArray(this.currentFileList) ? this.currentFileList : [];
         const view = this.currentJsonView || 'view1';
-        const matchValue = value.toLowerCase();
         const matches = new Set();
         const tracker = (typeof this.createStatusProgressTracker === 'function')
             ? this.createStatusProgressTracker('Filtering files')
@@ -9328,10 +9741,32 @@ class PaperStatsApp {
                         continue;
                     }
                 }
-                const values = this.getFieldValuesForFilter(data, field);
-                if (!values || !values.length) continue;
-                const found = values.some(v => String(v).toLowerCase().includes(matchValue));
-                if (found) matches.add(base);
+                let result = null;
+                compiledConditions.forEach((cond, idx) => {
+                    if (result === false && cond.logic === 'AND') {
+                        return;
+                    }
+                    const values = this.getFieldValuesForFilter(data, cond.field);
+                    const found = values && values.length
+                        ? values.some(v => {
+                            const text = String(v || '');
+                            if (cond.match === 'regex' && cond.regex) {
+                                return cond.regex.test(text);
+                            }
+                            return text.toLowerCase().includes(cond.value);
+                        })
+                        : false;
+                    if (idx === 0) {
+                        result = found;
+                    } else if (cond.logic === 'OR') {
+                        result = (result || false) || found;
+                    } else {
+                        result = (result || false) && found;
+                    }
+                });
+                if (result) {
+                    matches.add(base);
+                }
                 processed += 1;
                 if (tracker) {
                     const percent = bases.length ? Math.round((processed / bases.length) * 100) : 100;
@@ -9400,8 +9835,24 @@ class PaperStatsApp {
         if (keep !== 'settings' && this.settingsMenuVisible) this.toggleSettingsMenu(false);
         if (keep !== 'import' && this.importMenuVisible) this.toggleImportMenu(false);
         if (keep !== 'prompt' && this.promptPanelVisible) this.togglePromptPanel(false, { skipClose: true });
-        if (keep !== 'info' && this.projectInfoVisible) this.toggleProjectInfoPanel(false, { skipClose: true });
-        if (keep !== 'shortcuts' && this.shortcutsVisible) this.toggleShortcutsPanel(false, { skipClose: true });
+        if (keep !== 'info' && this.projectInfoVisible) {
+            const panel = document.getElementById('projectInfoPanel');
+            if (!(panel && panel.classList.contains('settings-panel'))) {
+                this.toggleProjectInfoPanel(false, { skipClose: true });
+            }
+        }
+        if (keep !== 'thirdparty' && this.thirdPartyInfoVisible) {
+            const panel = document.getElementById('thirdPartyInfoPanel');
+            if (!(panel && panel.classList.contains('settings-panel'))) {
+                this.toggleThirdPartyInfoPanel(false, { skipClose: true });
+            }
+        }
+        if (keep !== 'shortcuts' && this.shortcutsVisible) {
+            const panel = document.getElementById('shortcutsInfoPanel');
+            if (!(panel && panel.classList.contains('settings-panel'))) {
+                this.toggleShortcutsPanel(false, { skipClose: true });
+            }
+        }
     }
 
     applyRawJsonFromTextarea(opts = {}) {
@@ -9639,34 +10090,52 @@ class PaperStatsApp {
         const body = document.getElementById('projectInfoBody');
         if (!panel || !body) return;
 
-        // 收集项目信息
+        this.renderProjectInfoPanelContent();
+        if (this._projectInfoEscHandler) {
+            document.removeEventListener('keydown', this._projectInfoEscHandler);
+        }
+        this._projectInfoEscHandler = (ev) => {
+            if (ev.key === 'Escape') {
+                ev.preventDefault();
+                this.toggleProjectInfoPanel(false, { skipClose: true });
+            }
+        };
+        document.addEventListener('keydown', this._projectInfoEscHandler);
+        this.projectInfoVisible = true;
+        panel.classList.add('is-visible');
+        this.moveSettingsPanelToEnd(panel);
+        this.updateSettingsPanelsVisibility();
+        this.switchToView('settings');
+        this.closeHeaderMenus('info');
+    }
+
+    renderProjectInfoPanelContent() {
+        const body = document.getElementById('projectInfoBody');
+        if (!body) return;
+        if (!this.currentProject) {
+            body.textContent = 'No project loaded';
+            return;
+        }
+
         const projectPath = this.currentProject.path || '';
         const projectName = this.currentProject.name || 'Unknown Project';
 
-        console.log(`📂 Current Project Info - Name: ${projectName}, Path: ${projectPath}`);
-
-        // 统计文件数量 - 直接从 fileMetaByBase 统计
         let jsonCount = 0;
         let mdCount = 0;
         let pdfCount = 0;
 
-        // 方法1: 从 fileMetaByBase 统计 JSON 和 MD
         if (this.fileMetaByBase && typeof this.fileMetaByBase === 'object') {
             Object.values(this.fileMetaByBase).forEach(meta => {
-                // JSON: 只要有 views 或 legacyJson 就计数
                 if ((meta.views && Object.keys(meta.views).length > 0) || meta.legacyJson) {
                     jsonCount++;
                 }
-                // MD: 只要有 mdPath 就计数
                 if (meta.mdPath) {
                     mdCount++;
                 }
             });
         }
 
-        // Method 2: Count PDF files from fileMetaByPath
         if (this.fileMetaByPath && typeof this.fileMetaByPath === 'object') {
-            console.log('🔍 fileMetaByPath content:', Object.entries(this.fileMetaByPath).map(([path, meta]) => ({ path, kind: meta?.kind })));
             Object.values(this.fileMetaByPath).forEach(meta => {
                 if (meta && meta.kind === 'pdf') {
                     pdfCount++;
@@ -9674,15 +10143,8 @@ class PaperStatsApp {
             });
         }
 
-        // 构建HTML内容
         const html = `
             <div class="project-details">
-            <button type="button" class="info-panel-close" title="Close panel" aria-label="Close project info">
-                <i class="fas fa-times"></i>
-            </button>
-            <div class="detail-titlebar">
-                <h3 class="detail-title">Project Info</h3>
-            </div>
             <div class="detail-section">
                 <div class="detail-item">
                 <label>Project Name:</label>
@@ -9728,25 +10190,6 @@ class PaperStatsApp {
         `;
 
         body.innerHTML = html;
-        const closeBtn = body.querySelector('.info-panel-close');
-        if (closeBtn) {
-            closeBtn.addEventListener('click', () => {
-                this.toggleProjectInfoPanel(false, { skipClose: true });
-            });
-        }
-        if (this._projectInfoEscHandler) {
-            document.removeEventListener('keydown', this._projectInfoEscHandler);
-        }
-        this._projectInfoEscHandler = (ev) => {
-            if (ev.key === 'Escape') {
-                ev.preventDefault();
-                this.toggleProjectInfoPanel(false, { skipClose: true });
-            }
-        };
-        document.addEventListener('keydown', this._projectInfoEscHandler);
-        this.projectInfoVisible = true;
-        panel.classList.add('visible');
-        this.closeHeaderMenus('info');
     }
 
     copyProjectPathToClipboard() {
@@ -10301,7 +10744,9 @@ class PaperStatsApp {
     openProjectModal({ openCreate = false } = {}) {
         document.getElementById('projectSelectorModal')?.classList.add('active');
         this.projectInfoVisible = false;
-        document.getElementById('projectInfoPanel')?.classList.remove('visible');
+        document.getElementById('projectInfoPanel')?.classList.remove('is-visible');
+        this.updateSettingsPanelsVisibility();
+        this.saveSettingsPanelsState();
         if (openCreate) {
             document.getElementById('createProjectBtn')?.click();
         }
@@ -10369,6 +10814,7 @@ class PaperStatsApp {
         this.fileMetaByPath = {};
         this.hasUnsavedChanges = false;
         this.tempDataCache = {};
+        this.fileFilterHistory = [];
         this.selectedFiles = new Set();
         this.lastFileSelectionAnchor = null;
         this.visibleFileOrder = [];
@@ -10387,13 +10833,16 @@ class PaperStatsApp {
 
         // 清除UI - 主面板
         this.resetMainPanelsForProject();
+        this.renderFileFilterHistory();
 
         // 保存配置
         this.saveProjectConfig();
 
         // 隐藏项目信息面板
         this.projectInfoVisible = false;
-        document.getElementById('projectInfoPanel')?.classList.remove('visible');
+        document.getElementById('projectInfoPanel')?.classList.remove('is-visible');
+        this.updateSettingsPanelsVisibility();
+        this.saveSettingsPanelsState();
 
         // 更新显示
         this.updateProjectDisplay();
@@ -10410,25 +10859,53 @@ class PaperStatsApp {
         const next = typeof forceVisible === 'boolean' ? forceVisible : !this.projectInfoVisible;
         if (next && !opts.skipClose) this.closeHeaderMenus('info');
         this.projectInfoVisible = next;
-        panel.classList.toggle('visible', next);
+        panel.classList.toggle('is-visible', next);
+        if (next) this.moveSettingsPanelToEnd(panel);
+        this.updateSettingsPanelsVisibility();
         if (!next && this._projectInfoEscHandler) {
             document.removeEventListener('keydown', this._projectInfoEscHandler);
             this._projectInfoEscHandler = null;
         }
-        if (next && !this.projectInfoLoaded) {
-            body.textContent = 'Loading...';
-            try {
-                const res = await fetch('/js-info.md');
-                if (!res.ok) throw new Error(`HTTP ${res.status}`);
-                const text = await res.text();
-                const parser = this.getMarkdownParser();
-                body.innerHTML = parser ? parser.render(text) : text;
-                this.applyProjectInfoIcons(body);
-                this.projectInfoLoaded = true;
-            } catch (err) {
-                console.error('Failed to load project info', err);
-                body.textContent = `Load failed: ${err.message}`;
-            }
+        if (next) {
+            this.switchToView('settings');
+        }
+        this.saveSettingsPanelsState();
+    }
+
+    async toggleThirdPartyInfoPanel(forceVisible, opts = {}) {
+        const panel = document.getElementById('thirdPartyInfoPanel');
+        const body = document.getElementById('thirdPartyInfoBody');
+        if (!panel || !body) return;
+        const next = typeof forceVisible === 'boolean' ? forceVisible : !this.thirdPartyInfoVisible;
+        if (next && !opts.skipClose) this.closeHeaderMenus('thirdparty');
+        this.thirdPartyInfoVisible = next;
+        panel.classList.toggle('is-visible', next);
+        if (next) this.moveSettingsPanelToEnd(panel);
+        this.updateSettingsPanelsVisibility();
+        if (next) {
+            this.switchToView('settings');
+        }
+        if (next) {
+            await this.loadThirdPartyInfoContent();
+        }
+        this.saveSettingsPanelsState();
+    }
+
+    async loadThirdPartyInfoContent() {
+        const body = document.getElementById('thirdPartyInfoBody');
+        if (!body || this.thirdPartyInfoLoaded) return;
+        body.textContent = 'Loading...';
+        try {
+            const res = await fetch('/js-info.md');
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            const text = await res.text();
+            const parser = this.getMarkdownParser();
+            body.innerHTML = parser ? parser.render(text) : text;
+            this.applyProjectInfoIcons(body);
+            this.thirdPartyInfoLoaded = true;
+        } catch (err) {
+            console.error('Failed to load third-party JS info', err);
+            body.textContent = `Load failed: ${err.message}`;
         }
     }
 
@@ -10439,20 +10916,32 @@ class PaperStatsApp {
         const next = typeof forceVisible === 'boolean' ? forceVisible : !this.shortcutsVisible;
         if (next && !opts.skipClose) this.closeHeaderMenus('shortcuts');
         this.shortcutsVisible = next;
-        panel.classList.toggle('visible', next);
-        if (next && !this.shortcutsLoaded) {
-            body.textContent = 'Loading...';
-            try {
-                const res = await fetch('/shortcuts.md');
-                if (!res.ok) throw new Error(`HTTP ${res.status}`);
-                const text = await res.text();
-                const parser = this.getMarkdownParser();
-                body.innerHTML = parser ? parser.render(text) : text;
-                this.shortcutsLoaded = true;
-            } catch (err) {
-                console.error('Failed to load shortcuts info', err);
-                body.textContent = `Load failed: ${err.message}`;
-            }
+        panel.classList.toggle('is-visible', next);
+        if (next) this.moveSettingsPanelToEnd(panel);
+        this.updateSettingsPanelsVisibility();
+        if (next) {
+            this.switchToView('settings');
+        }
+        if (next) {
+            await this.loadShortcutsInfoContent();
+        }
+        this.saveSettingsPanelsState();
+    }
+
+    async loadShortcutsInfoContent() {
+        const body = document.getElementById('shortcutsInfoBody');
+        if (!body || this.shortcutsLoaded) return;
+        body.textContent = 'Loading...';
+        try {
+            const res = await fetch('/shortcuts.md');
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            const text = await res.text();
+            const parser = this.getMarkdownParser();
+            body.innerHTML = parser ? parser.render(text) : text;
+            this.shortcutsLoaded = true;
+        } catch (err) {
+            console.error('Failed to load shortcuts info', err);
+            body.textContent = `Load failed: ${err.message}`;
         }
     }
 
@@ -13685,9 +14174,11 @@ class PaperStatsApp {
             const structured = document.getElementById('structuredView');
             const markdown = document.getElementById('markdownView');
             const flat = document.getElementById('flatView');
+            const settings = document.getElementById('settingsView');
             if (structured) structured.classList.remove('active');
             if (markdown) markdown.classList.remove('active');
             if (flat) flat.classList.remove('active');
+            if (settings) settings.classList.remove('active');
 
             if (view === 'structured' && structured) {
                 structured.classList.add('active');
@@ -13695,6 +14186,8 @@ class PaperStatsApp {
                 markdown.classList.add('active');
             } else if (view === 'flat' && flat) {
                 flat.classList.add('active');
+            } else if (view === 'settings' && settings) {
+                settings.classList.add('active');
             }
 
             this.updateHeaderControls();
@@ -13771,7 +14264,7 @@ class PaperStatsApp {
 
     toggleTableMarkdownView(reverse = false) {
         const tabs = Array.from(document.querySelectorAll('#middleViewTabs .tab-btn'));
-        const order = tabs.map(tab => tab.dataset.view).filter(Boolean);
+        const order = tabs.map(tab => tab.dataset.view).filter(v => v && v !== 'settings');
         const fallbackOrder = ['structured', 'markdown', 'draft'];
         const sequence = order.length ? order : fallbackOrder;
         let currentKey = 'structured';
@@ -16602,6 +17095,8 @@ class PaperStatsApp {
         let target = 'structured';
         if ((this.currentView || 'structured') === 'markdown') {
             target = this.isDraftViewActive ? 'draft' : 'markdown';
+        } else if ((this.currentView || 'structured') === 'settings') {
+            target = 'settings';
         }
         const active = document.querySelector(`.tab-btn[data-view="${target}"]`);
         if (active) active.classList.add('active');
@@ -17100,6 +17595,9 @@ class PaperStatsApp {
             if (this.projectInfoVisible) {
                 const panel = document.getElementById('projectInfoPanel');
                 const btn = document.getElementById('projectInfoBtn');
+                if (panel && panel.classList.contains('settings-panel')) {
+                    return;
+                }
                 if (panel && !panel.contains(e.target) && !(btn && btn.contains(e.target))) {
                     this.toggleProjectInfoPanel(false, { skipClose: true });
                 }
@@ -17107,6 +17605,9 @@ class PaperStatsApp {
             if (this.shortcutsVisible) {
                 const panel = document.getElementById('shortcutsInfoPanel');
                 const btn = document.getElementById('shortcutsInfoBtn');
+                if (panel && panel.classList.contains('settings-panel')) {
+                    return;
+                }
                 if (panel && !panel.contains(e.target) && !(btn && btn.contains(e.target))) {
                     this.toggleShortcutsPanel(false, { skipClose: true });
                 }
@@ -17117,10 +17618,23 @@ class PaperStatsApp {
             const panel = document.getElementById('projectInfoPanel');
             const btn = document.getElementById('projectInfoBtn');
             if (!panel) return;
+            if (panel.classList.contains('settings-panel')) return;
             const insidePanel = panel.contains(e.target);
             const fromBtn = btn && btn.contains(e.target);
             if (!insidePanel && !fromBtn) {
                 this.toggleProjectInfoPanel(false, { skipClose: true });
+            }
+        });
+        document.addEventListener('click', (e) => {
+            if (!this.shortcutsVisible) return;
+            const panel = document.getElementById('shortcutsInfoPanel');
+            const btn = document.getElementById('shortcutsInfoBtn');
+            if (!panel) return;
+            if (panel.classList.contains('settings-panel')) return;
+            const insidePanel = panel.contains(e.target);
+            const fromBtn = btn && btn.contains(e.target);
+            if (!insidePanel && !fromBtn) {
+                this.toggleShortcutsPanel(false, { skipClose: true });
             }
         });
 

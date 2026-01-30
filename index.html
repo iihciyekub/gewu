@@ -232,12 +232,6 @@
         </div>
         <div class="prompt-groups" id="promptGroupsContainer"></div>
     </div>
-    <div class="info-panel" id="projectInfoPanel">
-        <div class="info-body" id="projectInfoBody">Loading...</div>
-    </div>
-    <div class="info-panel" id="shortcutsInfoPanel">
-        <div class="info-body" id="shortcutsInfoBody">Loading...</div>
-    </div>
 
     <!-- Project Selector Modal -->
     <div class="modal" id="projectSelectorModal">
@@ -394,39 +388,6 @@
         </div>
     </div>
 
-    <!-- Create Group Modal -->
-    <div class="modal" id="createGroupModal">
-        <div class="modal-content create-group-content">
-            <div class="modal-header">
-                <span>Create File Group</span>
-                <button class="close-btn" onclick="window.paperStats.closeCreateGroupDialog()">
-                    <i class="fas fa-times"></i>
-                </button>
-            </div>
-            <div class="modal-body">
-                <div class="form-group">
-                    <label for="groupNamesInput">Group Names:</label>
-                    <textarea id="groupNamesInput" 
-                              placeholder="Enter group names, support batch creation (one per line)&#10;Example:&#10;Papers to Review&#10;Completed Papers&#10;Papers for Discussion" 
-                              rows="8"
-                              style="font-family: inherit; font-size: 10px; line-height: 1.6;"></textarea>
-                    <small class="hint">💡 Tip: Enter one group name per line, empty lines will be ignored</small>
-                </div>
-                
-                <div class="create-group-preview" id="groupPreview" style="display: none;">
-                    <h4><i class="fas fa-eye"></i> Preview</h4>
-                    <div class="group-preview-list" id="groupPreviewList"></div>
-                </div>
-            </div>
-            <div class="modal-footer">
-                <button class="btn btn-cancel" onclick="window.paperStats.closeCreateGroupDialog()">Cancel</button>
-                <button class="btn btn-primary" id="confirmCreateGroupBtn">
-                    <i class="fas fa-check"></i> Create Groups
-                </button>
-            </div>
-        </div>
-    </div>
-
     <!-- Main Container -->
     <div class="container">
         <!-- Left Panel - File List -->
@@ -470,27 +431,6 @@
             <input type="file" id="importJsonFolderInput" webkitdirectory directory multiple style="display: none;">
             <input type="file" id="importPdfInput" accept=".pdf" multiple style="display: none;">
             <input type="file" id="importWosInput" accept=".txt" multiple style="display: none;">
-            <div class="file-filter" id="fileFilterContainer">
-                <div class="file-filter-row">
-                    <button class="file-filter-icon-btn" type="button" aria-label="Search">
-                        <i class="fas fa-search"></i>
-                    </button>
-                    <div class="file-filter-chip-row" id="fileFilterChipRow">
-                        <span class="file-filter-chip" id="fileFilterFieldChip" hidden>
-                            <span class="file-filter-chip-text" id="fileFilterFieldChipText"></span>
-                            <button type="button" class="file-filter-chip-remove" id="fileFilterFieldChipRemove" aria-label="Remove field filter">
-                                <i class="fas fa-times"></i>
-                            </button>
-                        </span>
-                    </div>
-                </div>
-                <div class="file-filter-input-row">
-                    <button class="file-filter-run-btn" id="fileFilterRunBtn" type="button" title="Run filter" aria-label="Run filter">
-                        <i class="fas fa-play"></i>
-                    </button>
-                    <input type="text" id="fileFilterInput" placeholder="Filter files..." autocomplete="off">
-                </div>
-            </div>
             <div class="file-list" id="fileList">
                 <div class="empty-state">
                     <p>Please load a project first</p>
@@ -511,6 +451,7 @@
                         <button class="tab-btn" data-view="structured" type="button" title="JSON Table">JSON</button>
                         <button class="tab-btn" data-view="markdown" type="button" title="Markdown Render">MD</button>
                         <button class="tab-btn active" data-view="draft" type="button" title="Markdown Draft">Draft</button>
+                        <button class="tab-btn" data-view="settings" type="button" title="Settings">Settings</button>
                     </div>
                     <button class="status-btn" id="statusToggleSourceBtn" type="button" title="Toggle Markdown Source (Cmd/Ctrl+/)">
                         <i class="fa-solid fa-person-chalkboard"></i>
@@ -618,6 +559,105 @@
                         <i class="fas fa-code"></i>
                         <h3>No File Selected</h3>
                     <p>Select a JSON file from the left panel to view raw JSON</p>
+                </div>
+            </div>
+            <div class="settings-view" id="settingsView">
+                <div class="settings-content is-empty" id="settingsContent">
+                    <div class="settings-section settings-panel file-filter-settings-panel" id="fileFilterSettingsPanel">
+                        <div class="settings-panel-header">
+                            <span>File Filter</span>
+                            <button class="btn btn-secondary" type="button" onclick="window.paperStats.toggleFileFilter(false)">
+                                <i class="fas fa-eye-slash"></i> Hide
+                            </button>
+                        </div>
+                        <div class="file-filter" id="fileFilterContainer">
+                            <div class="file-filter-row">
+                                <button class="file-filter-icon-btn" type="button" aria-label="Search">
+                                    <i class="fas fa-search"></i>
+                                </button>
+                                <div class="file-filter-title">Quick filter (by filename)</div>
+                            </div>
+                            <div class="file-filter-input-row">
+                                <button class="file-filter-run-btn" id="fileFilterRunBtn" type="button" title="Run filter" aria-label="Run filter">
+                                    <i class="fas fa-play"></i>
+                                </button>
+                                <input type="text" id="fileFilterInput" placeholder="Filter files..." autocomplete="off">
+                            </div>
+                            <div class="file-filter-condition-panel">
+                                <div class="file-filter-condition-header">
+                                    <span>Field conditions</span>
+                                    <button class="btn btn-secondary" id="fileFilterAddConditionBtn" type="button">
+                                        <i class="fas fa-plus"></i> Add condition
+                                    </button>
+                                </div>
+                                <div class="file-filter-condition-list" id="fileFilterConditions"></div>
+                                <div class="file-filter-condition-hint">Combine conditions with AND / OR</div>
+                            </div>
+                            <div class="file-filter-history">
+                                <div class="file-filter-history-header">
+                                    <span>History</span>
+                                    <button class="btn btn-secondary" id="fileFilterHistoryClearBtn" type="button">
+                                        <i class="fas fa-trash"></i> Clear
+                                    </button>
+                                </div>
+                                <div class="file-filter-history-list" id="fileFilterHistoryList"></div>
+                                <div class="file-filter-history-empty" id="fileFilterHistoryEmpty">No saved filters yet.</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="settings-section settings-panel create-group-settings-panel" id="createGroupSettingsPanel">
+                        <div class="settings-panel-header">
+                            <span>Create Group</span>
+                            <button class="btn btn-secondary" type="button" onclick="window.paperStats.toggleCreateGroupPanel(false)">
+                                <i class="fas fa-eye-slash"></i> Hide
+                            </button>
+                        </div>
+                        <div class="form-group">
+                            <label for="groupNamesInput">Group Names:</label>
+                            <textarea id="groupNamesInput"
+                                placeholder="Enter group names, support batch creation (one per line)&#10;Example:&#10;Papers to Review&#10;Completed Papers&#10;Papers for Discussion"
+                                rows="8"
+                                style="font-family: inherit; font-size: 10px; line-height: 1.6;"></textarea>
+                            <small class="hint">💡 Tip: Enter one group name per line, empty lines will be ignored</small>
+                        </div>
+                        <div class="create-group-preview" id="groupPreview" style="display: none;">
+                            <h4><i class="fas fa-eye"></i> Preview</h4>
+                            <div class="group-preview-list" id="groupPreviewList"></div>
+                        </div>
+                        <div class="modal-footer">
+                            <button class="btn btn-cancel" onclick="window.paperStats.closeCreateGroupDialog()">Cancel</button>
+                            <button class="btn btn-primary" id="confirmCreateGroupBtn">
+                                <i class="fas fa-check"></i> Create Groups
+                            </button>
+                        </div>
+                    </div>
+                    <div class="settings-section settings-panel project-info-settings-panel" id="projectInfoPanel">
+                        <div class="settings-panel-header">
+                            <span>Project Info</span>
+                            <button class="btn btn-secondary" type="button" onclick="window.paperStats.toggleProjectInfoPanel(false)">
+                                <i class="fas fa-eye-slash"></i> Hide
+                            </button>
+                        </div>
+                        <div class="info-body" id="projectInfoBody">Loading...</div>
+                    </div>
+                    <div class="settings-section settings-panel third-party-info-settings-panel" id="thirdPartyInfoPanel">
+                        <div class="settings-panel-header">
+                            <span>Third-party JS Info</span>
+                            <button class="btn btn-secondary" type="button" onclick="window.paperStats.toggleThirdPartyInfoPanel(false)">
+                                <i class="fas fa-eye-slash"></i> Hide
+                            </button>
+                        </div>
+                        <div class="info-body" id="thirdPartyInfoBody">Loading...</div>
+                    </div>
+                    <div class="settings-section settings-panel shortcuts-info-settings-panel" id="shortcutsInfoPanel">
+                        <div class="settings-panel-header">
+                            <span>Shortcuts</span>
+                            <button class="btn btn-secondary" type="button" onclick="window.paperStats.toggleShortcutsPanel(false)">
+                                <i class="fas fa-eye-slash"></i> Hide
+                            </button>
+                        </div>
+                        <div class="info-body" id="shortcutsInfoBody">Loading...</div>
+                    </div>
                 </div>
             </div>
             <div class="md-chat-panel" id="mdChatPanel">
@@ -741,10 +781,10 @@
                         <span>Fix All JSON DOIs</span>
                     </button>
                     <div class="header-dropdown-divider"></div>
-                    <button class="header-dropdown-item" id="projectInfoBtn" type="button" role="menuitem"
-                        title="Project Information">
+                    <button class="header-dropdown-item" id="thirdPartyInfoBtn" type="button" role="menuitem"
+                        title="Third-party JavaScript libraries">
                         <i class="fas fa-info-circle"></i>
-                        <span>Project Info</span>
+                        <span>Third-party JS Info</span>
                     </button>
                     <button class="header-dropdown-item" id="shortcutsInfoBtn" type="button" role="menuitem"
                         title="Keyboard Shortcuts">
