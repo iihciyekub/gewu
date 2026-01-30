@@ -48,6 +48,17 @@ body.theme-dark .section-header {
     color: var(--vscode-text);
 }
 
+body.theme-dark .file-filter {
+    background: transparent;
+}
+
+body.theme-dark .file-filter-title, 
+body.theme-dark #fileFilterSettingsPanel .file-filter-condition-header span,
+body.theme-dark .file-filter-condition-hint,
+body.theme-dark .file-filter-history-header span {
+    color: #f3f0e6;
+}
+
 
 body.theme-dark #lastUpdateDisplay {
     color: var(--vscode-text);
@@ -242,6 +253,52 @@ body.theme-dark .right-panel iframe {
     background: #0f1113;
 }
 
+body.theme-dark .settings-content {
+    background: var(--vscode-panel);
+    border-color: var(--vscode-border);
+    color: var(--vscode-text);
+}
+
+body.theme-dark .settings-panel {
+    border-bottom-color: var(--vscode-border);
+}
+
+body.theme-dark .settings-panel-header {
+    color: var(--vscode-text);
+}
+
+body.theme-dark .file-filter-history-item {
+    background: #1f2328;
+    border-color: var(--vscode-border);
+    color: var(--vscode-text);
+}
+
+body.theme-dark .file-filter-history-btn {
+    background: var(--vscode-hover);
+    color: var(--vscode-text);
+}
+
+body.theme-dark .file-filter-history-btn:hover {
+    background: var(--vscode-active);
+    color: var(--vscode-text);
+}
+
+body.theme-dark .file-filter-remove-btn {
+    background: var(--vscode-hover);
+    color: var(--vscode-text);
+}
+
+body.theme-dark .file-filter-remove-btn:hover {
+    background: var(--vscode-active);
+    color: var(--vscode-text);
+}
+
+body.theme-dark .md-chat-query-block,
+body.theme-dark .md-chat-query-title,
+body.theme-dark .md-chat-query-value {
+    color: #f3f0e6;
+}
+
 body.theme-dark .context-menu {
     background: var(--vscode-panel);
     border-color: var(--vscode-border);
@@ -267,6 +324,16 @@ body.theme-dark .modal .modal-footer {
     background: var(--vscode-panel);
     color: var(--vscode-text);
     border-color: var(--vscode-border);
+}
+
+body.theme-dark .modal .modal-footer {
+    border-top: 1px solid var(--vscode-border);
+    background: var(--vscode-panel);
+}
+
+body.theme-dark .project-selector-content .modal-footer {
+    background: var(--vscode-panel);
+    border-top: 1px solid var(--vscode-border);
 }
 
 body.theme-dark .modal .modal-content {
@@ -477,8 +544,6 @@ body.theme-dark #projectInfoPanel,
 body.theme-dark #shortcutsInfoPanel {
     background: var(--vscode-panel);
     color: var(--vscode-text);
-    border: 1px solid var(--vscode-border);
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
 }
 
 body.theme-dark #projectInfoBody,
@@ -565,15 +630,15 @@ body.theme-dark .resizer:hover {
 
 body.theme-dark .resizer-toggle {
     color: var(--vscode-text);
-    background: #2b3847;
+    background: #3a3a3a;
     border-radius: 10px;
     padding: 2px 6px;
-    box-shadow: inset 0 0 0 1px rgba(86, 156, 214, 0.45);
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
 }
 
 body.theme-dark .resizer-toggle:hover {
-    background: #33506e;
-    box-shadow: inset 0 0 0 1px rgba(86, 156, 214, 0.7);
+    background: #4a4a4a;
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.12);
 }
 
 body.theme-dark .resizer-toggle i {
@@ -586,6 +651,10 @@ body.theme-dark .collapsible-header {
     background: var(--vscode-panel);
     border-color: var(--vscode-border);
     color: var(--vscode-text);
+}
+
+body.theme-dark .collapsible-section {
+    border-color: #2a2a2a;
 }
 
 /* 折叠/选中状态也保持深色，不被默认浅色覆盖 */
@@ -680,15 +749,26 @@ body.theme-dark .quote-tab .tab-remove:hover {
     color: #f28b82;
 }
 
-/* Markdown 渲染适配黑金风格 */
+/* Markdown / Draft 使用与 JSON 一致的暗色风格 */
 body.theme-dark .markdown-view {
-    color: #e7d8a9;
+    color: var(--vscode-text);
+}
+
+body.theme-dark .markdown-view.active,
+body.theme-dark #markdownRender {
+    background: var(--vscode-panel);
+}
+
+body.theme-dark .markdown-editor textarea {
+    background: var(--vscode-panel);
+    color: var(--vscode-text);
+    border-color: var(--vscode-border);
 }
 
 body.theme-dark .markdown-body {
-    background: #151311;
-    color: #e7d8a9;
-    border: 1px solid #3a2f1b;
+    background: var(--vscode-panel);
+    color: var(--vscode-text);
+    border: 1px solid var(--vscode-border);
     border-radius: 6px;
 }
 
@@ -698,75 +778,75 @@ body.theme-dark .markdown-body h3,
 body.theme-dark .markdown-body h4,
 body.theme-dark .markdown-body h5,
 body.theme-dark .markdown-body h6 {
-    color: #f5d88a;
+    color: var(--vscode-text);
 }
 
 body.theme-dark .markdown-body a {
-    color: #f0c76a;
+    color: var(--vscode-accent);
 }
 
 body.theme-dark .markdown-body a:hover {
-    color: #ffd98a;
+    color: var(--vscode-accent-strong);
 }
 
 body.theme-dark .markdown-body code {
-    background: #221b10;
-    color: #f0c76a;
-    border: 1px solid #3a2f1b;
+    background: #1f2328;
+    color: var(--vscode-text);
+    border: 1px solid var(--vscode-border);
 }
 
 body.theme-dark .markdown-body pre {
-    background: #1b170f;
-    border: 1px solid #3a2f1b;
+    background: #1f2328;
+    border: 1px solid var(--vscode-border);
 }
 
 body.theme-dark .markdown-body blockquote {
-    background: #1a1712;
-    border-left: 3px solid #f0c76a;
-    color: #e6cf99;
+    background: #1f2328;
+    border-left: 3px solid var(--vscode-accent);
+    color: var(--vscode-text-muted);
 }
 
 body.theme-dark .markdown-body table {
-    background: #151311;
+    background: var(--vscode-panel);
 }
 
 body.theme-dark .markdown-body table th {
-    background: #2a2215;
-    color: #f5d88a;
-    border-color: #4a3b20;
+    background: var(--vscode-hover);
+    color: var(--vscode-text);
+    border-color: var(--vscode-border);
 }
 
 body.theme-dark .markdown-body table td {
-    background: #1b1712;
-    color: #e7d8a9;
-    border-color: #3a2f1b;
+    background: var(--vscode-panel);
+    color: var(--vscode-text);
+    border-color: var(--vscode-border);
 }
 
 body.theme-dark .markdown-body table td:first-child {
-    background: #211b12;
-    color: #f0c76a;
+    background: #1f2328;
+    color: var(--vscode-text);
 }
 
 body.theme-dark .markdown-body table tbody tr:hover td {
-    background: #241d12;
+    background: var(--vscode-hover);
 }
 
 body.theme-dark .markdown-body table tbody tr:hover td:first-child {
-    background: #2a2215;
+    background: #1f2328;
 }
 
 body.theme-dark .markdown-metadata {
-    background: #151311;
-    border: 1px solid #3a2f1b;
-    color: #e7d8a9;
+    background: var(--vscode-panel);
+    border: 1px solid var(--vscode-border);
+    color: var(--vscode-text);
 }
 
 body.theme-dark .markdown-metadata .metadata-header {
-    color: #d1b874;
+    color: var(--vscode-text);
 }
 
 body.theme-dark .markdown-metadata .metadata-header:hover {
-    background: #211b12;
+    background: var(--vscode-hover);
 }
 
 body.theme-dark .markdown-metadata .metadata-table {
@@ -776,12 +856,12 @@ body.theme-dark .markdown-metadata .metadata-table {
 
 body.theme-dark .markdown-metadata .metadata-table td {
     background: transparent;
-    border-bottom-color: #3a2f1b;
+    border-bottom-color: var(--vscode-border);
 }
 
 body.theme-dark .markdown-metadata .metadata-table td:first-child {
     background: transparent;
-    color: #f0c76a;
+    color: var(--vscode-text-muted);
 }
 
 body.theme-dark .markdown-metadata .metadata-table tbody tr:hover td {
@@ -793,31 +873,31 @@ body.theme-dark .markdown-metadata .metadata-table tbody tr:hover td:first-child
 }
 
 body.theme-dark .markdown-metadata .meta-key {
-    color: #f0c76a;
+    color: var(--vscode-text-muted);
 }
 
 body.theme-dark .markdown-metadata .meta-value {
-    color: #e7d8a9;
+    color: var(--vscode-text);
 }
 
 body.theme-dark .doi-link,
 body.theme-dark .wos-query-link,
 body.theme-dark .bib-fetch-btn {
-    color: #f0c76a;
+    color: var(--vscode-accent);
     border-color: transparent;
 }
 
 body.theme-dark .doi-link:hover,
 body.theme-dark .wos-query-link:hover,
 body.theme-dark .bib-fetch-btn:hover:not(:disabled) {
-    background: #221b10;
-    border-color: #4a3b20;
+    background: var(--vscode-hover);
+    border-color: var(--vscode-border);
 }
 
 body.theme-dark .doi-link:focus,
 body.theme-dark .wos-query-link:focus,
 body.theme-dark .bib-fetch-btn:focus {
-    border-color: #4a3b20;
+    border-color: var(--vscode-border);
 }
 
 /* 项目详情面板 - 深色主题 */
