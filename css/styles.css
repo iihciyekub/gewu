@@ -923,8 +923,6 @@ body {
     height: 20px;
     margin-right: 8px;
     padding: 1px;
-    border-radius: 999px;
-    border: 1px solid rgba(0, 62, 116, 0.18);
     user-select: none;
 }
 
@@ -936,7 +934,6 @@ body {
     border-radius: 999px;
     cursor: pointer;
     font-size: 9px;
-    font-weight: 600;
     letter-spacing: 0.2px;
     transition: all 0.12s ease;
     line-height: 1;
@@ -1177,22 +1174,57 @@ body {
     font-size: 11px;
 }
 
-.middle-tabs-left .status-btn i {
-    font-size: 13px;
+/* 状态栏中的 middle-tabs-left 样式适配 */
+.status-bar .middle-tabs-left {
+    gap: 6px;
 }
 
-.middle-tabs-left .status-btn {
-    width: 26px;
-    height: 26px;
+.status-bar .view-tabs {
+    height: 16px;
+    margin-right: 4px;
     padding: 0;
-    border-radius: 999px;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
+    border: none;
+    background: transparent;
 }
 
-.middle-tabs-left .status-btn:hover i {
-    color: var(--wos-blue);
+.status-bar .tab-btn {
+    height: 16px;
+    padding: 0 8px;
+    font-size: 9px;
+    min-width: 40px;
+    color: #fff;
+}
+
+.status-bar .tab-btn:hover:not(.active) {
+    background: rgba(255, 255, 255, 0.1);
+    color: #fff;
+}
+
+.status-bar .tab-btn.active {
+    background: rgb(163, 225, 5);
+    color: #0a0a0a;
+    font-weight: 600;
+}
+
+.status-bar .middle-tabs-left .status-btn {
+    width: 16px;
+    height: 16px;
+    background: transparent;
+    border: none;
+    color: #fff;
+}
+
+.status-bar .middle-tabs-left .status-btn i {
+    font-size: 10px;
+    color: #fff;
+}
+
+.status-bar .middle-tabs-left .status-btn:hover {
+    background: rgba(255, 255, 255, 0.15);
+}
+
+.status-bar .middle-tabs-left .status-btn:hover i {
+    color: #fff;
 }
 
 .status-bar .header-dropdown-menu {
