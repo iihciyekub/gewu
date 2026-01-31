@@ -177,19 +177,6 @@ body {
     letter-spacing: 0.02em;
 }
 
-.panel-header-left {
-    display: flex;
-    align-items: center;
-    gap: 5px;
-    flex: 1;
-    min-width: 0;
-}
-
-.panel-header-left i {
-    font-size: 11px;
-    flex-shrink: 0;
-}
-
 .project-name-btn {
     font-weight: 500;
     overflow: hidden;
@@ -223,6 +210,7 @@ body {
     display: flex;
     align-items: center;
     gap: 4px;
+    margin-left: auto;
 }
 
 #currentProjectName {
@@ -1059,15 +1047,10 @@ body {
     padding: 0 8px;
 }
 
-.status-left-icon:hover + .status-left,
+.status-left-icon:hover+.status-left,
 .status-left:hover {
     max-width: 50vw;
     background: rgb(203, 206, 9);
-}
-
-.status-bar .panel-header-left i {
-    font-size: 9px;
-    color: #000000;
 }
 
 .status-project {
@@ -1089,7 +1072,7 @@ body {
     transition: opacity 0.15s ease 0.1s;
 }
 
-.status-left-icon:hover + .status-left .project-name-btn,
+.status-left-icon:hover+.status-left .project-name-btn,
 .status-left:hover .project-name-btn {
     opacity: 1;
     transition-delay: 0s;
@@ -1147,14 +1130,11 @@ body {
     font-size: 11px;
 }
 
-/* 状态栏中的 middle-tabs-left 样式适配 */
-.status-bar .middle-tabs-left {
-    gap: 6px;
-}
 
 .status-bar .view-tabs {
     height: 16px;
     margin-right: 4px;
+    margin-left: 8px;
     padding: 0;
     border: none;
     background: transparent;
@@ -3786,9 +3766,9 @@ body.theme-dark .groupby-json-pre {
     left: 50%;
     top: 50%;
     transform: translate(-50%, -50%);
-    background: #cbcbcb;
+    background: #ffffff;
     border-radius: 50%;
-    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
     width: 22px;
     height: 22px;
     display: flex;
@@ -3801,7 +3781,7 @@ body.theme-dark .groupby-json-pre {
 }
 
 .resizer-toggle:hover {
-    background: #e6e6e6;
+    background: #f5f5f5;
 }
 
 .resizer-toggle i {
@@ -5494,4 +5474,127 @@ body.theme-vscode .group-preview-item {
     font-size: 12px;
     line-height: 1.5;
     width: 100%;
+}
+
+/* Mermaid 图表样式 */
+.markdown-body .mermaid-container {
+    position: relative;
+    background-color: transparent;
+    /* border: 1px solid #e5e7eb; */
+    border-radius: 8px;
+    margin: 2px 0;
+    padding: 10px;
+}
+
+.markdown-body .mermaid {
+    background-color: transparent;
+    text-align: center;
+    overflow: visible;
+    transform-origin: center center;
+    transition: transform 0.2s ease;
+}
+
+.markdown-body .mermaid svg {
+    max-width: 100%;
+    height: auto;
+    display: inline-block;
+}
+
+/* Mermaid 节点内部紧凑间距 */
+.markdown-body .mermaid svg .node rect,
+.markdown-body .mermaid svg .node circle,
+.markdown-body .mermaid svg .node ellipse,
+.markdown-body .mermaid svg .node polygon {
+    padding: 6px !important;
+}
+
+.markdown-body .mermaid svg .label {
+    padding: 4px 8px !important;
+}
+
+.markdown-body .mermaid svg .edgeLabel {
+    padding: 3px 6px !important;
+}
+
+/* 序列图紧凑间距 */
+.markdown-body .mermaid svg .actor {
+    padding: 6px 10px !important;
+}
+
+.markdown-body .mermaid svg .note {
+    padding: 6px 10px !important;
+}
+
+/* 类图紧凑间距 */
+.markdown-body .mermaid svg .classBox {
+    padding: 8px !important;
+}
+
+/* 状态图紧凑间距 */
+.markdown-body .mermaid svg .stateGroup rect {
+    padding: 6px !important;
+}
+
+/* Mermaid 缩放控制按钮 */
+.mermaid-zoom-controls {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    display: flex;
+    gap: 4px;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+    z-index: 10;
+}
+
+.mermaid-container:hover .mermaid-zoom-controls {
+    opacity: 1;
+}
+
+.mermaid-zoom-btn {
+    width: 28px;
+    height: 28px;
+    border: 1px solid #d1d5db;
+    background: #ffffff;
+    border-radius: 6px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    color: #374151;
+    transition: all 0.2s ease;
+}
+
+.mermaid-zoom-btn:hover {
+    background: #f3f4f6;
+    border-color: #9ca3af;
+}
+
+.mermaid-zoom-btn:active {
+    transform: scale(0.95);
+}
+
+.mermaid-zoom-level {
+    font-size: 11px;
+    color: #6b7280;
+    padding: 0 6px;
+    background: #ffffff;
+    border: 1px solid #d1d5db;
+    border-radius: 6px;
+    line-height: 26px;
+    min-width: 45px;
+    text-align: center;
+}
+
+/* Mermaid 错误提示样式 */
+.markdown-body .mermaid[data-processed="true"].error {
+    border: 1px solid #fca5a5;
+    border-radius: 8px;
+    background: #fef2f2;
+    color: #991b1b;
+    padding: 16px;
+    font-family: monospace;
+    font-size: 12px;
+    text-align: left;
 }

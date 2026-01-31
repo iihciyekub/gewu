@@ -622,15 +622,165 @@ class PaperStatsApp {
         this.updateThemeToggleButton(isDark);
     }
 
+    refreshMermaidTheme() {
+        // 刷新所有已渲染的 mermaid 图表以应用新主题
+        if (!window.mermaid) return;
+
+        try {
+            const mermaidElements = document.querySelectorAll('.mermaid[data-processed="true"]');
+            mermaidElements.forEach((element) => {
+                // 保存原始代码
+                const originalCode = element.getAttribute('data-mermaid-code') || element.textContent;
+
+                // 移除渲染结果
+                element.removeAttribute('data-processed');
+                element.innerHTML = '';
+                element.textContent = originalCode;
+
+                // 保存代码以便重新渲染
+                element.setAttribute('data-mermaid-code', originalCode);
+            });
+
+            // 重新渲染所有 mermaid 图表
+            const elementsToRender = document.querySelectorAll('.mermaid:not([data-processed])');
+            if (elementsToRender.length > 0) {
+                if (typeof window.mermaid.run === 'function') {
+                    window.mermaid.run({ nodes: elementsToRender });
+                } else {
+                    window.mermaid.init(undefined, elementsToRender);
+                }
+            }
+        } catch (err) {
+            console.warn('Mermaid theme refresh failed:', err);
+        }
+    }
+
+    initMermaid() {
+        if (window.mermaid) {
+            try {
+                const isDark = this.theme === 'dark';
+                // 使用 neutral 主题（黑白学术风格）
+                window.mermaid.initialize({
+                    startOnLoad: false,
+                    theme: 'neutral',
+                    themeVariables: {
+                        // 学术黑白配色 - 通用变量
+                        fontFamily: 'Georgia, "Times New Roman", serif',
+                        fontSize: '14px',
+
+                        // 背景透明
+                        background: 'transparent',
+                        mainBkg: 'transparent',
+
+                        // 文字颜色 - 根据主题调整
+                        primaryTextColor: isDark ? '#e5e7eb' : '#1f2937',
+                        secondaryTextColor: isDark ? '#d1d5db' : '#374151',
+                        tertiaryTextColor: isDark ? '#9ca3af' : '#4b5563',
+
+                        // 边框和线条 - 灰度
+                        primaryBorderColor: isDark ? '#6b7280' : '#4b5563',
+                        secondaryBorderColor: isDark ? '#4b5563' : '#6b7280',
+                        tertiaryBorderColor: isDark ? '#374151' : '#9ca3af',
+
+                        // 节点填充 - 浅灰
+                        primaryColor: isDark ? '#374151' : '#f9fafb',
+                        secondaryColor: isDark ? '#2d3741' : '#f3f4f6',
+                        tertiaryColor: isDark ? '#1f2937' : '#e5e7eb',
+
+                        // 线条颜色
+                        lineColor: isDark ? '#9ca3af' : '#6b7280',
+
+                        // 标签背景
+                        edgeLabelBackground: isDark ? '#1f2937' : '#ffffff',
+                        labelBackground: isDark ? '#1f2937' : '#ffffff',
+                        labelTextColor: isDark ? '#e5e7eb' : '#1f2937',
+
+                        // 序列图
+                        actorBkg: isDark ? '#374151' : '#f9fafb',
+                        actorBorder: isDark ? '#6b7280' : '#4b5563',
+                        actorTextColor: isDark ? '#e5e7eb' : '#1f2937',
+                        actorLineColor: isDark ? '#9ca3af' : '#6b7280',
+                        signalColor: isDark ? '#e5e7eb' : '#1f2937',
+                        signalTextColor: isDark ? '#e5e7eb' : '#1f2937',
+
+                        // 类图
+                        classText: isDark ? '#e5e7eb' : '#1f2937',
+
+                        // 状态图
+                        labelColor: isDark ? '#e5e7eb' : '#1f2937',
+
+                        // 甘特图
+                        gridColor: isDark ? '#4b5563' : '#d1d5db',
+                        todayLineColor: isDark ? '#9ca3af' : '#6b7280',
+
+                        // Git 图
+                        git0: isDark ? '#4b5563' : '#e5e7eb',
+                        git1: isDark ? '#6b7280' : '#d1d5db',
+                        git2: isDark ? '#9ca3af' : '#9ca3af',
+                        git3: isDark ? '#6b7280' : '#6b7280',
+                        git4: isDark ? '#4b5563' : '#4b5563',
+
+                        // 紧凑间距设置
+                        nodePadding: 8,
+                        padding: 10,
+                        boxPadding: 6,
+                        edgeLabelPadding: 5
+                    },
+                    flowchart: {
+                        useMaxWidth: true,
+                        htmlLabels: true,
+                        curve: 'basis',
+                        padding: 10,
+                        nodeSpacing: 40,
+                        rankSpacing: 40,
+                        diagramPadding: 10
+                    },
+                    sequence: {
+                        useMaxWidth: true,
+                        wrap: true,
+                        diagramMarginX: 10,
+                        diagramMarginY: 10,
+                        boxMargin: 8,
+                        boxTextMargin: 4,
+                        noteMargin: 8,
+                        messageMargin: 30,
+                        mirrorActors: false
+                    },
+                    gantt: {
+                        useMaxWidth: true,
+                        leftPadding: 50,
+                        gridLineStartPadding: 20,
+                        fontSize: 11,
+                        sectionFontSize: 11
+                    },
+                    class: {
+                        padding: 8
+                    },
+                    state: {
+                        padding: 8
+                    }
+                });
+            } catch (err) {
+                console.warn('Mermaid initialization failed:', err);
+            }
+        }
+    }
+
     toggleTheme() {
         this.theme = this.theme === 'dark' ? 'light' : 'dark';
         this.applyTheme();
+        this.initMermaid(); // 重新初始化 mermaid 以应用新主题
         this.persistTheme();
         // 同步到项目配置，方便重载后保持一致
         try {
             this.saveProjectConfig();
         } catch (_e) {
             // ignore
+        }
+        // 重新渲染当前 markdown 以更新 mermaid 图表主题
+        this.refreshMermaidTheme();
+        if (this.currentFile && this.view === 'markdown') {
+            this.renderMarkdown();
         }
         // 重新加载已打开的 PDF，使其采用对应主题
         // 只有在autoLoadPdf开启或PDF已经显示时才重新加载
@@ -1449,6 +1599,7 @@ class PaperStatsApp {
         this.updateMarkdownMenuState();
         this.applyEditLockState();
         this.applyTheme();
+        this.initMermaid();
         this.setupResizers();
         this.setupDraggableModal();
     }
@@ -1641,9 +1792,39 @@ class PaperStatsApp {
         if (statusToggleSourceBtn) {
             statusToggleSourceBtn.addEventListener('click', () => this.toggleJsonMdSource());
         }
-        const openCodexCliBtn = document.getElementById('openCodexCliBtn');
-        if (openCodexCliBtn) {
-            openCodexCliBtn.addEventListener('click', () => this.openCodexCli());
+        // CLI Menu
+        const cliMenuDropdown = document.getElementById('cliMenuDropdown');
+        const cliMenuToggleBtn = document.getElementById('cliMenuToggleBtn');
+        const cliMenu = document.getElementById('cliMenu');
+        const openCodexCliMenuItem = document.getElementById('openCodexCliMenuItem');
+        const openClaudeCliMenuItem = document.getElementById('openClaudeCliMenuItem');
+
+        if (cliMenuToggleBtn && cliMenu) {
+            cliMenuToggleBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                this.toggleCliMenu();
+            });
+            cliMenu.addEventListener('click', (e) => {
+                e.stopPropagation();
+            });
+            document.addEventListener('click', (e) => {
+                if (!this.cliMenuVisible) return;
+                if (cliMenuDropdown && cliMenuDropdown.contains(e.target)) return;
+                this.toggleCliMenu(false);
+            });
+        }
+        if (openCodexCliMenuItem) {
+            openCodexCliMenuItem.addEventListener('click', () => {
+                this.openCodexCli();
+                this.toggleCliMenu(false);
+            });
+        }
+        if (openClaudeCliMenuItem) {
+            openClaudeCliMenuItem.addEventListener('click', () => {
+                this.openClaudeCli();
+                this.toggleCliMenu(false);
+            });
         }
         this.initMarkdownChatPanel();
         // 快捷键：Cmd/Ctrl + E 正向切换（JSON/MD/Draft），Cmd/Ctrl + Shift + E 反向切换
@@ -8879,6 +9060,15 @@ class PaperStatsApp {
         menu.classList.toggle('visible', next);
     }
 
+    toggleCliMenu(forceVisible) {
+        const menu = document.getElementById('cliMenu');
+        if (!menu) return;
+        const next = typeof forceVisible === 'boolean' ? forceVisible : !this.cliMenuVisible;
+        if (next) this.closeHeaderMenus('cli');
+        this.cliMenuVisible = next;
+        menu.classList.toggle('visible', next);
+    }
+
     constrainDropdownMenu(menuEl, dropdownEl) {
         if (!menuEl || !dropdownEl) return;
         const margin = 8;
@@ -9770,6 +9960,7 @@ class PaperStatsApp {
         if (keep !== 'md' && this.mdMenuVisible) this.toggleMdMenu(false);
         if (keep !== 'settings' && this.settingsMenuVisible) this.toggleSettingsMenu(false);
         if (keep !== 'import' && this.importMenuVisible) this.toggleImportMenu(false);
+        if (keep !== 'cli' && this.cliMenuVisible) this.toggleCliMenu(false);
         if (keep !== 'info' && this.projectInfoVisible) {
             const panel = document.getElementById('projectInfoPanel');
             if (!(panel && panel.classList.contains('settings-panel'))) {
@@ -10652,7 +10843,7 @@ class PaperStatsApp {
         const projectPath = this.getRequiredProjectPath();
         if (!projectPath) return;
         this._openCodexCliPending = true;
-        const btn = document.getElementById('openCodexCliBtn');
+        const btn = document.getElementById('openCodexCliMenuItem');
         if (btn) {
             btn.disabled = true;
             btn.classList.add('is-busy');
@@ -10673,6 +10864,40 @@ class PaperStatsApp {
         } finally {
             setTimeout(() => {
                 this._openCodexCliPending = false;
+                if (btn) {
+                    btn.disabled = false;
+                    btn.classList.remove('is-busy');
+                }
+            }, 1200);
+        }
+    }
+
+    async openClaudeCli() {
+        if (this._openClaudeCliPending) return;
+        const projectPath = this.getRequiredProjectPath();
+        if (!projectPath) return;
+        this._openClaudeCliPending = true;
+        const btn = document.getElementById('openClaudeCliMenuItem');
+        if (btn) {
+            btn.disabled = true;
+            btn.classList.add('is-busy');
+        }
+        try {
+            const response = await fetch('/open-claude-cli', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ projectPath })
+            });
+            if (!response.ok) {
+                const text = await response.text();
+                throw new Error(text || `HTTP ${response.status}`);
+            }
+            this.showNotification('Claude CLI opened', 'success');
+        } catch (err) {
+            this.showNotification(`Failed to open Claude CLI: ${err.message}`, 'error');
+        } finally {
+            setTimeout(() => {
+                this._openClaudeCliPending = false;
                 if (btn) {
                     btn.disabled = false;
                     btn.classList.remove('is-busy');
@@ -12098,6 +12323,8 @@ class PaperStatsApp {
         this.bindQaCollapsibles(render);
         this.bindMetadataCollapse(render);
         this.renderMath(render);
+        // 确保 mermaid 使用当前主题配置
+        this.initMermaid();
         this.highlightCodeBlocks(render);
         this.applyCitationRendering(render);
         this.applyBibliographyRendering(render);
@@ -13853,14 +14080,124 @@ class PaperStatsApp {
 
     highlightCodeBlocks(container) {
         try {
-            if (!window.hljs || !container) return;
-            container.querySelectorAll('pre code').forEach((block) => {
-                window.hljs.highlightElement(block);
-                this.injectCopyButton(block);
-            });
+            if (!container) return;
+
+            // 处理 mermaid 代码块
+            if (window.mermaid) {
+                const mermaidBlocks = container.querySelectorAll('pre code.language-mermaid');
+                const processedCount = { value: 0 };
+                const totalBlocks = mermaidBlocks.length;
+
+                mermaidBlocks.forEach((block, index) => {
+                    const pre = block.closest('pre');
+                    if (!pre || pre.classList.contains('mermaid-rendered')) return;
+
+                    // 创建 mermaid 容器包裹器
+                    const wrapper = document.createElement('div');
+                    wrapper.className = 'mermaid-container';
+
+                    // 创建 mermaid div
+                    const mermaidDiv = document.createElement('div');
+                    mermaidDiv.className = 'mermaid';
+                    const mermaidCode = block.textContent;
+                    mermaidDiv.textContent = mermaidCode;
+                    mermaidDiv.dataset.zoom = '1';
+                    // 保存原始代码以便主题切换时重新渲染
+                    mermaidDiv.setAttribute('data-mermaid-code', mermaidCode);
+                    // 添加唯一 ID 用于渲染
+                    mermaidDiv.id = `mermaid-${Date.now()}-${index}`;
+
+                    // 创建缩放控制
+                    const controls = document.createElement('div');
+                    controls.className = 'mermaid-zoom-controls';
+                    controls.innerHTML = `
+                        <button class="mermaid-zoom-btn" data-action="zoom-out" title="缩小">−</button>
+                        <div class="mermaid-zoom-level">100%</div>
+                        <button class="mermaid-zoom-btn" data-action="zoom-in" title="放大">+</button>
+                        <button class="mermaid-zoom-btn" data-action="zoom-reset" title="重置">⟲</button>
+                    `;
+
+                    // 组装结构
+                    wrapper.appendChild(mermaidDiv);
+                    wrapper.appendChild(controls);
+
+                    // 添加缩放事件
+                    this.attachMermaidZoomHandlers(wrapper, mermaidDiv);
+
+                    // 替换 pre
+                    pre.replaceWith(wrapper);
+                });
+
+                // 使用 run() 方法渲染所有 mermaid 图表（更可靠）
+                try {
+                    const mermaidElements = container.querySelectorAll('.mermaid:not([data-processed])');
+                    if (mermaidElements.length > 0) {
+                        // 使用 run 方法（mermaid v9+）或回退到 init
+                        if (typeof window.mermaid.run === 'function') {
+                            window.mermaid.run({ nodes: mermaidElements });
+                        } else {
+                            window.mermaid.init(undefined, mermaidElements);
+                        }
+                    }
+                } catch (mermaidErr) {
+                    console.warn('Mermaid rendering failed:', mermaidErr);
+                }
+            }
+
+            // 处理其他代码块的高亮
+            if (window.hljs) {
+                container.querySelectorAll('pre code').forEach((block) => {
+                    // 跳过 mermaid 代码块
+                    if (block.classList.contains('language-mermaid')) return;
+
+                    window.hljs.highlightElement(block);
+                    this.injectCopyButton(block);
+                });
+            }
         } catch (err) {
             console.warn('Highlight failed:', err);
         }
+    }
+
+    attachMermaidZoomHandlers(wrapper, mermaidDiv) {
+        const zoomLevelEl = wrapper.querySelector('.mermaid-zoom-level');
+        const controls = wrapper.querySelector('.mermaid-zoom-controls');
+
+        const updateZoom = (zoom) => {
+            zoom = Math.max(0.5, Math.min(3, zoom)); // 限制在 50% - 300%
+            mermaidDiv.dataset.zoom = zoom;
+            mermaidDiv.style.transform = `scale(${zoom})`;
+            zoomLevelEl.textContent = Math.round(zoom * 100) + '%';
+        };
+
+        controls.addEventListener('click', (e) => {
+            const btn = e.target.closest('.mermaid-zoom-btn');
+            if (!btn) return;
+
+            e.preventDefault();
+            e.stopPropagation();
+
+            const action = btn.dataset.action;
+            let currentZoom = parseFloat(mermaidDiv.dataset.zoom) || 1;
+
+            if (action === 'zoom-in') {
+                updateZoom(currentZoom + 0.1);
+            } else if (action === 'zoom-out') {
+                updateZoom(currentZoom - 0.1);
+            } else if (action === 'zoom-reset') {
+                updateZoom(1);
+            }
+        });
+
+        // 滚轮缩放
+        wrapper.addEventListener('wheel', (e) => {
+            if (e.ctrlKey || e.metaKey) {
+                e.preventDefault();
+                const delta = e.deltaY > 0 ? -0.1 : 0.1;
+                const currentZoom = parseFloat(mermaidDiv.dataset.zoom) || 1;
+                updateZoom(currentZoom + delta);
+            }
+        }, { passive: false });
     }
 
     injectCopyButton(codeBlock) {

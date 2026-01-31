@@ -69,7 +69,6 @@ body.theme-dark #lastUpdateDisplay.unsaved-state {
     color: var(--vscode-text);
 }
 
-body.theme-dark .panel-header .panel-header-left i,
 body.theme-dark .panel-header-actions button i {
     color: var(--vscode-text);
 }
@@ -958,4 +957,38 @@ body.theme-dark .doi-copy-btn:hover {
 body.theme-dark .status-bar {
     background: #007acc;
     color: #fff;
+}
+
+/* Mermaid 图表暗色主题 */
+body.theme-dark .markdown-body .mermaid-container {
+    border-color: #2d3741;
+    background: transparent;
+}
+
+body.theme-dark .markdown-body .mermaid {
+    background: transparent;
+}
+
+body.theme-dark .mermaid-zoom-btn {
+    background: #1f2937;
+    border-color: #374151;
+    color: #e5e7eb;
+}
+
+body.theme-dark .mermaid-zoom-btn:hover {
+    background: #374151;
+    border-color: #4b5563;
+}
+
+body.theme-dark .mermaid-zoom-level {
+    background: #1f2937;
+    border-color: #374151;
+    color: #9ca3af;
+}
+
+/* Mermaid 错误提示暗色主题 */
+body.theme-dark .markdown-body .mermaid[data-processed="true"].error {
+    border-color: #7f1d1d;
+    background: #1f1414;
+    color: #fca5a5;
 }

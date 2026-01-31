@@ -219,6 +219,7 @@
     <link rel="stylesheet" href="js/core/highlight/styles/github.min.css">
     <script src="js/core/highlight/highlight.min.js"></script>
     <script src="js/core/jsonrepair.min.js"></script>
+    <script src="js/core/mermaid.min.js"></script>
 </head>
 
 <body>
@@ -383,9 +384,6 @@
         <!-- Left Panel - File List -->
         <div class="left-panel">
             <div class="panel-header">
-                <div class="panel-header-left">
-                    <i class="fa-solid fa-qrcode" title="Enlightenkey"></i>
-                </div>
                 <div class="panel-header-actions">
                     <button class="btn-switch-project" id="fileFilterToggleBtn" title="Search/filter files">
                         <i class="fas fa-search"></i>
@@ -694,9 +692,7 @@
                 <i class="fas fa-folder"></i>
             </div>
             <div class="status-left">
-                <div class="panel-header-left status-project">
-                    <button class="project-name-btn" id="currentProjectName" title="Click to create or switch project">Click to create or switch project</button>
-                </div>
+                <button class="project-name-btn" id="currentProjectName" title="Click to create or switch project">Click to create or switch project</button>
             </div>
             <select id="jsonViewSelect" class="json-view-select" title="Select JSON view"></select>
             <div class="middle-tabs-left">
@@ -783,10 +779,22 @@
             </div>
         </div>
         <div class="status-right">
-            <button class="status-btn" id="openCodexCliBtn" type="button"
-                title="Open Codex CLI" aria-label="Open Codex CLI">
-                <i class="fas fa-terminal"></i>
-            </button>
+            <div class="header-dropdown" id="cliMenuDropdown">
+                <button class="status-btn" id="cliMenuToggleBtn" type="button"
+                    title="Open CLI" aria-label="CLI Menu">
+                    <i class="fas fa-terminal"></i>
+                </button>
+                <div class="header-dropdown-menu" id="cliMenu" role="menu" aria-label="CLI Menu">
+                    <button class="header-dropdown-item" id="openCodexCliMenuItem" type="button" role="menuitem"
+                        title="Open Codex CLI in current project directory">
+                        <i class="fas fa-terminal"></i><span>Open Codex CLI</span>
+                    </button>
+                    <button class="header-dropdown-item" id="openClaudeCliMenuItem" type="button" role="menuitem"
+                        title="Open Claude CLI in current project directory">
+                        <i class="fas fa-robot"></i><span>Open Claude CLI</span>
+                    </button>
+                </div>
+            </div>
             <button class="status-btn" id="mdChatToggleBtn" type="button"
                 title="Toggle MD Chat Panel" aria-label="Toggle MD Chat Panel">
                 <i class="far fa-comment-dots"></i>
