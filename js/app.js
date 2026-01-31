@@ -555,8 +555,6 @@ class PaperStatsApp {
         const payload = { ...(this.globalSettings || {}) };
         window.appSettings = payload;
         window.APP_SETTINGS = payload;
-        window.WOS_SID = payload.wosSid || '';
-        window.EASYCHORAL_API = payload.easychoralApi || '';
         window.OPENAI_API = payload.openaiApi || '';
     }
 
@@ -569,8 +567,6 @@ class PaperStatsApp {
     }
 
     applyApiSettingsInputs() {
-        const wosInput = document.getElementById('wosSidInput');
-        const easyInput = document.getElementById('easychoralApiInput');
         const openaiInput = document.getElementById('openaiApiInput');
         const setMasked = (input, raw) => {
             if (!input) return;
@@ -584,16 +580,12 @@ class PaperStatsApp {
             input.dataset.masked = '1';
             input.value = this.maskApiValue(clean);
         };
-        setMasked(wosInput, this.globalSettings?.wosSid || '');
-        setMasked(easyInput, this.globalSettings?.easychoralApi || '');
         setMasked(openaiInput, this.globalSettings?.openaiApi || '');
     }
 
     bindApiSettingsInputs() {
-        const wosInput = document.getElementById('wosSidInput');
-        const easyInput = document.getElementById('easychoralApiInput');
         const openaiInput = document.getElementById('openaiApiInput');
-        if (!wosInput || !easyInput || !openaiInput) return;
+        if (!openaiInput) return;
 
         const handleMaskedFocus = (input) => {
             if (input.dataset.masked === '1') {
@@ -609,11 +601,7 @@ class PaperStatsApp {
             this.applyApiSettingsInputs();
         };
 
-        wosInput.addEventListener('focus', () => handleMaskedFocus(wosInput));
-        wosInput.addEventListener('blur', () => handleMaskedBlur('wosSid', wosInput));
-        easyInput.addEventListener('focus', () => handleMaskedFocus(easyInput));
         openaiInput.addEventListener('focus', () => handleMaskedFocus(openaiInput));
-        easyInput.addEventListener('blur', () => handleMaskedBlur('easychoralApi', easyInput));
         openaiInput.addEventListener('blur', () => handleMaskedBlur('openaiApi', openaiInput));
 
         this.applyApiSettingsInputs();
@@ -8989,8 +8977,8 @@ class PaperStatsApp {
         if (next) {
             this.switchToView('settings');
             this.applyApiSettingsInputs();
-            const wosInput = document.getElementById('wosSidInput');
-            if (wosInput) setTimeout(() => wosInput.focus({ preventScroll: true }), 0);
+            const openaiInput = document.getElementById('openaiApiInput');
+            if (openaiInput) setTimeout(() => openaiInput.focus({ preventScroll: true }), 0);
         }
     }
 
