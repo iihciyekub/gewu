@@ -538,7 +538,8 @@ const server = http.createServer((req, res) => {
                     dirs,
                     projectKey,
                     created,
-                    markerCreated
+                    markerCreated,
+                    dirsInitialized
                 }));
 
             } catch (error) {

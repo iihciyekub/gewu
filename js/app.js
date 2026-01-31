@@ -3287,7 +3287,40 @@ class PaperStatsApp {
     }
 
     // 触发浏览对话框
-    browseAndFillPath() {
+    async browseAndFillPath() {
+        // 优先使用现代 File System Access API，它可以正确处理空目录
+        if ('showDirectoryPicker' in window) {
+            try {
+                const dirHandle = await window.showDirectoryPicker();
+                // 尝试获取完整路径
+                if (dirHandle.name) {
+                    // 在某些环境中可能无法获取完整路径，需要用户手动输入
+                    await this.loadEnvInfo();
+                    const userPath = prompt(
+                        `Selected folder: "${dirHandle.name}"\nPlease enter the full absolute path:`,
+                        this.buildSuggestedPath(dirHandle.name) || ''
+                    );
+                    const detectedPath = (userPath || '').trim();
+
+                    if (detectedPath) {
+                        const input = document.getElementById('projectPathInput');
+                        if (input) {
+                            input.value = detectedPath;
+                        }
+                        this.showNotification('Path set', 'success');
+                        await this.initProjectFromPath();
+                    }
+                }
+                return;
+            } catch (err) {
+                // 用户取消或 API 不支持，回退到传统方法
+                if (err.name !== 'AbortError') {
+                    console.log('Directory picker error:', err);
+                }
+            }
+        }
+
+        // 回退到传统的 input file 方法
         const browser = document.getElementById('projectFolderBrowser');
         if (browser) {
             browser.click();
@@ -3301,7 +3334,32 @@ class PaperStatsApp {
 
     async fillPathFromBrowserEvent(e, targetInputId) {
         const files = e.target.files;
-        if (!files || files.length === 0) return;
+
+        // 处理空目录的情况
+        if (!files || files.length === 0) {
+            await this.loadEnvInfo();
+            const userPath = prompt(
+                'The selected directory appears to be empty.\nPlease enter the absolute path to the folder:',
+                this.buildSuggestedPath('my_project') || ''
+            );
+            const detectedPath = (userPath || '').trim();
+
+            if (detectedPath) {
+                const input = document.getElementById(targetInputId);
+                if (input) {
+                    input.value = detectedPath;
+                }
+                this.showNotification('Path set', 'success');
+                if (targetInputId === 'projectPathInput') {
+                    await this.initProjectFromPath();
+                }
+            } else {
+                this.showNotification('✗ Path not set', 'error');
+            }
+
+            e.target.value = '';
+            return;
+        }
 
         const firstFile = files[0];
         const relativePath = firstFile.webkitRelativePath;
@@ -3640,6 +3698,11 @@ class PaperStatsApp {
                 console.error('Invalid project:', result.message);
                 this.showNotification(`Invalid project structure: ${result.message}`, 'error');
                 return;
+            }
+
+            // 显示初始化或验证成功的消息
+            if (result.created || result.dirsInitialized) {
+                this.showNotification(`✓ ${result.message || 'Project initialized'}`, 'success');
             }
 
             // 保存当前项目
