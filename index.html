@@ -721,10 +721,6 @@
                 <button class="status-btn" id="statusSaveBtn" type="button" title="Save (Cmd/Ctrl+S)">
                     <i class="fas fa-save"></i>
                 </button>
-                <button id="editLockToggleBtn" class="status-btn" type="button" title="Editing Unlocked"
-                    aria-label="Toggle Edit Lock">
-                    <i class="fas fa-lock-open"></i>
-                </button>
                 <div class="header-dropdown" id="jsonMenuDropdown">
                     <button id="jsonMenuToggleBtn" class="btn header-icon-only" type="button" title="JSON Menu"
                         aria-label="JSON Menu">
@@ -827,6 +823,17 @@
                         title="Load PDF preview only when clicking the right panel">
                         <i class="fas fa-check" data-check="off" style="opacity:0"></i>
                         <span>Disable PDF Auto-load</span>
+                    </button>
+                    <div class="header-dropdown-divider"></div>
+                    <button class="header-dropdown-item" id="editLockOnItem" type="button" role="menuitem"
+                        title="Lock editing to prevent accidental changes">
+                        <i class="fas fa-check" data-check="on" style="opacity:0"></i>
+                        <span>Lock Editing</span>
+                    </button>
+                    <button class="header-dropdown-item" id="editLockOffItem" type="button" role="menuitem"
+                        title="Unlock editing to allow changes">
+                        <i class="fas fa-check" data-check="off" style="opacity:0"></i>
+                        <span>Unlock Editing</span>
                     </button>
                     <div class="header-dropdown-divider"></div>
                     <button class="header-dropdown-item" id="apiSettingsMenuItem" type="button" role="menuitem"

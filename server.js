@@ -426,16 +426,16 @@ const server = http.createServer((req, res) => {
             try {
                 const data = JSON.parse(body);
                 const projectPath = (data.projectPath || '').trim();
-                
+
                 if (!projectPath) {
                     res.writeHead(400, { 'Content-Type': 'application/json' });
                     res.end(JSON.stringify({ success: false, error: '项目路径不能为空' }));
                     return;
                 }
-                
+
                 // 规范化路径
                 const { projectKey, fullPath } = normalizeProjectPath(projectPath);
-                
+
                 let created = false;
                 let dirsInitialized = false;
                 if (fs.existsSync(fullPath)) {
@@ -459,7 +459,7 @@ const server = http.createServer((req, res) => {
 
                 // 创建一个 .project 标记文件（可选，用于识别项目根目录）
                 ensureProjectMarker(fullPath);
-                
+
                 res.writeHead(200, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify({
                     success: true,
@@ -488,22 +488,22 @@ const server = http.createServer((req, res) => {
     // 处理项目验证请求
     if (req.method === 'POST' && pathname === '/validate-project') {
         let body = '';
-        
+
         req.on('data', chunk => {
             body += chunk.toString();
         });
-        
+
         req.on('end', () => {
             try {
                 const data = JSON.parse(body);
                 const { projectPath } = data;
-                
+
                 if (!projectPath) {
                     res.writeHead(400, { 'Content-Type': 'application/json' });
                     res.end(JSON.stringify({ success: false, error: 'Missing projectPath' }));
                     return;
                 }
-                
+
                 const { projectKey, fullPath } = normalizeProjectPath(projectPath);
 
                 let created = false;
@@ -540,28 +540,28 @@ const server = http.createServer((req, res) => {
                     created,
                     markerCreated
                 }));
-                
+
             } catch (error) {
                 console.error('✗ Error validating project:', error);
                 res.writeHead(500, { 'Content-Type': 'application/json' });
-                res.end(JSON.stringify({ 
+                res.end(JSON.stringify({
                     valid: false,
-                    error: error.message 
+                    error: error.message
                 }));
             }
         });
-        
+
         return;
     }
 
     // 处理JSON保存请求
     if (req.method === 'POST' && pathname === '/save-json') {
         let body = '';
-        
+
         req.on('data', chunk => {
             body += chunk.toString();
         });
-        
+
         req.on('end', () => {
             try {
                 const data = JSON.parse(body);
@@ -577,16 +577,16 @@ const server = http.createServer((req, res) => {
                     res.end(JSON.stringify({ success: false, error: 'Missing filename or content' }));
                     return;
                 }
-                
+
                 const { projectKey, fullPath } = normalizeProjectPath(projectPath);
                 ensureProjectStructure(fullPath);
 
                 const filePath = getJsonTargetPath(fullPath, filename);
                 fs.mkdirSync(path.dirname(filePath), { recursive: true });
                 fs.writeFileSync(filePath, content, 'utf8');
-                
+
                 console.log(`✓ Saved JSON: ${filePath}`);
-                
+
                 res.writeHead(200, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify({
                     success: true,
@@ -594,17 +594,17 @@ const server = http.createServer((req, res) => {
                     path: filePath,
                     projectKey
                 }));
-                
+
             } catch (error) {
                 console.error('✗ Error saving file:', error);
                 res.writeHead(500, { 'Content-Type': 'application/json' });
-                res.end(JSON.stringify({ 
-                    success: false, 
-                    error: error.message 
+                res.end(JSON.stringify({
+                    success: false,
+                    error: error.message
                 }));
             }
         });
-        
+
         return;
     }
 
@@ -721,16 +721,16 @@ const server = http.createServer((req, res) => {
     // 处理JSON重命名请求
     if (req.method === 'POST' && pathname === '/rename-json') {
         let body = '';
-        
+
         req.on('data', chunk => {
             body += chunk.toString();
         });
-        
+
         req.on('end', () => {
             try {
                 const data = JSON.parse(body);
                 const { projectPath, oldFilename, newFilename } = data;
-                
+
                 if (!projectPath) {
                     res.writeHead(400, { 'Content-Type': 'application/json' });
                     res.end(JSON.stringify({ success: false, error: 'Missing projectPath' }));
@@ -741,7 +741,7 @@ const server = http.createServer((req, res) => {
                     res.end(JSON.stringify({ success: false, error: 'Missing oldFilename or newFilename' }));
                     return;
                 }
-                
+
                 const { projectKey, fullPath } = normalizeProjectPath(projectPath);
                 ensureProjectStructure(fullPath);
                 const resolveTarget = (name) => {
@@ -752,26 +752,26 @@ const server = http.createServer((req, res) => {
                 };
                 const oldPath = resolveTarget(oldFilename);
                 const newPath = resolveTarget(newFilename);
-                
+
                 // 检查旧文件是否存在
                 if (!fs.existsSync(oldPath)) {
                     res.writeHead(404, { 'Content-Type': 'application/json' });
                     res.end(JSON.stringify({ success: false, error: 'File not found' }));
                     return;
                 }
-                
+
                 // 检查新文件名是否已存在
                 if (fs.existsSync(newPath)) {
                     res.writeHead(409, { 'Content-Type': 'application/json' });
                     res.end(JSON.stringify({ success: false, error: 'File with new name already exists' }));
                     return;
                 }
-                
+
                 // 重命名文件
                 fs.renameSync(oldPath, newPath);
-                
+
                 console.log(`✓ Renamed: ${oldFilename} → ${newFilename}`);
-                
+
                 res.writeHead(200, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify({
                     success: true,
@@ -780,17 +780,17 @@ const server = http.createServer((req, res) => {
                     newFilename,
                     projectKey
                 }));
-                
+
             } catch (error) {
                 console.error('✗ Error renaming file:', error);
                 res.writeHead(500, { 'Content-Type': 'application/json' });
-                res.end(JSON.stringify({ 
-                    success: false, 
-                    error: error.message 
+                res.end(JSON.stringify({
+                    success: false,
+                    error: error.message
                 }));
             }
         });
-        
+
         return;
     }
 
@@ -1024,16 +1024,16 @@ const server = http.createServer((req, res) => {
     // 处理JSON删除请求
     if (req.method === 'POST' && pathname === '/delete-json') {
         let body = '';
-        
+
         req.on('data', chunk => {
             body += chunk.toString();
         });
-        
+
         req.on('end', () => {
             try {
                 const data = JSON.parse(body);
                 const { projectPath, filename } = data;
-                
+
                 if (!projectPath) {
                     res.writeHead(400, { 'Content-Type': 'application/json' });
                     res.end(JSON.stringify({ success: false, error: 'Missing projectPath' }));
@@ -1044,26 +1044,26 @@ const server = http.createServer((req, res) => {
                     res.end(JSON.stringify({ success: false, error: 'Missing filename' }));
                     return;
                 }
-                
+
                 const { projectKey, fullPath } = normalizeProjectPath(projectPath);
                 ensureProjectStructure(fullPath);
                 const lower = filename.toLowerCase();
                 const filePath = lower.endsWith('.md')
                     ? getMdTargetPath(fullPath, filename)
                     : getJsonTargetPath(fullPath, filename);
-                
+
                 // 检查文件是否存在
                 if (!fs.existsSync(filePath)) {
                     res.writeHead(404, { 'Content-Type': 'application/json' });
                     res.end(JSON.stringify({ success: false, error: 'File not found' }));
                     return;
                 }
-                
+
                 // 删除文件
                 fs.unlinkSync(filePath);
 
                 console.log(`✓ Deleted: ${filename}`);
-                
+
                 res.writeHead(200, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify({
                     success: true,
@@ -1071,64 +1071,63 @@ const server = http.createServer((req, res) => {
                     filename,
                     projectKey
                 }));
-                
+
             } catch (error) {
                 console.error('✗ Error deleting file:', error);
                 res.writeHead(500, { 'Content-Type': 'application/json' });
-                res.end(JSON.stringify({ 
-                    success: false, 
-                    error: error.message 
+                res.end(JSON.stringify({
+                    success: false,
+                    error: error.message
                 }));
             }
         });
-        
+
         return;
     }
 
     // 处理读取文件请求（支持任意项目路径）
     if (req.method === 'POST' && pathname === '/read-file') {
         let body = '';
-        
+
         req.on('data', chunk => {
             body += chunk.toString();
         });
-        
+
         req.on('end', () => {
             try {
                 const data = JSON.parse(body);
                 const { projectPath, filePath: relativeFilePath } = data;
-                
+
                 if (!projectPath) {
                     res.writeHead(400, { 'Content-Type': 'application/json' });
                     res.end(JSON.stringify({ success: false, error: 'Missing projectPath' }));
                     return;
                 }
 
-                console.log('📖 读取文件请求:', { projectPath, relativeFilePath });
-                
+
                 const { projectKey, fullPath } = normalizeProjectPath(projectPath);
                 const targetFile = path.join(fullPath, relativeFilePath);
-                
+
                 // 安全检查：确保目标文件在项目目录内
                 const relativePath = path.relative(fullPath, targetFile);
                 if (relativePath.startsWith('..')) {
                     throw new Error('访问被拒绝：文件必须在项目目录内');
                 }
-                
+
                 console.log('📍 读取文件:', targetFile);
-                
+
                 if (!fs.existsSync(targetFile)) {
                     res.writeHead(404, { 'Content-Type': 'application/json' });
-                    res.end(JSON.stringify({ 
-                        success: false, 
-                        error: '文件不存在' 
+                    res.end(JSON.stringify({
+                        success: false,
+                        error: '文件不存在'
                     }));
                     return;
                 }
-                
+
                 const content = fs.readFileSync(targetFile, 'utf-8');
                 const ext = path.extname(targetFile).toLowerCase();
-                
+
                 // 如果是 JSON 文件，解析并返回
                 if (ext === '.json') {
                     try {
@@ -1144,19 +1143,18 @@ const server = http.createServer((req, res) => {
                     res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8' });
                     res.end(content);
                 }
-                
-                console.log('✅ 文件读取成功');
-                
+
+
             } catch (error) {
                 console.error('✗ 读取文件错误:', error);
                 res.writeHead(500, { 'Content-Type': 'application/json' });
-                res.end(JSON.stringify({ 
-                    success: false, 
-                    error: error.message 
+                res.end(JSON.stringify({
+                    success: false,
+                    error: error.message
                 }));
             }
         });
-        
+
         return;
     }
 
@@ -1201,46 +1199,46 @@ const server = http.createServer((req, res) => {
     // 处理 ensure-dir 请求（确保目录存在）
     if (req.method === 'POST' && pathname === '/ensure-dir') {
         let body = '';
-        
+
         req.on('data', chunk => {
             body += chunk.toString();
         });
-        
+
         req.on('end', () => {
             try {
                 const data = JSON.parse(body);
                 const { path: dirPath } = data;
-                
+
                 if (!dirPath) {
                     res.writeHead(400, { 'Content-Type': 'application/json' });
                     res.end(JSON.stringify({ success: false, error: 'Missing path' }));
                     return;
                 }
-                
+
                 // 解析路径
                 const absolutePath = path.isAbsolute(dirPath) ? dirPath : path.resolve(ROOT_DIR, dirPath);
-                
+
                 // 创建目录
                 fs.mkdirSync(absolutePath, { recursive: true });
-                
+
                 console.log(`✓ Ensured directory: ${absolutePath}`);
-                
+
                 res.writeHead(200, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify({
                     success: true,
                     path: absolutePath
                 }));
-                
+
             } catch (error) {
                 console.error('✗ Error ensuring directory:', error);
                 res.writeHead(500, { 'Content-Type': 'application/json' });
-                res.end(JSON.stringify({ 
-                    success: false, 
-                    error: error.message 
+                res.end(JSON.stringify({
+                    success: false,
+                    error: error.message
                 }));
             }
         });
-        
+
         return;
     }
 
@@ -1249,132 +1247,132 @@ const server = http.createServer((req, res) => {
         try {
             const parsedUrl = url.parse(req.url, true);
             const filePath = parsedUrl.query.file;
-            
+
             if (!filePath) {
                 res.writeHead(400, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify({ error: 'Missing file parameter' }));
                 return;
             }
-            
+
             const absolutePath = path.isAbsolute(filePath) ? filePath : path.resolve(ROOT_DIR, filePath);
-            
+
             if (!fs.existsSync(absolutePath)) {
                 res.writeHead(404, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify({ error: 'File not found' }));
                 return;
             }
-            
+
             const content = fs.readFileSync(absolutePath, 'utf-8');
             const data = JSON.parse(content);
-            
+
             res.writeHead(200, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify(data));
-            
+
         } catch (error) {
             console.error('✗ Error reading JSON:', error);
             res.writeHead(500, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify({ error: error.message }));
         }
-        
+
         return;
     }
 
     // 处理 save-json API（保存 JSON 到指定路径）
     if (req.method === 'POST' && pathname === '/save-json-api') {
         let body = '';
-        
+
         req.on('data', chunk => {
             body += chunk.toString();
         });
-        
+
         req.on('end', () => {
             try {
                 const payload = JSON.parse(body);
                 const { file: filePath, data: jsonData } = payload;
-                
+
                 if (!filePath || typeof jsonData === 'undefined') {
                     res.writeHead(400, { 'Content-Type': 'application/json' });
                     res.end(JSON.stringify({ success: false, error: 'Missing file or data' }));
                     return;
                 }
-                
+
                 const absolutePath = path.isAbsolute(filePath) ? filePath : path.resolve(ROOT_DIR, filePath);
-                
+
                 // 确保目录存在
                 fs.mkdirSync(path.dirname(absolutePath), { recursive: true });
-                
+
                 // 写入文件
                 const content = JSON.stringify(jsonData, null, 2);
                 fs.writeFileSync(absolutePath, content, 'utf-8');
-                
+
                 console.log(`✓ Saved JSON to: ${absolutePath}`);
-                
+
                 res.writeHead(200, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify({
                     success: true,
                     path: absolutePath
                 }));
-                
+
             } catch (error) {
                 console.error('✗ Error saving JSON:', error);
                 res.writeHead(500, { 'Content-Type': 'application/json' });
-                res.end(JSON.stringify({ 
-                    success: false, 
-                    error: error.message 
+                res.end(JSON.stringify({
+                    success: false,
+                    error: error.message
                 }));
             }
         });
-        
+
         return;
     }
 
     // 处理 delete-file 请求（删除文件）
     if (req.method === 'POST' && pathname === '/delete-file') {
         let body = '';
-        
+
         req.on('data', chunk => {
             body += chunk.toString();
         });
-        
+
         req.on('end', () => {
             try {
                 const data = JSON.parse(body);
                 const { file: filePath } = data;
-                
+
                 if (!filePath) {
                     res.writeHead(400, { 'Content-Type': 'application/json' });
                     res.end(JSON.stringify({ success: false, error: 'Missing file' }));
                     return;
                 }
-                
+
                 const absolutePath = path.isAbsolute(filePath) ? filePath : path.resolve(ROOT_DIR, filePath);
-                
+
                 if (!fs.existsSync(absolutePath)) {
                     res.writeHead(404, { 'Content-Type': 'application/json' });
                     res.end(JSON.stringify({ success: false, error: 'File not found' }));
                     return;
                 }
-                
+
                 fs.unlinkSync(absolutePath);
-                
+
                 console.log(`✓ Deleted file: ${absolutePath}`);
-                
+
                 res.writeHead(200, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify({
                     success: true,
                     path: absolutePath
                 }));
-                
+
             } catch (error) {
                 console.error('✗ Error deleting file:', error);
                 res.writeHead(500, { 'Content-Type': 'application/json' });
-                res.end(JSON.stringify({ 
-                    success: false, 
-                    error: error.message 
+                res.end(JSON.stringify({
+                    success: false,
+                    error: error.message
                 }));
             }
         });
-        
+
         return;
     }
 
@@ -1389,11 +1387,11 @@ const server = http.createServer((req, res) => {
                 res.end('Missing projectPath');
                 return;
             }
-            
+
             console.log('📄 PDF请求:', { projectPath, pdfFile });
-            
+
             const { projectKey, fullPath } = normalizeProjectPath(projectPath);
-            
+
             // 构建PDF文件路径
             let targetFile;
             if (pdfFile.includes('/') || pdfFile.includes('\\')) {
@@ -1403,21 +1401,21 @@ const server = http.createServer((req, res) => {
                 // 纯文件名，在pdf目录中查找
                 targetFile = path.join(fullPath, 'pdf', pdfFile);
             }
-            
+
             // 安全检查：确保目标文件在项目目录内
             const relativePath = path.relative(fullPath, targetFile);
             if (relativePath.startsWith('..')) {
                 throw new Error('访问被拒绝：文件必须在项目目录内');
             }
-            
+
             console.log('📍 读取PDF:', targetFile);
-            
+
             if (!fs.existsSync(targetFile)) {
                 res.writeHead(404, { 'Content-Type': 'text/plain' });
                 res.end('PDF file not found');
                 return;
             }
-            
+
             const stat = fs.statSync(targetFile);
             const fileSize = stat.size;
             const range = req.headers.range;
@@ -1489,15 +1487,15 @@ const server = http.createServer((req, res) => {
                 'Cache-Control': 'public, max-age=0'
             });
             fs.createReadStream(targetFile).pipe(res);
-            
+
             console.log('✅ PDF读取成功');
-            
+
         } catch (error) {
             console.error('✗ 读取PDF错误:', error);
             res.writeHead(500, { 'Content-Type': 'text/plain' });
             res.end(`Error: ${error.message}`);
         }
-        
+
         return;
     }
 
@@ -1508,11 +1506,11 @@ const server = http.createServer((req, res) => {
         req.on('end', () => {
             try {
                 const { projectPath, file } = JSON.parse(body);
-                
+
                 console.log('📁 获取PDF目录:', { projectPath, file });
-                
+
                 const { projectKey, fullPath } = normalizeProjectPath(projectPath);
-                
+
                 // 构建PDF文件路径
                 let targetFile;
                 if (file.includes('/') || file.includes('\\')) {
@@ -1520,28 +1518,28 @@ const server = http.createServer((req, res) => {
                 } else {
                     targetFile = path.join(fullPath, 'pdf', file);
                 }
-                
+
                 // 安全检查
                 const relativePath = path.relative(fullPath, targetFile);
                 if (relativePath.startsWith('..')) {
                     throw new Error('访问被拒绝：文件必须在项目目录内');
                 }
-                
+
                 // 获取文件所在目录
                 const directory = path.dirname(targetFile);
-                
+
                 console.log('✅ PDF目录:', directory);
-                
+
                 res.writeHead(200, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify({ directory }));
-                
+
             } catch (error) {
                 console.error('✗ 获取PDF目录错误:', error);
                 res.writeHead(500, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify({ error: error.message }));
             }
         });
-        
+
         return;
     }
 
@@ -1552,45 +1550,45 @@ const server = http.createServer((req, res) => {
         req.on('end', () => {
             try {
                 const { projectPath, filename, data } = JSON.parse(body);
-                
+
                 console.log('💾 保存PDF到项目pdf目录:', { projectPath, filename });
-                
+
                 const { projectKey, fullPath } = normalizeProjectPath(projectPath);
-                
+
                 // 始终保存到项目的pdf目录
                 const targetDir = path.join(fullPath, 'pdf');
-                
+
                 // 完整的保存路径
                 const savePath = path.join(targetDir, filename);
-                
+
                 // 安全检查
                 const relativePath = path.relative(fullPath, savePath);
                 if (relativePath.startsWith('..')) {
                     throw new Error('访问被拒绝：文件必须在项目目录内');
                 }
-                
+
                 // 确保pdf目录存在
                 if (!fs.existsSync(targetDir)) {
                     fs.mkdirSync(targetDir, { recursive: true });
                     console.log('📁 创建pdf目录:', targetDir);
                 }
-                
+
                 // 将Base64解码并写入文件
                 const buffer = Buffer.from(data, 'base64');
                 fs.writeFileSync(savePath, buffer);
-                
+
                 console.log('✅ PDF已保存到项目pdf目录:', savePath);
-                
+
                 res.writeHead(200, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify({ success: true, path: savePath }));
-                
+
             } catch (error) {
                 console.error('✗ 保存PDF错误:', error);
                 res.writeHead(500, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify({ success: false, error: error.message }));
             }
         });
-        
+
         return;
     }
 
@@ -1700,16 +1698,16 @@ const server = http.createServer((req, res) => {
     // 处理复制PDF文件到剪贴板请求
     if (req.method === 'POST' && pathname === '/copy-pdf-to-clipboard') {
         let body = '';
-        
+
         req.on('data', chunk => {
             body += chunk.toString();
         });
-        
+
         req.on('end', () => {
             try {
                 const data = JSON.parse(body);
                 const { projectPath, pdfFile } = data;
-                
+
                 if (!projectPath) {
                     res.writeHead(400, { 'Content-Type': 'application/json' });
                     res.end(JSON.stringify({ success: false, error: 'Missing projectPath' }));
@@ -1720,11 +1718,11 @@ const server = http.createServer((req, res) => {
                     res.end(JSON.stringify({ success: false, error: 'PDF file name is required' }));
                     return;
                 }
-                
+
                 console.log('📋 复制PDF到剪贴板:', { projectPath, pdfFile });
-                
+
                 const { projectKey, fullPath } = normalizeProjectPath(projectPath);
-                
+
                 // 构建PDF文件路径
                 let targetFile;
                 if (pdfFile.includes('/') || pdfFile.includes('\\')) {
@@ -1734,25 +1732,25 @@ const server = http.createServer((req, res) => {
                     // 纯文件名，在pdf目录中查找
                     targetFile = path.join(fullPath, 'pdf', pdfFile);
                 }
-                
+
                 // 安全检查：确保目标文件在项目目录内
                 const relativePath = path.relative(fullPath, targetFile);
                 if (relativePath.startsWith('..')) {
                     throw new Error('访问被拒绝：文件必须在项目目录内');
                 }
-                
+
                 console.log('📍 复制文件:', targetFile);
-                
+
                 if (!fs.existsSync(targetFile)) {
                     res.writeHead(404, { 'Content-Type': 'application/json' });
                     res.end(JSON.stringify({ success: false, error: '文件不存在' }));
                     return;
                 }
-                
+
                 // 根据操作系统选择合适的命令
                 const platform = os.platform();
                 const absolutePath = path.resolve(targetFile);
-                
+
                 try {
                     if (platform === 'darwin') {
                         // macOS: 使用 osascript 通过 Finder 将文件复制到剪贴板
@@ -1792,7 +1790,7 @@ const server = http.createServer((req, res) => {
                     } else {
                         throw new Error(`不支持的操作系统: ${platform}`);
                     }
-                    
+
                     console.log('✅ 文件已复制到剪贴板:', absolutePath);
                     res.writeHead(200, { 'Content-Type': 'application/json' });
                     res.end(JSON.stringify({ success: true, message: '文件已复制到剪贴板' }));
@@ -1800,39 +1798,39 @@ const server = http.createServer((req, res) => {
                     console.error('执行复制命令失败:', execError.message, execError);
                     throw new Error(`复制失败: ${execError.message}`);
                 }
-                
+
             } catch (error) {
                 console.error('✗ 复制PDF到剪贴板错误:', error);
                 res.writeHead(500, { 'Content-Type': 'application/json' });
-                res.end(JSON.stringify({ 
-                    success: false, 
-                    error: error.message 
+                res.end(JSON.stringify({
+                    success: false,
+                    error: error.message
                 }));
             }
         });
-        
+
         return;
     }
 
     // 处理获取文件列表请求（仅新结构 json/<view>/ + md/）
     if (req.method === 'POST' && pathname === '/list-json-files') {
         let body = '';
-        
+
         req.on('data', chunk => {
             body += chunk.toString();
         });
-        
+
         req.on('end', () => {
             try {
                 const data = JSON.parse(body);
                 const { projectPath } = data;
-                
+
                 if (!projectPath) {
                     res.writeHead(400, { 'Content-Type': 'application/json' });
                     res.end(JSON.stringify({ success: false, error: 'Missing projectPath' }));
                     return;
                 }
-                
+
                 const { projectKey, fullPath } = normalizeProjectPath(projectPath);
                 console.log(`\n📥 /list-json-files 请求 - 项目路径: ${projectPath}`);
                 console.log(`   ➜ fullPath: ${fullPath}`);
@@ -1909,17 +1907,17 @@ const server = http.createServer((req, res) => {
                     files: files.sort((a, b) => a.path.localeCompare(b.path)),
                     projectKey
                 }));
-                
+
             } catch (error) {
                 console.error('✗ Error listing files:', error);
                 res.writeHead(500, { 'Content-Type': 'application/json' });
-                res.end(JSON.stringify({ 
+                res.end(JSON.stringify({
                     success: false,
-                    error: error.message 
+                    error: error.message
                 }));
             }
         });
-        
+
         return;
     }
 
@@ -2011,20 +2009,20 @@ const server = http.createServer((req, res) => {
                     return;
                 }
                 const { fullPath } = normalizeProjectPath(projectPath);
-                
+
                 const targetDir = subDir ? path.join(fullPath, subDir) : fullPath;
-                
+
                 if (!fs.existsSync(targetDir)) {
                     res.writeHead(404, { 'Content-Type': 'application/json' });
                     res.end(JSON.stringify({ success: false, error: 'Directory not found' }));
                     return;
                 }
-                
+
                 const entries = fs.readdirSync(targetDir, { withFileTypes: true });
                 const files = entries
                     .filter(entry => entry.isFile())
                     .map(entry => entry.name);
-                
+
                 res.writeHead(200, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify({ success: true, files }));
             } catch (error) {

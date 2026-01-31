@@ -1914,14 +1914,7 @@ class PaperStatsApp {
                 }
             });
         }
-        const editLockToggleBtn = document.getElementById('editLockToggleBtn');
-        if (editLockToggleBtn) {
-            editLockToggleBtn.addEventListener('click', (e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                this.toggleEditLock();
-            });
-        }
+        // 编辑锁定功能已移到设置菜单中
         const gotoCancelBtn = document.getElementById('gotoEditCancel');
         const gotoSaveBtn = document.getElementById('gotoEditSave');
         const gotoTestBtn = document.getElementById('gotoEditTest');
@@ -2249,6 +2242,22 @@ class PaperStatsApp {
                 this.showProjectDetailsPanel();
             });
         }
+
+        // 点击文件夹图标也可以打开项目面板
+        const folderIcon = document.querySelector('.status-left-icon');
+        if (folderIcon) {
+            folderIcon.style.cursor = 'pointer';
+            folderIcon.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                if (this.projectInfoVisible) {
+                    this.toggleProjectInfoPanel(false, { skipClose: true });
+                    return;
+                }
+                this.showProjectDetailsPanel();
+            });
+        }
+
         const statusProject = document.querySelector('.status-project');
         if (statusProject && projectNameBtn) {
             statusProject.addEventListener('click', (e) => {
@@ -2450,6 +2459,21 @@ class PaperStatsApp {
         if (autoLoadOffItem) {
             autoLoadOffItem.addEventListener('click', () => {
                 this.setAutoLoadPdf(false);
+                this.toggleSettingsMenu(false);
+            });
+        }
+        // 编辑锁定菜单项
+        const editLockOnItem = document.getElementById('editLockOnItem');
+        const editLockOffItem = document.getElementById('editLockOffItem');
+        if (editLockOnItem) {
+            editLockOnItem.addEventListener('click', () => {
+                this.setEditLock(true);
+                this.toggleSettingsMenu(false);
+            });
+        }
+        if (editLockOffItem) {
+            editLockOffItem.addEventListener('click', () => {
+                this.setEditLock(false);
                 this.toggleSettingsMenu(false);
             });
         }
@@ -6873,6 +6897,8 @@ class PaperStatsApp {
         table.addEventListener('click', (e) => {
             if (e.target.closest('tr')) return;
             this.setSelectedItem({ type: 'section', path: [], key: title });
+            // 激活中间栏，使得键盘上下键可以工作
+            this.setActivePanel('middle');
         });
         this.renderObject(data, table, path, null);
         content.appendChild(table);
@@ -6932,6 +6958,8 @@ class PaperStatsApp {
                 this.setSectionExpanded(title, isActive);
             }
             this.setSelectedItem({ type: 'section', path: [], key: title });
+            // 激活中间栏，使得键盘上下键可以工作
+            this.setActivePanel('middle');
         });
 
         // Section drag sorting logic removed, changed to click selection + keyboard up/down adjustment
@@ -6989,11 +7017,15 @@ class PaperStatsApp {
             row.addEventListener('click', (e) => {
                 const tablePath = table.dataset.path ? table.dataset.path.split('.').filter(Boolean) : [];
                 this.setSelectedItem({ type: 'row', path: tablePath, key });
+                // 激活中间栏，使得键盘上下键可以工作
+                this.setActivePanel('middle');
             });
             row.addEventListener('dblclick', (e) => {
                 const tablePath = table.dataset.path ? table.dataset.path.split('.').filter(Boolean) : [];
                 const valuePath = [...tablePath, key];
                 this.setSelectedItem({ type: 'row', path: tablePath, key });
+                // 激活中间栏
+                this.setActivePanel('middle');
                 if (e.target.closest('a')) return; // Skip link navigation but keep selection state
                 if (e.target.closest('.editable-value')) return; // Clicking value area only selects, doesn't trigger edit modal
 
@@ -8823,23 +8855,32 @@ class PaperStatsApp {
         }
     }
 
-    toggleEditLock(forceLocked) {
-        const next = typeof forceLocked === 'boolean' ? forceLocked : !this.isEditLocked;
-        this.isEditLocked = next;
+    setEditLock(locked) {
+        this.isEditLocked = !!locked;
         this.persistEditLockState();
         this.applyEditLockState();
-        this.showNotification(next ? 'Editing locked' : 'Editing unlocked', next ? 'info' : 'success');
+        this.showNotification(locked ? 'Editing locked' : 'Editing unlocked', locked ? 'info' : 'success');
+    }
+
+    toggleEditLock(forceLocked) {
+        const next = typeof forceLocked === 'boolean' ? forceLocked : !this.isEditLocked;
+        this.setEditLock(next);
     }
 
     applyEditLockState() {
-        const lockBtn = document.getElementById('editLockToggleBtn');
-        if (lockBtn) {
-            lockBtn.classList.toggle('active', this.isEditLocked);
-            const icon = lockBtn.querySelector('i');
-            if (icon) icon.className = this.isEditLocked ? 'fas fa-lock' : 'fas fa-lock-open';
-            lockBtn.title = this.isEditLocked ? 'Editing locked' : 'Editing unlocked';
-            lockBtn.setAttribute('aria-pressed', String(this.isEditLocked));
+        // 更新设置菜单中的编辑锁定选项状态
+        const editLockOnItem = document.getElementById('editLockOnItem');
+        const editLockOffItem = document.getElementById('editLockOffItem');
+        if (editLockOnItem) {
+            const checkIcon = editLockOnItem.querySelector('i[data-check="on"]');
+            if (checkIcon) checkIcon.style.opacity = this.isEditLocked ? '1' : '0';
         }
+        if (editLockOffItem) {
+            const checkIcon = editLockOffItem.querySelector('i[data-check="off"]');
+            if (checkIcon) checkIcon.style.opacity = this.isEditLocked ? '0' : '1';
+        }
+
+        // 应用锁定状态到编辑器
         const jsonTextarea = document.getElementById('jsonEditorTextarea');
         if (jsonTextarea) {
             jsonTextarea.readOnly = this.isEditLocked;
