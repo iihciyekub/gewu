@@ -6118,6 +6118,7 @@ class PaperStatsApp {
 
         const view = this.currentJsonView || 'view1';
         const created = [];
+        const updated = [];
         const moved = [];
         const skipped = [];
         const failed = [];
@@ -6139,19 +6140,49 @@ class PaperStatsApp {
                     skipped.push({ file: pdfFile.name, reason: 'Invalid DOI' });
                     continue;
                 }
-                const already = this.fileMetaByBase?.[base]?.views?.[view];
-                if (seenBases.has(base) || already) {
-                    if (already) moved.push(base);
-                    else skipped.push({ file: pdfFile.name, reason: 'Already exists' });
+
+                // 检查是否在当前批次中已处理
+                if (seenBases.has(base)) {
+                    skipped.push({ file: pdfFile.name, reason: 'Duplicate in batch' });
                     continue;
                 }
+
+                // 在所有分组中查找是否已存在该文件
+                const groups = this.getCurrentGroups();
+                let foundInGroup = null;
+                for (const group of groups) {
+                    if (group.files && group.files.includes(base)) {
+                        foundInGroup = group;
+                        break;
+                    }
+                }
+
                 seenBases.add(base);
 
                 const pdfTargetName = `${base}.pdf`;
                 const pdfPathKey = `pdf/${pdfTargetName}`;
-                if (this.fileMetaByPath?.[pdfPathKey]) {
-                    skipped.push({ file: pdfFile.name, reason: 'PDF already exists' });
-                    continue;
+                const pdfAlreadyExists = this.fileMetaByPath?.[pdfPathKey];
+
+                // 如果文件已存在于某个分组
+                if (foundInGroup) {
+                    // 检查是否已有 PDF 文件
+                    if (pdfAlreadyExists) {
+                        // PDF 已存在，只处理移动逻辑
+                        if (targetGroupId && foundInGroup.id !== targetGroupId) {
+                            moved.push(base);
+                        } else {
+                            skipped.push({ file: pdfFile.name, reason: `Already in ${foundInGroup.name || foundInGroup.id}` });
+                        }
+                        continue;
+                    }
+                    // PDF 不存在，需要上传 PDF 并更新 JSON
+                    // 继续执行后续的 PDF 上传逻辑
+                } else {
+                    // 新文件，检查 PDF 是否已存在
+                    if (pdfAlreadyExists) {
+                        skipped.push({ file: pdfFile.name, reason: 'PDF already exists' });
+                        continue;
+                    }
                 }
 
                 const dataUrl = await this.readFileAsDataUrl(pdfFile);
@@ -6172,16 +6203,41 @@ class PaperStatsApp {
                     throw new Error(result.error || 'Upload failed');
                 }
 
-                const jsonFilename = `json/${view}/${base}.json`;
-                const payload = this.buildDoiJsonTemplate(doi);
-                payload.meta_info.pdf_path = pdfTargetName;
-                if (Number.isFinite(nextNo)) {
-                    payload.meta_info.No = nextNo;
-                    nextNo += 1;
+                // 如果文件已存在，更新现有 JSON；否则创建新文件
+                if (foundInGroup) {
+                    // 文件已存在，只需更新 PDF 路径
+                    const existingMeta = this.fileMetaByBase?.[base];
+                    if (existingMeta?.views?.[view]) {
+                        const jsonFilename = existingMeta.views[view];
+                        try {
+                            const existingPayload = await this.loadJsonPayload(jsonFilename);
+                            if (existingPayload) {
+                                existingPayload.meta_info = existingPayload.meta_info || {};
+                                existingPayload.meta_info.pdf_path = pdfTargetName;
+                                await this.saveJsonPayload(jsonFilename, existingPayload);
+                                updated.push(base);
+                            }
+                        } catch (err) {
+                            console.warn('Failed to update existing JSON with PDF path:', err);
+                        }
+                    }
+                    // 标记为移动（如果需要）
+                    if (targetGroupId && foundInGroup.id !== targetGroupId) {
+                        moved.push(base);
+                    }
+                } else {
+                    // 创建新文件
+                    const jsonFilename = `json/${view}/${base}.json`;
+                    const payload = this.buildDoiJsonTemplate(doi);
+                    payload.meta_info.pdf_path = pdfTargetName;
+                    if (Number.isFinite(nextNo)) {
+                        payload.meta_info.No = nextNo;
+                        nextNo += 1;
+                    }
+                    await this.saveJsonPayload(jsonFilename, payload);
+                    await this.ensureMarkdownExistsForFile(jsonFilename);
+                    created.push(base);
                 }
-                await this.saveJsonPayload(jsonFilename, payload);
-                await this.ensureMarkdownExistsForFile(jsonFilename);
-                created.push(base);
             } catch (err) {
                 console.error('PDF drop create failed:', pdfFile?.name, err);
                 failed.push({ file: pdfFile?.name || 'PDF', reason: err.message || 'Unknown error' });
@@ -6194,10 +6250,10 @@ class PaperStatsApp {
             }
         }
 
-        if (created.length) {
+        if (created.length || updated.length) {
             await this.loadFileList(true);
         }
-        const moveTargets = targetGroupId ? [...new Set([...created, ...moved])] : [];
+        const moveTargets = targetGroupId ? [...new Set([...created, ...updated, ...moved])] : [];
         if (moveTargets.length) {
             this.moveFilesToGroup(moveTargets, targetGroupId);
         }
@@ -6208,14 +6264,22 @@ class PaperStatsApp {
                 const item = this.getRenderedFileItem(targetBase);
                 if (item) this.loadFile(targetBase, item);
             }, 120);
+        } else if (updated.length) {
+            const targetBase = updated[0];
+            setTimeout(() => {
+                this.scrollFileIntoView(targetBase, { align: 'center' });
+                const item = this.getRenderedFileItem(targetBase);
+                if (item) this.loadFile(targetBase, item);
+            }, 120);
         }
 
         const parts = [];
         if (created.length) parts.push(`created ${created.length}`);
+        if (updated.length) parts.push(`updated ${updated.length}`);
         if (moved.length) parts.push(`moved ${moved.length}`);
         if (skipped.length) parts.push(`skipped ${skipped.length}`);
         if (failed.length) parts.push(`failed ${failed.length}`);
-        const type = failed.length ? 'error' : (created.length ? 'success' : 'info');
+        const type = failed.length ? 'error' : ((created.length || updated.length) ? 'success' : 'info');
         if (parts.length) {
             tracker.finish('PDF import: finalizing...', 800);
             this.showNotification(`PDF import: ${parts.join(', ')}`, type);
