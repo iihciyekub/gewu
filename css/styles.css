@@ -963,7 +963,6 @@ body {
 /* Bottom Status Bar (VS Code style, compact) */
 .status-bar {
     position: relative;
-    height: 16px;
     background: var(--wos-blue);
     color: #fff;
     display: flex;
@@ -1002,9 +1001,10 @@ body {
     overflow: hidden;
     height: 16px;
     white-space: nowrap;
-    text-overflow: ellipsis;
     background: #f6c500;
     color: #0d1117;
+    max-width: 0;
+    transition: max-width 0.25s cubic-bezier(.4, 1, .7, 1);
 }
 
 .status-progress {
@@ -1081,16 +1081,18 @@ body {
 
 .status-project {
     gap: 4px;
-    max-width: 50vw;
+    width: max-content;
+    padding: 0 8px;
 }
 
+.status-left-icon:hover + .status-left,
 .status-left:hover {
+    max-width: 50vw;
     background: rgb(203, 206, 9);
 }
 
 .status-bar .panel-header-left i {
     font-size: 9px;
-    padding: 0px 0px 0px 10px;
     color: #000000;
 }
 
@@ -1106,6 +1108,17 @@ body {
 
 .status-bar .project-name-btn:hover {
     color: #e8f3ff;
+}
+
+.status-left .project-name-btn {
+    opacity: 0;
+    transition: opacity 0.15s ease 0.1s;
+}
+
+.status-left-icon:hover + .status-left .project-name-btn,
+.status-left:hover .project-name-btn {
+    opacity: 1;
+    transition-delay: 0s;
 }
 
 .status-version-group {
@@ -3258,8 +3271,12 @@ body.theme-dark .groupby-json-pre {
     border: none;
     outline: none;
     background: transparent;
-    padding: 4px 8px;
+    padding: 0 8px;
     border-radius: 4px;
+    height: 16px;
+    font-size: 10px;
+    color: #fff;
+    cursor: pointer;
 }
 
 /* Right Panel - PDF Viewer - 使用iframe */
