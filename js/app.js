@@ -6044,10 +6044,7 @@ class PaperStatsApp {
 
         const targetName = `${baseName}.pdf`;
         const pdfPathKey = `pdf/${targetName}`;
-        if (this.fileMetaByPath?.[pdfPathKey]) {
-            this.showNotification('PDF with same name already exists, not overwriting', 'info');
-            return;
-        }
+        const isReplacing = !!(this.fileMetaByPath?.[pdfPathKey]);
 
         try {
             const dataUrl = await this.readFileAsDataUrl(pdfFile);
@@ -6060,7 +6057,8 @@ class PaperStatsApp {
                 body: JSON.stringify({
                     projectPath: this.currentProject.path,
                     filename: targetName,
-                    content: base64
+                    content: base64,
+                    overwrite: true  // 允许覆盖已存在的PDF
                 })
             });
             const result = await resp.json();
@@ -6071,11 +6069,6 @@ class PaperStatsApp {
             if (!this.fileMetaByPath) this.fileMetaByPath = {};
             this.fileMetaByPath[pdfPathKey] = { name: targetName, path: pdfPathKey, kind: 'pdf', category: 'pdf' };
 
-            if (result.skipped) {
-                this.showNotification('PDF with same name already exists, not overwritten', 'info');
-                return;
-            }
-
             // If current meta_info has no pdf_path set, auto-fill it
             if (this.currentData?.meta_info && !this.currentData.meta_info.pdf_path) {
                 this.currentData.meta_info.pdf_path = targetName;
@@ -6084,13 +6077,23 @@ class PaperStatsApp {
                 this.updateSaveButtonState();
             }
 
-            this.showNotification(`PDF saved as ${targetName}`, 'success');
+            const action = isReplacing ? 'updated' : 'saved';
+            this.showNotification(`PDF ${action} as ${targetName}`, 'success');
 
             // Refresh current PDF preview
             this.currentPdfUrl = this.getPdfUrl(targetName);
             this.pendingPdfUrl = this.currentPdfUrl;
             this.pendingPdfFallback = null;
             this.currentPdfLoadToken++;
+
+            // 清除PDF可用性缓存，确保能够检测到新上传的PDF
+            if (this._pdfAvailabilityCache) {
+                this._pdfAvailabilityCache.delete(this.currentPdfUrl);
+            }
+
+            // 跳过可用性检查，直接加载刚上传的PDF
+            this._skipPdfAvailabilityCheck = true;
+
             this.resetPdfViewerFrame();
             await this.ensurePdfLoaded();
         } catch (error) {
@@ -6210,7 +6213,7 @@ class PaperStatsApp {
                     if (existingMeta?.views?.[view]) {
                         const jsonFilename = existingMeta.views[view];
                         try {
-                            const existingPayload = await this.loadJsonPayload(jsonFilename);
+                            const existingPayload = await this.readProjectFile(jsonFilename);
                             if (existingPayload) {
                                 existingPayload.meta_info = existingPayload.meta_info || {};
                                 existingPayload.meta_info.pdf_path = pdfTargetName;
@@ -6250,6 +6253,7 @@ class PaperStatsApp {
             }
         }
 
+        // 重新加载文件列表以包含新创建/更新的文件
         if (created.length || updated.length) {
             await this.loadFileList(true);
         }
@@ -6257,6 +6261,10 @@ class PaperStatsApp {
         if (moveTargets.length) {
             this.moveFilesToGroup(moveTargets, targetGroupId);
         }
+
+        // 标记即将加载的文件需要强制加载PDF（即使autoLoadPdf=false）
+        this._forceLoadPdfOnNextFile = true;
+
         if (created.length) {
             const targetBase = created[0];
             setTimeout(() => {
@@ -6702,7 +6710,14 @@ class PaperStatsApp {
                 this.lastPdfLoadedKey = '';
                 this.updatePdfPlaceholder('pending');
                 this.prewarmPdf(primaryUrl);
-                if (this.autoLoadPdf) {
+                // 如果autoLoadPdf开启，或者有强制加载标志，则自动加载PDF
+                const shouldForceLoad = this._forceLoadPdfOnNextFile;
+                if (shouldForceLoad) {
+                    this._forceLoadPdfOnNextFile = false; // 清除标志
+                    // 刚导入的PDF，跳过可用性检查直接加载
+                    this._skipPdfAvailabilityCheck = true;
+                }
+                if (this.autoLoadPdf || shouldForceLoad) {
                     await this.ensurePdfLoaded();
                 }
             } else {
@@ -6714,6 +6729,8 @@ class PaperStatsApp {
                 this.updatePdfPlaceholder('empty');
                 this.lastPdfLoadedUrl = '';
                 this.lastPdfLoadedKey = '';
+                // 清除强制加载标志（如果有）
+                this._forceLoadPdfOnNextFile = false;
             }
             if (!(this.isDraftViewActive && (this.currentView === 'markdown' || this.currentView === 'draft'))) {
                 await this.applyCurrentView();
@@ -14508,6 +14525,8 @@ class PaperStatsApp {
         pdfViewer.removeAttribute('src');
         pdfViewer.classList.remove('pdf-loaded');
         delete pdfViewer.dataset.pdfSig;
+        // 清除已加载的PDF URL，确保下次能够重新加载
+        this.lastPdfLoadedUrl = '';
     }
 
     fitPdfViewerToWidth() {
@@ -14950,10 +14969,12 @@ class PaperStatsApp {
 
     async checkPdfAvailable(url) {
         try {
+            console.log('🔍 Checking PDF availability:', url);
             if (!this._pdfAvailabilityCache) this._pdfAvailabilityCache = new Map();
             const cached = this._pdfAvailabilityCache.get(url);
             const now = Date.now();
             if (cached && (now - cached.ts) < 180000) {
+                console.log('📦 Using cached result:', cached.ok ? 'available' : 'not available');
                 return cached.ok;
             }
             const headResp = await fetch(url, { method: 'HEAD', cache: 'no-store' });
@@ -14961,8 +14982,10 @@ class PaperStatsApp {
                 const type = (headResp.headers.get('content-type') || '').toLowerCase();
                 const ok = !type || type.includes('application/pdf') || type.includes('pdf');
                 this._pdfAvailabilityCache.set(url, { ok, ts: now });
+                console.log('✅ HEAD request succeeded, content-type:', type, 'ok:', ok);
                 return ok;
             }
+            console.log('⚠️ HEAD request failed, trying GET with Range...');
             const resp = await fetch(url, {
                 method: 'GET',
                 headers: { Range: 'bytes=0-0' },
@@ -14970,6 +14993,7 @@ class PaperStatsApp {
             });
             const ok = resp.status === 206 || resp.status === 200;
             this._pdfAvailabilityCache.set(url, { ok, ts: now });
+            console.log('📥 GET request result, status:', resp.status, 'ok:', ok);
             if (resp.body && typeof resp.body.cancel === 'function') {
                 try {
                     resp.body.cancel();
@@ -14979,12 +15003,19 @@ class PaperStatsApp {
             }
             return ok;
         } catch (error) {
-            console.warn('PDF availability check failed:', error);
+            console.warn('❌ PDF availability check failed:', error);
             return false;
         }
     }
 
     async resolvePdfUrl(url) {
+        // 如果设置了跳过可用性检查的标志，直接返回URL（用于刚上传的PDF）
+        if (this._skipPdfAvailabilityCheck) {
+            this._skipPdfAvailabilityCheck = false;
+            console.log('🔄 Skipping PDF availability check for newly uploaded PDF');
+            return url || '';
+        }
+
         const candidates = [];
         if (url) candidates.push(url);
         if (this.pendingPdfFallback && this.pendingPdfFallback !== url) {
@@ -15001,11 +15032,14 @@ class PaperStatsApp {
     async ensurePdfLoaded() {
         const url = this.pendingPdfUrl || this.currentPdfUrl;
         const loadToken = this.currentPdfLoadToken;
+        console.log('🔍 ensurePdfLoaded called with URL:', url);
         if (!url) {
+            console.log('❌ No PDF URL, showing empty placeholder');
             this.updatePdfPlaceholder('empty');
             return;
         }
         if (this.lastPdfLoadedUrl === url) {
+            console.log('✅ PDF already loaded:', url);
             this.updatePdfPlaceholder('loaded');
             return;
         }
@@ -15013,10 +15047,12 @@ class PaperStatsApp {
         tracker.update('Loading PDF...', 10);
         this.updatePdfPlaceholder('pending');
 
+        console.log('🔄 Resolving PDF URL...');
         const availableUrl = await this.resolvePdfUrl(url);
         if (loadToken !== this.currentPdfLoadToken) return;
 
         if (!availableUrl) {
+            console.error('❌ PDF URL not available after resolution:', url);
             this.resetPdfViewerFrame();
             this.currentPdfUrl = null;
             this.pendingPdfUrl = null;
@@ -15026,6 +15062,8 @@ class PaperStatsApp {
             tracker.fail('PDF not found');
             return;
         }
+
+        console.log('✅ PDF URL resolved:', availableUrl);
 
         this.currentPdfUrl = availableUrl;
         this.pendingPdfUrl = availableUrl;
