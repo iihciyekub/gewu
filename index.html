@@ -441,74 +441,6 @@
 
         <!-- Middle Panel - JSON Editor -->
         <div class="middle-panel">
-            <div class="middle-header">
-                <div class="header-actions">
-                    <div class="header-dropdown" id="jsonMenuDropdown">
-                        <button id="jsonMenuToggleBtn" class="btn header-icon-only" type="button" title="JSON Menu"
-                            aria-label="JSON Menu">
-                            <i class="fas fa-database"></i>
-                        </button>
-                        <div class="header-dropdown-menu" id="jsonMenu" role="menu" aria-label="JSON Menu">
-                            <button class="header-dropdown-item" id="jsonViewStructuredItem" type="button"
-                                role="menuitem" title="Table View">
-                                <i class="fas fa-table"></i><span>Table View</span>
-                            </button>
-                            <button class="header-dropdown-item" id="jsonViewFlatItem" type="button" role="menuitem"
-                                title="JSON Code">
-                                <i class="fas fa-code"></i><span>JSON Code</span>
-                            </button>
-                            <button class="header-dropdown-item" id="jsonFormatItem" type="button" role="menuitem"
-                                title="Format JSON">
-                                <i class="fas fa-align-left"></i><span>Format</span>
-                            </button>
-                            <button class="header-dropdown-item" id="jsonAddFieldItem" type="button" role="menuitem"
-                                title="Add Field">
-                                <i class="fas fa-plus"></i><span>Add Field</span>
-                            </button>
-                            <button class="header-dropdown-item" id="jsonSaveItem" type="button" role="menuitem"
-                                title="Save JSON (Ctrl+S)">
-                                <i class="fas fa-save"></i><span>Save JSON</span>
-                            </button>
-                        </div>
-                    </div>
-                    <div class="header-dropdown" id="mdMenuDropdown">
-                        <button id="mdMenuToggleBtn" class="btn header-icon-only" type="button" title="Markdown Menu"
-                            aria-label="Markdown Menu">
-                            <i class="fa-brands fa-markdown fa-2xs"></i>
-                        </button>
-                        <div class="header-dropdown-menu" id="mdMenu" role="menu" aria-label="Markdown Menu">
-                            <button class="header-dropdown-item" id="mdRenderItem" type="button" role="menuitem"
-                                title="Markdown Rendered View">
-                                <i class="fas fa-eye"></i><span>MD Render</span>
-                            </button>
-                            <button class="header-dropdown-item" id="mdSourceItem" type="button" role="menuitem"
-                                title="Markdown Source Code">
-                                <i class="fas fa-pen"></i><span>MD Source</span>
-                            </button>
-                            <button class="header-dropdown-item" id="mdCiteRenderItem" type="button" role="menuitem"
-                                title="Render citations and references">
-                                <i class="fas fa-quote-right"></i><span>Generate References</span>
-                            </button>
-                            <button class="header-dropdown-item" id="mdClearCiteCacheCurrentItem" type="button"
-                                role="menuitem" title="Clear citation cache for current document">
-                                <i class="fas fa-eraser"></i><span>Clear Current Doc Cache</span>
-                            </button>
-                            <button class="header-dropdown-item" id="mdClearCiteCacheItem" type="button" role="menuitem"
-                                title="Clear all citation cache in project">
-                                <i class="fas fa-broom"></i><span>Clear All Project Cache</span>
-                            </button>
-                            <button class="header-dropdown-item" id="mdSaveItem" type="button" role="menuitem"
-                                title="Save Markdown">
-                                <i class="fas fa-save"></i><span>MD Save</span>
-                            </button>
-                            <button class="header-dropdown-item" id="mdDeleteItem" type="button" role="menuitem"
-                                title="Delete Markdown File">
-                                <i class="fas fa-trash"></i><span>Delete MD File</span>
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            </div>
             <div class="editor-container">
                 <div class="structured-view active" id="structuredView">
                     <div id="structuredContent">
@@ -768,11 +700,10 @@
     <div class="status-bar" id="statusBar" role="status" aria-live="polite">
         <div class="status-left-group">
             <div class="status-left-icon" aria-hidden="true" style="padding-left: 6px; width: 30px;">
-                <i class="fa-solid fa-code-commit"></i>
+                <i class="fas fa-folder"></i>
             </div>
             <div class="status-left">
                 <div class="panel-header-left status-project">
-                    <i class="fas fa-folder-open"></i>
                     <button class="project-name-btn" id="currentProjectName" title="Click to create or switch project">Click to create or switch project</button>
                 </div>
             </div>
@@ -794,6 +725,70 @@
                     aria-label="Toggle Edit Lock">
                     <i class="fas fa-lock-open"></i>
                 </button>
+                <div class="header-dropdown" id="jsonMenuDropdown">
+                    <button id="jsonMenuToggleBtn" class="btn header-icon-only" type="button" title="JSON Menu"
+                        aria-label="JSON Menu">
+                        <i class="fas fa-database"></i>
+                    </button>
+                    <div class="header-dropdown-menu" id="jsonMenu" role="menu" aria-label="JSON Menu">
+                        <button class="header-dropdown-item" id="jsonViewStructuredItem" type="button"
+                            role="menuitem" title="Table View">
+                            <i class="fas fa-table"></i><span>Table View</span>
+                        </button>
+                        <button class="header-dropdown-item" id="jsonViewFlatItem" type="button" role="menuitem"
+                            title="JSON Code">
+                            <i class="fas fa-code"></i><span>JSON Code</span>
+                        </button>
+                        <button class="header-dropdown-item" id="jsonFormatItem" type="button" role="menuitem"
+                            title="Format JSON">
+                            <i class="fas fa-align-left"></i><span>Format</span>
+                        </button>
+                        <button class="header-dropdown-item" id="jsonAddFieldItem" type="button" role="menuitem"
+                            title="Add Field">
+                            <i class="fas fa-plus"></i><span>Add Field</span>
+                        </button>
+                        <button class="header-dropdown-item" id="jsonSaveItem" type="button" role="menuitem"
+                            title="Save JSON (Ctrl+S)">
+                            <i class="fas fa-save"></i><span>Save JSON</span>
+                        </button>
+                    </div>
+                </div>
+                <div class="header-dropdown" id="mdMenuDropdown">
+                    <button id="mdMenuToggleBtn" class="btn header-icon-only" type="button" title="Markdown Menu"
+                        aria-label="Markdown Menu">
+                        <i class="fa-brands fa-markdown fa-2xs"></i>
+                    </button>
+                    <div class="header-dropdown-menu" id="mdMenu" role="menu" aria-label="Markdown Menu">
+                        <button class="header-dropdown-item" id="mdRenderItem" type="button" role="menuitem"
+                            title="Markdown Rendered View">
+                            <i class="fas fa-eye"></i><span>MD Render</span>
+                        </button>
+                        <button class="header-dropdown-item" id="mdSourceItem" type="button" role="menuitem"
+                            title="Markdown Source Code">
+                            <i class="fas fa-pen"></i><span>MD Source</span>
+                        </button>
+                        <button class="header-dropdown-item" id="mdCiteRenderItem" type="button" role="menuitem"
+                            title="Render citations and references">
+                            <i class="fas fa-quote-right"></i><span>Generate References</span>
+                        </button>
+                        <button class="header-dropdown-item" id="mdClearCiteCacheCurrentItem" type="button"
+                            role="menuitem" title="Clear citation cache for current document">
+                            <i class="fas fa-eraser"></i><span>Clear Current Doc Cache</span>
+                        </button>
+                        <button class="header-dropdown-item" id="mdClearCiteCacheItem" type="button" role="menuitem"
+                            title="Clear all citation cache in project">
+                            <i class="fas fa-broom"></i><span>Clear All Project Cache</span>
+                        </button>
+                        <button class="header-dropdown-item" id="mdSaveItem" type="button" role="menuitem"
+                            title="Save Markdown">
+                            <i class="fas fa-save"></i><span>MD Save</span>
+                        </button>
+                        <button class="header-dropdown-item" id="mdDeleteItem" type="button" role="menuitem"
+                            title="Delete Markdown File">
+                            <i class="fas fa-trash"></i><span>Delete MD File</span>
+                        </button>
+                    </div>
+                </div>
             </div>
             <div class="status-progress" id="statusProgress" aria-live="polite">
                 <div class="status-progress-bar" id="statusProgressBar"></div>

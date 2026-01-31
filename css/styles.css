@@ -801,17 +801,6 @@ body {
     overflow: hidden;
 }
 
-.middle-header {
-    padding: 6px 10px;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    gap: 12px;
-    height: 7mm;
-    line-height: 32px;
-    flex-shrink: 0;
-}
-
 .middle-tabs-left {
     display: flex;
     align-items: center;
@@ -833,12 +822,6 @@ body {
     color: var(--gray-700);
     min-width: 0;
     white-space: nowrap;
-}
-
-.header-actions {
-    display: flex;
-    align-items: center;
-    gap: 6px;
 }
 
 .header-divider {
@@ -884,12 +867,6 @@ body {
     display: inline-flex;
     align-items: center;
     gap: 4px;
-}
-
-.header-actions {
-    display: flex;
-    align-items: center;
-    gap: 8px;
 }
 
 .btn-save {
@@ -990,7 +967,7 @@ body {
 }
 
 .status-left-icon i {
-    font-size: 14px;
+    font-size: 11px;
 }
 
 
@@ -1010,7 +987,7 @@ body {
     gap: 6px;
     padding: 0px 6px;
     min-width: 220px;
-    background: #050154;
+    background: transparent;
 }
 
 .status-progress.active {
@@ -1166,10 +1143,6 @@ body {
     background: rgba(255, 255, 255, 0.15);
 }
 
-.middle-header .status-btn:hover {
-    background: transparent;
-}
-
 .status-btn i {
     font-size: 11px;
 }
@@ -1227,57 +1200,33 @@ body {
     color: #fff;
 }
 
-.status-bar .header-dropdown-menu {
-    top: auto;
-    bottom: calc(100% + 6px);
-}
-
-.middle-header .header-actions .btn,
-.middle-header .header-actions .btn-save {
-    width: 28px;
-    height: 28px;
+/* 状态栏中的 header-dropdown 按钮样式适配 */
+.status-bar .middle-tabs-left .header-dropdown .btn.header-icon-only {
+    width: 16px;
+    height: 16px;
     padding: 0;
-    border-radius: 999px;
+    background: transparent;
+    border: none;
+    color: #fff;
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    gap: 0;
+    border-radius: 999px;
 }
 
-.middle-header .header-actions .btn i,
-.middle-header .header-actions .btn-save i {
-    font-size: 13px;
+.status-bar .middle-tabs-left .header-dropdown .btn.header-icon-only i {
+    font-size: 10px;
+    color: #fff;
 }
 
-.middle-header .header-actions .btn-save {
-    box-shadow: none;
+.status-bar .middle-tabs-left .header-dropdown .btn.header-icon-only:hover {
+    background: rgba(255, 255, 255, 0.15);
+    color: #fff;
 }
 
-.middle-header .header-actions .btn-save:hover,
-.middle-header .header-actions .btn:hover {
-    box-shadow: none;
-}
-
-.header-actions .btn.header-icon-only {
-    background: transparent;
-    color: var(--gray-700);
-    outline: none;
-    box-shadow: none;
-}
-
-.header-actions .btn.header-icon-only:hover {
-    background: transparent;
-    color: var(--wos-blue);
-}
-
-.header-actions .btn.header-icon-only:active {
-    transform: none;
-}
-
-.header-actions .btn.header-icon-only:focus,
-.header-actions .btn.header-icon-only:focus-visible {
-    outline: none;
-    box-shadow: none;
+.status-bar .header-dropdown-menu {
+    top: auto;
+    bottom: calc(100% + 6px);
 }
 
 .header-dropdown-menu .header-dropdown-item i[data-check] {
@@ -3302,11 +3251,10 @@ body.theme-dark .groupby-json-pre {
 .json-view-select {
     border: none;
     outline: none;
-    background: transparent;
+    background: #150222;
     padding: 0 8px;
-    border-radius: 4px;
     height: 16px;
-    font-size: 10px;
+    font-size: 9px;
     color: #fff;
     cursor: pointer;
 }
