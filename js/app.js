@@ -10520,6 +10520,10 @@ class PaperStatsApp {
                     }
                 }
                 localStorage.setItem('mdChatHidden', isHidden ? '1' : '0');
+                // 当面板显示时自动聚焦输入框
+                if (!isHidden && textarea) {
+                    setTimeout(() => textarea.focus(), 0);
+                }
             });
         }
 
@@ -10687,6 +10691,10 @@ class PaperStatsApp {
             textarea.addEventListener('input', resizeInput);
             resizeInput();
             this.renderMdChatQueryChips();
+            // Auto-focus input if panel is visible on initialization
+            if (!storedHidden && textarea) {
+                setTimeout(() => textarea.focus(), 100);
+            }
         }
     }
 

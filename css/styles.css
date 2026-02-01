@@ -1299,24 +1299,6 @@ body.theme-vscode .tab-btn.active {
     box-shadow: 0 0 0 1px rgba(47, 114, 255, 0.25);
 }
 
-body.theme-dark .view-tabs {
-    border-color: rgba(108, 125, 155, 0.35);
-}
-
-body.theme-dark .tab-btn {
-    color: #cfd6e6;
-}
-
-body.theme-dark .tab-btn:hover:not(.active) {
-    color: #f0f4ff;
-}
-
-body.theme-dark .tab-btn.active {
-    background: rgb(1, 7, 51);
-    color: #ffffff;
-    box-shadow: 0 0 0 1px rgba(76, 126, 255, 0.25);
-}
-
 .editor-container {
     flex: 1;
     display: flex;
@@ -3087,142 +3069,6 @@ body.theme-vscode .qa-bubble {
     color: var(--wos-blue);
 }
 
-body.theme-dark .markdown-view.active {
-    background: #0f141b;
-}
-
-body.theme-dark #markdownRender {
-    background: #161b22;
-}
-
-body.theme-dark .markdown-body {
-    color: #e5e7eb;
-}
-
-body.theme-dark .markdown-body h1,
-body.theme-dark .markdown-body h2,
-body.theme-dark .markdown-body h3,
-body.theme-dark .markdown-body h4,
-body.theme-dark .markdown-body h5,
-body.theme-dark .markdown-body h6 {
-    color: #f3f4f6;
-}
-
-body.theme-dark .markdown-editor textarea {
-    background: #0f141b;
-    color: #e5e7eb;
-    border-color: transparent;
-}
-
-body.theme-dark .md-chat-resizer::before {
-    background: #ffffff;
-    opacity: 0.6;
-}
-
-body.theme-dark .md-chat-dock-resizer::before {
-    background: #cbcbcb;
-    opacity: 0.6;
-}
-
-body.theme-dark .md-chat-shell {
-    background: #1e1f20;
-    border-color: #2b3445;
-    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.55);
-}
-
-body.theme-dark .md-chat-body {
-    background: #1e1f20;
-}
-
-body.theme-dark .md-chat-suggest {
-    background: #1e1f20;
-    border-color: #2b3445;
-    box-shadow: 0 8px 18px rgba(0, 0, 0, 0.4);
-}
-
-body.theme-dark .md-chat-suggest-item {
-    color: #e5e7eb;
-}
-
-body.theme-dark .md-chat-suggest-item:hover,
-body.theme-dark .md-chat-suggest-item.active {
-    background: #2a2f36;
-}
-
-body.theme-dark .md-chat-input {
-    border-top-color: #2b3445;
-}
-
-body.theme-dark .md-chat-input-text {
-    color: #e5e7eb;
-}
-
-body.theme-dark .md-chat-input-text::placeholder {
-    color: #94a3b8;
-}
-
-body.theme-dark .md-chat-btn {
-    color: #e5e7eb;
-}
-
-body.theme-dark .md-chat-btn:hover {
-    color: var(--wos-blue-light);
-}
-
-body.theme-dark .groupby-box {
-    border-color: #2b3445;
-    background: #161b22;
-}
-
-body.theme-dark .groupby-title {
-    color: #e5e7eb;
-}
-
-body.theme-dark .groupby-toggle-btn {
-    color: #cbd5e1;
-}
-
-body.theme-dark .groupby-toggle-btn:hover {
-    color: #f3f4f6;
-}
-
-body.theme-dark .groupby-loading {
-    color: #9aa4b2;
-}
-
-body.theme-dark .groupby-error {
-    color: #f87171;
-}
-
-body.theme-dark .groupby-table th,
-body.theme-dark .groupby-table td {
-    border-color: #2b3445;
-    color: #e5e7eb;
-}
-
-body.theme-dark .groupby-table th {
-    background: #1f2633;
-    color: #f3f4f6;
-}
-
-body.theme-dark .groupby-table th.groupby-sortable::after {
-    color: #94a3b8;
-}
-
-body.theme-dark .groupby-table th.is-sorted-asc::after,
-body.theme-dark .groupby-table th.is-sorted-desc::after {
-    color: #f3f4f6;
-}
-
-body.theme-dark .groupby-table.groupby-json {
-    border-color: #2b3445;
-    background: #0f141b;
-}
-
-body.theme-dark .groupby-json-pre {
-    color: #e5e7eb;
-}
-
 .json-view-select {
     border: none;
     outline: none;
@@ -4170,7 +4016,7 @@ ol.json-array {
 
 .context-menu-divider {
     margin: 4px 0;
-    border-top: 1px solid #eee;
+    border-top: 1px dashed #929292;
 }
 
 /* Citation links */
@@ -4297,28 +4143,7 @@ body.theme-vscode .bib-collapse-btn:hover {
     color: var(--wos-blue-light);
 }
 
-body.theme-dark .bib-result pre {
-    background: #0d1117;
-    border-color: #30363d;
-}
 
-body.theme-dark .bib-result code {
-    color: #c9d1d9;
-}
-
-body.theme-dark .bib-copy-btn,
-body.theme-dark .bib-collapse-btn {
-    background: rgba(13, 17, 23, 0.9);
-    border-color: #30363d;
-    color: #c9d1d9;
-}
-
-body.theme-dark .bib-copy-btn:hover,
-body.theme-dark .bib-collapse-btn:hover {
-    background: #0d1117;
-    border-color: var(--wos-blue-light);
-    color: var(--wos-blue-light);
-}
 
 /* 项目选择器模态框 */
 .project-selector-content {
