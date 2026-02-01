@@ -10192,10 +10192,6 @@ class PaperStatsApp {
             <div class="project-details">
             <div class="detail-section">
                 <div class="detail-item">
-                <label>Project Name:</label>
-                <span class="detail-value">${this.escapeHtml(projectName)}</span>
-                </div>
-                <div class="detail-item">
                 <label>Project Path:</label>
                 <span class="detail-value detail-path" title="${this.escapeAttr(projectPath)}">${this.escapeHtml(projectPath)}</span>
                 <button class="detail-copy-btn" type="button" title="Copy Project Path" aria-label="Copy Project Path" onclick="window.paperStats.copyProjectPathToClipboard()">
@@ -10698,132 +10694,12 @@ class PaperStatsApp {
         }
     }
 
-    ensureMdChatMetaEl() {
-        const panel = document.getElementById('mdChatPanel');
-        const top = panel?.querySelector('.md-chat-top');
-        if (!panel || !top) return null;
-        let meta = top.querySelector('.md-chat-query-meta');
-        if (!meta) {
-            meta = document.createElement('div');
-            meta.className = 'md-chat-query-meta';
-            top.insertBefore(meta, top.firstChild);
-        }
-        return meta;
-    }
-
     updateMdChatFieldOptionsFromCurrentData() {
         if (!this.currentData || typeof this.currentData !== 'object') {
             this.mdChatFieldOptions = [];
             return;
         }
         this.mdChatFieldOptions = Array.from(this.getFieldUnionFromData(this.currentData)).sort();
-    }
-
-    addMdChatQueryField(field) {
-        const name = (field || '').trim();
-        if (!name) return;
-        if (!this.mdChatQueryFields) this.mdChatQueryFields = new Set();
-        this.mdChatQueryFields.add(name);
-        this.renderMdChatQueryChips();
-        this.runMdChatFieldQuery();
-    }
-
-    removeMdChatQueryField(field) {
-        if (!this.mdChatQueryFields) return;
-        this.mdChatQueryFields.delete(field);
-        this.renderMdChatQueryChips();
-        this.runMdChatFieldQuery();
-    }
-
-    renderMdChatQueryChips() {
-        const panel = document.getElementById('mdChatPanel');
-        const chipRow = panel?.querySelector('.md-chat-field-chips');
-        if (!chipRow) return;
-        chipRow.innerHTML = '';
-        const fields = Array.from(this.mdChatQueryFields || []);
-        if (!fields.length) {
-            chipRow.innerHTML = '<span class="md-chat-chip-hint">Enter field and press Enter to add</span>';
-            return;
-        }
-        fields.forEach((field) => {
-            const chip = document.createElement('button');
-            chip.type = 'button';
-            chip.className = 'md-chat-chip';
-            chip.innerHTML = `<span>${this.escapeHtml(field)}</span><i class="fas fa-times"></i>`;
-            chip.addEventListener('click', () => this.removeMdChatQueryField(field));
-            chipRow.appendChild(chip);
-        });
-    }
-
-    resolveMdChatFieldValues(data, fieldPath) {
-        if (!data || !fieldPath) return [];
-        const segments = String(fieldPath).split('.').filter(Boolean);
-        const walk = (node, idx) => {
-            if (idx >= segments.length) return [node];
-            if (!node || typeof node !== 'object') return [];
-            const raw = segments[idx];
-            const isArraySeg = raw.endsWith('[]');
-            const key = isArraySeg ? raw.slice(0, -2) : raw;
-            if (!Object.prototype.hasOwnProperty.call(node, key)) return [];
-            const nextVal = node[key];
-            if (isArraySeg) {
-                const arr = Array.isArray(nextVal) ? nextVal : [nextVal];
-                const out = [];
-                arr.forEach(item => out.push(...walk(item, idx + 1)));
-                return out;
-            }
-            return walk(nextVal, idx + 1);
-        };
-        return walk(data, 0).filter(v => v !== undefined && v !== null);
-    }
-
-    formatMdChatValue(value) {
-        if (value === null || value === undefined) return '';
-        if (Array.isArray(value)) {
-            return value.map(v => this.formatMdChatValue(v)).filter(Boolean).join('; ');
-        }
-        if (typeof value === 'object') {
-            try {
-                return JSON.stringify(value);
-            } catch (_err) {
-                return String(value);
-            }
-        }
-        return String(value);
-    }
-
-    runMdChatFieldQuery() {
-        const body = this._mdChatBody || document.querySelector('#mdChatPanel .md-chat-body');
-        if (!body) return;
-        const fields = Array.from(this.mdChatQueryFields || []);
-        if (!fields.length) {
-            body.innerHTML = '<div class="md-chat-query-empty">No query fields yet.</div>';
-            return;
-        }
-        if (!this.currentData) {
-            body.innerHTML = '<div class="md-chat-query-empty">No JSON loaded.</div>';
-            return;
-        }
-        const base = this.currentFileBase || this.currentFile || '';
-        const viewSelect = document.getElementById('jsonViewSelect');
-        const view = (viewSelect && viewSelect.value) ? viewSelect.value : (this.currentJsonView || this.currentView || 'structured');
-        const blocks = fields.map((field) => {
-            const values = this.resolveMdChatFieldValues(this.currentData, field);
-            const text = values.length ? values.map(v => this.formatMdChatValue(v)).filter(Boolean).join('\n') : '(not found)';
-            const rendered = text === '(not found)' ? this.escapeHtml(text) : this.renderGotoLinks(text, field);
-            return `
-                <div class="md-chat-query-block">
-                    <div class="md-chat-query-title">${this.escapeHtml(field)}</div>
-                    <div class="md-chat-query-value">${rendered}</div>
-                </div>
-            `;
-        }).join('');
-        body.innerHTML = blocks;
-        const meta = this.ensureMdChatMetaEl();
-        if (meta) {
-            meta.textContent = `File: ${base} · View: ${view}`;
-            meta.title = meta.textContent;
-        }
     }
 
     showStatusProjectContextMenu(e) {
@@ -13028,7 +12904,35 @@ class PaperStatsApp {
             }
         };
         tryScroll();
+        
+        // Ensure right panel is expanded when opening PDF via citation link
+        const rightPanel = document.querySelector('.right-panel');
+        let panelWasExpanded = false;
+        if (rightPanel && rightPanel.classList.contains('panel-collapsed')) {
+            const middleResizer = document.getElementById('middleResizer');
+            const icon = middleResizer?.querySelector('i');
+            rightPanel.classList.remove('panel-collapsed');
+            if (!this.lastRightWidth || this.lastRightWidth <= 1) {
+                const container = document.querySelector('.container');
+                const containerWidth = container?.getBoundingClientRect().width || window.innerWidth;
+                this.lastRightWidth = Math.max(200, Math.floor(containerWidth * 0.33));
+            }
+            rightPanel.style.width = this.lastRightWidth + 'px';
+            if (middleResizer) middleResizer.title = 'Hide PDF preview (Cmd+Shift+F / Ctrl+Shift+F)';
+            if (icon) icon.style.transform = 'rotate(0deg)';
+            const leftPanel = document.querySelector('.left-panel');
+            this.savePanelWidths(leftPanel, rightPanel, { collapsedRight: false, lastLeftWidth: this.lastLeftWidth, lastRightWidth: this.lastRightWidth });
+            panelWasExpanded = true;
+        }
+        
         await this.ensurePdfLoaded();
+        
+        // Trigger window resize to make PDF.js recalculate layout
+        if (panelWasExpanded) {
+            requestAnimationFrame(() => {
+                window.dispatchEvent(new Event('resize'));
+            });
+        }
     }
 
     async findFileBaseByDoi(rawDoi = '') {
@@ -17595,19 +17499,19 @@ class PaperStatsApp {
                     return;
                 }
 
-                // 检查是否是同一个链接且在5秒内
+                // 如果正在搜索，先终止之前的搜索
+                if (this._isSearching) {
+                    this.abortCurrentSearch();
+                }
+
+                // 检查是否是同一个链接且在200ms内（防止连续双击）
                 const now = Date.now();
                 const isSameLink = this._lastClickedLink === link;
                 const timeSinceLastClick = now - this._lastClickTime;
 
-                if (isSameLink && timeSinceLastClick < 300) {
+                if (isSameLink && timeSinceLastClick < 200) {
                     // 过快的重复点击，忽略
                     return;
-                }
-
-                // 如果正在搜索，先终止之前的搜索
-                if (this._isSearching) {
-                    this.abortCurrentSearch();
                 }
 
                 // 记录当前点击

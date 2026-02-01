@@ -37,14 +37,26 @@ ul.json-dict, ol.json-array {
     color: #888;
     margin-left: -1em;
     margin-right: 0.5em;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1em;
+    height: 1em;
+    min-width: 1em;
+    min-height: 1em;
 }
 
 .json-toggle:before {
-    content: "▼ ";
+    content: "▼";
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 100%;
 }
 
 .json-toggle.collapsed:before {
-    content: "▶ ";
+    content: "▶";
 }
 
 .json-placeholder {

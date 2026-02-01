@@ -145,6 +145,16 @@ body.theme-dark .file-item:hover {
     color: #e5e7e9;
 }
 
+body.theme-dark .json-view-select {
+    color: var(--vscode-text);
+    background: var(--vscode-panel);
+}
+
+body.theme-dark .json-view-select:hover,
+body.theme-dark .json-view-select:focus {
+    background: var(--vscode-hover);
+}
+
 body.theme-dark .panel-header-actions .btn-switch-project,
 body.theme-dark .btn-sync-pdf,
 body.theme-dark .btn-import-json {
@@ -171,7 +181,6 @@ body.theme-dark textarea,
 body.theme-dark select {
     background: #1f1f1f;
     color: var(--vscode-text);
-    border-color: var(--vscode-border);
 }
 
 body.theme-dark #editKeyInput,
@@ -939,10 +948,6 @@ body.theme-dark .doi-copy-btn:hover {
     color: #9fcbff;
 }
 
-body.theme-dark .status-bar {
-    background: #007acc;
-    color: #fff;
-}
 
 body.theme-dark .stat-value {
     color: #569cd6;
@@ -968,19 +973,6 @@ body.theme-dark .detail-copy-btn:hover {
     border-color: rgba(86, 156, 214, 0.6);
 }
 
-/* DOI 复制按钮 - 深色主题 */
-body.theme-dark .doi-copy-btn {
-    color: #569cd6;
-}
-
-body.theme-dark .doi-copy-btn:hover {
-    color: #9fcbff;
-}
-
-body.theme-dark .status-bar {
-    background: #007acc;
-    color: #fff;
-}
 
 /* 视图标签 - 深色主题 */
 body.theme-dark .view-tabs {
@@ -988,18 +980,10 @@ body.theme-dark .view-tabs {
 }
 
 body.theme-dark .tab-btn {
-    color: #cfd6e6;
-}
-
-body.theme-dark .tab-btn:hover:not(.active) {
-    color: #f0f4ff;
-}
-
-body.theme-dark .tab-btn.active {
-    background: rgb(1, 7, 51);
     color: #ffffff;
-    box-shadow: 0 0 0 1px rgba(76, 126, 255, 0.25);
 }
+
+
 
 /* Markdown 视图 - 深色主题 */
 body.theme-dark .markdown-view.active {

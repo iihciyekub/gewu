@@ -949,7 +949,7 @@ body {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    background: #0f1115;
+    background: #1f1f1f;
     color: #ffffff;
     flex-shrink: 0;
 }
@@ -2922,15 +2922,24 @@ body.theme-vscode .qa-bubble {
     color: #0b3a6f;
     border-radius: 999px;
     padding: 2px 8px;
-    font-size: 12px;
+    font-size: 10px;
     display: inline-flex;
     align-items: center;
     gap: 6px;
     cursor: pointer;
+    justify-content: space-between;
 }
 
 .md-chat-chip i {
     font-size: 11px;
+}
+
+.md-chat-chip span {
+    max-width: auto;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    text-align: left;
 }
 
 .md-chat-chip-hint {
@@ -3072,11 +3081,11 @@ body.theme-vscode .qa-bubble {
 .json-view-select {
     border: none;
     outline: none;
-    background: #150222;
     padding: 0 8px;
     height: 16px;
     font-size: 9px;
-    color: #fff;
+    color: #ffffff;
+    background: #1f1f1f;
     cursor: pointer;
 }
 
