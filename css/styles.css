@@ -932,16 +932,17 @@ body {
     justify-content: space-between;
     font-size: 10px;
     font-family: 'Segoe UI', 'Arial', sans-serif;
-    border-top: 1px solid var(--wos-blue-dark);
-    max-height: 100px;
-    overflow: hidden;
+    border: none;
+    outline: none;
+    height: 16px;
+    max-height: 16px;
+    overflow: visible;
     transition: max-height 0.2s ease, opacity 0.2s ease;
     order: 999;
 }
 
 .status-bar.status-bar-top {
-    border-top: none;
-    border-bottom: 1px solid var(--wos-blue-dark);
+    border: none;
     order: -1;
 }
 
@@ -951,6 +952,7 @@ body {
     pointer-events: none;
     border-top: none;
     border-bottom: none;
+    overflow: hidden;
 }
 
 .status-left-group,
@@ -1224,6 +1226,11 @@ body {
 .status-bar .header-dropdown-menu {
     top: auto;
     bottom: calc(100% + 6px);
+}
+
+.status-bar.status-bar-top .header-dropdown-menu {
+    top: calc(100% + 6px);
+    bottom: auto;
 }
 
 .header-dropdown-menu .header-dropdown-item i[data-check] {
@@ -1848,15 +1855,44 @@ body.theme-vscode .nested-index-cell {
 
 /* Font Awesome shake 动画 */
 @keyframes fa-shake {
-    0% { transform: rotate(-15deg); }
-    4% { transform: rotate(15deg); }
-    8%, 24% { transform: rotate(-18deg); }
-    12%, 28% { transform: rotate(18deg); }
-    16% { transform: rotate(-22deg); }
-    20% { transform: rotate(22deg); }
-    32% { transform: rotate(-12deg); }
-    36% { transform: rotate(12deg); }
-    40%, 100% { transform: rotate(0deg); }
+    0% {
+        transform: rotate(-15deg);
+    }
+
+    4% {
+        transform: rotate(15deg);
+    }
+
+    8%,
+    24% {
+        transform: rotate(-18deg);
+    }
+
+    12%,
+    28% {
+        transform: rotate(18deg);
+    }
+
+    16% {
+        transform: rotate(-22deg);
+    }
+
+    20% {
+        transform: rotate(22deg);
+    }
+
+    32% {
+        transform: rotate(-12deg);
+    }
+
+    36% {
+        transform: rotate(12deg);
+    }
+
+    40%,
+    100% {
+        transform: rotate(0deg);
+    }
 }
 
 /* 多个quote的间距 */
@@ -2177,12 +2213,12 @@ body.theme-vscode .nested-index-cell {
 }
 
 .editor-container.chat-docked .flat-view.active {
-    justify-content: center;
+    justify-content: flex-start;
 }
 
 .editor-container.chat-docked .flat-view.active .flat-editor {
-    flex: 0 1 auto;
-    height: 80%;
+    flex: 1 1 auto;
+    height: 100%;
 }
 
 .editor-container.chat-docked .flat-view.active .flat-editor textarea {

@@ -1186,3 +1186,119 @@ body.theme-dark .markdown-body .mermaid[data-processed="true"].error {
     background: #1f1414;
     color: #fca5a5;
 }
+
+/* Query 面板暗色主题 */
+body.theme-dark .query-card {
+    background: var(--vscode-panel);
+    border-color: var(--vscode-border);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+body.theme-dark .query-card h4 {
+    color: var(--vscode-text);
+}
+
+body.theme-dark .query-filter-input {
+    background: var(--vscode-bg);
+    border-color: var(--vscode-border);
+    color: var(--vscode-text);
+}
+
+body.theme-dark .query-field-list {
+    color: var(--vscode-text);
+}
+
+body.theme-dark .query-selected-box {
+    background: var(--vscode-bg);
+    border-color: var(--vscode-border);
+}
+
+body.theme-dark .query-chip {
+    background: var(--vscode-hover);
+    border-color: var(--vscode-border);
+    color: var(--vscode-text);
+}
+
+body.theme-dark .query-chip:hover {
+    background: var(--vscode-active);
+}
+
+/* 状态栏暗色主题 */
+body.theme-dark .status-bar {
+    background: var(--wos-blue-dark);
+    color: var(--vscode-text);
+}
+
+body.theme-dark .status-left-icon {
+    background: #161616;
+    color: var(--vscode-text);
+}
+
+body.theme-dark .status-left {
+    background: #3a3a00;
+    color: #f6c500;
+}
+
+body.theme-dark .status-btn {
+    color: var(--vscode-text);
+}
+
+body.theme-dark .status-btn:hover {
+    background: rgba(255, 255, 255, 0.1);
+}
+
+body.theme-dark .status-bar .project-name-btn {
+    color: var(--vscode-text);
+}
+
+body.theme-dark .status-bar .project-name-btn:hover {
+    color: var(--vscode-accent);
+}
+
+body.theme-dark .status-version-group {
+    background: #1e4d3a;
+    color: #04d798;
+}
+
+body.theme-dark .status-version-group:hover {
+    background: #2a5f4a;
+}
+
+body.theme-dark .status-version-icon {
+    color: #04d798;
+}
+
+body.theme-dark .status-version {
+    color: #04d798;
+}
+
+body.theme-dark .status-bar .tab-btn {
+    color: var(--vscode-text);
+    background: transparent;
+}
+
+body.theme-dark .status-bar .tab-btn.active {
+    background: #3a4a00;
+    color: #b8d600;
+}
+
+body.theme-dark .status-bar .tab-btn:hover:not(.active) {
+    background: rgba(255, 255, 255, 0.08);
+    color: var(--vscode-accent);
+}
+
+body.theme-dark .status-bar .middle-tabs-left .status-btn {
+    color: var(--vscode-text);
+}
+
+body.theme-dark .status-bar .middle-tabs-left .status-btn i {
+    color: var(--vscode-text);
+}
+
+body.theme-dark .status-bar .middle-tabs-left .status-btn:hover {
+    background: rgba(255, 255, 255, 0.1);
+}
+
+body.theme-dark .status-bar .middle-tabs-left .status-btn:hover i {
+    color: var(--vscode-accent);
+}
