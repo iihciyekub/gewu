@@ -9150,6 +9150,15 @@ class PaperStatsApp {
                 return;
             }
             await this.goToMarkdownSource();
+            return;
+        }
+        // Draft 视图：渲染/源码之间切换
+        if (view === 'draft') {
+            if (this.isMarkdownEditing) {
+                this.toggleMarkdownEdit(false);
+                return;
+            }
+            await this.goToDraftSource();
         }
     }
 

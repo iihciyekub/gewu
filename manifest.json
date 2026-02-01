@@ -1,36 +1,4 @@
 {
-  "version": "1.0.0",
-  "src": {
-    "prompts": {
-      "basePath": "/src/prompts/checkDID/",
-      "checkDID": {
-        "files": [
-          "[0]checked.md",
-          "[1]exact_DID.md"
-        ]
-      },
-      "qjson": {
-        "basePath": "/src/prompts/qjson/",
-        "files": [
-          "step1.md",
-          "step2.md",
-          "step3.md",
-          "step4.md",
-          "step5.md",
-          "step6.md"
-        ]
-      },
-      "qmd": {
-        "basePath": "/src/prompts/qmd/",
-        "files": [
-          "p1.md",
-          "p2.md",
-          "p3.md",
-          "p4.md",
-          "p5.md",
-          "p6.md"
-        ]
-      }
-    }
-  }
+  "name": "Enlightenkey",
+  "version": "1.0.8"
 }
