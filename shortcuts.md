@@ -1,7 +1,10 @@
+- Cmd/Ctrl + O — 打开项目选择面板 (Select Project Folder)
+- Cmd/Ctrl + Space - 打开 chat 面板
+- Cmd/Ctrl + J — 切换到 JSON 视图
+- Cmd/Ctrl + M — 切换到 Markdown 视图
+- Cmd/Ctrl + D — 切换到 Draft 视图
+- Cmd/Ctrl + E — 切换 JSON / Markdown / Draft
 - Cmd/Ctrl + / — Markdown 源码
-- Cmd/Ctrl + E — 切换 JSON 表格 / Markdown 视图
-- Cmd/Ctrl + Shift  + E — 切换 JSON 源码 / Markdown 源码
-- Cmd/Ctrl + Shift + G — 打开工具面板
 - Cmd/Ctrl + Shift + F — 隐藏/显示 PDF 预览
 - Cmd/Ctrl + Shift + S — 隐藏/显示左侧文件栏
 - Cmd/Ctrl + S — 按当前视图保存 JSON 或 Markdown

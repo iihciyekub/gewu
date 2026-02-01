@@ -2203,6 +2203,31 @@ class PaperStatsApp {
                 this.openCodexCli();
                 return;
             }
+            if (mod && !e.shiftKey && key === 'o') {
+                e.preventDefault();
+                this.showProjectSelector();
+                return;
+            }
+            if (mod && !e.shiftKey && key === 'j') {
+                e.preventDefault();
+                console.log('[Shortcut] Cmd/Ctrl + J triggered, switching to structured view');
+                this.switchToView('structured').catch(err => console.error('[Shortcut] Error switching to structured:', err));
+                return;
+            }
+            if (mod && !e.shiftKey && key === 'm') {
+                e.preventDefault();
+                console.log('[Shortcut] Cmd/Ctrl + M triggered, switching to markdown view');
+                this.switchToView('markdown').catch(err => console.error('[Shortcut] Error switching to markdown:', err));
+                return;
+            }
+            if (mod && !e.shiftKey && key === 'd') {
+                if (['INPUT', 'TEXTAREA'].includes(e.target.tagName) || e.target.isContentEditable) return;
+                e.preventDefault();
+                e.stopPropagation();
+                console.log('[Shortcut] Cmd/Ctrl + D triggered, switching to draft view');
+                this.switchToView('draft').catch(err => console.error('[Shortcut] Error switching to draft:', err));
+                return;
+            }
             if (mod && (e.key === 'Delete' || e.key === 'Backspace') && this.isLeftActive) {
                 if (['INPUT', 'TEXTAREA'].includes(e.target.tagName) || e.target.isContentEditable) return;
                 if (this.groupMenuState) return;
