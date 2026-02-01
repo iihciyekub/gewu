@@ -1,0 +1,473 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>自动保存功能演示</title>
+    <link rel="stylesheet" href="css/auto-save.css">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: #f5f5f5;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .header {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .header h1 {
+            margin-bottom: 10px;
+            color: #333;
+        }
+
+        .header p {
+            color: #666;
+            font-size: 14px;
+        }
+
+        .demo-section {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .demo-section h2 {
+            margin-bottom: 15px;
+            color: #333;
+            font-size: 18px;
+        }
+
+        .editor-wrapper {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+
+        .editor {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .editor h3 {
+            margin-bottom: 10px;
+            color: #555;
+            font-size: 14px;
+        }
+
+        textarea {
+            width: 100%;
+            min-height: 200px;
+            padding: 12px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
+            font-size: 13px;
+            resize: vertical;
+        }
+
+        textarea:focus {
+            outline: none;
+            border-color: #007bff;
+            box-shadow: 0 0 0 3px rgba(0,123,255,0.1);
+        }
+
+        .controls {
+            margin-top: 15px;
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        button {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            font-size: 14px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        button.primary {
+            background: #007bff;
+            color: white;
+        }
+
+        button.primary:hover {
+            background: #0056b3;
+        }
+
+        button.secondary {
+            background: #6c757d;
+            color: white;
+        }
+
+        button.secondary:hover {
+            background: #545b62;
+        }
+
+        button.success {
+            background: #28a745;
+            color: white;
+        }
+
+        button.success:hover {
+            background: #218838;
+        }
+
+        button.danger {
+            background: #dc3545;
+            color: white;
+        }
+
+        button.danger:hover {
+            background: #c82333;
+        }
+
+        .status {
+            margin-top: 15px;
+            padding: 10px;
+            border-radius: 4px;
+            font-size: 13px;
+        }
+
+        .status.info {
+            background: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+
+        .info-box {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 4px;
+            margin-bottom: 20px;
+            border-left: 4px solid #007bff;
+        }
+
+        .info-box h3 {
+            margin-bottom: 10px;
+            color: #333;
+            font-size: 16px;
+        }
+
+        .info-box ul {
+            margin-left: 20px;
+            color: #666;
+            font-size: 14px;
+        }
+
+        .info-box li {
+            margin-bottom: 5px;
+        }
+
+        .debug-panel {
+            background: #1e1e1e;
+            color: #d4d4d4;
+            padding: 15px;
+            border-radius: 4px;
+            font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
+            font-size: 12px;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        .debug-panel pre {
+            margin: 0;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+
+        .mode-selector {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+
+        .mode-btn {
+            padding: 8px 16px;
+            border: 2px solid #ddd;
+            background: white;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .mode-btn.active {
+            background: #007bff;
+            color: white;
+            border-color: #007bff;
+        }
+
+        .mode-btn:hover {
+            border-color: #007bff;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🚀 自动保存功能演示</h1>
+            <p>体验参照 VSCode 设计的优雅自动保存系统</p>
+        </div>
+
+        <div class="info-box">
+            <h3>功能说明</h3>
+            <ul>
+                <li>在下方编辑器中输入内容，停止输入 1 秒后会自动保存</li>
+                <li>右下角会显示保存状态指示器</li>
+                <li>可以切换不同的保存模式体验</li>
+                <li>打开浏览器控制台查看详细日志</li>
+            </ul>
+        </div>
+
+        <div class="demo-section">
+            <h2>保存模式选择</h2>
+            <div class="mode-selector">
+                <button class="mode-btn" data-mode="off">关闭</button>
+                <button class="mode-btn active" data-mode="afterDelay">延迟保存 (推荐)</button>
+                <button class="mode-btn" data-mode="onFocusChange">失焦保存</button>
+                <button class="mode-btn" data-mode="onWindowChange">窗口切换保存</button>
+            </div>
+        </div>
+
+        <div class="demo-section">
+            <h2>编辑器演示</h2>
+            <div class="editor-wrapper">
+                <div class="editor">
+                    <h3>JSON 编辑器</h3>
+                    <textarea id="jsonEditor" placeholder='输入 JSON 数据，例如：
+{
+  "title": "测试文档",
+  "author": "张三",
+  "content": "这是一个测试"
+}'></textarea>
+                </div>
+                <div class="editor">
+                    <h3>Markdown 编辑器</h3>
+                    <textarea id="markdownEditor" placeholder='输入 Markdown 内容，例如：
+# 标题
+
+这是一段文本。
+
+- 列表项 1
+- 列表项 2'></textarea>
+                </div>
+            </div>
+
+            <div class="controls">
+                <button class="primary" id="openConfigBtn">打开配置面板</button>
+                <button class="success" id="manualSaveBtn">手动保存全部</button>
+                <button class="secondary" id="debugInfoBtn">查看调试信息</button>
+                <button class="danger" id="clearBtn">清空内容</button>
+            </div>
+
+            <div class="status info" id="statusText">
+                准备就绪。开始输入以体验自动保存功能...
+            </div>
+        </div>
+
+        <div class="demo-section">
+            <h2>调试信息</h2>
+            <div class="debug-panel">
+                <pre id="debugOutput">等待操作...</pre>
+            </div>
+        </div>
+    </div>
+
+    <!-- 自动保存脚本 -->
+    <script src="js/core/auto-save-manager.js"></script>
+    <script src="js/core/auto-save-config-ui.js"></script>
+
+    <script>
+        // 模拟应用对象
+        class DemoApp {
+            constructor() {
+                this.currentFile = 'demo.json';
+                this.currentData = {};
+                this.currentMarkdownText = '';
+                this.currentMarkdownFile = 'demo.md';
+                this.hasUnsavedChanges = false;
+                this.hasUnsavedMarkdownChanges = false;
+                this.saveCount = { json: 0, markdown: 0 };
+            }
+
+            async saveToFile(options = {}) {
+                return new Promise((resolve) => {
+                    this.log('💾 开始保存 JSON...', 'info');
+
+                    setTimeout(() => {
+                        this.hasUnsavedChanges = false;
+                        this.saveCount.json++;
+                        this.log(`✓ JSON 保存成功！(第 ${this.saveCount.json} 次)`, 'success');
+                        this.updateStatus('JSON 已保存');
+                        resolve();
+                    }, 500); // 模拟网络延迟
+                });
+            }
+
+            async saveMarkdownFromEditor() {
+                return new Promise((resolve) => {
+                    this.log('💾 开始保存 Markdown...', 'info');
+
+                    setTimeout(() => {
+                        this.hasUnsavedMarkdownChanges = false;
+                        this.saveCount.markdown++;
+                        this.log(`✓ Markdown 保存成功！(第 ${this.saveCount.markdown} 次)`, 'success');
+                        this.updateStatus('Markdown 已保存');
+                        resolve();
+                    }, 500); // 模拟网络延迟
+                });
+            }
+
+            showNotification(message, type) {
+                this.log(`[通知] ${message}`, type);
+            }
+
+            log(message, type = 'info') {
+                const timestamp = new Date().toLocaleTimeString();
+                const debugOutput = document.getElementById('debugOutput');
+                const colorMap = {
+                    info: '#4a9eff',
+                    success: '#4caf50',
+                    error: '#f44336',
+                    warning: '#ff9800'
+                };
+                const color = colorMap[type] || '#d4d4d4';
+
+                const line = `<span style="color: #888">[${timestamp}]</span> <span style="color: ${color}">${message}</span>`;
+                debugOutput.innerHTML = line + '\n' + debugOutput.innerHTML;
+            }
+
+            updateStatus(text) {
+                const statusEl = document.getElementById('statusText');
+                statusEl.textContent = text;
+            }
+        }
+
+        // 初始化应用
+        const app = new DemoApp();
+        window.demoApp = app;
+
+        // 初始化自动保存
+        const autoSaveManager = new AutoSaveManager(app);
+        const autoSaveConfigUI = new AutoSaveConfigUI(autoSaveManager);
+
+        // 全局访问
+        window.autoSave = autoSaveManager;
+
+        app.log('✨ 自动保存系统已初始化', 'success');
+        app.log(`当前模式: ${autoSaveManager.config.mode}`, 'info');
+
+        // JSON 编辑器
+        const jsonEditor = document.getElementById('jsonEditor');
+        jsonEditor.addEventListener('input', () => {
+            app.hasUnsavedChanges = true;
+            app.currentData = { content: jsonEditor.value };
+            app.log('JSON 内容已修改，等待自动保存...', 'info');
+
+            if (autoSaveManager.config.mode === 'afterDelay') {
+                autoSaveManager.scheduleAutoSave(AutoSaveManager.FILE_TYPES.JSON);
+            }
+        });
+
+        // Markdown 编辑器
+        const markdownEditor = document.getElementById('markdownEditor');
+        markdownEditor.addEventListener('input', () => {
+            app.hasUnsavedMarkdownChanges = true;
+            app.currentMarkdownText = markdownEditor.value;
+            app.log('Markdown 内容已修改，等待自动保存...', 'info');
+
+            if (autoSaveManager.config.mode === 'afterDelay') {
+                autoSaveManager.scheduleAutoSave(AutoSaveManager.FILE_TYPES.MARKDOWN);
+            }
+        });
+
+        // 失焦保存
+        jsonEditor.addEventListener('blur', () => {
+            if (app.hasUnsavedChanges &&
+                (autoSaveManager.config.mode === 'onFocusChange' ||
+                 autoSaveManager.config.mode === 'onWindowChange')) {
+                autoSaveManager.triggerAutoSave(AutoSaveManager.FILE_TYPES.JSON);
+            }
+        });
+
+        markdownEditor.addEventListener('blur', () => {
+            if (app.hasUnsavedMarkdownChanges &&
+                (autoSaveManager.config.mode === 'onFocusChange' ||
+                 autoSaveManager.config.mode === 'onWindowChange')) {
+                autoSaveManager.triggerAutoSave(AutoSaveManager.FILE_TYPES.MARKDOWN);
+            }
+        });
+
+        // 模式切换
+        document.querySelectorAll('.mode-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const mode = btn.dataset.mode;
+                autoSaveManager.setMode(mode);
+
+                // 更新按钮状态
+                document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+
+                app.log(`✓ 切换到模式: ${mode}`, 'success');
+                app.updateStatus(`当前模式: ${mode}`);
+            });
+        });
+
+        // 打开配置
+        document.getElementById('openConfigBtn').addEventListener('click', () => {
+            autoSaveConfigUI.show();
+            app.log('打开配置面板', 'info');
+        });
+
+        // 手动保存
+        document.getElementById('manualSaveBtn').addEventListener('click', async () => {
+            app.log('🔄 触发手动保存...', 'info');
+            await autoSaveManager.saveAll();
+        });
+
+        // 查看调试信息
+        document.getElementById('debugInfoBtn').addEventListener('click', () => {
+            const info = autoSaveManager.getDebugInfo();
+            app.log('===== 调试信息 =====', 'info');
+            app.log(JSON.stringify(info, null, 2), 'info');
+        });
+
+        // 清空内容
+        document.getElementById('clearBtn').addEventListener('click', () => {
+            jsonEditor.value = '';
+            markdownEditor.value = '';
+            app.hasUnsavedChanges = false;
+            app.hasUnsavedMarkdownChanges = false;
+            app.log('✓ 内容已清空', 'success');
+            app.updateStatus('内容已清空');
+        });
+
+        // 控制台提示
+        console.log('%c🚀 自动保存演示已加载！', 'font-size: 16px; color: #4a9eff; font-weight: bold;');
+        console.log('%c可用命令:', 'font-size: 14px; color: #4caf50;');
+        console.log('  autoSave.getDebugInfo()     - 查看调试信息');
+        console.log('  autoSave.setMode("off")     - 切换模式');
+        console.log('  await autoSave.saveAll()    - 手动保存');
+        console.log('  demoApp                     - 访问演示应用');
+    </script>
+</body>
+</html>

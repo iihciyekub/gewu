@@ -51,6 +51,7 @@ class PaperStatsApp {
         this.fileFilterFieldAutocompletes = new Map();
         this.fileFilterHistory = [];
         this.createGroupVisible = false;
+        this.autoSaveConfigVisible = false;
         this.settingsPanelsStateKey = '';
         this.queryExportVisible = false;
         this.debugEnabled = this.loadDebugEnabled();
@@ -95,6 +96,8 @@ class PaperStatsApp {
         this.thirdPartyInfoLoaded = false;
         this.shortcutsVisible = false;
         this.shortcutsLoaded = false;
+        this.autoSaveManager = null;
+        this.autoSaveConfigUI = null;
         this.jsonMenuVisible = false;
         this.mdMenuVisible = false;
         this.rawJsonParseOk = true;
@@ -142,6 +145,7 @@ class PaperStatsApp {
         this.settingsMenuVisible = false;
         this.autoLoadPdf = false;
         this.apiSettingsVisible = false;
+        this.autoSaveConfigVisible = false;
         this.pdfPopupWindow = null;
         this.isPdfPopupMode = false;
         this.pdfPopupFocusInterval = null;
@@ -205,6 +209,8 @@ class PaperStatsApp {
         // 初始化管理器
         this.specialSyntaxManager = null; // 延迟初始化
         this.projectStorage = null; // 延迟初始化
+        this.autoSaveManager = null; // 自动保存管理器
+        this.autoSaveConfigUI = null; // 自动保存配置界面
 
         // 🔑 立即清理可能遗留的独立PDF窗口
         this.cleanupOrphanedPdfWindows();
@@ -1829,6 +1835,7 @@ class PaperStatsApp {
         document.addEventListener('keydown', (e) => {
             const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
             const mod = isMac ? e.metaKey : e.ctrlKey;
+
             if (mod && e.key.toLowerCase() === 'e') {
                 e.preventDefault();
                 this.toggleTableMarkdownView(e.shiftKey);
@@ -2571,6 +2578,14 @@ class PaperStatsApp {
                 this.toggleSettingsMenu(false);
             });
         }
+        const autoSaveSettingsMenuItem = document.getElementById('autoSaveSettingsMenuItem');
+        if (autoSaveSettingsMenuItem) {
+            autoSaveSettingsMenuItem.addEventListener('click', (e) => {
+                e.preventDefault();
+                this.toggleAutoSavePanel(); // 切换显示/隐藏
+                this.toggleSettingsMenu(false);
+            });
+        }
         // 左侧文件列表：鼠标激活后可用上下键快速切换
         const fileListEl = document.getElementById('fileList');
         if (fileListEl) {
@@ -2628,6 +2643,14 @@ class PaperStatsApp {
             addGroupBtn.addEventListener('click', (e) => {
                 e.preventDefault();
                 this.toggleCreateGroupPanel();
+            });
+        }
+        // 绑定自动保存配置按钮
+        const autoSaveConfigToggleBtn = document.getElementById('autoSaveConfigToggleBtn');
+        if (autoSaveConfigToggleBtn) {
+            autoSaveConfigToggleBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                this.toggleAutoSaveConfigPanel();
             });
         }
         // 绑定创建分组确认按钮
@@ -9378,9 +9401,45 @@ class PaperStatsApp {
         }
     }
 
+    toggleAutoSavePanel(forceVisible) {
+        const panel = document.getElementById('autoSaveConfigPanel');
+        const next = typeof forceVisible === 'boolean' ? forceVisible : !this.autoSaveConfigVisible;
+        this.autoSaveConfigVisible = next;
+        if (panel) panel.classList.toggle('is-visible', next);
+        if (next) this.moveSettingsPanelToEnd(panel);
+        this.updateSettingsPanelsVisibility();
+        this.saveSettingsPanelsState();
+        if (next) {
+            this.switchToView('settings');
+            // 初始化内联配置 UI（延迟确保 DOM 已准备好）
+            setTimeout(() => {
+                if (this.autoSaveConfigUI) {
+                    const container = document.getElementById('autoSaveConfigBody');
+                    if (container) {
+                        // 总是渲染（即使已经是内联模式，也重新渲染以确保内容存在）
+                        if (!this.autoSaveConfigUI.isInlineMode || container.innerHTML.trim() === '') {
+                            this.autoSaveConfigUI.renderInline(container);
+                            console.log('[AutoSave] 配置 UI 已渲染到容器');
+                        } else {
+                            // 已经渲染过，只需要重新加载设置
+                            this.autoSaveConfigUI.loadCurrentSettings();
+                        }
+                    } else {
+                        console.warn('[AutoSave] 容器元素未找到: autoSaveConfigBody');
+                    }
+                }
+            }, 50);
+        }
+    }
+
+    // 添加别名方法以兼容 HTML 中的 onclick
+    toggleAutoSaveConfigPanel(forceVisible) {
+        this.toggleAutoSavePanel(forceVisible);
+    }
+
     updateSettingsPanelsVisibility() {
         const settingsContent = document.getElementById('settingsContent');
-        const hasAny = !!(this.fileFilterVisible || this.createGroupVisible || this.projectInfoVisible || this.thirdPartyInfoVisible || this.shortcutsVisible || this.queryExportVisible || this.apiSettingsVisible);
+        const hasAny = !!(this.fileFilterVisible || this.createGroupVisible || this.projectInfoVisible || this.thirdPartyInfoVisible || this.shortcutsVisible || this.queryExportVisible || this.apiSettingsVisible || this.autoSaveConfigVisible);
         if (settingsContent) settingsContent.classList.toggle('is-empty', !hasAny);
     }
 
@@ -9393,6 +9452,7 @@ class PaperStatsApp {
     handleSettingsPanelEscape() {
         if ((this.currentView || '') !== 'settings') return false;
         const candidates = [
+            { id: 'autoSaveConfigPanel', flag: 'autoSaveConfigVisible' },
             { id: 'queryExportPanel', flag: 'queryExportVisible' },
             { id: 'apiSettingsPanel', flag: 'apiSettingsVisible' },
             { id: 'shortcutsInfoPanel', flag: 'shortcutsVisible' },
@@ -9423,6 +9483,26 @@ class PaperStatsApp {
             return true;
         }
         return false;
+    }
+
+    toggleAutoSaveConfigPanel(forceVisible) {
+        const panel = document.getElementById('autoSaveConfigPanel');
+        const next = typeof forceVisible === 'boolean' ? forceVisible : !this.autoSaveConfigVisible;
+        this.autoSaveConfigVisible = next;
+        if (panel) panel.classList.toggle('is-visible', next);
+        if (next) this.moveSettingsPanelToEnd(panel);
+        this.updateSettingsPanelsVisibility();
+        this.saveSettingsPanelsState();
+        if (next) {
+            this.switchToView('settings');
+            // 在inline模式中渲染自动保存配置UI
+            if (this.autoSaveManager && this.autoSaveConfigUI) {
+                const containerElement = document.getElementById('autoSaveConfigBody');
+                if (containerElement) {
+                    this.autoSaveConfigUI.renderInline(containerElement);
+                }
+            }
+        }
     }
 
     toggleQueryExportPanel(forceVisible) {
@@ -9473,6 +9553,7 @@ class PaperStatsApp {
             shortcutsVisible: !!this.shortcutsVisible,
             queryExportVisible: !!this.queryExportVisible,
             apiSettingsVisible: !!this.apiSettingsVisible
+            // autoSaveConfigVisible 不持久化保存，每次加载时默认关闭
         };
         try {
             localStorage.setItem(key, JSON.stringify(payload));
@@ -9490,6 +9571,7 @@ class PaperStatsApp {
         this.shortcutsVisible = !!state.shortcutsVisible;
         this.queryExportVisible = !!state.queryExportVisible;
         this.apiSettingsVisible = !!state.apiSettingsVisible;
+        // autoSaveConfigVisible 不从 state 恢复，始终从构造函数的默认值 false 开始
 
         const fileFilterPanel = document.getElementById('fileFilterSettingsPanel');
         const createGroupPanel = document.getElementById('createGroupSettingsPanel');
@@ -9498,6 +9580,7 @@ class PaperStatsApp {
         const shortcutsPanel = document.getElementById('shortcutsInfoPanel');
         const queryExportPanel = document.getElementById('queryExportPanel');
         const apiSettingsPanel = document.getElementById('apiSettingsPanel');
+        const autoSaveConfigPanel = document.getElementById('autoSaveConfigPanel');
         const fileFilterBtn = document.getElementById('fileFilterToggleBtn');
         const addGroupBtn = document.getElementById('addGroupBtn');
         const queryExportBtn = document.getElementById('queryExportBtn');
@@ -9509,6 +9592,8 @@ class PaperStatsApp {
         if (shortcutsPanel) shortcutsPanel.classList.toggle('is-visible', this.shortcutsVisible);
         if (queryExportPanel) queryExportPanel.classList.toggle('is-visible', this.queryExportVisible);
         if (apiSettingsPanel) apiSettingsPanel.classList.toggle('is-visible', this.apiSettingsVisible);
+        // autoSaveConfigPanel 默认不显示（使用构造函数中的默认值 false）
+        if (autoSaveConfigPanel) autoSaveConfigPanel.classList.remove('is-visible');
         if (fileFilterBtn) fileFilterBtn.classList.toggle('active', this.fileFilterVisible);
         if (addGroupBtn) addGroupBtn.classList.toggle('active', this.createGroupVisible);
         if (queryExportBtn) queryExportBtn.classList.toggle('active', this.queryExportVisible);
@@ -9541,7 +9626,18 @@ class PaperStatsApp {
         if (this.apiSettingsVisible) {
             this.applyApiSettingsInputs();
         }
-        if (!skipView && (this.fileFilterVisible || this.createGroupVisible || this.projectInfoVisible || this.thirdPartyInfoVisible || this.shortcutsVisible || this.queryExportVisible || this.apiSettingsVisible)) {
+        if (this.autoSaveConfigVisible) {
+            // 渲染自动保存配置内容
+            setTimeout(() => {
+                if (this.autoSaveConfigUI) {
+                    const container = document.getElementById('autoSaveConfigBody');
+                    if (container && container.innerHTML.trim() === '') {
+                        this.autoSaveConfigUI.renderInline(container);
+                    }
+                }
+            }, 100);
+        }
+        if (!skipView && (this.fileFilterVisible || this.createGroupVisible || this.projectInfoVisible || this.thirdPartyInfoVisible || this.shortcutsVisible || this.queryExportVisible || this.apiSettingsVisible || this.autoSaveConfigVisible)) {
             this.switchToView('settings');
         }
     }
@@ -18319,6 +18415,33 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Make app globally accessible for debugging
     window.paperStats = app;
+
+    // Initialize AutoSave Manager
+    if (window.AutoSaveManager && window.AutoSaveConfigUI) {
+        try {
+            app.autoSaveManager = new AutoSaveManager(app);
+            app.autoSaveConfigUI = new AutoSaveConfigUI(app.autoSaveManager);
+            window.autoSave = app.autoSaveManager;
+            console.log('[AutoSave] ✅ 已初始化 | 模式:', app.autoSaveManager.config.mode);
+
+            // 如果之前自动保存面板是打开的，重新渲染内容
+            if (app.autoSaveConfigVisible) {
+                setTimeout(() => {
+                    const container = document.getElementById('autoSaveConfigBody');
+                    const panel = document.getElementById('autoSaveConfigPanel');
+                    if (container && panel && panel.classList.contains('is-visible')) {
+                        app.autoSaveConfigUI.renderInline(container);
+                        console.log('[AutoSave] 🔄 恢复面板状态并渲染内容');
+                    }
+                }, 150);
+            }
+        } catch (error) {
+            console.error('[AutoSave] ❌ 初始化失败:', error);
+        }
+    } else {
+        console.warn('[AutoSave] ⚠️ AutoSaveManager 或 AutoSaveConfigUI 未加载');
+    }
+
     window.testCite = async (dois, mode = 'citep') => {
         const list = Array.isArray(dois) ? dois : [dois];
         return app.formatCitation(list, mode === 'cite' ? 'cite' : 'citep');
