@@ -1,7 +1,3 @@
-// Import PDF.js (不再需要，使用iframe加载viewer)
-// VERSION: 2026-01-12-15:30 - Fixed MD DOI generation (basename only)
-console.log('✅ app.js 已加载 - 版本: 2026-01-12-15:30 (MD DOI修复版)');
-
 class PaperStatsApp {
     constructor() {
         this.currentFile = null;
@@ -136,6 +132,7 @@ class PaperStatsApp {
         this.selectedFiles = new Set();
         this.lastFileSelectionAnchor = null;
         this.visibleFileOrder = [];
+        this.currentGroupId = null; // 当前选中文件所在的分组ID
         this.groupMenuState = null; // { menuEl, groups, index }
         this.currentPdfLoadToken = 0;
         this.lastPdfLoadedUrl = '';
@@ -2050,7 +2047,7 @@ class PaperStatsApp {
                 // Ensure all files are assigned to groups, especially files that appear in the new view
                 const ensuredGroups = this.ensureInitGroupExists(filesToRender);
                 this.renderFileList(filesToRender, this.currentFileBase || null, true, ensuredGroups);
-                this.refreshQueryFieldOptions().catch(() => {});
+                this.refreshQueryFieldOptions().catch(() => { });
                 if (this.fileFilterVisible) {
                     this.renderFileFilterConditions();
                 }
@@ -2592,6 +2589,13 @@ class PaperStatsApp {
             addGroupBtn.addEventListener('click', (e) => {
                 e.preventDefault();
                 this.toggleCreateGroupPanel();
+            });
+        }
+        // 绑定创建分组确认按钮
+        const confirmCreateGroupBtn = document.getElementById('confirmCreateGroupBtn');
+        if (confirmCreateGroupBtn) {
+            confirmCreateGroupBtn.addEventListener('click', () => {
+                this.handleConfirmCreateGroups();
             });
         }
         const themeToggleBtn = document.getElementById('themeToggleBtn');
@@ -4403,6 +4407,8 @@ class PaperStatsApp {
             header.draggable = true;
             header.addEventListener('click', (ev) => {
                 if (ev.target.closest('.file-group-title')) return;
+                // 更新当前选中的分组
+                this.currentGroupId = group.id;
                 this.toggleGroupCollapse(group.id, { collapseAll: ev.shiftKey });
             });
             header.addEventListener('contextmenu', (e) => {
@@ -4455,7 +4461,7 @@ class PaperStatsApp {
                 const menuEvt = {
                     pageX: rect.left + rect.width / 2,
                     pageY: rect.bottom + 6,
-                    preventDefault: () => {}
+                    preventDefault: () => { }
                 };
                 this.showGroupContextMenu(menuEvt, group);
             });
@@ -5118,24 +5124,8 @@ class PaperStatsApp {
     }
 
     showCreateGroupDialog() {
+        // 直接调用 toggleCreateGroupPanel，事件监听器已在 setupEventListeners 中绑定
         this.toggleCreateGroupPanel(true);
-        const input = document.getElementById('groupNamesInput');
-        if (input) {
-            input.value = '';
-            input.focus();
-            // 添加实时预览
-            input.addEventListener('input', () => this.updateGroupPreview());
-        }
-
-        // 绑定确认按钮
-        const confirmBtn = document.getElementById('confirmCreateGroupBtn');
-        if (confirmBtn) {
-            const handler = () => this.handleConfirmCreateGroups();
-            confirmBtn.removeEventListener('click', handler);
-            confirmBtn.addEventListener('click', handler);
-        }
-
-        this.updateGroupPreview();
     }
 
     closeCreateGroupDialog() {
@@ -6885,6 +6875,17 @@ class PaperStatsApp {
             if (!this.selectedFiles.has(base)) {
                 this.setSelectedFiles([base], base);
             }
+            
+            // 更新当前文件所在的分组ID
+            const groups = this.getCurrentGroups();
+            this.currentGroupId = null;
+            for (const g of groups) {
+                if ((g.files || []).includes(base)) {
+                    this.currentGroupId = g.id;
+                    break;
+                }
+            }
+            
             // 如果当前 Markdown 有未保存修改，提示用户
             if (this.hasUnsavedMarkdownChanges && this.currentMarkdownExists) {
                 const mdFilename = this.getActiveMarkdownFilename();
@@ -8585,6 +8586,38 @@ class PaperStatsApp {
                 await this.applyCurrentView();
             }
             this.showNotification(`Import completed: ${hasExistingFile ? 'merged 1' : 'created 1'}`, 'success');
+            
+            // 如果是新文件，添加到当前选中的分组
+            if (!hasExistingFile) {
+                const groups = this.getCurrentGroups();
+                let targetGroup = null;
+                
+                // 使用当前分组ID查找目标分组
+                if (this.currentGroupId) {
+                    targetGroup = groups.find(g => g.id === this.currentGroupId);
+                }
+                
+                // 如果没有找到目标分组，使用默认分组
+                if (!targetGroup) {
+                    targetGroup = groups[0];
+                }
+                
+                // 如果文件还不在该分组中，添加它
+                if (targetGroup && !targetGroup.files.includes(targetBase)) {
+                    const currentBase = this.currentFileBase || this.currentFile;
+                    // 如果当前文件在该分组中，在其后插入新文件；否则追加到末尾
+                    if (currentBase && targetGroup.files.includes(currentBase)) {
+                        const idx = targetGroup.files.indexOf(currentBase);
+                        targetGroup.files.splice(idx + 1, 0, targetBase);
+                    } else {
+                        targetGroup.files.push(targetBase);
+                    }
+                    
+                    // 保存分组配置
+                    this.persistGroupsAndRender(groups, targetBase);
+                }
+            }
+            
             await this.loadFileList();
             await new Promise(resolve => setTimeout(resolve, 30));
             await this.loadFile(targetBase);
@@ -9189,7 +9222,7 @@ class PaperStatsApp {
         if (next) {
             this.switchToView('settings');
             if (!this.queryFieldOptions.length) {
-                this.refreshQueryFieldOptions().catch(() => {});
+                this.refreshQueryFieldOptions().catch(() => { });
             }
             this.renderFileFilterConditions();
             if (input) {
@@ -9214,6 +9247,11 @@ class PaperStatsApp {
             if (input) {
                 input.value = '';
                 setTimeout(() => input.focus({ preventScroll: true }), 0);
+                // 绑定输入实时预览（使用一次性监听避免重复绑定）
+                if (!input.dataset.previewBound) {
+                    input.addEventListener('input', () => this.updateGroupPreview());
+                    input.dataset.previewBound = 'true';
+                }
             }
             this.updateGroupPreview();
         }
@@ -9373,7 +9411,7 @@ class PaperStatsApp {
         this.updateSettingsPanelsVisibility();
         if (this.fileFilterVisible) {
             if (!this.queryFieldOptions.length) {
-                this.refreshQueryFieldOptions().catch(() => {});
+                this.refreshQueryFieldOptions().catch(() => { });
             }
             this.renderFileFilterConditions();
             this.renderFileFilterHistory();
@@ -9661,7 +9699,7 @@ class PaperStatsApp {
             });
             fieldInput.addEventListener('focus', () => {
                 if (!this.queryFieldOptions.length) {
-                    this.refreshQueryFieldOptions().catch(() => {});
+                    this.refreshQueryFieldOptions().catch(() => { });
                 }
             });
             row.appendChild(fieldInput);
@@ -9726,7 +9764,7 @@ class PaperStatsApp {
 
     getFileFilterFieldOptions() {
         if ((this.queryFieldOptionsView || '') !== (this.currentJsonView || '')) {
-            this.refreshQueryFieldOptions().catch(() => {});
+            this.refreshQueryFieldOptions().catch(() => { });
         }
         const options = new Set();
         (this.queryFieldOptions || []).forEach(f => options.add(String(f)));
@@ -14433,6 +14471,13 @@ class PaperStatsApp {
         const order = tabs.map(tab => tab.dataset.view).filter(v => v && v !== 'settings');
         const fallbackOrder = ['structured', 'markdown', 'draft'];
         const sequence = order.length ? order : fallbackOrder;
+        
+        // 如果当前在 settings 视图，默认跳到 draft
+        if (this.currentView === 'settings') {
+            this.switchToView('draft');
+            return;
+        }
+        
         let currentKey = 'structured';
         if ((this.currentView || 'structured') === 'markdown') {
             currentKey = this.isDraftViewActive ? 'draft' : 'markdown';
