@@ -883,6 +883,34 @@ body.theme-dark .bib-fetch-btn:focus {
     border-color: var(--vscode-border);
 }
 
+/* Citation links - 暗色主题适配 */
+body.theme-dark .citation-link {
+    color: #8fb8ff;
+}
+
+body.theme-dark .citation-link:hover {
+    color: #b3cbff;
+    text-decoration: underline;
+}
+
+/* Location links - 暗色主题适配 */
+body.theme-dark .location-link {
+    color: var(--vscode-accent);
+}
+
+body.theme-dark .location-link:hover {
+    color: #9fcbff;
+}
+
+body.theme-dark .location-link i.fa-quote-right {
+    color: var(--vscode-accent);
+}
+
+body.theme-dark .location-link:hover i.fa-quote-right {
+    color: #9fcbff;
+    animation: fa-shake 1s ease-in-out infinite;
+}
+
 /* 项目详情面板 - 深色主题 */
 /* 项目详情面板 - 深色主题 */
 body.theme-dark .detail-section {

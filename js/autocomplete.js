@@ -14,6 +14,7 @@ class AutocompleteManager {
         this.minChars = Number.isFinite(options.minChars) ? options.minChars : 1;
         this.maxSuggestions = Number.isFinite(options.maxSuggestions) ? options.maxSuggestions : 10;
         this.pathProvider = options.pathProvider || null;
+        this.doiProvider = options.doiProvider || null;
         this.onSelect = typeof options.onSelect === 'function' ? options.onSelect : null;
         this.onConfirm = typeof options.onConfirm === 'function' ? options.onConfirm : null;
         this.activeProvider = null;
@@ -96,7 +97,17 @@ class AutocompleteManager {
     onInput(e) {
         const cursorPos = this.textarea.selectionStart;
         const text = this.textarea.value;
-        
+
+        // 优先检测 DOI 上下文（在 \cite{}, \citep{}, \bib{} 内）
+        const doiContext = this.getDoiContext(text, cursorPos);
+        if (doiContext) {
+            this.activeProvider = 'doi';
+            this.applyCompletionContext(doiContext);
+            const suggestions = this.getDoiSuggestions(doiContext);
+            this.showSuggestions(suggestions);
+            return;
+        }
+
         const commandContext = this.getCommandContext(text, cursorPos);
         if (commandContext) {
             this.activeProvider = 'command';
@@ -221,6 +232,64 @@ class AutocompleteManager {
         const suggestions = rawSuggestions.map((item) => {
             if (typeof item === 'string') {
                 return { label: item, insertText: item, detail: '' };
+            }
+            return item;
+        });
+        return this.limitSuggestions(suggestions);
+    }
+
+    /**
+     * 检测 DOI 补全上下文
+     * 支持 \cite{}, \citep{}, \bib{} 等命令内的 DOI 补全
+     */
+    getDoiContext(text, cursorPos) {
+        if (!this.doiProvider || typeof this.doiProvider.getSuggestions !== 'function') {
+            return null;
+        }
+
+        const beforeCursor = text.substring(0, cursorPos);
+
+        // 匹配 \cite{...}, \citep{...}, \bib{...} 等命令
+        // 支持多个 DOI 用逗号分隔的情况
+        const match = beforeCursor.match(/\\(cite|citep|bib)\{([^}]*)$/);
+        if (!match) return null;
+
+        const command = match[1];
+        const insideBraces = match[2];
+
+        // 找到最后一个逗号后的内容作为当前输入
+        const lastCommaIndex = insideBraces.lastIndexOf(',');
+        const afterComma = lastCommaIndex >= 0
+            ? insideBraces.substring(lastCommaIndex + 1)
+            : insideBraces;
+
+        const currentInput = afterComma.trim();
+
+        // 计算补全起始位置（跳过逗号和前导空格）
+        const braceStartIndex = beforeCursor.lastIndexOf('{');
+        const leadingSpaces = afterComma.length - afterComma.trimStart().length;
+
+        const completionStart = lastCommaIndex >= 0
+            ? braceStartIndex + 1 + lastCommaIndex + 1 + leadingSpaces
+            : braceStartIndex + 1 + leadingSpaces;
+
+        return {
+            completionStart,
+            completionEnd: cursorPos,
+            searchText: currentInput,
+            command,
+            insideBraces
+        };
+    }
+
+    /**
+     * 获取 DOI 建议列表
+     */
+    getDoiSuggestions(context) {
+        const rawSuggestions = this.doiProvider.getSuggestions(context) || [];
+        const suggestions = rawSuggestions.map((item) => {
+            if (typeof item === 'string') {
+                return { label: item, insertText: item, detail: 'DOI' };
             }
             return item;
         });

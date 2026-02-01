@@ -1596,6 +1596,7 @@ class PaperStatsApp {
         this.updateMarkdownMenuState();
         this.applyEditLockState();
         this.applyTheme();
+        this.restoreStatusBarState();
         this.initMermaid();
         this.setupResizers();
         this.setupDraggableModal();
@@ -2020,6 +2021,9 @@ class PaperStatsApp {
                     maxSuggestions: 0,
                     pathProvider: {
                         getSuggestions: (context) => this.getJsonPathAutocompleteSuggestions(context)
+                    },
+                    doiProvider: {
+                        getSuggestions: (context) => this.getDoiAutocompleteSuggestions(context)
                     }
                 });
                 console.log('✓ Autocomplete initialized for markdown editor');
@@ -2208,6 +2212,11 @@ class PaperStatsApp {
                 this.showProjectSelector();
                 return;
             }
+            if (mod && !e.shiftKey && key === 'u') {
+                e.preventDefault();
+                this.toggleTheme();
+                return;
+            }
             if (mod && !e.shiftKey && key === 'j') {
                 e.preventDefault();
                 console.log('[Shortcut] Cmd/Ctrl + J triggered, switching to structured view');
@@ -2291,6 +2300,11 @@ class PaperStatsApp {
             if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === 's') {
                 e.preventDefault();
                 this.toggleLeftPanelVisibility();
+                return;
+            }
+            if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === 'x') {
+                e.preventDefault();
+                this.toggleStatusBarVisibility();
                 return;
             }
             if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
@@ -2627,6 +2641,10 @@ class PaperStatsApp {
         if (themeToggleBtn) {
             themeToggleBtn.addEventListener('click', () => this.toggleTheme());
             this.updateThemeToggleButton(this.theme === 'dark');
+        }
+        const statusBarPositionToggleBtn = document.getElementById('statusBarPositionToggleBtn');
+        if (statusBarPositionToggleBtn) {
+            statusBarPositionToggleBtn.addEventListener('click', () => this.toggleStatusBarPosition());
         }
         const settingsToggleBtn = document.getElementById('settingsToggleBtn');
         const settingsMenu = document.getElementById('settingsMenu');
@@ -3166,6 +3184,59 @@ class PaperStatsApp {
             if (icon) icon.style.transform = 'rotate(180deg)';
             if (middleToggle) middleToggle.title = 'Show PDF preview (Cmd+Shift+F / Ctrl+Shift+F)';
             this.savePanelWidths(leftPanel, rightPanel, { collapsedRight: true, lastLeftWidth: this.lastLeftWidth, lastRightWidth: this.lastRightWidth });
+        }
+    }
+
+    toggleStatusBarVisibility() {
+        const statusBar = document.getElementById('statusBar');
+        if (!statusBar) return;
+        statusBar.classList.toggle('status-bar-hidden');
+
+        // 保存隐藏/显示状态
+        const isHidden = statusBar.classList.contains('status-bar-hidden');
+        try {
+            localStorage.setItem('statusBarHidden', isHidden ? 'true' : 'false');
+        } catch (e) {
+            console.warn('Failed to save status bar visibility state:', e);
+        }
+    }
+
+    toggleStatusBarPosition() {
+        const statusBar = document.getElementById('statusBar');
+        if (!statusBar) return;
+        statusBar.classList.toggle('status-bar-top');
+
+        // 保存位置状态
+        const isTop = statusBar.classList.contains('status-bar-top');
+        try {
+            localStorage.setItem('statusBarPosition', isTop ? 'top' : 'bottom');
+        } catch (e) {
+            console.warn('Failed to save status bar position state:', e);
+        }
+    }
+
+    restoreStatusBarState() {
+        const statusBar = document.getElementById('statusBar');
+        if (!statusBar) return;
+
+        try {
+            // 恢复位置状态
+            const position = localStorage.getItem('statusBarPosition');
+            if (position === 'top') {
+                statusBar.classList.add('status-bar-top');
+            } else {
+                statusBar.classList.remove('status-bar-top');
+            }
+
+            // 恢复隐藏/显示状态
+            const isHidden = localStorage.getItem('statusBarHidden');
+            if (isHidden === 'true') {
+                statusBar.classList.add('status-bar-hidden');
+            } else {
+                statusBar.classList.remove('status-bar-hidden');
+            }
+        } catch (e) {
+            console.warn('Failed to restore status bar state:', e);
         }
     }
 
@@ -14491,6 +14562,59 @@ class PaperStatsApp {
                 detail: fullPath
             };
         });
+    }
+
+    /**
+     * DOI 自动补全建议
+     * 根据项目中的文件列表提供 DOI 补全
+     */
+    getDoiAutocompleteSuggestions(context) {
+        if (!context) return [];
+        const searchText = (context.searchText || '').toLowerCase().trim();
+
+        // 获取项目中所有的 DOI（基于文件名/base）
+        const bases = Object.keys(this.fileMetaByBase || {});
+        if (!bases.length) return [];
+
+        // DOI 格式验证：必须包含斜杠或下划线（如 10.1234/abc 或 10.1234_abc）
+        const isValidDoiBase = (base) => {
+            // DOI 通常以 10. 开头，且包含斜杠或下划线
+            return /^10[._]/.test(base) || base.includes('_') && base.includes('.');
+        };
+
+        // 将 base 转换为 DOI 格式（将下划线替换回斜杠）
+        const doiList = bases
+            .filter(base => isValidDoiBase(base)) // 只保留有效的 DOI base
+            .map(base => {
+                // 从缓存或临时数据中获取额外信息
+                const cached = this.tempDataCache?.[base];
+                const meta = cached?.meta_info || {};
+                const title = meta.title || meta.TI || '';
+                const doi = meta.doi || base.replace(/_/g, '/');
+                return {
+                    base,
+                    doi,
+                    title: typeof title === 'string' ? title : (Array.isArray(title) ? title.join(' ') : '')
+                };
+            });
+
+        // 过滤匹配的 DOI
+        const filtered = doiList.filter(item => {
+            if (!searchText) return true;
+            const doiLower = item.doi.toLowerCase();
+            const titleLower = item.title.toLowerCase();
+            const baseLower = item.base.toLowerCase();
+            return doiLower.includes(searchText) ||
+                   titleLower.includes(searchText) ||
+                   baseLower.includes(searchText);
+        });
+
+        // 返回建议列表
+        return filtered.slice(0, 20).map(item => ({
+            label: item.doi,
+            insertText: item.doi,
+            detail: item.title ? item.title.substring(0, 50) + (item.title.length > 50 ? '...' : '') : 'DOI'
+        }));
     }
 
     renderGotoLinks(rawText, valuePath = '') {

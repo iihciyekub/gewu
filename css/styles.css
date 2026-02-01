@@ -933,6 +933,24 @@ body {
     font-size: 10px;
     font-family: 'Segoe UI', 'Arial', sans-serif;
     border-top: 1px solid var(--wos-blue-dark);
+    max-height: 100px;
+    overflow: hidden;
+    transition: max-height 0.2s ease, opacity 0.2s ease;
+    order: 999;
+}
+
+.status-bar.status-bar-top {
+    border-top: none;
+    border-bottom: 1px solid var(--wos-blue-dark);
+    order: -1;
+}
+
+.status-bar.status-bar-hidden {
+    max-height: 0;
+    opacity: 0;
+    pointer-events: none;
+    border-top: none;
+    border-bottom: none;
 }
 
 .status-left-group,
@@ -1794,7 +1812,7 @@ body.theme-vscode .nested-index-cell {
     margin-left: 3px;
     padding: 1px 5px;
     border-radius: 3px;
-    background: var(--wos-hover);
+    background: transparent;
     transition: all 0.12s ease;
     white-space: nowrap;
     vertical-align: middle;
@@ -1812,10 +1830,7 @@ body.theme-vscode .nested-index-cell {
 }
 
 .location-link:hover {
-    background: var(--wos-blue);
-    color: white;
-    box-shadow: 0 2px 4px rgba(0, 62, 116, 0.3);
-    transform: translateY(-1px);
+    color: #0056b3;
 }
 
 .location-link i {
@@ -1827,38 +1842,26 @@ body.theme-vscode .nested-index-cell {
 }
 
 .location-link:hover i.fa-quote-right {
-    color: white;
+    color: #0056b3;
+    animation: fa-shake 1s ease-in-out infinite;
+}
+
+/* Font Awesome shake 动画 */
+@keyframes fa-shake {
+    0% { transform: rotate(-15deg); }
+    4% { transform: rotate(15deg); }
+    8%, 24% { transform: rotate(-18deg); }
+    12%, 28% { transform: rotate(18deg); }
+    16% { transform: rotate(-22deg); }
+    20% { transform: rotate(22deg); }
+    32% { transform: rotate(-12deg); }
+    36% { transform: rotate(12deg); }
+    40%, 100% { transform: rotate(0deg); }
 }
 
 /* 多个quote的间距 */
 .location-link:not(:first-of-type) {
     margin-left: 2px;
-}
-
-/* 悬停时显示提示 */
-.location-link::before {
-    content: attr(title);
-    position: absolute;
-    bottom: 100%;
-    left: 50%;
-    transform: translateX(-50%);
-    background: rgba(0, 0, 0, 0.9);
-    color: white;
-    padding: 4px 8px;
-    border-radius: 3px;
-    font-size: 10px;
-    white-space: nowrap;
-    opacity: 0;
-    pointer-events: none;
-    transition: opacity 0.2s;
-    margin-bottom: 4px;
-    max-width: 300px;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-
-.location-link:hover::before {
-    opacity: 1;
 }
 
 .location-link i.fa-external-link-alt {
