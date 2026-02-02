@@ -2,7 +2,7 @@
 
 ## 功能概述
 
-本更新为 Paper Reviewer 添加了新的项目创建和管理功能，支持以下特性：
+本更新为 GEWU 添加了新的项目创建和管理功能，支持以下特性：
 
 ### 1. **新项目结构** ✨
 新创建的项目必须包含以下三个子目录：
@@ -32,7 +32,7 @@ curl -X POST http://localhost:8000/create-project \
 {
   "success": true,
   "projectKey": "user/my_research",
-  "projectPath": "/Users/yjli/PolyUWorkspace/ref_251207_reviewer/user/my_research",
+  "projectPath": "/Users/yjli/PolyUWorkspace/ref_251207_GEWU/user/my_research",
   "message": "项目 \"my_research\" 创建成功",
   "dirs": {
     "json": "user/my_research/json",

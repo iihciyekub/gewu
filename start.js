@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * EnlightenKey - Node.js launcher
+ * GEWU - Node.js launcher
  * Cross-platform replacement for start.sh
  */
 
@@ -10,7 +10,7 @@ const os = require('os');
 
 function logHeader() {
   console.log('=========================================');
-  console.log('        EnlightenKey - Starting...');
+  console.log('        GEWU - Starting...');
   console.log('=========================================');
   console.log('');
 }

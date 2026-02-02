@@ -153,9 +153,9 @@ function ensurePromptManifest() {
     // 写出简化的 manifest.json 仅用于版本信息，不包含 groups
     try {
         const payload = JSON.stringify({
-            name: 'Enlightenkey',
-            version: '1.0.0',
-            dockerHub: 'https://hub.docker.com/repository/docker/iihciyekub/enlightenkey/general'
+            name: 'GEWU',
+            version: '0.0.1',
+            dockerHub: 'https://hub.docker.com/repository/docker/iihciyekub/gewu/general'
         }, null, 2);
         fs.writeFileSync(CUSTOM_MANIFEST_PATH, payload, 'utf8');
     } catch (err) {

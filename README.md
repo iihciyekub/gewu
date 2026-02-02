@@ -1,6 +1,8 @@
-# Paper Reviewer - Research Paper Review Tool
+# GEWU
 
-一个强大的研究论文审阅工具，支持 JSON 结构化数据、Markdown 笔记和 PDF 查看。
+GEWU — a workspace for dissecting texts and composing knowledge.
+
+一个强大的文本研读与知识构建工作台，支持 JSON 结构化数据、Markdown 笔记和 PDF 查看。
 
 ## 🎯 核心功能
 
@@ -18,7 +20,7 @@
 
 ```bash
 # 克隆或进入项目目录
-cd /Users/yjli/PolyUWorkspace/ref_251207_reviewer
+cd /Users/yjli/PolyUWorkspace/ref_251207_GEWU
 
 # 安装依赖（如果需要）
 npm install  # 可选，大多数功能无需额外依赖
@@ -42,14 +44,14 @@ ALLOWED_ROOTS="$HOME,$PWD,/data" npm start
 ### Docker 启动
 
 ```bash
-docker build -t enlightenkey .
+docker build -t gewu .
 
 # 将本地项目目录映射到容器 /data
 docker run -p 8000:8000 \
   -e HOST=0.0.0.0 \
   -e ALLOWED_ROOTS=/data \
   -v /path/to/projects:/data \
-  enlightenkey
+  gewu
 ```
 
 在应用内创建/选择项目时，使用绝对路径，例如：`/data/my_research`。

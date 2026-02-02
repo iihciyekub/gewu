@@ -87,10 +87,11 @@ class PaperStatsApp {
         this.gotoEditResolver = null;
         this.envInfo = { homeDir: '', desktopDir: '', rootDir: '', platform: '' };
         this.defaultProjectPathExample = '/path/to/project';
+        this.migrateLocalStorageKeys();
         this.isEditLocked = this.loadEditLockState();
         this.citationCache = {}; // 缓存 cite/citep 渲染结果 {text, fallback}
         this.citationMetaCache = {}; // 缓存 DOI -> CSL
-        this.citationMetaStoreKey = 'paperReviewerCitationMeta';
+        this.citationMetaStoreKey = 'gewuCitationMeta';
         this.projectInfoVisible = false;
         this.thirdPartyInfoVisible = false;
         this.thirdPartyInfoLoaded = false;
@@ -507,6 +508,8 @@ class PaperStatsApp {
         try {
             const qs = new URLSearchParams(window.location.search || '');
             if (qs.get('debug') === '1') return true;
+            const stored = localStorage.getItem('gewuDebug');
+            if (stored !== null) return stored === '1';
             return localStorage.getItem('paperReviewerDebug') === '1';
         } catch (_e) {
             return false;
@@ -520,7 +523,7 @@ class PaperStatsApp {
 
     loadTheme() {
         try {
-            const saved = localStorage.getItem('reviewerTheme');
+            const saved = localStorage.getItem('gewuTheme') ?? localStorage.getItem('reviewerTheme');
             if (saved === 'dark' || saved === 'light') return saved;
         } catch (_e) {
             // ignore
@@ -615,7 +618,7 @@ class PaperStatsApp {
 
     persistTheme() {
         try {
-            localStorage.setItem('reviewerTheme', this.theme);
+            localStorage.setItem('gewuTheme', this.theme);
         } catch (_e) {
             // ignore
         }
@@ -854,6 +857,8 @@ class PaperStatsApp {
 
     loadEditLockState() {
         try {
+            const stored = localStorage.getItem('gewuEditLocked');
+            if (stored !== null) return stored === '1';
             return localStorage.getItem('reviewerEditLocked') === '1';
         } catch (_e) {
             return false;
@@ -862,7 +867,7 @@ class PaperStatsApp {
 
     persistEditLockState() {
         try {
-            localStorage.setItem('reviewerEditLocked', this.isEditLocked ? '1' : '0');
+            localStorage.setItem('gewuEditLocked', this.isEditLocked ? '1' : '0');
         } catch (_e) {
             // ignore
         }
@@ -1633,7 +1638,7 @@ class PaperStatsApp {
             const resp = await fetch('manifest.json', { cache: 'no-store' });
             if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
             const data = await resp.json();
-            const name = String(data?.name || 'Enlightenkey').trim();
+            const name = String(data?.name || 'GEWU').trim();
             const version = String(data?.version || '').trim();
             const dockerHub = String(data?.dockerHub || '').trim();
             if (!version) return;
@@ -1730,7 +1735,7 @@ class PaperStatsApp {
     // 加载项目配置
     loadProjectConfig() {
         try {
-            const config = localStorage.getItem('reviewerProjectConfig');
+            const config = localStorage.getItem('gewuProjectConfig') ?? localStorage.getItem('reviewerProjectConfig');
             if (config) {
                 const data = JSON.parse(config);
                 this.currentProject = data.currentProject;
@@ -1756,9 +1761,30 @@ class PaperStatsApp {
                 theme: this.theme,
                 autoLoadPdf: this.autoLoadPdf
             };
-            localStorage.setItem('reviewerProjectConfig', JSON.stringify(config));
+            localStorage.setItem('gewuProjectConfig', JSON.stringify(config));
         } catch (error) {
             console.error('Failed to save project config:', error);
+        }
+    }
+
+    migrateLocalStorageKeys() {
+        const keyPairs = [
+            { oldKey: 'reviewerTheme', newKey: 'gewuTheme' },
+            { oldKey: 'reviewerEditLocked', newKey: 'gewuEditLocked' },
+            { oldKey: 'reviewerProjectConfig', newKey: 'gewuProjectConfig' },
+            { oldKey: 'paperReviewerCitationMeta', newKey: 'gewuCitationMeta' },
+            { oldKey: 'paperReviewerDebug', newKey: 'gewuDebug' }
+        ];
+        try {
+            keyPairs.forEach(({ oldKey, newKey }) => {
+                const existing = localStorage.getItem(newKey);
+                if (existing !== null) return;
+                const legacy = localStorage.getItem(oldKey);
+                if (legacy === null) return;
+                localStorage.setItem(newKey, legacy);
+            });
+        } catch (_e) {
+            // ignore
         }
     }
 
@@ -15655,7 +15681,7 @@ class PaperStatsApp {
                             console.warn('Failed to bind PDF panel activation:', err);
                         }
                         // 添加自定义样式：保持0.8缩放但修正标注层坐标
-                        const styleId = 'paperReviewerPdfScaleStyle';
+                        const styleId = 'gewuPdfScaleStyle';
                         if (!pdfDoc.getElementById(styleId)) {
                             const styleEl = pdfDoc.createElement('style');
                             styleEl.id = styleId;

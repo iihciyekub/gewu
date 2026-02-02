@@ -4,7 +4,7 @@
 
 ### 1. 启动服务器
 ```bash
-cd /Users/yjli/PolyUWorkspace/ref_251207_reviewer
+cd /Users/yjli/PolyUWorkspace/ref_251207_GEWU
 npm start
 # 或
 node server.js
@@ -55,7 +55,7 @@ user/my_research/
 
 ### 相对路径（推荐用于项目内部）
 ```
-user/my_project          # 自动创建在 /ref_251207_reviewer/user/my_project
+user/my_project          # 自动创建在 /ref_251207_GEWU/user/my_project
 user/research/study1     # 子目录也支持
 ```
 

@@ -266,8 +266,14 @@ class ProjectStorageManager {
         };
         
         try {
+            const getLegacyValue = (newKey, oldKey) => {
+                const next = localStorage.getItem(newKey);
+                if (next !== null) return next;
+                return localStorage.getItem(oldKey);
+            };
+
             // 迁移 citation metadata
-            const citationMeta = localStorage.getItem('paperReviewerCitationMeta');
+            const citationMeta = getLegacyValue('gewuCitationMeta', 'paperReviewerCitationMeta');
             if (citationMeta) {
                 try {
                     const data = JSON.parse(citationMeta);
@@ -279,7 +285,7 @@ class ProjectStorageManager {
             }
             
             // 迁移项目配置
-            const projectConfig = localStorage.getItem('reviewerProjectConfig');
+            const projectConfig = getLegacyValue('gewuProjectConfig', 'reviewerProjectConfig');
             if (projectConfig) {
                 try {
                     const data = JSON.parse(projectConfig);
@@ -320,10 +326,10 @@ class ProjectStorageManager {
             
             // 迁移 UI 首选项
             const uiPreferences = {
-                theme: localStorage.getItem('reviewerTheme'),
+                theme: getLegacyValue('gewuTheme', 'reviewerTheme'),
                 lastViewMode: localStorage.getItem('lastViewMode'),
-                editLocked: localStorage.getItem('reviewerEditLocked'),
-                debug: localStorage.getItem('paperReviewerDebug'),
+                editLocked: getLegacyValue('gewuEditLocked', 'reviewerEditLocked'),
+                debug: getLegacyValue('gewuDebug', 'paperReviewerDebug'),
                 lastJsonView: null,
                 lastSelectedFile: null
             };

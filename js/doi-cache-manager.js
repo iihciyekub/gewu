@@ -11,7 +11,7 @@
 class DoiCacheManager {
     constructor(app) {
         this.app = app;
-        this.dbName = 'EnlightenKeyDoiCache';
+        this.dbName = 'GEWUDoiCache';
         this.dbVersion = 1;
         this.storeName = 'doiData';
         this.cacheDataVersion = 3; // 缓存数据版本（修改格式时增加此版本号）- v3: 优先使用 wos_data.author_full_names
