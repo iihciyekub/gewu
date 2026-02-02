@@ -2693,6 +2693,7 @@ class PaperStatsApp {
         const autoLoadOffItem = document.getElementById('autoLoadOffItem');
         const fixAllMdDoisBtn = document.getElementById('fixAllMdDoisBtn');
         const fixAllJsonDoisBtn = document.getElementById('fixAllJsonDoisBtn');
+        const refreshDoiCacheBtn = document.getElementById('refreshDoiCacheBtn');
         if (settingsToggleBtn && settingsMenu) {
             settingsToggleBtn.addEventListener('click', (e) => {
                 e.preventDefault();
@@ -2746,6 +2747,23 @@ class PaperStatsApp {
                 this.toggleSettingsMenu(false);
                 if (confirm('Are you sure you want to batch fix meta_info.doi in all JSON files?\n\nThis will extract a valid DOI via regex and normalize the field.')) {
                     await this.fixAllJsonDois();
+                }
+            });
+        }
+        if (refreshDoiCacheBtn) {
+            refreshDoiCacheBtn.addEventListener('click', async () => {
+                this.toggleSettingsMenu(false);
+                if (!this.doiCacheManager) {
+                    this.showNotification('DOI Cache Manager not initialized', 'error');
+                    return;
+                }
+                try {
+                    await this.doiCacheManager.clearCache();
+                    const data = await this.doiCacheManager.buildCache({ notify: true });
+                    this.showNotification(`DOI cache refreshed: ${data.length} entries`, 'success');
+                } catch (err) {
+                    console.error('Failed to refresh DOI cache:', err);
+                    this.showNotification(`Failed to refresh DOI cache: ${err.message}`, 'error');
                 }
             });
         }
@@ -8193,7 +8211,7 @@ class PaperStatsApp {
                     };
 
                     const title = extractField(['wos_data.title', 'meta_info.title', 'title', 'TI']);
-                    const authors = extractField(['wos_data.authors', 'meta_info.authors', 'authors', 'AF', 'AU']);
+                    const authors = extractField(['wos_data.author_full_names', 'wos_data.authors', 'meta_info.authors', 'authors', 'AF', 'AU']);
                     const year = extractField(['wos_data.publication_year', 'meta_info.publication_year', 'year', 'PY']);
 
                     rows.push({
@@ -14793,15 +14811,28 @@ class PaperStatsApp {
             return [];
         }
 
-        const search = searchText.toLowerCase();
+        // 多条件组合查询：用空格分隔多个关键词
+        // 例如：'2023 li the' 表示必须同时包含 2023、li 和 the
+        const keywords = searchText
+            .toLowerCase()
+            .split(/\s+/)  // 按空格分割
+            .map(k => k.trim())
+            .filter(k => k.length > 0);  // 过滤空关键词
 
-        // 模糊匹配：任一字段包含搜索文本即匹配
+        // 多条件匹配：所有关键词都必须在某个字段中出现（AND 逻辑）
         const matches = cacheData.filter(item => {
-            if (!search) return true;
-            return item.doi.toLowerCase().includes(search) ||
-                   item.title.toLowerCase().includes(search) ||
-                   item.authors.toLowerCase().includes(search) ||
-                   item.year.toLowerCase().includes(search);
+            if (keywords.length === 0) return true;
+
+            // 合并所有可搜索字段为一个字符串
+            const searchableText = [
+                item.doi.toLowerCase(),
+                item.title.toLowerCase(),
+                item.authors.toLowerCase(),
+                item.year.toLowerCase()
+            ].join(' ');
+
+            // 所有关键词都必须出现在搜索文本中
+            return keywords.every(keyword => searchableText.includes(keyword));
         });
 
         // 返回增强的建议列表
@@ -18550,6 +18581,27 @@ document.addEventListener('DOMContentLoaded', () => {
         return app.formatCitation(list, mode === 'cite' ? 'cite' : 'citep');
     };
     window.clearCitationCache = () => app.clearCitationCache();
+
+    // DOI 缓存管理全局方法
+    window.refreshDoiCache = async () => {
+        if (!app.doiCacheManager) {
+            console.warn('DOI Cache Manager not initialized');
+            return;
+        }
+        console.log('🔄 Refreshing DOI cache...');
+        await app.doiCacheManager.clearCache();
+        const data = await app.doiCacheManager.buildCache({ notify: true });
+        console.log(`✅ DOI cache refreshed: ${data.length} entries`);
+        return data;
+    };
+    window.clearDoiCache = async () => {
+        if (!app.doiCacheManager) {
+            console.warn('DOI Cache Manager not initialized');
+            return;
+        }
+        await app.doiCacheManager.clearCache();
+        console.log('✅ DOI cache cleared');
+    };
 
     // 全局 DOI -> APA 测试方法：在控制台调用 citeDoiToApa('10.xxxx/yyy')
     const loadCiteLib = async () => {

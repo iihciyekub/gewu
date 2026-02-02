@@ -14,6 +14,7 @@ class DoiCacheManager {
         this.dbName = 'EnlightenKeyDoiCache';
         this.dbVersion = 1;
         this.storeName = 'doiData';
+        this.cacheDataVersion = 3; // 缓存数据版本（修改格式时增加此版本号）- v3: 优先使用 wos_data.author_full_names
         this.db = null;
         this.cacheKey = null; // 当前项目的缓存键
         this.memoryCache = null; // 内存缓存，加速查询
@@ -68,6 +69,7 @@ class DoiCacheManager {
 
     /**
      * 从 IndexedDB 加载缓存
+     * 检查缓存版本，如果版本不匹配则自动重建
      */
     async loadFromCache() {
         if (!this.db) {
@@ -84,9 +86,17 @@ class DoiCacheManager {
             request.onsuccess = () => {
                 const result = request.result;
                 if (result && result.data) {
+                    // 检查缓存版本
+                    const cacheVersion = result.version || 1;
+                    if (cacheVersion !== this.cacheDataVersion) {
+                        console.log(`Cache version mismatch (${cacheVersion} vs ${this.cacheDataVersion}), will rebuild cache`);
+                        resolve(null); // 返回 null 触发重建
+                        return;
+                    }
+
                     this.memoryCache = result.data;
                     this.lastUpdateTime = result.timestamp;
-                    console.log(`✓ Loaded ${result.data.length} DOI entries from cache`);
+                    console.log(`✓ Loaded ${result.data.length} DOI entries from cache (v${cacheVersion})`);
                     resolve(result.data);
                 } else {
                     console.log('No cache found, will build new cache');
@@ -103,6 +113,7 @@ class DoiCacheManager {
 
     /**
      * 保存缓存到 IndexedDB
+     * 包含版本号，用于检测缓存格式变化
      */
     async saveToCache(data) {
         if (!this.db) {
@@ -113,7 +124,8 @@ class DoiCacheManager {
         const cacheEntry = {
             projectKey: key,
             data: data,
-            timestamp: Date.now()
+            timestamp: Date.now(),
+            version: this.cacheDataVersion  // 添加版本号
         };
 
         return new Promise((resolve, reject) => {
@@ -124,7 +136,7 @@ class DoiCacheManager {
             request.onsuccess = () => {
                 this.memoryCache = data;
                 this.lastUpdateTime = cacheEntry.timestamp;
-                console.log(`✓ Saved ${data.length} DOI entries to cache`);
+                console.log(`✓ Saved ${data.length} DOI entries to cache (v${this.cacheDataVersion})`);
                 resolve();
             };
 
@@ -184,7 +196,7 @@ class DoiCacheManager {
                 const title = this.extractField(data, ['wos_data.title', 'meta_info.title', 'title', 'TI']);
 
                 // 提取作者
-                const authors = this.extractField(data, ['wos_data.authors', 'meta_info.authors', 'authors', 'AF', 'AU']);
+                const authors = this.extractField(data, ['wos_data.author_full_names', 'wos_data.authors', 'meta_info.authors', 'authors', 'AF', 'AU']);
 
                 // 提取年份
                 const year = this.extractField(data, ['wos_data.publication_year', 'meta_info.publication_year', 'year', 'PY']);
@@ -250,25 +262,62 @@ class DoiCacheManager {
 
     /**
      * 格式化作者显示
-     * 例如：Smith, J.; Johnson, A. => Smith et al.
+     * 最多显示 5 位作者，超过的用省略号表示
+     * 例如：
+     *   1 位: Smith, J.
+     *   2-5 位: Smith, J.; Johnson, A.; ...
+     *   超过 5 位: Smith, J.; Johnson, A.; Williams, C.; Brown, D.; Davis, E.; ...
      */
     formatAuthors(authors) {
         if (!authors) return '';
 
         const authorsStr = String(authors);
 
-        // 分割多个作者
-        const authorList = authorsStr.split(/[;,]\s*/);
+        // 分割多个作者（支持分号或逗号分隔）
+        // 优先使用分号分割，如果没有分号则使用逗号
+        let authorList;
+        if (authorsStr.includes(';')) {
+            authorList = authorsStr.split(/;\s*/);
+        } else {
+            // 如果使用逗号分割，需要更智能的处理（避免把名字中的逗号也分割）
+            // 简单处理：假设作者之间用逗号+空格分隔
+            authorList = authorsStr.split(/,\s+(?=[A-Z])/);
+        }
+
+        authorList = authorList.map(a => a.trim()).filter(a => a.length > 0);
 
         if (authorList.length === 0) return '';
         if (authorList.length === 1) return authorList[0];
 
-        // 提取第一作者的姓氏
-        const firstAuthor = authorList[0].trim();
-        const lastNameMatch = firstAuthor.match(/^([^,\s]+)/);
-        const lastName = lastNameMatch ? lastNameMatch[1] : firstAuthor.split(/\s+/)[0];
+        // 最多显示 5 位作者
+        const maxAuthors = 5;
+        const hasMore = authorList.length > maxAuthors;
+        const displayAuthors = authorList.slice(0, maxAuthors);
 
-        return `${lastName} et al.`;
+        // 提取每位作者的姓氏
+        const formattedAuthors = displayAuthors.map(author => {
+            // 尝试提取姓氏（假设格式为 "LastName, FirstName" 或 "FirstName LastName"）
+            const commaMatch = author.match(/^([^,]+),/);
+            if (commaMatch) {
+                return commaMatch[1].trim();
+            }
+            // 如果没有逗号，取第一个单词作为姓氏
+            const spaceMatch = author.match(/^(\S+)/);
+            return spaceMatch ? spaceMatch[1] : author;
+        });
+
+        // 如果只有 2 位作者，使用 "A and B" 格式
+        if (!hasMore && authorList.length === 2) {
+            return `${formattedAuthors[0]} and ${formattedAuthors[1]}`;
+        }
+
+        // 多位作者：用逗号连接，最后加省略号（如果有更多）
+        let result = formattedAuthors.join(', ');
+        if (hasMore) {
+            result += ', ...';
+        }
+
+        return result;
     }
 
     /**
@@ -293,6 +342,8 @@ class DoiCacheManager {
     /**
      * 搜索 DOI
      * 在 doi, title, authors, year 四个字段中进行模糊匹配
+     * 支持多条件组合查询：空格分隔的多个关键词（AND 逻辑）
+     * 例如：'2023 li the' 表示必须同时包含 2023、li 和 the
      */
     async searchDoi(searchText, options = {}) {
         const maxResults = options.maxResults || 20;
@@ -307,14 +358,28 @@ class DoiCacheManager {
             return cacheData.slice(0, maxResults);
         }
 
-        const search = searchText.toLowerCase().trim();
+        // 多条件组合查询：用空格分隔多个关键词
+        const keywords = searchText
+            .toLowerCase()
+            .trim()
+            .split(/\s+/)  // 按空格分割
+            .map(k => k.trim())
+            .filter(k => k.length > 0);  // 过滤空关键词
 
-        // 模糊匹配：任一字段包含搜索文本即匹配
+        // 多条件匹配：所有关键词都必须在某个字段中出现（AND 逻辑）
         const matches = cacheData.filter(item => {
-            return item.doi.toLowerCase().includes(search) ||
-                   item.title.toLowerCase().includes(search) ||
-                   item.authors.toLowerCase().includes(search) ||
-                   item.year.toLowerCase().includes(search);
+            if (keywords.length === 0) return true;
+
+            // 合并所有可搜索字段为一个字符串
+            const searchableText = [
+                item.doi.toLowerCase(),
+                item.title.toLowerCase(),
+                item.authors.toLowerCase(),
+                item.year.toLowerCase()
+            ].join(' ');
+
+            // 所有关键词都必须出现在搜索文本中
+            return keywords.every(keyword => searchableText.includes(keyword));
         });
 
         return matches.slice(0, maxResults);
