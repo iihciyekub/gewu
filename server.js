@@ -36,7 +36,7 @@ const ALLOWED_ROOTS = (() => {
         .map(s => s.trim())
         .filter(Boolean)
         .map(p => path.resolve(p));
-    const defaults = [ROOT_DIR, os.homedir(), fsRoot].filter(Boolean);
+    const defaults = [ROOT_DIR, path.join(fsRoot, 'data')].filter(Boolean);
     const roots = envRoots.length ? envRoots : defaults;
     return Array.from(new Set(roots));
 })();
@@ -136,10 +136,13 @@ function ensurePromptManifest() {
         try {
             const raw = fs.readFileSync(CUSTOM_MANIFEST_PATH, 'utf8');
             const parsed = JSON.parse(raw);
-            const groups = groupsFromManifestJson(parsed);
-            if (Object.keys(groups).length) {
-                promptManifestCache = groups;
-                return;
+            // 如果 manifest.json 包含 groups 或 src 字段，使用它们
+            if (parsed.groups || parsed.src) {
+                const groups = groupsFromManifestJson(parsed);
+                if (Object.keys(groups).length) {
+                    promptManifestCache = groups;
+                    return;
+                }
             }
         } catch (err) {
             console.error('✗ Failed to read custom manifest.json:', err);
@@ -149,9 +152,13 @@ function ensurePromptManifest() {
     // fallback 自动扫描
     promptManifestCache = buildPromptManifest();
 
-    // 写出自动生成的 manifest 供前端静态兜底使用
+    // 写出简化的 manifest.json 仅用于版本信息，不包含 groups
     try {
-        const payload = JSON.stringify({ success: true, groups: promptManifestCache }, null, 2);
+        const payload = JSON.stringify({
+            name: 'Enlightenkey',
+            version: '1.0.0',
+            dockerHub: 'https://hub.docker.com/repository/docker/iihciyekub/enlightenkey/general'
+        }, null, 2);
         fs.writeFileSync(CUSTOM_MANIFEST_PATH, payload, 'utf8');
     } catch (err) {
         console.error('✗ Failed to write prompt manifest:', err);

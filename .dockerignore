@@ -2,6 +2,7 @@
 .gitignore
 .DS_Store
 node_modules
+projects
 user
 *.code-workspace
 *.log

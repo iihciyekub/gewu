@@ -1626,14 +1626,19 @@ class PaperStatsApp {
             const resp = await fetch('manifest.json', { cache: 'no-store' });
             if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
             const data = await resp.json();
+            const name = String(data?.name || 'Enlightenkey').trim();
             const version = String(data?.version || '').trim();
+            const dockerHub = String(data?.dockerHub || '').trim();
             if (!version) return;
-            const label = `Enlightenkey ${version}`;
+            const label = `${name} ${version}`;
             labelEl.textContent = label;
-            const iconLink = document.querySelector('.status-version-icon');
-            if (iconLink) {
-                iconLink.title = `Docker Hub: ${label}`;
-                iconLink.setAttribute('aria-label', `Docker Hub: ${label}`);
+            const versionGroup = document.getElementById('statusVersionGroup');
+            if (versionGroup) {
+                if (dockerHub) {
+                    versionGroup.href = dockerHub;
+                }
+                versionGroup.title = `Docker Hub: ${label}`;
+                versionGroup.setAttribute('aria-label', `Docker Hub: ${label}`);
             }
         } catch (err) {
             console.warn('Failed to load manifest version:', err);
