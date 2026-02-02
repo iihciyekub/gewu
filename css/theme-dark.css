@@ -14,7 +14,7 @@
 body.theme-dark {
     --wos-blue: #2472c8;
     --wos-blue-light: #3b8eea;
-    --wos-blue-dark: #1e4976;
+    --wos-blue-dark: #252525;
     --wos-orange: #ce9178;
     --wos-orange-light: #d7ba7d;
     --wos-bg: var(--vscode-bg);
@@ -1248,7 +1248,7 @@ body.theme-dark .status-bar {
 }
 
 body.theme-dark .status-left-icon {
-    background: #161616;
+    background: var(--wos-blue-dark);
     color: var(--vscode-text);
 }
 
@@ -1266,7 +1266,8 @@ body.theme-dark .status-btn:hover {
 }
 
 body.theme-dark .status-bar .project-name-btn {
-    color: var(--vscode-text);
+    background: var(--wos-blue-dark);
+    color: #00e98c !important;
 }
 
 body.theme-dark .status-bar .project-name-btn:hover {
@@ -1274,20 +1275,20 @@ body.theme-dark .status-bar .project-name-btn:hover {
 }
 
 body.theme-dark .status-version-group {
-    background: #1e4d3a;
+    background: #00ff99;
     color: #04d798;
 }
 
 body.theme-dark .status-version-group:hover {
-    background: #2a5f4a;
+    background: #00e98c;
 }
 
 body.theme-dark .status-version-icon {
-    color: #04d798;
+    color: #000000;
 }
 
 body.theme-dark .status-version {
-    color: #04d798;
+    color: #000000;
 }
 
 body.theme-dark .status-bar .tab-btn {

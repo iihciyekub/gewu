@@ -359,9 +359,6 @@
                     <button class="btn-switch-project" id="addGroupBtn" title="Create new group">
                         <i class="fas fa-layer-group"></i>
                     </button>
-                    <button class="btn-switch-project" id="autoSaveConfigToggleBtn" title="Auto save config">
-                        <i class="fas fa-floppy-disk"></i>
-                    </button>
                     <div class="header-dropdown" id="importMenuDropdown">
                         <button class="btn-switch-project" id="importMenuToggleBtn" title="Import">
                             <i class="fas fa-file-import"></i>
@@ -694,9 +691,9 @@
                 <button class="status-btn" id="statusToggleSourceBtn" type="button" title="Toggle Markdown Source (Cmd/Ctrl+/)">
                     <i class="fa-solid fa-person-chalkboard"></i>
                 </button>
-                <button class="status-btn" id="statusSaveBtn" type="button" title="Save (Cmd/Ctrl+S)">
+                <!-- <button class="status-btn" id="statusSaveBtn" type="button" title="Save (Cmd/Ctrl+S)">
                     <i class="fas fa-save"></i>
-                </button>
+                </button> -->
                 <div class="header-dropdown" id="jsonMenuDropdown">
                     <button id="jsonMenuToggleBtn" class="btn header-icon-only" type="button" title="JSON Menu"
                         aria-label="JSON Menu">
@@ -722,6 +719,11 @@
                         <button class="header-dropdown-item" id="jsonSaveItem" type="button" role="menuitem"
                             title="Save JSON (Ctrl+S)">
                             <i class="fas fa-save"></i><span>Save JSON</span>
+                        </button>
+                        <div class="header-dropdown-divider"></div>
+                        <button class="header-dropdown-item" id="fixAllJsonDoisBtn" type="button" role="menuitem"
+                            title="Batch fix meta_info.doi in all JSON files (extract and normalize)">
+                            <i class="fas fa-wrench"></i><span>Fix All JSON DOIs</span>
                         </button>
                     </div>
                 </div>
@@ -758,6 +760,11 @@
                         <button class="header-dropdown-item" id="mdDeleteItem" type="button" role="menuitem"
                             title="Delete Markdown File">
                             <i class="fas fa-trash"></i><span>Delete MD File</span>
+                        </button>
+                        <div class="header-dropdown-divider"></div>
+                        <button class="header-dropdown-item" id="fixAllMdDoisBtn" type="button" role="menuitem"
+                            title="Batch fix DOIs in all MD files (remove path components)">
+                            <i class="fas fa-wrench"></i><span>Fix All MD DOIs</span>
                         </button>
                     </div>
                 </div>
@@ -839,16 +846,6 @@
                         <span>Auto Save Settings</span>
                     </button>
                     <div class="header-dropdown-divider"></div>
-                    <button class="header-dropdown-item" id="fixAllMdDoisBtn" type="button" role="menuitem"
-                        title="Batch fix DOIs in all MD files (remove path components)">
-                        <i class="fas fa-wrench"></i>
-                        <span>Fix All MD DOIs</span>
-                    </button>
-                    <button class="header-dropdown-item" id="fixAllJsonDoisBtn" type="button" role="menuitem"
-                        title="Batch fix meta_info.doi in all JSON files (extract and normalize)">
-                        <i class="fas fa-wrench"></i>
-                        <span>Fix All JSON DOIs</span>
-                    </button>
                     <button class="header-dropdown-item" id="refreshDoiCacheBtn" type="button" role="menuitem"
                         title="Refresh DOI autocomplete cache (rebuild with latest data)">
                         <i class="fas fa-sync-alt"></i>

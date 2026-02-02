@@ -5,7 +5,7 @@
     /* WoS 专业配色 */
     --wos-blue: #003E74;
     --wos-blue-light: #0066CC;
-    --wos-blue-dark: #002952;
+    --wos-blue-dark: #252525;
     --wos-orange: #FF6A00;
     --wos-orange-light: #FF8533;
     --wos-bg: #FFFFFF;
@@ -162,13 +162,12 @@ body {
 
 
 .panel-header {
-    padding: 6px 8px;
     background: var(--wos-blue);
     border-bottom: 1px solid var(--gray-300);
     font-weight: 600;
-    font-size: 11px;
+    font-size: 10px;
     color: white;
-    height: 7mm;
+    height: 20px;
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -211,6 +210,12 @@ body {
     align-items: center;
     gap: 4px;
     margin-left: auto;
+}
+
+/* 移除 panel-header-actions 下按钮的聚焦外线框 */
+.panel-header-actions button:focus,
+.panel-header-actions button:focus-visible {
+    outline: none;
 }
 
 #currentProjectName {
@@ -278,6 +283,11 @@ body {
 .btn-switch-project.active {
     background: rgba(255, 255, 255, 0.2);
     border: 1px solid rgba(255, 255, 255, 0.35);
+}
+
+/* 隐藏自动保存配置按钮 */
+#autoSaveConfigToggleBtn {
+    display: none;
 }
 
 .file-filter {
@@ -969,7 +979,7 @@ body {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    background: #1f1f1f;
+    background: var(--wos-blue);
     color: #ffffff;
     flex-shrink: 0;
 }
@@ -1160,7 +1170,7 @@ body {
 }
 
 .status-bar .tab-btn {
-    height: 16px;
+    height: 12px;
     padding: 0 8px;
     font-size: 9px;
     min-width: 40px;
@@ -3189,7 +3199,7 @@ body.theme-vscode .qa-bubble {
     height: 16px;
     font-size: 9px;
     color: #ffffff;
-    background: #1f1f1f;
+    background: var(--wos-blue);
     cursor: pointer;
 }
 
@@ -3704,7 +3714,7 @@ body.theme-vscode .qa-bubble {
 .resizer {
     width: 4px;
     cursor: col-resize;
-    background: #173D70;
+    background: var(--wos-blue);
     position: relative;
     flex-shrink: 0;
     transition: background 0.15s ease;
