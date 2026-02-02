@@ -6964,8 +6964,6 @@ class PaperStatsApp {
         }
     }
 
-    // WOS import logic moved to js/wos-import.js
-
     coalesceRecordValue(record = {}, tag) {
         const val = record?.[tag];
         if (Array.isArray(val)) return val.join(' ').trim();
@@ -9153,6 +9151,12 @@ class PaperStatsApp {
         this.toggleMarkdownEdit(true);
         const mdTextarea = document.getElementById('markdownTextarea');
         if (mdTextarea) mdTextarea.focus();
+    }
+
+    async goToDraftSource() {
+        // Draft 视图的源码切换逻辑与 Markdown 视图相同
+        // goToMarkdownSource 已经通过 isDraftViewActive 处理了 Draft 视图
+        await this.goToMarkdownSource();
     }
 
     async toggleJsonMdSource() {
