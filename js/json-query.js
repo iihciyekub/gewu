@@ -127,50 +127,82 @@
                 return;
             }
             block.innerHTML = '<div class="groupby-loading">Querying...</div>';
-            const result = await this.queryJsonItems({ groupsRaw, fieldsRaw });
-            const items = result?.items || [];
-            const jsonText = JSON.stringify(items, null, 2);
-            const wrapper = document.createElement('div');
-            wrapper.className = 'groupby-box';
-            const header = document.createElement('div');
-            header.className = 'groupby-header';
-            const title = document.createElement('div');
-            title.className = 'groupby-title';
-            title.textContent = `JSON (${items.length} / ${result?.total || 0})`;
-            const actions = document.createElement('div');
-            actions.className = 'groupby-actions';
-            const toggleBtn = document.createElement('button');
-            toggleBtn.className = 'groupby-toggle-btn';
-            toggleBtn.type = 'button';
-            toggleBtn.setAttribute('aria-label', 'Collapse results');
-            toggleBtn.innerHTML = '<i class="fas fa-chevron-up"></i>';
-            const copyBtn = document.createElement('button');
-            copyBtn.className = 'groupby-copy-btn';
-            copyBtn.innerHTML = '<i class="fas fa-copy"></i><span>Copy JSON</span>';
-            copyBtn.addEventListener('click', async () => {
-                await this.writeTextToClipboard(jsonText);
-                this.flashCopyButton(copyBtn);
-                this.showNotification('JSON copied', 'success');
-            });
-            header.appendChild(toggleBtn);
-            actions.appendChild(copyBtn);
-            header.appendChild(title);
-            header.appendChild(actions);
-            wrapper.appendChild(header);
-            const body = document.createElement('div');
-            body.className = 'groupby-table groupby-json';
-            body.innerHTML = `<pre class="groupby-json-pre">${this.escapeHtml(jsonText || '')}</pre>`;
-            wrapper.appendChild(body);
-            toggleBtn.addEventListener('click', () => {
-                wrapper.classList.toggle('groupby-collapsed');
-                const collapsed = wrapper.classList.contains('groupby-collapsed');
-                toggleBtn.innerHTML = collapsed
-                    ? '<i class="fas fa-chevron-down"></i>'
-                    : '<i class="fas fa-chevron-up"></i>';
-                toggleBtn.setAttribute('aria-label', collapsed ? 'Expand results' : 'Collapse results');
-            });
-            block.innerHTML = '';
-            block.appendChild(wrapper);
+
+            try {
+                const result = await this.queryJsonItems({ groupsRaw, fieldsRaw });
+                const items = result?.items || [];
+                const totalItems = items.length;
+                const displayLimit = 25;
+                const itemsToDisplay = items.slice(0, displayLimit);
+                const isTruncated = totalItems > displayLimit;
+
+                const jsonTextFull = JSON.stringify(items, null, 2);
+                const jsonTextDisplay = isTruncated
+                    ? JSON.stringify(itemsToDisplay, null, 2)
+                    : jsonTextFull;
+
+                const wrapper = document.createElement('div');
+                wrapper.className = 'groupby-box';
+                const header = document.createElement('div');
+                header.className = 'groupby-header';
+                const title = document.createElement('div');
+                title.className = 'groupby-title';
+                title.textContent = isTruncated
+                    ? `JSON (showing ${displayLimit} of ${totalItems} / ${result?.total || 0})`
+                    : `JSON (${totalItems} / ${result?.total || 0})`;
+                const actions = document.createElement('div');
+                actions.className = 'groupby-actions';
+                const toggleBtn = document.createElement('button');
+                toggleBtn.className = 'groupby-toggle-btn';
+                toggleBtn.type = 'button';
+                toggleBtn.setAttribute('aria-label', 'Collapse results');
+                toggleBtn.innerHTML = '<i class="fas fa-chevron-up"></i>';
+                const copyBtn = document.createElement('button');
+                copyBtn.className = 'groupby-copy-btn';
+                copyBtn.innerHTML = '<i class="fas fa-copy"></i><span>Copy JSON</span>';
+                copyBtn.title = isTruncated
+                    ? `Copy all ${totalItems} items (displayed: ${displayLimit})`
+                    : 'Copy JSON to clipboard';
+                copyBtn.addEventListener('click', async () => {
+                    try {
+                        await this.writeTextToClipboard(jsonTextFull);
+                        this.flashCopyButton(copyBtn);
+                        this.showNotification(isTruncated
+                            ? `All ${totalItems} items copied`
+                            : 'JSON copied', 'success');
+                    } catch (err) {
+                        this.showNotification(`Copy failed: ${err.message}`, 'error');
+                    }
+                });
+                header.appendChild(toggleBtn);
+                actions.appendChild(copyBtn);
+                header.appendChild(title);
+                header.appendChild(actions);
+                wrapper.appendChild(header);
+                const body = document.createElement('div');
+                body.className = 'groupby-table groupby-json';
+                body.innerHTML = `<pre class="groupby-json-pre">${this.escapeHtml(jsonTextDisplay || '')}</pre>`;
+                if (isTruncated) {
+                    const truncateHint = document.createElement('div');
+                    truncateHint.className = 'groupby-truncate-hint';
+                    truncateHint.textContent = `... and ${totalItems - displayLimit} more items (use Copy button to get all data)`;
+                    body.appendChild(truncateHint);
+                }
+                wrapper.appendChild(body);
+                toggleBtn.addEventListener('click', () => {
+                    wrapper.classList.toggle('groupby-collapsed');
+                    const collapsed = wrapper.classList.contains('groupby-collapsed');
+                    toggleBtn.innerHTML = collapsed
+                        ? '<i class="fas fa-chevron-down"></i>'
+                        : '<i class="fas fa-chevron-up"></i>';
+                    toggleBtn.setAttribute('aria-label', collapsed ? 'Expand results' : 'Collapse results');
+                });
+                block.innerHTML = '';
+                block.appendChild(wrapper);
+            } catch (err) {
+                console.warn('JSON query render failed:', err);
+                block.innerHTML = `<div class="groupby-error">JSON query failed: ${this.escapeHtml(err.message || String(err))}</div>`;
+            }
         };
 
         return true;
