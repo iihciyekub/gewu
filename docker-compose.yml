@@ -10,9 +10,10 @@ services:
     environment:
       HOST: 0.0.0.0
       PORT: 8000
-      ALLOWED_ROOTS: /data
+      ALLOWED_ROOTS: /data,/home/node
     volumes:
       - ./projects:/data
+      - ./home:/home/node
     healthcheck:
       test:
         - CMD-SHELL

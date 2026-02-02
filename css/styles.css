@@ -4861,6 +4861,18 @@ body.theme-vscode .bib-collapse-btn:hover {
 .header-dropdown-item i {
     font-size: 12px;
     color: var(--wos-blue);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 18px;
+    width: 18px;
+    height: 18px;
+    line-height: 1;
+}
+
+.header-dropdown-item span {
+    display: inline-block;
+    vertical-align: middle;
 }
 
 body.theme-vscode .header-dropdown-menu {

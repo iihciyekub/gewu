@@ -43,7 +43,7 @@ body.theme-dark .panel-header,
 body.theme-dark .middle-header,
 body.theme-dark .file-filter,
 body.theme-dark .section-header {
-    background: #202225;
+    background: var(--wos-blue-dark);
     border-color: var(--vscode-border);
     color: var(--vscode-text);
 }
@@ -598,7 +598,23 @@ body.theme-dark .header-dropdown-item:hover {
 }
 
 body.theme-dark .header-dropdown-item i {
-    color: var(--vscode-accent);
+    color: var(--vscode-text);
+}
+
+/* Ensure icons align in dark theme too */
+body.theme-dark .header-dropdown-item i {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 18px;
+    width: 18px;
+    height: 18px;
+    line-height: 1;
+}
+
+body.theme-dark .header-dropdown-item span {
+    display: inline-block;
+    vertical-align: middle;
 }
 
 body.theme-dark .right-panel {

@@ -199,8 +199,10 @@
                 <span>Select Project Folder</span>
             </div>
             <div class="modal-body">
-                <div style="margin-bottom: 20px; border-bottom: 1px solid #e0e0e0; padding-bottom: 20px; display: none;">
-                    <h4 style="margin-top: 0; margin-bottom: 12px; font-size: 14px; font-weight: 600;">Create New Project</h4>
+                <div
+                    style="margin-bottom: 20px; border-bottom: 1px solid #e0e0e0; padding-bottom: 20px; display: none;">
+                    <h4 style="margin-top: 0; margin-bottom: 12px; font-size: 14px; font-weight: 600;">Create New
+                        Project</h4>
                     <p style="font-size: 12px; color: var(--gray-600); margin-bottom: 12px;">
                         Click the button below, the system will guide you to select a directory and enter a project name
                     </p>
@@ -212,12 +214,14 @@
                 <div class="form-group">
                     <div class="path-input-group">
                         <input type="text" id="projectPathInput" placeholder="Enter full path, e.g.: /path/to/project">
-                        <button class="btn btn-browse" onclick="window.paperStats.browseAndFillPath()" title="Browse to select directory">
+                        <button class="btn btn-browse" onclick="window.paperStats.browseAndFillPath()"
+                            title="Browse to select directory">
                             <i class="fas fa-folder-open"></i> Browse
                         </button>
                     </div>
                     <input type="file" id="projectFolderBrowser" webkitdirectory directory style="display: none;">
-                    <small class="hint">💡 Tip: Click "Browse" to select a directory (can be empty), or directly enter the full path. Required folders will be auto-created.</small>
+                    <small class="hint">💡 Tip: Click "Browse" to select a directory (can be empty), or directly enter
+                        the full path. Required folders will be auto-created.</small>
                 </div>
 
                 <div class="recent-projects" id="recentProjectsList" style="display: none;">
@@ -245,9 +249,11 @@
             </div>
             <div class="modal-body">
                 <p style="font-size: 12px; color: var(--gray-700); margin-top: 0;">
-                    Paste text containing DOIs, click "Extract/Format" to automatically extract and separate by lines using regex.
+                    Paste text containing DOIs, click "Extract/Format" to automatically extract and separate by lines
+                    using regex.
                 </p>
-                <textarea id="doiInput" rows="8" placeholder="如：&#10;10.1145/1234567&#10;https://doi.org/10.1000/xyz123"></textarea>
+                <textarea id="doiInput" rows="8"
+                    placeholder="如：&#10;10.1145/1234567&#10;https://doi.org/10.1000/xyz123"></textarea>
                 <div class="doi-actions">
                     <button class="btn" id="doiExtractBtn">
                         <i class="fas fa-magic"></i> Extract/Format
@@ -283,7 +289,8 @@
                     </div>
                     <div class="mode-info">
                         <h4>Intersection Update (Join)</h4>
-                        <p>Only processes JSON files with the same name that already exist in the current view. Updates existing fields by intersection, without adding new files or fields.</p>
+                        <p>Only processes JSON files with the same name that already exist in the current view. Updates
+                            existing fields by intersection, without adding new files or fields.</p>
                     </div>
                     <div class="mode-action">
                         <button class="btn btn-primary" onclick="window.paperStats.selectImportMode('join')">
@@ -297,7 +304,8 @@
                     </div>
                     <div class="mode-info">
                         <h4>Union Update (Union)</h4>
-                        <p>Merges files with the same name and adds missing fields, while importing non-existent files to the target directory.</p>
+                        <p>Merges files with the same name and adds missing fields, while importing non-existent files
+                            to the target directory.</p>
                     </div>
                     <div class="mode-action">
                         <button class="btn btn-primary" onclick="window.paperStats.selectImportMode('union')">
@@ -324,7 +332,8 @@
             <div class="modal-body">
                 <div class="json-target-info">
                     <i class="fas fa-info-circle"></i>
-                    <p>Select which <code>json/</code> subdirectory to import external JSON files into. If no subdirectory exists, the default directory will be used.</p>
+                    <p>Select which <code>json/</code> subdirectory to import external JSON files into. If no
+                        subdirectory exists, the default directory will be used.</p>
                 </div>
                 <div class="json-target-list" id="jsonTargetList">
                     <!-- Dynamically populated subdirectory options -->
@@ -332,7 +341,8 @@
                 <div class="form-group" style="margin-top: 12px;">
                     <label for="jsonTargetInput">Custom subdirectory (optional):</label>
                     <input type="text" id="jsonTargetInput" placeholder="e.g., json/imported or json/view1/new">
-                    <small class="hint">Leave empty to use selection above; no need for leading slash, system will automatically add <code>json/</code></small>
+                    <small class="hint">Leave empty to use selection above; no need for leading slash, system will
+                        automatically add <code>json/</code></small>
                 </div>
             </div>
             <div class="modal-footer">
@@ -367,8 +377,8 @@
                                 title="Import and merge JSON directory (same name files only)">
                                 <i class="fas fa-file-import"></i><span>Import JSON Directory</span>
                             </button>
-                            <button class="header-dropdown-item" id="importJsonFileMenuItem" type="button" role="menuitem"
-                                title="Import single JSON and merge by DOI">
+                            <button class="header-dropdown-item" id="importJsonFileMenuItem" type="button"
+                                role="menuitem" title="Import single JSON and merge by DOI">
                                 <i class="fas fa-file-import"></i><span>Import JSON File</span>
                             </button>
                             <button class="header-dropdown-item" id="importPdfMenuItem" type="button" role="menuitem"
@@ -427,242 +437,292 @@
                     <div class="empty-state">
                         <i class="fas fa-code"></i>
                         <h3>No File Selected</h3>
-                    <p>Select a JSON file from the left panel to view raw JSON</p>
+                        <p>Select a JSON file from the left panel to view raw JSON</p>
+                    </div>
                 </div>
-            </div>
-            <div class="settings-view" id="settingsView">
-                <div class="settings-content is-empty" id="settingsContent">
-                    <div class="settings-section settings-panel file-filter-settings-panel" id="fileFilterSettingsPanel">
-                        <div class="settings-panel-header">
-                            <span>File Filter</span>
-                            <button class="btn btn-secondary" type="button" onclick="window.paperStats.toggleFileFilter(false)">
-                                <i class="fas fa-eye-slash"></i> Hide
-                            </button>
-                        </div>
-                        <div class="file-filter" id="fileFilterContainer">
-                            <div class="file-filter-row">
-                                <button class="file-filter-icon-btn" type="button" aria-label="Search">
-                                    <i class="fas fa-search"></i>
+                <div class="settings-view" id="settingsView">
+                    <div class="settings-content is-empty" id="settingsContent">
+                        <div class="settings-section settings-panel file-filter-settings-panel"
+                            id="fileFilterSettingsPanel">
+                            <div class="settings-panel-header">
+                                <span>File Filter</span>
+                                <button class="btn btn-secondary" type="button"
+                                    onclick="window.paperStats.toggleFileFilter(false)">
+                                    <i class="fas fa-eye-slash"></i> Hide
                                 </button>
-                                <div class="file-filter-title">Quick filter (by filename)</div>
                             </div>
-                            <div class="file-filter-input-row">
-                                <button class="file-filter-run-btn" id="fileFilterRunBtn" type="button" title="Run filter" aria-label="Run filter">
-                                    <i class="fas fa-play"></i>
+                            <div class="file-filter" id="fileFilterContainer">
+                                <div class="file-filter-row">
+                                    <button class="file-filter-icon-btn" type="button" aria-label="Search">
+                                        <i class="fas fa-search"></i>
+                                    </button>
+                                    <div class="file-filter-title">Quick filter (by filename)</div>
+                                </div>
+                                <div class="file-filter-input-row">
+                                    <button class="file-filter-run-btn" id="fileFilterRunBtn" type="button"
+                                        title="Run filter" aria-label="Run filter">
+                                        <i class="fas fa-play"></i>
+                                    </button>
+                                    <input type="text" id="fileFilterInput" placeholder="Filter files..."
+                                        autocomplete="off">
+                                </div>
+                                <div class="file-filter-condition-panel">
+                                    <div class="file-filter-condition-header">
+                                        <span>Field conditions</span>
+                                        <button class="btn btn-secondary" id="fileFilterAddConditionBtn" type="button">
+                                            <i class="fas fa-plus"></i> Add condition
+                                        </button>
+                                    </div>
+                                    <div class="file-filter-condition-list" id="fileFilterConditions"></div>
+                                    <div class="file-filter-condition-hint">Combine conditions with AND / OR</div>
+                                </div>
+                                <div class="file-filter-history">
+                                    <div class="file-filter-history-header">
+                                        <span>History</span>
+                                        <button class="btn btn-secondary" id="fileFilterHistoryClearBtn" type="button">
+                                            <i class="fas fa-trash"></i> Clear
+                                        </button>
+                                    </div>
+                                    <div class="file-filter-history-list" id="fileFilterHistoryList"></div>
+                                    <div class="file-filter-history-empty" id="fileFilterHistoryEmpty">No saved filters
+                                        yet.</div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="settings-section settings-panel api-settings-panel" id="apiSettingsPanel">
+                            <div class="settings-panel-header">
+                                <span>API Settings</span>
+                                <button class="btn btn-secondary" type="button"
+                                    onclick="window.paperStats.toggleApiSettingsPanel(false)">
+                                    <i class="fas fa-eye-slash"></i> Hide
                                 </button>
-                                <input type="text" id="fileFilterInput" placeholder="Filter files..." autocomplete="off">
                             </div>
-                            <div class="file-filter-condition-panel">
-                                <div class="file-filter-condition-header">
-                                    <span>Field conditions</span>
-                                    <button class="btn btn-secondary" id="fileFilterAddConditionBtn" type="button">
-                                        <i class="fas fa-plus"></i> Add condition
-                                    </button>
+                            <div class="settings-field-list">
+                                <div class="settings-field-row">
+                                    <label for="openaiApiInput">OpenAI API</label>
+                                    <input type="text" id="openaiApiInput" placeholder="Enter OpenAI API key">
                                 </div>
-                                <div class="file-filter-condition-list" id="fileFilterConditions"></div>
-                                <div class="file-filter-condition-hint">Combine conditions with AND / OR</div>
-                            </div>
-                            <div class="file-filter-history">
-                                <div class="file-filter-history-header">
-                                    <span>History</span>
-                                    <button class="btn btn-secondary" id="fileFilterHistoryClearBtn" type="button">
-                                        <i class="fas fa-trash"></i> Clear
-                                    </button>
+                                <div class="settings-field-hint">API values are stored locally and masked after editing.
                                 </div>
-                                <div class="file-filter-history-list" id="fileFilterHistoryList"></div>
-                                <div class="file-filter-history-empty" id="fileFilterHistoryEmpty">No saved filters yet.</div>
                             </div>
                         </div>
-                    </div>
-                    <div class="settings-section settings-panel api-settings-panel" id="apiSettingsPanel">
-                        <div class="settings-panel-header">
-                            <span>API Settings</span>
-                            <button class="btn btn-secondary" type="button" onclick="window.paperStats.toggleApiSettingsPanel(false)">
-                                <i class="fas fa-eye-slash"></i> Hide
-                            </button>
-                        </div>
-                        <div class="settings-field-list">
-                            <div class="settings-field-row">
-                                <label for="openaiApiInput">OpenAI API</label>
-                                <input type="text" id="openaiApiInput" placeholder="Enter OpenAI API key">
+                        <div class="settings-section settings-panel create-group-settings-panel"
+                            id="createGroupSettingsPanel">
+                            <div class="settings-panel-header">
+                                <span>Create Group</span>
+                                <button class="btn btn-secondary" type="button"
+                                    onclick="window.paperStats.toggleCreateGroupPanel(false)">
+                                    <i class="fas fa-eye-slash"></i> Hide
+                                </button>
                             </div>
-                            <div class="settings-field-hint">API values are stored locally and masked after editing.</div>
+                            <div class="form-group">
+                                <label for="groupNamesInput">Group Names:</label>
+                                <textarea id="groupNamesInput"
+                                    placeholder="Enter group names, support batch creation (one per line)&#10;Example:&#10;Papers to Review&#10;Completed Papers&#10;Papers for Discussion"
+                                    rows="8"
+                                    style="font-family: inherit; font-size: 10px; line-height: 1.6;"></textarea>
+                                <small class="hint">💡 Tip: Enter one group name per line, empty lines will be
+                                    ignored</small>
+                            </div>
+                            <div class="create-group-preview" id="groupPreview" style="display: none;">
+                                <h4><i class="fas fa-eye"></i> Preview</h4>
+                                <div class="group-preview-list" id="groupPreviewList"></div>
+                            </div>
+                            <div class="modal-footer">
+                                <button class="btn btn-cancel"
+                                    onclick="window.paperStats.closeCreateGroupDialog()">Cancel</button>
+                                <button class="btn btn-primary" id="confirmCreateGroupBtn">
+                                    <i class="fas fa-check"></i> Create Groups
+                                </button>
+                            </div>
                         </div>
-                    </div>
-                    <div class="settings-section settings-panel create-group-settings-panel" id="createGroupSettingsPanel">
-                        <div class="settings-panel-header">
-                            <span>Create Group</span>
-                            <button class="btn btn-secondary" type="button" onclick="window.paperStats.toggleCreateGroupPanel(false)">
-                                <i class="fas fa-eye-slash"></i> Hide
-                            </button>
+                        <div class="settings-section settings-panel project-info-settings-panel" id="projectInfoPanel">
+                            <div class="settings-panel-header">
+                                <span>Project Info</span>
+                                <button class="btn btn-secondary" type="button"
+                                    onclick="window.paperStats.toggleProjectInfoPanel(false)">
+                                    <i class="fas fa-eye-slash"></i> Hide
+                                </button>
+                            </div>
+                            <div class="info-body" id="projectInfoBody">Loading...</div>
                         </div>
-                        <div class="form-group">
-                            <label for="groupNamesInput">Group Names:</label>
-                            <textarea id="groupNamesInput"
-                                placeholder="Enter group names, support batch creation (one per line)&#10;Example:&#10;Papers to Review&#10;Completed Papers&#10;Papers for Discussion"
-                                rows="8"
-                                style="font-family: inherit; font-size: 10px; line-height: 1.6;"></textarea>
-                            <small class="hint">💡 Tip: Enter one group name per line, empty lines will be ignored</small>
+                        <div class="settings-section settings-panel third-party-info-settings-panel"
+                            id="thirdPartyInfoPanel">
+                            <div class="settings-panel-header">
+                                <span>Third-party JS Info</span>
+                                <button class="btn btn-secondary" type="button"
+                                    onclick="window.paperStats.toggleThirdPartyInfoPanel(false)">
+                                    <i class="fas fa-eye-slash"></i> Hide
+                                </button>
+                            </div>
+                            <div class="info-body" id="thirdPartyInfoBody">Loading...</div>
                         </div>
-                        <div class="create-group-preview" id="groupPreview" style="display: none;">
-                            <h4><i class="fas fa-eye"></i> Preview</h4>
-                            <div class="group-preview-list" id="groupPreviewList"></div>
+                        <div class="settings-section settings-panel shortcuts-info-settings-panel"
+                            id="shortcutsInfoPanel">
+                            <div class="settings-panel-header">
+                                <span>Shortcuts</span>
+                                <button class="btn btn-secondary" type="button"
+                                    onclick="window.paperStats.toggleShortcutsPanel(false)">
+                                    <i class="fas fa-eye-slash"></i> Hide
+                                </button>
+                            </div>
+                            <div class="info-body" id="shortcutsInfoBody">Loading...</div>
                         </div>
-                        <div class="modal-footer">
-                            <button class="btn btn-cancel" onclick="window.paperStats.closeCreateGroupDialog()">Cancel</button>
-                            <button class="btn btn-primary" id="confirmCreateGroupBtn">
-                                <i class="fas fa-check"></i> Create Groups
-                            </button>
+                        <div class="settings-section settings-panel auto-save-settings-panel" id="autoSaveConfigPanel">
+                            <div class="settings-panel-header">
+                                <span>Auto Save Config</span>
+                                <button class="btn btn-secondary" type="button"
+                                    onclick="window.paperStats.toggleAutoSaveConfigPanel(false)">
+                                    <i class="fas fa-eye-slash"></i> Hide
+                                </button>
+                            </div>
+                            <div class="auto-save-config-body" id="autoSaveConfigBody">
+                                <!-- Dynamic content will be inserted here -->
+                            </div>
                         </div>
-                    </div>
-                    <div class="settings-section settings-panel project-info-settings-panel" id="projectInfoPanel">
-                        <div class="settings-panel-header">
-                            <span>Project Info</span>
-                            <button class="btn btn-secondary" type="button" onclick="window.paperStats.toggleProjectInfoPanel(false)">
-                                <i class="fas fa-eye-slash"></i> Hide
-                            </button>
+                        <div class="settings-section settings-panel about-settings-panel" id="aboutPanel">
+                            <div class="settings-panel-header">
+                                <span>About</span>
+                                <button class="btn btn-secondary" type="button"
+                                    onclick="window.paperStats.toggleAboutPanel(false)">
+                                    <i class="fas fa-eye-slash"></i> Hide
+                                </button>
+                            </div>
+                            <div class="info-body" id="aboutBody">Loading...</div>
                         </div>
-                        <div class="info-body" id="projectInfoBody">Loading...</div>
-                    </div>
-                    <div class="settings-section settings-panel third-party-info-settings-panel" id="thirdPartyInfoPanel">
-                        <div class="settings-panel-header">
-                            <span>Third-party JS Info</span>
-                            <button class="btn btn-secondary" type="button" onclick="window.paperStats.toggleThirdPartyInfoPanel(false)">
-                                <i class="fas fa-eye-slash"></i> Hide
-                            </button>
-                        </div>
-                        <div class="info-body" id="thirdPartyInfoBody">Loading...</div>
-                    </div>
-                    <div class="settings-section settings-panel shortcuts-info-settings-panel" id="shortcutsInfoPanel">
-                        <div class="settings-panel-header">
-                            <span>Shortcuts</span>
-                            <button class="btn btn-secondary" type="button" onclick="window.paperStats.toggleShortcutsPanel(false)">
-                                <i class="fas fa-eye-slash"></i> Hide
-                            </button>
-                        </div>
-                        <div class="info-body" id="shortcutsInfoBody">Loading...</div>
-                    </div>
-                    <div class="settings-section settings-panel auto-save-settings-panel" id="autoSaveConfigPanel">
-                        <div class="settings-panel-header">
-                            <span>Auto Save Config</span>
-                            <button class="btn btn-secondary" type="button" onclick="window.paperStats.toggleAutoSaveConfigPanel(false)">
-                                <i class="fas fa-eye-slash"></i> Hide
-                            </button>
-                        </div>
-                        <div class="auto-save-config-body" id="autoSaveConfigBody">
-                            <!-- Dynamic content will be inserted here -->
-                        </div>
-                    </div>
-                    <div class="settings-section settings-panel query-export-settings-panel" id="queryExportPanel">
-                        <div class="settings-panel-header">
-                            <span>Query & Export (DOI keyed)</span>
-                            <button class="btn btn-secondary" type="button" onclick="window.paperStats.toggleQueryExportPanel(false)">
-                                <i class="fas fa-eye-slash"></i> Hide
-                            </button>
-                        </div>
-                        <div class="form-group">
-                            <p>Select fields to export (dynamic from JSONs). If nothing is selected, only DOI is exported.</p>
-                        </div>
-                        <div class="form-group query-export-grid">
-                            <div class="query-card">
-                                <div class="query-actions" style="justify-content:space-between; width:100%;">
-                                    <div style="display:flex; gap:8px; align-items:center; justify-content:flex-end; flex:1; flex-wrap:nowrap;">
-                                        <input type="text" id="queryFieldFilterInput" placeholder="Filter fields..."
-                                            autocomplete="off" class="query-filter-input"
-                                            style="flex:1 1 auto; min-width:220px; max-width:none;">
-                                        <button class="btn btn-secondary" id="querySelectAllBtn" type="button">Select all</button>
-                                        <button class="btn btn-secondary" id="queryClearAllBtn" type="button">Clear</button>
-                                        <button class="btn btn-primary" id="queryRefreshFieldsBtn" type="button">Refresh fields</button>
+                        <div class="settings-section settings-panel query-export-settings-panel" id="queryExportPanel">
+                            <div class="settings-panel-header">
+                                <span>Query & Export (DOI keyed)</span>
+                                <button class="btn btn-secondary" type="button"
+                                    onclick="window.paperStats.toggleQueryExportPanel(false)">
+                                    <i class="fas fa-eye-slash"></i> Hide
+                                </button>
+                            </div>
+                            <div class="form-group">
+                                <p>Select fields to export (dynamic from JSONs). If nothing is selected, only DOI is
+                                    exported.</p>
+                            </div>
+                            <div class="form-group query-export-grid">
+                                <div class="query-card">
+                                    <div class="query-actions" style="justify-content:space-between; width:100%;">
+                                        <div
+                                            style="display:flex; gap:8px; align-items:center; justify-content:flex-end; flex:1; flex-wrap:nowrap;">
+                                            <input type="text" id="queryFieldFilterInput" placeholder="Filter fields..."
+                                                autocomplete="off" class="query-filter-input"
+                                                style="flex:1 1 auto; min-width:220px; max-width:none;">
+                                            <button class="btn btn-secondary" id="querySelectAllBtn"
+                                                type="button">Select all</button>
+                                            <button class="btn btn-secondary" id="queryClearAllBtn"
+                                                type="button">Clear</button>
+                                            <button class="btn btn-primary" id="queryRefreshFieldsBtn"
+                                                type="button">Refresh fields</button>
+                                        </div>
+                                    </div>
+                                    <div class="query-fields query-field-list" id="queryFieldList">
+                                        <!-- dynamic checkboxes -->
                                     </div>
                                 </div>
-                                <div class="query-fields query-field-list" id="queryFieldList">
-                                    <!-- dynamic checkboxes -->
-                                </div>
-                            </div>
-                            <div class="query-card" style="display:flex;flex-direction:column;gap:8px;">
-                                <div class="query-actions" style="justify-content:space-between; width:100%;">
-                                    <div style="display:flex; gap:8px; align-items:center; justify-content:flex-end; flex:1; flex-wrap:nowrap;">
-                                        <button class="btn btn-secondary" id="queryClearSelectedBtn" type="button">Clear selected list</button>
+                                <div class="query-card" style="display:flex;flex-direction:column;gap:8px;">
+                                    <div class="query-actions" style="justify-content:space-between; width:100%;">
+                                        <div
+                                            style="display:flex; gap:8px; align-items:center; justify-content:flex-end; flex:1; flex-wrap:nowrap;">
+                                            <button class="btn btn-secondary" id="queryClearSelectedBtn"
+                                                type="button">Clear selected list</button>
+                                        </div>
                                     </div>
+                                    <div id="querySelectedSummary" class="query-selected-box"></div>
                                 </div>
-                                <div id="querySelectedSummary" class="query-selected-box"></div>
+                            </div>
+                            <div class="form-group">
+                                <label for="queryDoiOrderInput">Export DOIs in order (optional, line-separated)</label>
+                                <textarea id="queryDoiOrderInput" rows="4"
+                                    placeholder="Enter DOIs, one per line. Leave empty to export all DOIs in current file list order."></textarea>
+                                <div class="query-actions" style="margin-top:8px;">
+                                    <button class="btn btn-secondary" id="queryUpdateNoBtn" type="button">Add/Update
+                                        meta_info.No sequence</button>
+                                    <div id="queryDoiStats" style="margin-top:6px;font-size:12px;color:#6b7280;">0
+                                        unique | 0 duplicates</div>
+                                </div>
+                                <p class="help-text">Leave empty: export all DOIs in current file list order; Fill in:
+                                    only export matched DOIs in input order, unmatched DOIs will be ignored.</p>
+                            </div>
+                            <div class="modal-footer">
+                                <button class="btn btn-cancel" id="queryCancelBtn">Cancel</button>
+                                <button class="btn btn-primary" id="queryExportRunBtn">Export</button>
                             </div>
                         </div>
-                        <div class="form-group">
-                            <label for="queryDoiOrderInput">Export DOIs in order (optional, line-separated)</label>
-                            <textarea id="queryDoiOrderInput" rows="4" placeholder="Enter DOIs, one per line. Leave empty to export all DOIs in current file list order."></textarea>
-                            <div class="query-actions" style="margin-top:8px;">
-                                <button class="btn btn-secondary" id="queryUpdateNoBtn" type="button">Add/Update meta_info.No sequence</button>
-                                <div id="queryDoiStats" style="margin-top:6px;font-size:12px;color:#6b7280;">0 unique | 0 duplicates</div>
+                    </div>
+                </div>
+                <div class="md-chat-panel" id="mdChatPanel">
+                    <div class="md-chat-resizer" id="mdChatResizer" title="Drag to resize"></div>
+                    <div class="md-chat-shell">
+                        <div class="md-chat-top">
+                            <div class="md-chat-font-size-control">
+                                <label for="mdChatFontSizeSlider" title="Font Size">
+                                    <i class="fas fa-text-height"></i>
+                                </label>
+                                <input type="range" id="mdChatFontSizeSlider" min="12" max="24" step="0.1" value="16">
+                                <span id="mdChatFontSizeValue" hidden>16px</span>
                             </div>
-                            <p class="help-text">Leave empty: export all DOIs in current file list order; Fill in: only export matched DOIs in input order, unmatched DOIs will be ignored.</p>
+                            <div class="md-chat-actions">
+                                <button class="md-chat-btn" type="button" title="Close"><i
+                                        class="fa-regular fa-eye-slash"></i></button>
+                                <button class="md-chat-btn" type="button" title="Dock position"
+                                    id="mdChatDockSideBtn"><i
+                                        class="fa-solid fa-arrow-right-from-bracket fa-flip-horizontal"></i></button>
+                            </div>
                         </div>
-                        <div class="modal-footer">
-                            <button class="btn btn-cancel" id="queryCancelBtn">Cancel</button>
-                            <button class="btn btn-primary" id="queryExportRunBtn">Export</button>
+                        <div class="md-chat-body"></div>
+                        <div class="md-chat-input">
+                            <textarea class="md-chat-input-text" rows="1" placeholder="Input field"
+                                aria-label="Input field"></textarea>
+                            <div class="md-chat-input-actions">
+                                <button class="md-chat-btn md-chat-slot-btn" type="button"
+                                    title="Save/Apply fields (Slot 1)" data-slot="0" id="mdChatSlotBtn1"><i
+                                        class="fa-regular fa-square"></i></button>
+                                <button class="md-chat-btn md-chat-slot-btn" type="button"
+                                    title="Save/Apply fields (Slot 2)" data-slot="1" id="mdChatSlotBtn2"><i
+                                        class="fa-regular fa-square"></i></button>
+                                <button class="md-chat-btn md-chat-slot-btn" type="button"
+                                    title="Save/Apply fields (Slot 3)" data-slot="2" id="mdChatSlotBtn3"><i
+                                        class="fa-regular fa-square"></i></button>
+                            </div>
                         </div>
                     </div>
                 </div>
             </div>
-            <div class="md-chat-panel" id="mdChatPanel">
-                <div class="md-chat-resizer" id="mdChatResizer" title="Drag to resize"></div>
-                <div class="md-chat-shell">
-                    <div class="md-chat-top">
-                    <div class="md-chat-font-size-control">
-                        <label for="mdChatFontSizeSlider" title="Font Size">
-                            <i class="fas fa-text-height"></i>
-                        </label>
-                        <input type="range" id="mdChatFontSizeSlider" min="12" max="24" step="0.1" value="16">
-                        <span id="mdChatFontSizeValue" hidden>16px</span>
-                    </div>
-                    <div class="md-chat-actions">
-                        <button class="md-chat-btn" type="button" title="Close"><i class="fa-regular fa-eye-slash"></i></button>
-                        <button class="md-chat-btn" type="button" title="Dock position" id="mdChatDockSideBtn"><i class="fa-solid fa-arrow-right-from-bracket fa-flip-horizontal"></i></button>
-                    </div>
-                    </div>
-                    <div class="md-chat-body"></div>
-                    <div class="md-chat-input">
-                        <textarea class="md-chat-input-text" rows="1" placeholder="Input field" aria-label="Input field"></textarea>
-                        <div class="md-chat-input-actions">
-                            <button class="md-chat-btn md-chat-slot-btn" type="button" title="Save/Apply fields (Slot 1)" data-slot="0" id="mdChatSlotBtn1"><i class="fa-regular fa-square"></i></button>
-                            <button class="md-chat-btn md-chat-slot-btn" type="button" title="Save/Apply fields (Slot 2)" data-slot="1" id="mdChatSlotBtn2"><i class="fa-regular fa-square"></i></button>
-                            <button class="md-chat-btn md-chat-slot-btn" type="button" title="Save/Apply fields (Slot 3)" data-slot="2" id="mdChatSlotBtn3"><i class="fa-regular fa-square"></i></button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
         </div>
 
         <!-- Resizer -->
         <div class="resizer" id="middleResizer">
-            <span class="resizer-toggle" title="Click to hide/show right panel"><i class="fas fa-angle-double-right"></i></span>
+            <span class="resizer-toggle" title="Click to hide/show right panel"><i
+                    class="fas fa-angle-double-right"></i></span>
         </div>
 
         <!-- Right Panel - PDF Viewer -->
         <div class="right-panel">
             <button class="btn-pdf-popup" id="btnPdfPopup" title="Toggle PDF view" aria-pressed="false">
-            <i class="fas fa-up-right-from-square"></i>
+                <i class="fas fa-up-right-from-square"></i>
             </button>
             <iframe id="pdfViewer" style="width: 100%; height: 100%; border: none;"></iframe>
             <div id="pdfPlaceholder" class="pdf-placeholder" aria-live="polite">
-            <div class="pdf-placeholder-inner">
-                <button class="pdf-placeholder-btn" type="button" title="Load PDF">
-                <i class="fas fa-file-pdf"></i>
-                </button>
-                <div class="pdf-placeholder-text"></div>
-            </div>
+                <div class="pdf-placeholder-inner">
+                    <button class="pdf-placeholder-btn" type="button" title="Load PDF">
+                        <i class="fas fa-file-pdf"></i>
+                    </button>
+                    <div class="pdf-placeholder-text"></div>
+                </div>
             </div>
             <!-- PDF.js fullscreen shortcut button -->
             <button class="btn-pdf-autoload" id="btnPdfAutoLoad" title="Auto-load PDF: Off" aria-pressed="false">
-            <i class="fas fa-toggle-off"></i>
+                <i class="fas fa-toggle-off"></i>
             </button>
             <button class="btn-pdfjs-fullscreen" id="btnPdfJsFullscreen" title="Enter PDF fullscreen mode">
-            <i class="fas fa-expand"></i>
+                <i class="fas fa-expand"></i>
             </button>
             <!-- PDF.js download shortcut button -->
             <button class="btn-pdfjs-download" id="btnPdfJsDownload" title="Download current PDF">
-            <i class="fas fa-download"></i>
+                <i class="fas fa-download"></i>
             </button>
         </div>
     </div>
@@ -673,7 +733,8 @@
                 <i class="fas fa-folder"></i>
             </div>
             <div class="status-left">
-                <button class="project-name-btn" id="currentProjectName" title="Click to create or switch project">Click to create or switch project</button>
+                <button class="project-name-btn" id="currentProjectName" title="Click to create or switch project">Click
+                    to create or switch project</button>
             </div>
             <select id="jsonViewSelect" class="json-view-select" title="Select JSON view"></select>
             <div class="middle-tabs-left">
@@ -683,7 +744,8 @@
                     <button class="tab-btn active" data-view="draft" type="button" title="Markdown Draft">Draft</button>
                     <button class="tab-btn" data-view="settings" type="button" title="Settings">Settings</button>
                 </div>
-                <button class="status-btn" id="statusToggleSourceBtn" type="button" title="Toggle Markdown Source (Cmd/Ctrl+/)">
+                <button class="status-btn" id="statusToggleSourceBtn" type="button"
+                    title="Toggle Markdown Source (Cmd/Ctrl+/)">
                     <i class="fa-solid fa-person-chalkboard"></i>
                 </button>
                 <!-- <button class="status-btn" id="statusSaveBtn" type="button" title="Save (Cmd/Ctrl+S)">
@@ -695,8 +757,8 @@
                         <i class="fas fa-database"></i>
                     </button>
                     <div class="header-dropdown-menu" id="jsonMenu" role="menu" aria-label="JSON Menu">
-                        <button class="header-dropdown-item" id="jsonViewStructuredItem" type="button"
-                            role="menuitem" title="Table View">
+                        <button class="header-dropdown-item" id="jsonViewStructuredItem" type="button" role="menuitem"
+                            title="Table View">
                             <i class="fas fa-table"></i><span>Table View</span>
                         </button>
                         <button class="header-dropdown-item" id="jsonViewFlatItem" type="button" role="menuitem"
@@ -770,37 +832,30 @@
             </div>
         </div>
         <div class="status-right">
-            <button class="status-btn" id="mdChatToggleBtn" type="button"
-                title="Toggle MD Chat Panel" aria-label="Toggle MD Chat Panel">
+            <button class="status-btn" id="mdChatToggleBtn" type="button" title="Toggle MD Chat Panel"
+                aria-label="Toggle MD Chat Panel">
                 <i class="fa-solid fa-bolt-lightning"></i>
             </button>
-            <button class="status-btn" id="themeToggleBtn" title="Toggle Theme (Light/Dark)"
-                aria-label="Toggle Theme">
+            <button class="status-btn" id="themeToggleBtn" title="Toggle Theme (Light/Dark)" aria-label="Toggle Theme">
                 <i class="fas fa-moon"></i>
             </button>
             <button class="status-btn" id="statusBarPositionToggleBtn" title="Toggle Status Bar Position (Top/Bottom)"
                 aria-label="Toggle Status Bar Position">
                 <i class="fas fa-up-down"></i>
             </button>
-            <button class="status-btn" id="queryExportBtn" type="button"
-                title="Query & Export (DOI keyed)" aria-label="Query & Export">
+            <button class="status-btn" id="queryExportBtn" type="button" title="Query & Export (DOI keyed)"
+                aria-label="Query & Export">
                 <i class="fas fa-list-check"></i>
             </button>
             <div class="header-dropdown" id="settingsDropdown">
-                <button id="settingsToggleBtn" class="status-btn" type="button" title="Settings"
-                    aria-label="Settings">
+                <button id="settingsToggleBtn" class="status-btn" type="button" title="Settings" aria-label="Settings">
                     <i class="fas fa-cog"></i>
                 </button>
                 <div class="header-dropdown-menu" id="settingsMenu" role="menu" aria-label="Settings">
-                    <button class="header-dropdown-item" id="autoLoadOnItem" type="button" role="menuitem"
-                        title="Automatically load PDF preview after switching files">
-                        <i class="fas fa-check" data-check="on" style="opacity:0"></i>
-                        <span>Enable PDF Auto-load</span>
-                    </button>
-                    <button class="header-dropdown-item" id="autoLoadOffItem" type="button" role="menuitem"
-                        title="Load PDF preview only when clicking the right panel">
-                        <i class="fas fa-check" data-check="off" style="opacity:0"></i>
-                        <span>Disable PDF Auto-load</span>
+                    <button class="header-dropdown-item" id="refreshDoiCacheBtn" type="button" role="menuitem"
+                        title="Refresh DOI autocomplete cache (rebuild with latest data)">
+                        <i class="fas fa-sync-alt"></i>
+                        <span>Refresh DOI Cache</span>
                     </button>
                     <div class="header-dropdown-divider"></div>
                     <button class="header-dropdown-item" id="editLockOnItem" type="button" role="menuitem"
@@ -825,28 +880,27 @@
                         <span>Auto Save Settings</span>
                     </button>
                     <div class="header-dropdown-divider"></div>
-                    <button class="header-dropdown-item" id="refreshDoiCacheBtn" type="button" role="menuitem"
-                        title="Refresh DOI autocomplete cache (rebuild with latest data)">
-                        <i class="fas fa-sync-alt"></i>
-                        <span>Refresh DOI Cache</span>
-                    </button>
                     <div class="header-dropdown-divider"></div>
-                    <button class="header-dropdown-item" id="thirdPartyInfoBtn" type="button" role="menuitem"
-                        title="Third-party JavaScript libraries">
-                        <i class="fas fa-info-circle"></i>
-                        <span>Third-party JS Info</span>
-                    </button>
                     <button class="header-dropdown-item" id="shortcutsInfoBtn" type="button" role="menuitem"
                         title="Keyboard Shortcuts">
                         <i class="fas fa-keyboard"></i>
                         <span>Shortcuts</span>
                     </button>
+                    <button class="header-dropdown-item" id="thirdPartyInfoBtn" type="button" role="menuitem"
+                        title="Third-party JavaScript libraries">
+                        <i class="fas fa-info-circle"></i>
+                        <span>Third-party JS Info</span>
+                    </button>
+                    <button class="header-dropdown-item" id="aboutMenuItem" type="button" role="menuitem"
+                        title="About this project">
+                        <i class="fas fa-info-circle"></i>
+                        <span>About</span>
+                    </button>
                 </div>
             </div>
             <a class="status-version-group" id="statusVersionGroup"
-                href="https://hub.docker.com/repository/docker/iihciyekub/gewu/general"
-                title="Docker Hub: GEWU 0.0.1" aria-label="Docker Hub: GEWU 0.0.1"
-                target="_blank" rel="noopener noreferrer">
+                href="https://hub.docker.com/repository/docker/iihciyekub/gewu/general" title="Docker Hub: GEWU 0.0.1"
+                aria-label="Docker Hub: GEWU 0.0.1" target="_blank" rel="noopener noreferrer">
                 <span class="status-version-icon" aria-hidden="true">
                     <i class="fa-brands fa-docker"></i>
                 </span>

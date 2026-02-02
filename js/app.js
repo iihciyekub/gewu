@@ -2702,6 +2702,7 @@ class PaperStatsApp {
         const fixAllMdDoisBtn = document.getElementById('fixAllMdDoisBtn');
         const fixAllJsonDoisBtn = document.getElementById('fixAllJsonDoisBtn');
         const refreshDoiCacheBtn = document.getElementById('refreshDoiCacheBtn');
+        const aboutMenuItem = document.getElementById('aboutMenuItem');
         if (settingsToggleBtn && settingsMenu) {
             settingsToggleBtn.addEventListener('click', (e) => {
                 e.preventDefault();
@@ -2725,6 +2726,14 @@ class PaperStatsApp {
             autoLoadOffItem.addEventListener('click', () => {
                 this.setAutoLoadPdf(false);
                 this.toggleSettingsMenu(false);
+            });
+        }
+        if (aboutMenuItem) {
+            aboutMenuItem.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                if (this.settingsMenuVisible) this.toggleSettingsMenu(false);
+                this.toggleAboutPanel();
             });
         }
         // 编辑锁定菜单项
@@ -2758,6 +2767,7 @@ class PaperStatsApp {
                 }
             });
         }
+
         if (refreshDoiCacheBtn) {
             refreshDoiCacheBtn.addEventListener('click', async () => {
                 this.toggleSettingsMenu(false);
@@ -9540,7 +9550,7 @@ class PaperStatsApp {
 
     updateSettingsPanelsVisibility() {
         const settingsContent = document.getElementById('settingsContent');
-        const hasAny = !!(this.fileFilterVisible || this.createGroupVisible || this.projectInfoVisible || this.thirdPartyInfoVisible || this.shortcutsVisible || this.queryExportVisible || this.apiSettingsVisible || this.autoSaveConfigVisible);
+        const hasAny = !!(this.fileFilterVisible || this.createGroupVisible || this.projectInfoVisible || this.thirdPartyInfoVisible || this.shortcutsVisible || this.queryExportVisible || this.apiSettingsVisible || this.autoSaveConfigVisible || this.aboutVisible);
         if (settingsContent) settingsContent.classList.toggle('is-empty', !hasAny);
     }
 
@@ -9559,6 +9569,7 @@ class PaperStatsApp {
             { id: 'shortcutsInfoPanel', flag: 'shortcutsVisible' },
             { id: 'thirdPartyInfoPanel', flag: 'thirdPartyInfoVisible' },
             { id: 'projectInfoPanel', flag: 'projectInfoVisible' },
+            { id: 'aboutPanel', flag: 'aboutVisible' },
             { id: 'createGroupSettingsPanel', flag: 'createGroupVisible' },
             { id: 'fileFilterSettingsPanel', flag: 'fileFilterVisible' }
         ];
@@ -11248,6 +11259,40 @@ class PaperStatsApp {
             await this.loadThirdPartyInfoContent();
         }
         this.saveSettingsPanelsState();
+    }
+
+    async toggleAboutPanel(forceVisible, opts = {}) {
+        const panel = document.getElementById('aboutPanel');
+        const body = document.getElementById('aboutBody');
+        if (!panel || !body) return;
+        const next = typeof forceVisible === 'boolean' ? forceVisible : !this.aboutVisible;
+        if (next && !opts.skipClose) this.closeHeaderMenus('about');
+        this.aboutVisible = next;
+        panel.classList.toggle('is-visible', next);
+        if (next) this.moveSettingsPanelToEnd(panel);
+        this.updateSettingsPanelsVisibility();
+        if (next) {
+            this.switchToView('settings');
+            await this.loadAboutContent();
+        }
+        this.saveSettingsPanelsState();
+    }
+
+    async loadAboutContent() {
+        const body = document.getElementById('aboutBody');
+        if (!body || this.aboutLoaded) return;
+        body.textContent = 'Loading...';
+        try {
+            const res = await fetch('/ABOUT.md');
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            const text = await res.text();
+            const parser = this.getMarkdownParser();
+            body.innerHTML = parser ? parser.render(text) : text;
+            this.aboutLoaded = true;
+        } catch (err) {
+            console.error('Failed to load ABOUT.md', err);
+            body.textContent = `Load failed: ${err.message}`;
+        }
     }
 
     async loadThirdPartyInfoContent() {
