@@ -973,6 +973,12 @@ body {
     min-width: 0;
 }
 
+.status-right *:focus,
+.status-right *:focus-visible {
+    outline: none;
+    box-shadow: none;
+}
+
 .status-left-icon {
     width: 16px;
     height: 16px;
@@ -1175,6 +1181,7 @@ body {
     font-size: 9px;
     min-width: 40px;
     color: #fff;
+    outline: none;
 }
 
 .status-bar .tab-btn:hover:not(.active) {
@@ -1207,6 +1214,12 @@ body {
 
 .status-bar .middle-tabs-left .status-btn:hover i {
     color: #fff;
+}
+
+.middle-tabs-left *:focus,
+.middle-tabs-left *:focus-visible {
+    outline: none;
+    box-shadow: none;
 }
 
 /* 状态栏中的 header-dropdown 按钮样式适配 */
@@ -1325,8 +1338,8 @@ body.theme-vscode .view-tabs {
 }
 
 body.theme-vscode .tab-btn:hover:not(.active) {
-    background: #2d2d2d;
-    color: #e6e6e6;
+    background: transparent;
+    color: inherit;
 }
 
 body.theme-vscode .tab-btn.active {
@@ -3135,6 +3148,10 @@ body.theme-vscode .qa-bubble {
     color: #b2b2b2;
 }
 
+body.theme-vscode .md-chat-input-text {
+    border-top-color: #4b4b4b;
+}
+
 .md-chat-input-actions {
     position: absolute;
     right: 14px;
@@ -3595,6 +3612,14 @@ body.theme-vscode .qa-bubble {
     display: flex;
 }
 
+#projectSelectorModal {
+    pointer-events: auto;
+}
+
+#projectSelectorModal.active {
+    background: rgba(0, 0, 0, 0.25);
+}
+
 .modal-content {
     background: white;
     padding: 0;
@@ -3610,7 +3635,6 @@ body.theme-vscode .qa-bubble {
     top: 50%;
     transform: translate(-50%, -50%);
     box-shadow: 0 10px 28px rgba(0, 0, 0, 0.25);
-    border: 1px solid #e0e0e0;
     pointer-events: auto;
     /* 允许操作自身 */
 }

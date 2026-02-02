@@ -32,6 +32,11 @@ npm start
 node server.js
 ```
 
+默认允许的项目根目录为：`$HOME`、项目根目录、`/data`。如需自定义，可在启动时设置：
+```bash
+ALLOWED_ROOTS="$HOME,$PWD,/data" npm start
+```
+
 访问: **http://localhost:8000**
 
 ### Docker 启动
@@ -66,248 +71,27 @@ docker compose up --build
 
 ## 📁 项目结构
 
+每个项目必须包含：
+
 ```
-ref_251207_reviewer/
-├── index.html           # 主界面
-├── server.js            # 后端服务器
-├── js/
-│   ├── app.js          # 主应用逻辑
-│   └── core/           # 核心库和插件
-├── css/                # 样式表
-├── src/                # 源代码（提示词、工具等）
-├── user/               # 用户项目目录
-│   ├── json/           # JSON 数据
-│   ├── md/             # Markdown 笔记
-│   ├── DRAFT.md         # 草稿（项目根目录）
-│   └── pdf/            # PDF 文献
-└── docs/               # 文档
+项目名/
+├── json/      # JSON 结构化数据（默认视图为 json/view1）
+├── md/        # Markdown 笔记
+├── pdf/       # PDF 文献
+└── DRAFT.md   # 草稿（项目根目录）
 ```
 
 ## 📖 文档
 
-### 基础文档
-- [快速开始](QUICK_START.md) - 30 秒快速上手
-- [项目创建指南](docs/dev/PROJECT_CREATION_GUIDE.md) - 详细的项目创建和管理文档
-- [快捷键](shortcuts.md) - 快捷键速查表
+- [快速开始](QUICK_START.md)
+- [项目创建指南](docs/dev/PROJECT_CREATION_GUIDE.md)
+- [快捷键](shortcuts.md)
+- [Front Matter 使用指南](FRONTMATTER_GUIDE.md)
 
-### Markdown Front Matter 功能 🏷️ NEW!
-- [功能说明](METADATA_FEATURE.md) - 完整功能介绍和使用指南
-- [快速参考](FRONTMATTER_QUICKREF.md) - Front Matter 语法快速参考
-- [使用指南](FRONTMATTER_GUIDE.md) - 详细使用文档
-- [示例文档](EXAMPLE_WITH_METADATA.md) - 完整示例
-- [独立测试](test_frontmatter.html) - 打开浏览器测试解析功能
+## 🐳 Docker 提示
 
-## 🎨 新项目目录结构
+容器内默认只允许 `/data` 作为项目根目录。如需放开范围，运行时覆盖：
 
-每个新项目必须包含三个子目录：
-
-```
-项目名/
-├── json/     # JSON 结构化数据
-├── md/       # Markdown 笔记和评论
-└── pdf/      # PDF 文献和资料
-```
-
-此外，草稿文件 `DRAFT.md` 放在项目根目录。
-
-### json/ 目录
-
-存放 JSON 格式的结构化数据，支持多个视图：
-
-```
-json/
-├── paper1.json              # 默认视图中的文件
-├── paper2.json
-└── checklist/               # 或创建子目录作为特定视图
-    ├── review.json
-    └── questions.json
-```
-
-### md/ 目录
-
-存放 Markdown 格式的笔记和评论。支持 YAML Front Matter 元数据：
-
-```
-md/
-├── paper1.md               # 对应 paper1.json 的笔记
-├── paper2.md
-└── notes.md               # 总体笔记
-```
-
-**特殊草稿文件**：`DRAFT.md` 位于项目根目录（不在 `md/` 内）。
-
-**Markdown Front Matter 示例**：
-```markdown
----
-title: 论文标题
-author: 作者名
-date: 2026-01-09
-tags: [AI, 深度学习]
-status: 审核中
----
-
-# 笔记内容
-
-这里是正文...
-```
-
-元数据会自动解析并显示在文档顶部。详见 [Front Matter 功能说明](METADATA_FEATURE.md)。
-
-### pdf/ 目录
-
-存放 PDF 文献文件：
-
-```
-pdf/
-├── paper1.pdf             # 对应 paper1.json 的论文
-├── paper2.pdf
-└── background.pdf         # 相关背景文献
-```
-
-## 🔧 服务器 API
-
-### 项目管理
-
-#### 创建项目
-```http
-POST /create-project
-Content-Type: application/json
-
-{
-  "projectPath": "user/my_research"
-}
-```
-
-#### 验证项目
-```http
-POST /validate-project
-Content-Type: application/json
-
-{
-  "projectPath": "user/my_research"
-}
-```
-
-### 文件操作
-
-#### 列出文件
-```http
-POST /list-json-files
-Content-Type: application/json
-
-{
-  "projectPath": "user/my_research"
-}
-```
-
-#### 保存 JSON
-```http
-POST /save-json
-Content-Type: application/json
-
-{
-  "projectPath": "user/my_research",
-  "filename": "json/paper1.json",
-  "content": "{...json data...}"
-}
-```
-
-#### 保存 Markdown
-```http
-POST /save-md
-Content-Type: application/json
-
-{
-  "projectPath": "user/my_research",
-  "filename": "md/paper1.md",
-  "content": "# Paper 1\n..."
-}
-```
-
-保存草稿：
-```http
-POST /save-md
-Content-Type: application/json
-
-{
-  "projectPath": "user/my_research",
-  "filename": "DRAFT.md",
-  "content": "# Draft\n..."
-}
-```
-
-完整 API 文档见 [docs/dev/PROJECT_CREATION_GUIDE.md](docs/dev/PROJECT_CREATION_GUIDE.md)
-
-## 🔄 向后兼容性
-
-本工具完全兼容旧的项目结构（使用 `data/` 和 `papers/` 目录）。旧项目可以继续使用，系统会自动：
-
-1. 创建新的 `json/`, `md/`, `pdf/` 目录
-2. 继续支持旧目录中的文件
-3. 优先使用新目录保存文件
-
-## ⚙️ 环境配置
-
-### 端口
-
-默认端口: `8000`
-
-修改端口:
 ```bash
-PORT=3000 npm start
+docker run -e ALLOWED_ROOTS=/data,/other/path ...
 ```
-
-### 文件路径
-
-所有项目默认存储在 `user/` 目录下，支持相对路径和绝对路径。
-
-## 🛠️ 开发
-
-### 依赖
-
-- Node.js (用于后端服务器)
-- 现代浏览器 (前端)
-
-### 代码结构
-
-- **server.js**: Express-like HTTP 服务器，无框架依赖
-- **js/app.js**: 主应用类，处理 UI 逻辑
-- **js/core/**: 核心库（Markdown 解析、JSON 编辑等）
-- **css/**: 响应式设计样式表
-
-### 扩展
-
-可以通过修改以下文件进行扩展：
-
-- `manifest.json`: 定义提示词和工具
-- `src/tools/`: 添加新的 JavaScript 工具
-- `src/prompts/`: 添加新的提示词
-
-## 📝 更新日志
-
-### v2.0 (2025-01)
-- ✨ 新增项目创建功能
-- ✨ 重新设计目录结构 (json/, md/, pdf/)
-- ✨ 改进项目管理和加载
-- ✅ 完全向后兼容旧项目
-
-### v1.0 (初始版本)
-- 基础的 JSON 编辑和 Markdown 笔记功能
-- PDF 查看器集成
-- 项目管理
-
-## 🤝 贡献
-
-欢迎贡献代码、报告问题和提出建议。
-
-## 📄 许可证
-
-MIT License
-
-## 📧 联系
-
-有问题或建议？请提交反馈。
-
----
-
-**祝你研究顺利！** 🎓

@@ -1,5 +1,5 @@
 {
-  "name": "ENLIGHTENKEY",
-  "version": "v1.0.1",
+  "name": "Enlightenkey",
+  "version": "1.0.0",
   "dockerHub": "https://hub.docker.com/repository/docker/iihciyekub/enlightenkey/general"
 }

@@ -821,10 +821,16 @@ class PaperStatsApp {
     renderJsonViewSelector() {
         const sel = document.getElementById('jsonViewSelect');
         if (!sel) return;
+        if (!this.currentProject) {
+            sel.innerHTML = '';
+            sel.style.display = 'none';
+            return;
+        }
         const views = this.availableJsonViews || [];
         const current = this.currentJsonView || (views[0] || '');
         sel.innerHTML = views.map(v => `<option value="${this.escapeAttr(v)}"${v === current ? ' selected' : ''}>${this.escapeHtml(v)}</option>`).join('') || '<option value=\"\">(no views)</option>';
         this.currentJsonView = current;
+        sel.style.display = views.length ? '' : 'none';
     }
 
     loadLastJsonViewByProject() {
@@ -1592,6 +1598,7 @@ class PaperStatsApp {
 
         // 先加载项目配置
         this.loadProjectConfig();
+        this.renderJsonViewSelector();
 
         // 如果没有当前项目，显示项目选择器
         if (!this.currentProject) {
@@ -1821,40 +1828,6 @@ class PaperStatsApp {
         const statusToggleSourceBtn = document.getElementById('statusToggleSourceBtn');
         if (statusToggleSourceBtn) {
             statusToggleSourceBtn.addEventListener('click', () => this.toggleJsonMdSource());
-        }
-        // CLI Menu
-        const cliMenuDropdown = document.getElementById('cliMenuDropdown');
-        const cliMenuToggleBtn = document.getElementById('cliMenuToggleBtn');
-        const cliMenu = document.getElementById('cliMenu');
-        const openCodexCliMenuItem = document.getElementById('openCodexCliMenuItem');
-        const openClaudeCliMenuItem = document.getElementById('openClaudeCliMenuItem');
-
-        if (cliMenuToggleBtn && cliMenu) {
-            cliMenuToggleBtn.addEventListener('click', (e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                this.toggleCliMenu();
-            });
-            cliMenu.addEventListener('click', (e) => {
-                e.stopPropagation();
-            });
-            document.addEventListener('click', (e) => {
-                if (!this.cliMenuVisible) return;
-                if (cliMenuDropdown && cliMenuDropdown.contains(e.target)) return;
-                this.toggleCliMenu(false);
-            });
-        }
-        if (openCodexCliMenuItem) {
-            openCodexCliMenuItem.addEventListener('click', () => {
-                this.openCodexCli();
-                this.toggleCliMenu(false);
-            });
-        }
-        if (openClaudeCliMenuItem) {
-            openClaudeCliMenuItem.addEventListener('click', () => {
-                this.openClaudeCli();
-                this.toggleCliMenu(false);
-            });
         }
         this.initMarkdownChatPanel();
         // 快捷键：Cmd/Ctrl + E 正向切换（JSON/MD/Draft），Cmd/Ctrl + Shift + E 反向切换
@@ -2239,11 +2212,6 @@ class PaperStatsApp {
                 this.toggleFileFilter();
                 return;
             }
-            if (mod && !e.shiftKey && key === 'i') {
-                e.preventDefault();
-                this.openCodexCli();
-                return;
-            }
             if (mod && !e.shiftKey && key === 'o') {
                 e.preventDefault();
                 this.showProjectSelector();
@@ -2292,6 +2260,11 @@ class PaperStatsApp {
             if (mod && !e.shiftKey && key === 's') {
                 e.preventDefault();
                 this.handleSaveShortcut();
+                return;
+            }
+            if (mod && e.shiftKey && key === 'z') {
+                e.preventDefault();
+                this.toggleStatusBarPosition();
                 return;
             }
             if (key === 'escape') {
@@ -2483,6 +2456,11 @@ class PaperStatsApp {
                 }
                 this.showProjectDetailsPanel();
             });
+            projectNameBtn.addEventListener('contextmenu', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                this.showStatusProjectContextMenu(e);
+            });
         }
 
         // 点击文件夹图标也可以打开项目面板
@@ -2498,22 +2476,13 @@ class PaperStatsApp {
                 }
                 this.showProjectDetailsPanel();
             });
-        }
-
-        const statusProject = document.querySelector('.status-project');
-        if (statusProject && projectNameBtn) {
-            statusProject.addEventListener('click', (e) => {
-                if (e.target.closest('#currentProjectName')) return;
-                e.preventDefault();
-                e.stopPropagation();
-                projectNameBtn.click();
-            });
-            statusProject.addEventListener('contextmenu', (e) => {
+            folderIcon.addEventListener('contextmenu', (e) => {
                 e.preventDefault();
                 e.stopPropagation();
                 this.showStatusProjectContextMenu(e);
             });
         }
+
         const shortcutsInfoBtn = document.getElementById('shortcutsInfoBtn');
         if (shortcutsInfoBtn) {
             shortcutsInfoBtn.addEventListener('click', (e) => {
@@ -9336,15 +9305,6 @@ class PaperStatsApp {
         menu.classList.toggle('visible', next);
     }
 
-    toggleCliMenu(forceVisible) {
-        const menu = document.getElementById('cliMenu');
-        if (!menu) return;
-        const next = typeof forceVisible === 'boolean' ? forceVisible : !this.cliMenuVisible;
-        if (next) this.closeHeaderMenus('cli');
-        this.cliMenuVisible = next;
-        menu.classList.toggle('visible', next);
-    }
-
     constrainDropdownMenu(menuEl, dropdownEl) {
         if (!menuEl || !dropdownEl) return;
         const margin = 8;
@@ -10314,7 +10274,6 @@ class PaperStatsApp {
         if (keep !== 'md' && this.mdMenuVisible) this.toggleMdMenu(false);
         if (keep !== 'settings' && this.settingsMenuVisible) this.toggleSettingsMenu(false);
         if (keep !== 'import' && this.importMenuVisible) this.toggleImportMenu(false);
-        if (keep !== 'cli' && this.cliMenuVisible) this.toggleCliMenu(false);
         if (keep !== 'info' && this.projectInfoVisible) {
             const panel = document.getElementById('projectInfoPanel');
             if (!(panel && panel.classList.contains('settings-panel'))) {
@@ -11162,73 +11121,6 @@ class PaperStatsApp {
         this.openProjectModal();
     }
 
-    async openCodexCli() {
-        if (this._openCodexCliPending) return;
-        const projectPath = this.getRequiredProjectPath();
-        if (!projectPath) return;
-        this._openCodexCliPending = true;
-        const btn = document.getElementById('openCodexCliMenuItem');
-        if (btn) {
-            btn.disabled = true;
-            btn.classList.add('is-busy');
-        }
-        try {
-            const response = await fetch('/open-codex-cli', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ projectPath })
-            });
-            if (!response.ok) {
-                const text = await response.text();
-                throw new Error(text || `HTTP ${response.status}`);
-            }
-            this.showNotification('Codex CLI opened', 'success');
-        } catch (err) {
-            this.showNotification(`Failed to open Codex CLI: ${err.message}`, 'error');
-        } finally {
-            setTimeout(() => {
-                this._openCodexCliPending = false;
-                if (btn) {
-                    btn.disabled = false;
-                    btn.classList.remove('is-busy');
-                }
-            }, 1200);
-        }
-    }
-
-    async openClaudeCli() {
-        if (this._openClaudeCliPending) return;
-        const projectPath = this.getRequiredProjectPath();
-        if (!projectPath) return;
-        this._openClaudeCliPending = true;
-        const btn = document.getElementById('openClaudeCliMenuItem');
-        if (btn) {
-            btn.disabled = true;
-            btn.classList.add('is-busy');
-        }
-        try {
-            const response = await fetch('/open-claude-cli', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ projectPath })
-            });
-            if (!response.ok) {
-                const text = await response.text();
-                throw new Error(text || `HTTP ${response.status}`);
-            }
-            this.showNotification('Claude CLI opened', 'success');
-        } catch (err) {
-            this.showNotification(`Failed to open Claude CLI: ${err.message}`, 'error');
-        } finally {
-            setTimeout(() => {
-                this._openClaudeCliPending = false;
-                if (btn) {
-                    btn.disabled = false;
-                    btn.classList.remove('is-busy');
-                }
-            }, 1200);
-        }
-    }
     openCreateProjectDialog() {
         this.openProjectModal({ openCreate: true });
     }
@@ -11286,6 +11178,7 @@ class PaperStatsApp {
 
         // 更新显示
         this.updateProjectDisplay();
+        this.renderJsonViewSelector();
 
         // 显示提示
         this.showNotification('Exited project', 'success');

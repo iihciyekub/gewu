@@ -6,6 +6,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const os = require('os');
 
 function logHeader() {
   console.log('=========================================');
@@ -34,10 +35,16 @@ function main() {
   ensureProjectRoot(rootDir);
 
   const port = process.env.PORT || '8000';
+  if (!process.env.ALLOWED_ROOTS) {
+    const homeDir = os.homedir();
+    const roots = [homeDir, rootDir, '/data'].filter(Boolean);
+    process.env.ALLOWED_ROOTS = roots.join(',');
+  }
 
   console.log(`✅ Starting HTTP server with JSON save support on port ${port}...`);
   console.log('');
   console.log(`📂 Project directory: ${rootDir}`);
+  console.log(`🔒 Allowed project roots: ${process.env.ALLOWED_ROOTS}`);
   console.log(`🌐 Access the application at: http://localhost:${port}`);
   console.log('💾 Default project layout: json/view1/, md/, pdf/, DRAFT.md (project root)');
   console.log('');

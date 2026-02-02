@@ -197,9 +197,6 @@
         <div class="modal-content project-selector-content">
             <div class="modal-header">
                 <span>Select Project Folder</span>
-                <button class="close-btn" onclick="window.paperStats.closeProjectSelector()">
-                    <i class="fas fa-times"></i>
-                </button>
             </div>
             <div class="modal-body">
                 <div style="margin-bottom: 20px; border-bottom: 1px solid #e0e0e0; padding-bottom: 20px; display: none;">
@@ -213,7 +210,6 @@
                 </div>
 
                 <div class="form-group">
-                    <label for="projectPathInput">Load Existing Project:</label>
                     <div class="path-input-group">
                         <input type="text" id="projectPathInput" placeholder="Enter full path, e.g.: /path/to/project">
                         <button class="btn btn-browse" onclick="window.paperStats.browseAndFillPath()" title="Browse to select directory">
@@ -232,7 +228,6 @@
                 </div>
             </div>
             <div class="modal-footer">
-                <button class="btn btn-cancel" onclick="window.paperStats.closeProjectSelector()">Cancel</button>
                 <button class="btn" id="initProjectBtn">Create or Open Project</button>
                 <button class="btn btn-primary" id="loadProjectBtn" style="display: none;">Load Project</button>
             </div>
@@ -775,25 +770,9 @@
             </div>
         </div>
         <div class="status-right">
-            <div class="header-dropdown" id="cliMenuDropdown">
-                <button class="status-btn" id="cliMenuToggleBtn" type="button"
-                    title="Open CLI" aria-label="CLI Menu">
-                    <i class="fas fa-terminal"></i>
-                </button>
-                <div class="header-dropdown-menu" id="cliMenu" role="menu" aria-label="CLI Menu">
-                    <button class="header-dropdown-item" id="openCodexCliMenuItem" type="button" role="menuitem"
-                        title="Open Codex CLI in current project directory">
-                        <i class="fas fa-terminal"></i><span>Open Codex CLI</span>
-                    </button>
-                    <button class="header-dropdown-item" id="openClaudeCliMenuItem" type="button" role="menuitem"
-                        title="Open Claude CLI in current project directory">
-                        <i class="fas fa-robot"></i><span>Open Claude CLI</span>
-                    </button>
-                </div>
-            </div>
             <button class="status-btn" id="mdChatToggleBtn" type="button"
                 title="Toggle MD Chat Panel" aria-label="Toggle MD Chat Panel">
-                <i class="far fa-comment-dots"></i>
+                <i class="fa-solid fa-bolt-lightning"></i>
             </button>
             <button class="status-btn" id="themeToggleBtn" title="Toggle Theme (Light/Dark)"
                 aria-label="Toggle Theme">

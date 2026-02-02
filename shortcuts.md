@@ -4,11 +4,12 @@
 - Cmd/Ctrl + J — 切换到 JSON 视图
 - Cmd/Ctrl + M — 切换到 Markdown 视图
 - Cmd/Ctrl + D — 切换到 Draft 视图
-- Cmd/Ctrl + E — 切换 JSON / Markdown / Draft
+- Cmd/Ctrl + E — 切换 Draft / Markdown / JSON
 - Cmd/Ctrl + / — Markdown 源码
 - Cmd/Ctrl + Shift + F — 隐藏/显示 PDF 预览
 - Cmd/Ctrl + Shift + S — 隐藏/显示左侧文件栏
 - Cmd/Ctrl + Shift + X — 隐藏/显示状态栏
+- Cmd/Ctrl + Shift + Z — 切换状态栏位置
 - Cmd/Ctrl + S — 按当前视图保存 JSON 或 Markdown
 - 表格视图：Shift + 点击折叠箭头 — 折叠全部 Section
 - 表格视图：点击列标题 — 按上/下排序该列

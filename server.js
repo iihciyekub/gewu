@@ -9,8 +9,6 @@ const fs = require('fs');
 const path = require('path');
 const url = require('url');
 const os = require('os');
-const { execFileSync } = require('child_process');
-const { spawn } = require('child_process');
 const { handleBibDownload } = require('./server/api/bib-download');
 const { handleGroupByFields } = require('./server/api/groupby-fields');
 const { handleJsonQuery } = require('./server/api/json-query');
@@ -629,96 +627,6 @@ const server = http.createServer((req, res) => {
             ensureProjectStructure,
             normalizeGroupList,
             fileOrderName: FILE_ORDER_NAME
-        });
-        return;
-    }
-
-    // Open Codex CLI in terminal at project path
-    if (req.method === 'POST' && pathname === '/open-codex-cli') {
-        let body = '';
-        req.on('data', chunk => { body += chunk.toString(); });
-        req.on('end', () => {
-            try {
-                const data = body ? JSON.parse(body) : {};
-                const { projectPath } = data;
-                if (!projectPath) {
-                    res.writeHead(400, { 'Content-Type': 'application/json' });
-                    res.end(JSON.stringify({ success: false, error: 'Missing projectPath' }));
-                    return;
-                }
-                const { fullPath } = normalizeProjectPath(projectPath);
-                if (!fs.existsSync(fullPath)) {
-                    res.writeHead(404, { 'Content-Type': 'application/json' });
-                    res.end(JSON.stringify({ success: false, error: 'Project path not found' }));
-                    return;
-                }
-
-                if (process.platform === 'darwin') {
-                    const script = [
-                        'tell application "Terminal"',
-                        'activate',
-                        `do script "cd ${fullPath.replace(/"/g, '\\"')} && codex"`,
-                        'end tell'
-                    ].join('\n');
-                    execFileSync('osascript', ['-e', script], { stdio: 'ignore' });
-                } else if (process.platform === 'win32') {
-                    spawn('cmd', ['/c', 'start', 'cmd', '/k', `cd /d "${fullPath}" && codex`], { detached: true });
-                } else {
-                    spawn('bash', ['-lc', `cd "${fullPath.replace(/"/g, '\\"')}" && codex`], { detached: true });
-                }
-
-                res.writeHead(200, { 'Content-Type': 'application/json' });
-                res.end(JSON.stringify({ success: true }));
-            } catch (error) {
-                console.error('✗ open-codex-cli failed:', error);
-                res.writeHead(500, { 'Content-Type': 'application/json' });
-                res.end(JSON.stringify({ success: false, error: error.message }));
-            }
-        });
-        return;
-    }
-
-    // Open Claude CLI in terminal at project path
-    if (req.method === 'POST' && pathname === '/open-claude-cli') {
-        let body = '';
-        req.on('data', chunk => { body += chunk.toString(); });
-        req.on('end', () => {
-            try {
-                const data = body ? JSON.parse(body) : {};
-                const { projectPath } = data;
-                if (!projectPath) {
-                    res.writeHead(400, { 'Content-Type': 'application/json' });
-                    res.end(JSON.stringify({ success: false, error: 'Missing projectPath' }));
-                    return;
-                }
-                const { fullPath } = normalizeProjectPath(projectPath);
-                if (!fs.existsSync(fullPath)) {
-                    res.writeHead(404, { 'Content-Type': 'application/json' });
-                    res.end(JSON.stringify({ success: false, error: 'Project path not found' }));
-                    return;
-                }
-
-                if (process.platform === 'darwin') {
-                    const script = [
-                        'tell application "Terminal"',
-                        'activate',
-                        `do script "cd ${fullPath.replace(/"/g, '\\"')} && claude"`,
-                        'end tell'
-                    ].join('\n');
-                    execFileSync('osascript', ['-e', script], { stdio: 'ignore' });
-                } else if (process.platform === 'win32') {
-                    spawn('cmd', ['/c', 'start', 'cmd', '/k', `cd /d "${fullPath}" && claude`], { detached: true });
-                } else {
-                    spawn('bash', ['-lc', `cd "${fullPath.replace(/"/g, '\\"')}" && claude`], { detached: true });
-                }
-
-                res.writeHead(200, { 'Content-Type': 'application/json' });
-                res.end(JSON.stringify({ success: true }));
-            } catch (error) {
-                console.error('✗ open-claude-cli failed:', error);
-                res.writeHead(500, { 'Content-Type': 'application/json' });
-                res.end(JSON.stringify({ success: false, error: error.message }));
-            }
         });
         return;
     }
@@ -2238,7 +2146,5 @@ server.listen(PORT, HOST, () => {
     console.log('   - POST /bib-download (download BibTeX by DOI list)');
     console.log('   - POST /groupby-fields (aggregate field values by view)');
     console.log('   - POST /json-query (query JSON items by fields)');
-    console.log('   - POST /open-codex-cli (open Codex CLI at project path)');
-    console.log('   - POST /open-claude-cli (open Claude CLI at project path)');
     console.log('Press Ctrl+C to stop\n');
 });
