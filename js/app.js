@@ -13216,34 +13216,11 @@ class PaperStatsApp {
             }
         };
         tryScroll();
-        
-        // Ensure right panel is expanded when opening PDF via citation link
+
+        // Only load PDF if the right panel is already expanded
         const rightPanel = document.querySelector('.right-panel');
-        let panelWasExpanded = false;
-        if (rightPanel && rightPanel.classList.contains('panel-collapsed')) {
-            const middleResizer = document.getElementById('middleResizer');
-            const icon = middleResizer?.querySelector('i');
-            rightPanel.classList.remove('panel-collapsed');
-            if (!this.lastRightWidth || this.lastRightWidth <= 1) {
-                const container = document.querySelector('.container');
-                const containerWidth = container?.getBoundingClientRect().width || window.innerWidth;
-                this.lastRightWidth = Math.max(200, Math.floor(containerWidth * 0.33));
-            }
-            rightPanel.style.width = this.lastRightWidth + 'px';
-            if (middleResizer) middleResizer.title = 'Hide PDF preview (Cmd+Shift+F / Ctrl+Shift+F)';
-            if (icon) icon.style.transform = 'rotate(0deg)';
-            const leftPanel = document.querySelector('.left-panel');
-            this.savePanelWidths(leftPanel, rightPanel, { collapsedRight: false, lastLeftWidth: this.lastLeftWidth, lastRightWidth: this.lastRightWidth });
-            panelWasExpanded = true;
-        }
-        
-        await this.ensurePdfLoaded();
-        
-        // Trigger window resize to make PDF.js recalculate layout
-        if (panelWasExpanded) {
-            requestAnimationFrame(() => {
-                window.dispatchEvent(new Event('resize'));
-            });
+        if (rightPanel && !rightPanel.classList.contains('panel-collapsed')) {
+            await this.ensurePdfLoaded();
         }
     }
 
