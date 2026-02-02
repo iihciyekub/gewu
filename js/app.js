@@ -1865,6 +1865,10 @@ class PaperStatsApp {
             }
             if (mod && e.key === '/') {
                 e.preventDefault();
+                if ((this.currentView || 'structured') === 'settings') {
+                    this.switchToView('draft');
+                    return;
+                }
                 this.toggleJsonMdSource();
             }
         });
@@ -9237,6 +9241,12 @@ class PaperStatsApp {
 
     async toggleJsonMdSource() {
         const view = this.currentView || 'structured';
+        if (view === 'settings') {
+            await this.switchToView('draft');
+            if ((this.currentView || 'structured') === 'settings') return;
+            await this.toggleJsonMdSource();
+            return;
+        }
         // JSON 视图：表格/源码之间切换
         if (view === 'flat') {
             await this.switchToView('structured');
