@@ -3139,7 +3139,7 @@ body.theme-vscode .qa-bubble {
     right: 14px;
     bottom: 10px;
     display: inline-flex;
-    gap: 12px;
+    gap: 2px;
     height: 24px;
     align-items: center;
     flex: 0 0 auto;

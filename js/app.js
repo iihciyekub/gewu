@@ -120,6 +120,9 @@ class PaperStatsApp {
         this.mdChatHistory = [];
         this.mdChatHistoryIndex = -1;
         this.mdChatHistoryDraft = '';
+        this.mdChatSavedSlots = [[], [], []];
+        this.mdChatSavedSlotsLoaded = false;
+        this._mdChatSlotButtons = null;
 
         // 项目管理
         this.currentProject = null; // { name, path }
@@ -1691,6 +1694,7 @@ class PaperStatsApp {
 
         await this.loadUiPreferencesFromStorage();
         await this.loadProjectViewStatesFromStorage();
+        await this.loadMdChatSavedSlots();
         this.updateViewTabs();
         await this.loadFileFilterHistory();
         this.renderFileFilterHistory();
@@ -10548,8 +10552,10 @@ class PaperStatsApp {
         const closeBtn = panel?.querySelector('.md-chat-btn[title="Close"]');
         const editorContainer = document.querySelector('.editor-container');
         const chatToggleBtn = document.getElementById('mdChatToggleBtn');
+        const slotButtons = panel?.querySelectorAll('.md-chat-slot-btn');
         if (!panel || !resizer) return;
         this._mdChatPanelBound = true;
+        this._mdChatSlotButtons = slotButtons ? Array.from(slotButtons) : null;
 
         const minHeight = 140;
         const collapseThreshold = 150;
@@ -10981,6 +10987,91 @@ class PaperStatsApp {
             if (!storedHidden && textarea) {
                 setTimeout(() => textarea.focus(), 100);
             }
+        }
+
+        if (this._mdChatSlotButtons && this._mdChatSlotButtons.length) {
+            this.loadMdChatSavedSlots().then(() => {
+                this.updateMdChatSlotIcons();
+            }).catch(() => {
+                this.updateMdChatSlotIcons();
+            });
+            this._mdChatSlotButtons.forEach((btn, idx) => {
+                btn.addEventListener('click', async (e) => {
+                    e.preventDefault();
+                    await this.handleMdChatSlotAction(typeof btn.dataset.slot !== 'undefined'
+                        ? Number(btn.dataset.slot)
+                        : idx);
+                });
+            });
+        }
+    }
+
+    async loadMdChatSavedSlots() {
+        const fallback = [[], [], []];
+        if (!this.projectStorage || !this.currentProject) {
+            this.mdChatSavedSlots = fallback;
+            this.mdChatSavedSlotsLoaded = true;
+            return;
+        }
+        try {
+            const stored = await this.projectStorage.load('md-chat-fields');
+            const slots = Array.isArray(stored?.slots) ? stored.slots : Array.isArray(stored) ? stored : [];
+            const normalized = [0, 1, 2].map((idx) => {
+                const list = Array.isArray(slots[idx]) ? slots[idx] : [];
+                return list.map(v => String(v || '').trim()).filter(Boolean);
+            });
+            this.mdChatSavedSlots = normalized;
+        } catch (err) {
+            console.warn('Failed to load md-chat fields:', err);
+            this.mdChatSavedSlots = fallback;
+        }
+        this.mdChatSavedSlotsLoaded = true;
+        this.updateMdChatSlotIcons();
+    }
+
+    updateMdChatSlotIcons() {
+        const buttons = this._mdChatSlotButtons || Array.from(document.querySelectorAll('.md-chat-slot-btn'));
+        if (!buttons || !buttons.length) return;
+        const slots = Array.isArray(this.mdChatSavedSlots) ? this.mdChatSavedSlots : [];
+        buttons.forEach((btn, idx) => {
+            const icon = btn.querySelector('i');
+            const hasSaved = Array.isArray(slots[idx]) && slots[idx].length > 0;
+            if (icon) {
+                icon.className = hasSaved
+                    ? 'fa-brands fa-square-font-awesome-stroke'
+                    : 'fa-regular fa-square';
+            }
+            btn.classList.toggle('is-saved', hasSaved);
+        });
+    }
+
+    async handleMdChatSlotAction(slotIndex) {
+        const idx = Number.isInteger(slotIndex) ? slotIndex : 0;
+        if (!this.mdChatSavedSlotsLoaded) {
+            await this.loadMdChatSavedSlots();
+        }
+        const currentFields = Array.from(this.mdChatQueryFields || [])
+            .map(v => String(v || '').trim())
+            .filter(Boolean);
+        const hasCurrent = currentFields.length > 0;
+        const savedSlots = Array.isArray(this.mdChatSavedSlots) ? this.mdChatSavedSlots : [[], [], []];
+        const saved = Array.isArray(savedSlots[idx]) ? savedSlots[idx] : [];
+
+        if (hasCurrent) {
+            savedSlots[idx] = currentFields;
+            this.mdChatSavedSlots = savedSlots;
+            if (this.projectStorage && this.currentProject) {
+                this.projectStorage.update('md-chat-fields', { slots: savedSlots });
+            }
+            this.updateMdChatSlotIcons();
+            return;
+        }
+
+        if (saved.length > 0) {
+            this.mdChatQueryFields = new Set(saved);
+            this.renderMdChatQueryChips();
+            this.runMdChatFieldQuery();
+            return;
         }
     }
 

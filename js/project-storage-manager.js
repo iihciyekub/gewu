@@ -19,7 +19,8 @@ class ProjectStorageManager {
             'section-states': 'section-states.json',
             'prompt-config': 'prompt-config.json',
             'ui-preferences': 'ui-preferences.json',
-            'file-filter-history': 'file-filter-history.json'
+            'file-filter-history': 'file-filter-history.json',
+            'md-chat-fields': 'md-chat-fields.json'
         };
     }
     
