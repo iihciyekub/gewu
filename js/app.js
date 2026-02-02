@@ -1573,6 +1573,14 @@ class PaperStatsApp {
         // 初始化管理器
         this.specialSyntaxManager = new SpecialSyntaxManager(this);
         this.projectStorage = new ProjectStorageManager(this);
+        this.doiCacheManager = new DoiCacheManager(this);
+
+        // 初始化 DOI 缓存的 IndexedDB
+        try {
+            await this.doiCacheManager.init();
+        } catch (err) {
+            console.error('Failed to initialize DOI cache:', err);
+        }
 
         // 加载环境信息（用于占位符和默认路径），不阻塞主流程
         this.loadEnvInfo();
@@ -1692,6 +1700,15 @@ class PaperStatsApp {
         await this.loadFileList();
         await this.applyCurrentView();
         this.setupEditableListeners();
+
+        // 构建 DOI 缓存（异步，不阻塞主流程）
+        if (this.doiCacheManager) {
+            this.doiCacheManager.getCacheData().then(() => {
+                console.log('DOI cache ready for autocomplete');
+            }).catch(err => {
+                console.error('Failed to build DOI cache:', err);
+            });
+        }
     }
 
     // 加载项目配置
@@ -8113,7 +8130,12 @@ class PaperStatsApp {
         statsEl.textContent = `${list.length} unique | ${dupCount} duplicates`;
     }
 
-    async exportQueryData() {
+    async exportQueryData(options = {}) {
+        // 支持两种导出模式：
+        // 1. 用户选择的字段（默认）
+        // 2. 固定的4个核心字段用于 DOI 自动补全缓存
+        const exportForAutocomplete = options.forAutocomplete === true;
+
         const files = this.visibleFileOrder && this.visibleFileOrder.length ? this.visibleFileOrder : (this.currentFileList || []);
         if (!files.length) {
             this.showNotification('No files to export', 'info');
@@ -8147,20 +8169,56 @@ class PaperStatsApp {
             }
             try {
                 if (!doi) continue;
-                const meta = data && data.meta_info ? data.meta_info : {};
-                const row = {
-                    doi,
-                    'meta_info.No': typeof meta.No === 'number' ? meta.No : (meta.No || 0)
-                };
-                const fieldsToUse = this.queryFieldSelected.size ? Array.from(this.queryFieldSelected) : [];
-                fieldsToUse.forEach((field) => {
-                    if (field === 'doi') return;
-                    const val = data ? this.getFieldValueForQuery(data, field) : undefined;
-                    if (val !== undefined) {
-                        row[field] = val;
-                    }
-                });
-                rows.push(row);
+
+                if (exportForAutocomplete) {
+                    // 导出固定的4个核心字段用于自动补全
+                    const extractField = (fieldPaths) => {
+                        for (const path of fieldPaths) {
+                            const parts = path.split('.');
+                            let value = data;
+                            for (const part of parts) {
+                                if (value && typeof value === 'object' && part in value) {
+                                    value = value[part];
+                                } else {
+                                    value = null;
+                                    break;
+                                }
+                            }
+                            if (value !== null && value !== undefined && value !== '') {
+                                if (Array.isArray(value)) return value.join('; ');
+                                return String(value);
+                            }
+                        }
+                        return '';
+                    };
+
+                    const title = extractField(['wos_data.title', 'meta_info.title', 'title', 'TI']);
+                    const authors = extractField(['wos_data.authors', 'meta_info.authors', 'authors', 'AF', 'AU']);
+                    const year = extractField(['wos_data.publication_year', 'meta_info.publication_year', 'year', 'PY']);
+
+                    rows.push({
+                        doi: doi,
+                        title: title,
+                        authors: authors,
+                        publication_year: year
+                    });
+                } else {
+                    // 导出用户选择的字段
+                    const meta = data && data.meta_info ? data.meta_info : {};
+                    const row = {
+                        doi,
+                        'meta_info.No': typeof meta.No === 'number' ? meta.No : (meta.No || 0)
+                    };
+                    const fieldsToUse = this.queryFieldSelected.size ? Array.from(this.queryFieldSelected) : [];
+                    fieldsToUse.forEach((field) => {
+                        if (field === 'doi') return;
+                        const val = data ? this.getFieldValueForQuery(data, field) : undefined;
+                        if (val !== undefined) {
+                            row[field] = val;
+                        }
+                    });
+                    rows.push(row);
+                }
             } catch (err) {
                 console.warn('exportQueryData skip', filename, err);
             }
@@ -14675,55 +14733,65 @@ class PaperStatsApp {
 
     /**
      * DOI 自动补全建议
-     * 根据项目中的文件列表提供 DOI 补全
+     * 使用缓存管理器提供高效的 DOI 补全
+     * 支持在 doi, title, authors, year 四个字段中进行模糊匹配
      */
     getDoiAutocompleteSuggestions(context) {
         if (!context) return [];
-        const searchText = (context.searchText || '').toLowerCase().trim();
 
-        // 获取项目中所有的 DOI（基于文件名/base）
-        const bases = Object.keys(this.fileMetaByBase || {});
-        if (!bases.length) return [];
+        // 如果缓存管理器未初始化，返回空列表
+        if (!this.doiCacheManager) {
+            console.warn('DOI Cache Manager not initialized');
+            return [];
+        }
 
-        // DOI 格式验证：必须包含斜杠或下划线（如 10.1234/abc 或 10.1234_abc）
-        const isValidDoiBase = (base) => {
-            // DOI 通常以 10. 开头，且包含斜杠或下划线
-            return /^10[._]/.test(base) || base.includes('_') && base.includes('.');
-        };
+        const searchText = (context.searchText || '').trim();
 
-        // 将 base 转换为 DOI 格式（将下划线替换回斜杠）
-        const doiList = bases
-            .filter(base => isValidDoiBase(base)) // 只保留有效的 DOI base
-            .map(base => {
-                // 从缓存或临时数据中获取额外信息
-                const cached = this.tempDataCache?.[base];
-                const meta = cached?.meta_info || {};
-                const title = meta.title || meta.TI || '';
-                const doi = meta.doi || base.replace(/_/g, '/');
-                return {
-                    base,
-                    doi,
-                    title: typeof title === 'string' ? title : (Array.isArray(title) ? title.join(' ') : '')
-                };
+        // 使用异步方式搜索（立即返回空数组，通过回调更新）
+        // 注意：这里我们需要同步返回，所以使用缓存的内存数据
+        const cacheData = this.doiCacheManager.memoryCache;
+
+        if (!cacheData || cacheData.length === 0) {
+            // 如果缓存为空，触发异步构建（不阻塞当前调用）
+            this.doiCacheManager.getCacheData().then(() => {
+                // 缓存构建完成后，可以触发 UI 更新
+                console.log('DOI cache built');
+            }).catch(err => {
+                console.error('Failed to build DOI cache:', err);
             });
+            return [];
+        }
 
-        // 过滤匹配的 DOI
-        const filtered = doiList.filter(item => {
-            if (!searchText) return true;
-            const doiLower = item.doi.toLowerCase();
-            const titleLower = item.title.toLowerCase();
-            const baseLower = item.base.toLowerCase();
-            return doiLower.includes(searchText) ||
-                   titleLower.includes(searchText) ||
-                   baseLower.includes(searchText);
+        const search = searchText.toLowerCase();
+
+        // 模糊匹配：任一字段包含搜索文本即匹配
+        const matches = cacheData.filter(item => {
+            if (!search) return true;
+            return item.doi.toLowerCase().includes(search) ||
+                   item.title.toLowerCase().includes(search) ||
+                   item.authors.toLowerCase().includes(search) ||
+                   item.year.toLowerCase().includes(search);
         });
 
-        // 返回建议列表
-        return filtered.slice(0, 20).map(item => ({
-            label: item.doi,
-            insertText: item.doi,
-            detail: item.title ? item.title.substring(0, 50) + (item.title.length > 50 ? '...' : '') : 'DOI'
-        }));
+        // 返回增强的建议列表
+        // 格式：{ label, insertText, detail, year, authorDisplay, title }
+        return matches.slice(0, 20).map(item => {
+            // 构建显示详情
+            const yearPart = item.year ? `(${item.year})` : '';
+            const authorYearDisplay = item.authorDisplay && item.year
+                ? `${item.authorDisplay} ${yearPart}`
+                : (item.authorDisplay || yearPart);
+
+            return {
+                label: item.doi,
+                insertText: item.doi,
+                detail: authorYearDisplay || 'DOI',
+                title: item.title ? item.title.substring(0, 80) + (item.title.length > 80 ? '...' : '') : '',
+                year: item.year,
+                authorDisplay: item.authorDisplay,
+                isDoi: true // 标记为 DOI 类型的补全项
+            };
+        });
     }
 
     renderGotoLinks(rawText, valuePath = '') {

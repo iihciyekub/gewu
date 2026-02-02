@@ -4780,13 +4780,13 @@ body.theme-vscode .header-dropdown-item:hover {
     border: 1px solid var(--wos-border);
     border-radius: 4px;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
-    max-height: 250px;
+    max-height: 350px;
     overflow-y: auto;
     overflow-x: hidden;
     z-index: 10000;
-    min-width: 200px;
-    max-width: 350px;
-    padding: 0px 2px;
+    min-width: 250px;
+    max-width: 600px;
+    padding: 2px;
     font-size: 11px;
 }
 
@@ -4823,6 +4823,55 @@ body.theme-vscode .header-dropdown-item:hover {
     color: var(--wos-text-light);
     opacity: 0.75;
     flex-shrink: 0;
+}
+
+/* DOI 类型的自动补全项样式 */
+.autocomplete-item-doi {
+    flex-direction: column;
+    align-items: stretch;
+    padding: 6px 10px;
+    white-space: normal;
+    gap: 4px;
+}
+
+.autocomplete-doi-container {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    width: 100%;
+}
+
+.autocomplete-doi-main {
+    font-family: 'Monaco', 'Menlo', 'Consolas', 'Courier New', monospace;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--wos-blue);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.autocomplete-doi-meta {
+    font-size: 11px;
+    color: var(--wos-text-light);
+    opacity: 0.85;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.autocomplete-doi-title {
+    font-size: 11px;
+    color: var(--wos-text);
+    opacity: 0.75;
+    line-height: 1.4;
+    max-height: 2.8em;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    word-break: break-word;
 }
 
 body.theme-vscode .autocomplete-dropdown {

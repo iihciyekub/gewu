@@ -339,18 +339,42 @@ class AutocompleteManager {
             const isSelected = index === this.selectedIndex;
             const label = this.escapeHtml(cmd.label);
             const detail = this.escapeHtml(cmd.detail || '');
-            return `
-                <div class="autocomplete-item ${isSelected ? 'selected' : ''}" 
-                     data-index="${index}"
-                     title="${this.escapeHtml(cmd.documentation || cmd.detail || '')}">
-                    <span class="autocomplete-label">${label}</span>
-                    <span class="autocomplete-detail">${detail}</span>
-                </div>
-            `;
+
+            // 检查是否为 DOI 类型的补全项（包含 title 字段）
+            const isDoi = cmd.isDoi === true || (cmd.title && cmd.title.length > 0);
+
+            if (isDoi) {
+                // DOI 类型：多行显示格式
+                // 第一行：DOI
+                // 第二行：作者 + 年份
+                // 第三行：标题
+                const title = this.escapeHtml(cmd.title || '');
+                return `
+                    <div class="autocomplete-item autocomplete-item-doi ${isSelected ? 'selected' : ''}"
+                         data-index="${index}"
+                         title="${this.escapeHtml(cmd.documentation || cmd.title || '')}">
+                        <div class="autocomplete-doi-container">
+                            <div class="autocomplete-doi-main">${label}</div>
+                            <div class="autocomplete-doi-meta">${detail}</div>
+                            ${title ? `<div class="autocomplete-doi-title">${title}</div>` : ''}
+                        </div>
+                    </div>
+                `;
+            } else {
+                // 标准类型：单行显示
+                return `
+                    <div class="autocomplete-item ${isSelected ? 'selected' : ''}"
+                         data-index="${index}"
+                         title="${this.escapeHtml(cmd.documentation || cmd.detail || '')}">
+                        <span class="autocomplete-label">${label}</span>
+                        <span class="autocomplete-detail">${detail}</span>
+                    </div>
+                `;
+            }
         }).join('');
-        
+
         this.dropdown.innerHTML = items;
-        
+
         // 绑定点击事件
         this.dropdown.querySelectorAll('.autocomplete-item').forEach(item => {
             item.addEventListener('click', () => {

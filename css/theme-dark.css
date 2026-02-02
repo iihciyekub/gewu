@@ -389,6 +389,18 @@ body.theme-dark .autocomplete-detail {
     color: #9aa4b2;
 }
 
+body.theme-dark .autocomplete-doi-main {
+    color: #8fb8ff;
+}
+
+body.theme-dark .autocomplete-doi-meta {
+    color: #9aa4b2;
+}
+
+body.theme-dark .autocomplete-doi-title {
+    color: #d4d4d4;
+}
+
 body.theme-dark .json-table td:nth-child(2) {
     color: #e3c07b;
     background: #1f1f1f;
