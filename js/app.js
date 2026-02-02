@@ -18803,10 +18803,25 @@ document.addEventListener('DOMContentLoaded', () => {
     (() => {
         const slider = document.getElementById('mdChatFontSizeSlider');
         const valueDisplay = document.getElementById('mdChatFontSizeValue');
+        const control = document.querySelector('.md-chat-font-size-control');
         const chatBody = document.querySelector('.md-chat-body');
         const storageKey = 'mdChatFontSize';
 
-        if (!slider || !valueDisplay || !chatBody) return;
+        if (!slider || !valueDisplay || !chatBody || !control) return;
+        let hideTimer = null;
+        const showSlider = () => {
+            control.classList.add('is-slider-visible');
+            if (hideTimer) {
+                clearTimeout(hideTimer);
+                hideTimer = null;
+            }
+        };
+        const scheduleHide = () => {
+            if (hideTimer) clearTimeout(hideTimer);
+            hideTimer = setTimeout(() => {
+                control.classList.remove('is-slider-visible');
+            }, 1500);
+        };
 
         // 从本地存储恢复字体大小
         const savedFontSize = localStorage.getItem(storageKey);
@@ -18816,6 +18831,15 @@ document.addEventListener('DOMContentLoaded', () => {
             valueDisplay.textContent = `${fontSize}px`;
             chatBody.style.fontSize = `${fontSize}px`;
         }
+
+        control.addEventListener('mouseenter', () => {
+            showSlider();
+        });
+        control.addEventListener('mouseleave', () => {
+            scheduleHide();
+        });
+        slider.addEventListener('focus', showSlider);
+        slider.addEventListener('blur', scheduleHide);
 
         // 监听滑杆变化
         slider.addEventListener('input', (e) => {

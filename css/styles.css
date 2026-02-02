@@ -2942,7 +2942,7 @@ body.theme-vscode .qa-bubble {
 }
 
 .md-chat-font-size-control input[type="range"] {
-    width: 100px;
+    width: 0;
     height: 4px;
     background: #e0e0e0;
     border-radius: 2px;
@@ -2950,6 +2950,17 @@ body.theme-vscode .qa-bubble {
     -webkit-appearance: none;
     appearance: none;
     cursor: pointer;
+    opacity: 0;
+    pointer-events: none;
+    transition: width 0.15s ease, opacity 0.15s ease, margin-left 0.15s ease;
+    margin-left: 0;
+}
+
+.md-chat-font-size-control.is-slider-visible input[type="range"] {
+    width: 100px;
+    opacity: 1;
+    pointer-events: auto;
+    margin-left: 2px;
 }
 
 .md-chat-font-size-control input[type="range"]::-webkit-slider-thumb {
