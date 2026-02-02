@@ -18790,6 +18790,39 @@ document.addEventListener('DOMContentLoaded', () => {
         app.setupEditableListeners();
     }, 500);
 
+    // 初始化 MD Chat 字体大小控制
+    (() => {
+        const slider = document.getElementById('mdChatFontSizeSlider');
+        const valueDisplay = document.getElementById('mdChatFontSizeValue');
+        const chatBody = document.querySelector('.md-chat-body');
+        const storageKey = 'mdChatFontSize';
+
+        if (!slider || !valueDisplay || !chatBody) return;
+
+        // 从本地存储恢复字体大小
+        const savedFontSize = localStorage.getItem(storageKey);
+        if (savedFontSize) {
+            const fontSize = parseInt(savedFontSize, 10);
+            slider.value = fontSize;
+            valueDisplay.textContent = `${fontSize}px`;
+            chatBody.style.fontSize = `${fontSize}px`;
+        }
+
+        // 监听滑杆变化
+        slider.addEventListener('input', (e) => {
+            const fontSize = e.target.value;
+            valueDisplay.textContent = `${fontSize}px`;
+            chatBody.style.fontSize = `${fontSize}px`;
+
+            // 保存到本地存储
+            try {
+                localStorage.setItem(storageKey, fontSize);
+            } catch (err) {
+                console.warn('无法保存字体大小设置:', err);
+            }
+        });
+    })();
+
     // 页面关闭/刷新前提示保存
     window.addEventListener('beforeunload', (e) => {
         // 通过localStorage发送关闭信号给独立PDF窗口
