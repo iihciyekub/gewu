@@ -4837,13 +4837,13 @@ body.theme-vscode .header-dropdown-item:hover {
 .autocomplete-doi-container {
     display: flex;
     flex-direction: column;
-    gap: 3px;
+    gap: 2px;
     width: 100%;
 }
 
 .autocomplete-doi-main {
     font-family: 'Monaco', 'Menlo', 'Consolas', 'Courier New', monospace;
-    font-size: 13px;
+    font-size: 11px;
     font-weight: 600;
     color: var(--wos-blue);
     overflow: hidden;
@@ -4853,8 +4853,8 @@ body.theme-vscode .header-dropdown-item:hover {
 
 .autocomplete-doi-meta {
     font-size: 11px;
+    padding-left: 10px;
     color: var(--wos-text-light);
-    opacity: 0.85;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -4862,8 +4862,8 @@ body.theme-vscode .header-dropdown-item:hover {
 
 .autocomplete-doi-title {
     font-size: 11px;
+    padding-left: 10px;
     color: var(--wos-text);
-    opacity: 0.75;
     line-height: 1.4;
     max-height: 2.8em;
     overflow: hidden;

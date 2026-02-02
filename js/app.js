@@ -12624,10 +12624,30 @@ class PaperStatsApp {
         if (!renderRoot) return;
         const spans = Array.from(renderRoot.querySelectorAll('.citation-inline'));
         if (!spans.length) return;
-        await Promise.allSettled(spans.map(async (span) => {
+
+        // 创建进度跟踪器
+        const tracker = (typeof this.createStatusProgressTracker === 'function')
+            ? this.createStatusProgressTracker('Citation Rendering')
+            : null;
+
+        const total = spans.length;
+        let completed = 0;
+
+        if (tracker) {
+            tracker.update(`Rendering citations (0/${total})`, 0);
+        }
+
+        await Promise.allSettled(spans.map(async (span, index) => {
             const type = span.dataset.citationType === 'cite' ? 'cite' : 'citep';
             const dois = (span.dataset.citationDois || '').split(',').map(d => d.trim()).filter(Boolean);
-            if (!dois.length) return;
+            if (!dois.length) {
+                completed++;
+                if (tracker) {
+                    const progress = Math.round((completed / total) * 100);
+                    tracker.update(`Rendering citations (${completed}/${total})`, progress);
+                }
+                return;
+            }
             try {
                 const text = await this.formatCitation(dois, type);
                 const links = this.buildCitationLinks(text, dois);
@@ -12647,8 +12667,19 @@ class PaperStatsApp {
                 console.warn('渲染引文失败:', err);
                 span.textContent = `[${dois.join('; ')}]`;
                 span.title = `渲染失败: ${err.message}`;
+            } finally {
+                completed++;
+                if (tracker) {
+                    const progress = Math.round((completed / total) * 100);
+                    tracker.update(`Rendering citations (${completed}/${total})`, progress);
+                }
             }
         }));
+
+        // 完成后自动清除进度条（延迟800ms后消失）
+        if (tracker) {
+            tracker.finish(`Rendered ${total} citation(s)`, 800);
+        }
     }
 
     async applyGroupByRendering(renderRoot) {
