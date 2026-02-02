@@ -1,8 +1,6 @@
-version: "3.8"
-
 services:
   gewu:
-    build: .
+    image: gewu:0.0.1
     ports:
       - "8000:8000"
     init: true
