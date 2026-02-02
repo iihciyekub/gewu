@@ -7487,7 +7487,23 @@ class PaperStatsApp {
     getOrderedEntriesForObject(obj, basePath = []) {
         const entries = Object.entries(obj || {});
         if (!Array.isArray(basePath) || !basePath.includes('wos_data')) return entries;
-        const preferred = ['title', 'doi', 'wos_id', 'citations', 'references', 'related', 'source_title', 'issn', 'eissn', 'authors'];
+        const preferred = [
+            'doi',
+            'wos_id',
+            'title',
+            'authors',
+            'citations',
+            'references',
+            'related',
+            'cited_reference_count',
+            'publication_year',
+            'times_cited_all_databases',
+            'times_cited_wos',
+            'usage_count_180_days',
+            'source_title',
+            'issn',
+            'eissn'
+        ];
         const keys = entries.map(([k]) => k);
         const seen = new Set();
         const ordered = [];
