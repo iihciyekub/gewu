@@ -230,13 +230,6 @@ runMdChatFieldQuery()
           └── formatObjectListItem() [extract from objects]
 ```
 
-### ensureMdChatMetaEl()
-
-Ensures the metadata element exists in the chat panel header.
-Creates it if missing, then returns the reference.
-
-**Returns:** HTMLElement or null
-
 ## Workflow
 
 ### User Enters Field in Chat Input

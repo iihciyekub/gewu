@@ -230,9 +230,6 @@
                 body.innerHTML = '<div class="md-chat-query-empty">No JSON loaded.</div>';
                 return;
             }
-            const base = this.currentFileBase || this.currentFile || '';
-            const viewSelect = document.getElementById('jsonViewSelect');
-            const view = (viewSelect && viewSelect.value) ? viewSelect.value : (this.currentJsonView || this.currentView || 'structured');
             const blocks = fields.map((field) => {
                 const values = this.resolveMdChatFieldValues(this.currentData, field);
                 const text = values.length ? values.map(v => this.formatMdChatValue(v)).filter(Boolean).join('\n') : '(not found)';
@@ -245,28 +242,6 @@
             `;
             }).join('');
             body.innerHTML = blocks;
-            const meta = this.ensureMdChatMetaEl();
-            if (meta) {
-                meta.textContent = `File: ${base} · View: ${view}`;
-                meta.title = meta.textContent;
-            }
-        };
-
-        /**
-         * Ensure the metadata element exists in the chat panel
-         * @returns {HTMLElement|null} The metadata element
-         */
-        proto.ensureMdChatMetaEl = function () {
-            const panel = document.getElementById('mdChatPanel');
-            const top = panel?.querySelector('.md-chat-top');
-            if (!panel || !top) return null;
-            let meta = top.querySelector('.md-chat-query-meta');
-            if (!meta) {
-                meta = document.createElement('div');
-                meta.className = 'md-chat-query-meta';
-                top.insertBefore(meta, top.firstChild);
-            }
-            return meta;
         };
     };
 

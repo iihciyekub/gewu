@@ -10540,7 +10540,6 @@ class PaperStatsApp {
         const chatToggleBtn = document.getElementById('mdChatToggleBtn');
         if (!panel || !resizer) return;
         this._mdChatPanelBound = true;
-        this.ensureMdChatMetaEl();
 
         const minHeight = 140;
         const collapseThreshold = 150;
