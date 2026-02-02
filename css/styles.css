@@ -3118,6 +3118,7 @@ body.theme-vscode .qa-bubble {
     flex: 1;
     align-self: stretch;
     border: none;
+    border-top: 1px dashed #ded8d8;
     padding: 4px 8px;
     outline: none;
     font-size: 13px;

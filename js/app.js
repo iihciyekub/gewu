@@ -11038,7 +11038,7 @@ class PaperStatsApp {
             const hasSaved = Array.isArray(slots[idx]) && slots[idx].length > 0;
             if (icon) {
                 icon.className = hasSaved
-                    ? 'fa-brands fa-square-font-awesome-stroke'
+                    ? 'fa-solid fa-square-check'
                     : 'fa-regular fa-square';
             }
             btn.classList.toggle('is-saved', hasSaved);
@@ -18917,10 +18917,12 @@ document.addEventListener('DOMContentLoaded', () => {
         // 从本地存储恢复字体大小
         const savedFontSize = localStorage.getItem(storageKey);
         if (savedFontSize) {
-            const fontSize = parseInt(savedFontSize, 10);
-            slider.value = fontSize;
-            valueDisplay.textContent = `${fontSize}px`;
-            chatBody.style.fontSize = `${fontSize}px`;
+            const fontSize = Number.parseFloat(savedFontSize);
+            if (Number.isFinite(fontSize)) {
+                slider.value = String(fontSize);
+                valueDisplay.textContent = `${fontSize.toFixed(1)}px`;
+                chatBody.style.fontSize = `${fontSize}px`;
+            }
         }
 
         control.addEventListener('mouseenter', () => {
@@ -18934,13 +18936,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // 监听滑杆变化
         slider.addEventListener('input', (e) => {
-            const fontSize = e.target.value;
-            valueDisplay.textContent = `${fontSize}px`;
+            const fontSize = Number.parseFloat(e.target.value);
+            if (!Number.isFinite(fontSize)) return;
+            valueDisplay.textContent = `${fontSize.toFixed(1)}px`;
             chatBody.style.fontSize = `${fontSize}px`;
 
             // 保存到本地存储
             try {
-                localStorage.setItem(storageKey, fontSize);
+                localStorage.setItem(storageKey, String(fontSize));
             } catch (err) {
                 console.warn('无法保存字体大小设置:', err);
             }
