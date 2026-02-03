@@ -2998,6 +2998,7 @@ body.theme-vscode .qa-bubble {
     display: flex;
     flex-direction: column;
     flex: 1 1 auto;
+    min-height: 0;
     min-width: 0;
 }
 
@@ -3017,9 +3018,9 @@ body.theme-vscode .qa-bubble {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 8px 16px;
+    padding: 2px 16px;
     transition: opacity 0.2s ease, max-height 0.2s ease;
-    max-height: 40px;
+    max-height: 30px;
     gap: 12px;
 }
 
@@ -3115,6 +3116,7 @@ body.theme-vscode .qa-bubble {
 
 .md-chat-body {
     flex: 1;
+    min-height: 0;
     overflow-y: auto;
 }
 
@@ -3289,6 +3291,8 @@ body.theme-vscode .md-chat-input-text {
     font-size: 0.75em; /* 相对于父元素，原来 12px 基于 16px = 0.75em */
     color: #2c3a47;
     white-space: pre-wrap;
+    text-align: justify;
+    text-justify: inter-ideograph;
 }
 
 .md-chat-query-empty {

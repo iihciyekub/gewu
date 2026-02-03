@@ -1075,7 +1075,6 @@ const server = http.createServer((req, res) => {
                     throw new Error('访问被拒绝：文件必须在项目目录内');
                 }
 
-                console.log('📍 读取文件:', targetFile);
 
                 if (!fs.existsSync(targetFile)) {
                     res.writeHead(404, { 'Content-Type': 'application/json' });
@@ -1266,7 +1265,6 @@ const server = http.createServer((req, res) => {
                 const content = JSON.stringify(jsonData, null, 2);
                 fs.writeFileSync(absolutePath, content, 'utf-8');
 
-                console.log(`✓ Saved JSON to: ${absolutePath}`);
 
                 res.writeHead(200, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify({
@@ -1316,7 +1314,6 @@ const server = http.createServer((req, res) => {
 
                 fs.unlinkSync(absolutePath);
 
-                console.log(`✓ Deleted file: ${absolutePath}`);
 
                 res.writeHead(200, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify({
@@ -1349,8 +1346,6 @@ const server = http.createServer((req, res) => {
                 return;
             }
 
-            console.log('📄 PDF请求:', { projectPath, pdfFile });
-
             const { projectKey, fullPath } = normalizeProjectPath(projectPath);
 
             // 构建PDF文件路径
@@ -1368,8 +1363,6 @@ const server = http.createServer((req, res) => {
             if (relativePath.startsWith('..')) {
                 throw new Error('访问被拒绝：文件必须在项目目录内');
             }
-
-            console.log('📍 读取PDF:', targetFile);
 
             if (!fs.existsSync(targetFile)) {
                 res.writeHead(404, { 'Content-Type': 'text/plain' });
@@ -1449,8 +1442,6 @@ const server = http.createServer((req, res) => {
             });
             fs.createReadStream(targetFile).pipe(res);
 
-            console.log('✅ PDF读取成功');
-
         } catch (error) {
             console.error('✗ 读取PDF错误:', error);
             res.writeHead(500, { 'Content-Type': 'text/plain' });
@@ -1467,8 +1458,6 @@ const server = http.createServer((req, res) => {
         req.on('end', () => {
             try {
                 const { projectPath, file } = JSON.parse(body);
-
-                console.log('📁 获取PDF目录:', { projectPath, file });
 
                 const { projectKey, fullPath } = normalizeProjectPath(projectPath);
 
@@ -1488,8 +1477,6 @@ const server = http.createServer((req, res) => {
 
                 // 获取文件所在目录
                 const directory = path.dirname(targetFile);
-
-                console.log('✅ PDF目录:', directory);
 
                 res.writeHead(200, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify({ directory }));
@@ -1512,8 +1499,6 @@ const server = http.createServer((req, res) => {
             try {
                 const { projectPath, filename, data } = JSON.parse(body);
 
-                console.log('💾 保存PDF到项目pdf目录:', { projectPath, filename });
-
                 const { projectKey, fullPath } = normalizeProjectPath(projectPath);
 
                 // 始终保存到项目的pdf目录
@@ -1531,14 +1516,11 @@ const server = http.createServer((req, res) => {
                 // 确保pdf目录存在
                 if (!fs.existsSync(targetDir)) {
                     fs.mkdirSync(targetDir, { recursive: true });
-                    console.log('📁 创建pdf目录:', targetDir);
                 }
 
                 // 将Base64解码并写入文件
                 const buffer = Buffer.from(data, 'base64');
                 fs.writeFileSync(savePath, buffer);
-
-                console.log('✅ PDF已保存到项目pdf目录:', savePath);
 
                 res.writeHead(200, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify({ success: true, path: savePath }));
@@ -1680,8 +1662,6 @@ const server = http.createServer((req, res) => {
                     return;
                 }
 
-                console.log('📋 复制PDF到剪贴板:', { projectPath, pdfFile });
-
                 const { projectKey, fullPath } = normalizeProjectPath(projectPath);
 
                 // 构建PDF文件路径
@@ -1700,7 +1680,6 @@ const server = http.createServer((req, res) => {
                     throw new Error('访问被拒绝：文件必须在项目目录内');
                 }
 
-                console.log('📍 复制文件:', targetFile);
 
                 if (!fs.existsSync(targetFile)) {
                     res.writeHead(404, { 'Content-Type': 'application/json' });
@@ -1752,7 +1731,6 @@ const server = http.createServer((req, res) => {
                         throw new Error(`不支持的操作系统: ${platform}`);
                     }
 
-                    console.log('✅ 文件已复制到剪贴板:', absolutePath);
                     res.writeHead(200, { 'Content-Type': 'application/json' });
                     res.end(JSON.stringify({ success: true, message: '文件已复制到剪贴板' }));
                 } catch (execError) {
@@ -1793,9 +1771,6 @@ const server = http.createServer((req, res) => {
                 }
 
                 const { projectKey, fullPath } = normalizeProjectPath(projectPath);
-                console.log(`\n📥 /list-json-files 请求 - 项目路径: ${projectPath}`);
-                console.log(`   ➜ fullPath: ${fullPath}`);
-                console.log(`   ➜ projectKey: ${projectKey}`);
                 ensureProjectStructure(fullPath);
 
                 const files = [];
@@ -1842,12 +1817,9 @@ const server = http.createServer((req, res) => {
 
                 // pdf/ - 添加 PDF 文件列表
                 const pdfDir = path.join(fullPath, 'pdf');
-                console.log(`   📂 PDF目录路径: ${pdfDir}`);
                 if (fs.existsSync(pdfDir)) {
-                    console.log(`   ✓ PDF目录存在`);
                     const pdfEntries = fs.readdirSync(pdfDir, { withFileTypes: true });
                     const pdfFiles = pdfEntries.filter(ent => ent.isFile() && /\.pdf$/i.test(ent.name));
-                    console.log(`   ✓ 找到 ${pdfFiles.length} 个PDF文件`);
                     pdfFiles.forEach(ent => {
                         const pdfPath = path.relative(fullPath, path.join(pdfDir, ent.name)).split(path.sep).join('/');
                         console.log(`      - ${ent.name}`);
@@ -2128,12 +2100,12 @@ server.on('error', (err) => {
 
 server.listen(PORT, HOST, () => {
     const hostLabel = HOST === '0.0.0.0' ? 'localhost' : HOST;
-    console.log('🚀 Server running at http://' + hostLabel + ':' + PORT + '/');
-    console.log('📁 Serving files from: ' + __dirname);
-    console.log('💾 Project operations:');
+    console.log('Server running at http://' + hostLabel + ':' + PORT + '/');
+    console.log('Serving files from: ' + __dirname);
+    console.log('Project operations:');
     console.log('   - POST /create-project (create new project with json/md/pdf dirs)');
     console.log('   - POST /validate-project (validate project structure)');
-    console.log('💾 JSON operations supported:');
+    console.log('JSON operations supported:');
     console.log('   - POST /list-json-files (list all JSON files)');
     console.log('   - POST /save-json (create/update)');
     console.log('   - POST /rename-json (rename)');
