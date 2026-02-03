@@ -472,10 +472,6 @@
                                     <div class="file-filter-title">Quick filter (by filename)</div>
                                 </div>
                                 <div class="file-filter-input-row">
-                                    <button class="file-filter-run-btn" id="fileFilterRunBtn" type="button"
-                                        title="Run filter" aria-label="Run filter">
-                                        <i class="fas fa-play"></i>
-                                    </button>
                                     <input type="text" id="fileFilterInput" placeholder="Filter files..."
                                         autocomplete="off">
                                 </div>
@@ -488,6 +484,16 @@
                                     </div>
                                     <div class="file-filter-condition-list" id="fileFilterConditions"></div>
                                     <div class="file-filter-condition-hint">Combine conditions with AND / OR</div>
+                                </div>
+                                <div class="file-filter-action-row">
+                                    <button class="file-filter-run-btn" id="fileFilterRunBtn" type="button"
+                                        title="Run filter" aria-label="Run filter">
+                                        <i class="fas fa-play"></i> Apply
+                                    </button>
+                                    <button class="file-filter-clear-btn" id="fileFilterClearBtn" type="button"
+                                        title="Clear filter" aria-label="Clear filter">
+                                        <i class="fas fa-xmark"></i> Clear
+                                    </button>
                                 </div>
                                 <div class="file-filter-history">
                                     <div class="file-filter-history-header">

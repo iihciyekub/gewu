@@ -359,7 +359,22 @@ body {
     justify-content: center;
 }
 
+.file-filter-clear-btn {
+    border: none;
+    background: transparent;
+    color: var(--gray-500);
+    cursor: pointer;
+    padding: 2px 4px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
 .file-filter-run-btn:hover {
+    color: var(--wos-blue);
+}
+
+.file-filter-clear-btn:hover {
     color: var(--wos-blue);
 }
 
@@ -379,6 +394,35 @@ body {
     font-size: 11px;
     color: var(--gray-700);
     font-weight: 600;
+}
+
+.file-filter-condition-actions {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.file-filter-action-row {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 6px;
+}
+
+.file-filter-action-row .file-filter-run-btn,
+.file-filter-action-row .file-filter-clear-btn {
+    padding: 4px 8px;
+    border: 1px solid var(--gray-300);
+    border-radius: 6px;
+    color: var(--gray-700);
+    background: #fff;
+    font-size: 11px;
+}
+
+.file-filter-action-row .file-filter-run-btn:hover,
+.file-filter-action-row .file-filter-clear-btn:hover {
+    color: var(--wos-blue);
+    border-color: var(--wos-blue-light);
 }
 
 .file-filter-condition-list {
@@ -3109,7 +3153,7 @@ body.theme-vscode .qa-bubble {
     display: flex;
     flex-wrap: wrap;
     gap: 6px;
-    padding: 6px 0 0;
+    padding: 2px 0 0;
 }
 
 .md-chat-chip {
@@ -3140,7 +3184,7 @@ body.theme-vscode .qa-bubble {
 
 .md-chat-chip-hint {
     color: #999;
-    font-size: 12px;
+    font-size: 10px;
 }
 
 .md-chat-suggest {

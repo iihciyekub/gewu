@@ -42,6 +42,9 @@ class PaperStatsApp {
         this.fileFilterField = '';
         this.fileFilterValue = '';
         this.fileFilterMatches = null;
+        this.fileFilterApplied = '';
+        this.fileFilterAppliedConditions = [];
+        this.fileFilterAppliedMatches = null;
         this.fileFilterComputeToken = 0;
         this.fileFilterAutocomplete = null;
         this.fileFilter = '';
@@ -2671,6 +2674,10 @@ class PaperStatsApp {
         if (fileFilterRunBtn) {
             fileFilterRunBtn.addEventListener('click', () => this.runFileFilter());
         }
+        const fileFilterClearBtn = document.getElementById('fileFilterClearBtn');
+        if (fileFilterClearBtn) {
+            fileFilterClearBtn.addEventListener('click', () => this.clearFileFilter());
+        }
         const addGroupBtn = document.getElementById('addGroupBtn');
         if (addGroupBtn) {
             addGroupBtn.addEventListener('click', (e) => {
@@ -4506,12 +4513,9 @@ class PaperStatsApp {
         }
 
         // Calculate flattened visible files for this view
-        const filterText = (this.fileFilter || '').toLowerCase();
-        const shouldFieldFilter = this.hasActiveFileFilterConditions();
-        if (shouldFieldFilter && !this.fileFilterMatches) {
-            this.updateFieldFilterMatches();
-        }
-        const filterSet = this.fileFilterMatches instanceof Set ? this.fileFilterMatches : null;
+        const filterText = (this.fileFilterApplied || '').toLowerCase();
+        const shouldFieldFilter = this.hasActiveFileFilterConditions(this.fileFilterAppliedConditions);
+        const filterSet = this.fileFilterAppliedMatches instanceof Set ? this.fileFilterAppliedMatches : null;
         const groupsView = groups.map(g => {
             let filtered = [...(g.files || [])];
             if (filterText) {
@@ -9937,17 +9941,22 @@ class PaperStatsApp {
         };
     }
 
-    saveFileFilterSnapshot() {
+    saveFileFilterSnapshot(opts = {}) {
+        if (opts.skipSave) return;
         const snapshot = this.buildFileFilterSnapshot();
         if (!snapshot) return;
         const history = Array.isArray(this.fileFilterHistory) ? this.fileFilterHistory : [];
-        const last = history[0];
-        if (last) {
-            const lastSig = JSON.stringify({ quick: last.quick || '', conditions: last.conditions || [] });
-            const nextSig = JSON.stringify({ quick: snapshot.quick || '', conditions: snapshot.conditions || [] });
-            if (lastSig === nextSig) return;
+        const nextSig = JSON.stringify({ quick: snapshot.quick || '', conditions: snapshot.conditions || [] });
+        const existingIdx = history.findIndex((item) => {
+            const sig = JSON.stringify({ quick: item?.quick || '', conditions: item?.conditions || [] });
+            return sig === nextSig;
+        });
+        if (existingIdx >= 0) {
+            const existing = history.splice(existingIdx, 1)[0];
+            history.unshift({ ...existing, ts: Date.now() });
+        } else {
+            history.unshift(snapshot);
         }
-        history.unshift(snapshot);
         this.fileFilterHistory = history.slice(0, 20);
         this.saveFileFilterHistory();
         this.renderFileFilterHistory();
@@ -9976,7 +9985,6 @@ class PaperStatsApp {
             : [this.createFileFilterCondition()];
         this.fileFilterMatches = null;
         this.renderFileFilterConditions();
-        this.runFileFilter();
     }
 
     renderFileFilterHistory() {
@@ -10014,9 +10022,12 @@ class PaperStatsApp {
             const applyBtn = document.createElement('button');
             applyBtn.type = 'button';
             applyBtn.className = 'file-filter-history-btn';
-            applyBtn.title = 'Restore';
-            applyBtn.innerHTML = '<i class="fas fa-rotate-left"></i>';
-            applyBtn.addEventListener('click', () => this.applyFileFilterSnapshot(item));
+            applyBtn.title = 'Apply';
+            applyBtn.innerHTML = '<i class="fas fa-play"></i>';
+            applyBtn.addEventListener('click', () => {
+                this.applyFileFilterSnapshot(item);
+                this.runFileFilter({ skipSave: true });
+            });
             const deleteBtn = document.createElement('button');
             deleteBtn.type = 'button';
             deleteBtn.className = 'file-filter-history-btn';
@@ -10039,16 +10050,22 @@ class PaperStatsApp {
         this.renderFileFilterConditions();
     }
 
-    runFileFilter() {
-        if (this.hasActiveFileFilterConditions()) {
-            this.saveFileFilterSnapshot();
-            this.updateFieldFilterMatches();
+    runFileFilter(opts = {}) {
+        const quick = (this.fileFilter || '').trim();
+        const conditions = this.getActiveFileFilterConditions(this.fileFilterConditions);
+        this.fileFilterApplied = quick;
+        this.fileFilterAppliedConditions = conditions;
+        if (!quick && !conditions.length) {
+            this.fileFilterAppliedMatches = null;
+            this.renderFileList(this.currentFileList || [], this.currentFile, true);
             return;
         }
-        if ((this.fileFilter || '').trim()) {
-            this.saveFileFilterSnapshot();
+        this.saveFileFilterSnapshot({ skipSave: !!opts.skipSave });
+        if (conditions.length) {
+            this.updateFieldFilterMatches(conditions);
+            return;
         }
-        this.fileFilterMatches = null;
+        this.fileFilterAppliedMatches = null;
         this.renderFileList(this.currentFileList || [], this.currentFile, true);
     }
 
@@ -10085,16 +10102,17 @@ class PaperStatsApp {
         this.renderFileFilterConditions();
     }
 
-    getActiveFileFilterConditions() {
-        return (this.fileFilterConditions || []).filter(c => {
+    getActiveFileFilterConditions(conditions = null) {
+        const source = Array.isArray(conditions) ? conditions : (this.fileFilterConditions || []);
+        return source.filter(c => {
             const field = String(c.field || '').trim();
             const value = String(c.value || '').trim();
             return field && value;
         });
     }
 
-    hasActiveFileFilterConditions() {
-        return this.getActiveFileFilterConditions().length > 0;
+    hasActiveFileFilterConditions(conditions = null) {
+        return this.getActiveFileFilterConditions(conditions).length > 0;
     }
 
     renderFileFilterConditions() {
@@ -10265,21 +10283,19 @@ class PaperStatsApp {
             target.value = '';
         }
         this.fileFilterMatches = null;
-        this.renderFileList(this.currentFileList || [], this.currentFile, true);
         this.updateFileFilterUi();
     }
 
     clearFileFilterField() {
         this.fileFilterConditions = [this.createFileFilterCondition()];
         this.fileFilterMatches = null;
-        this.renderFileList(this.currentFileList || [], this.currentFile, true);
         this.updateFileFilterUi();
     }
 
-    async updateFieldFilterMatches() {
-        const activeConditions = this.getActiveFileFilterConditions();
+    async updateFieldFilterMatches(conditionsOverride = null) {
+        const activeConditions = this.getActiveFileFilterConditions(conditionsOverride);
         if (!activeConditions.length) {
-            this.fileFilterMatches = null;
+            this.fileFilterAppliedMatches = null;
             this.renderFileList(this.currentFileList || [], this.currentFile, true);
             return;
         }
@@ -10297,7 +10313,7 @@ class PaperStatsApp {
         }).filter(c => c.field && c.value);
 
         if (!conditions.length) {
-            this.fileFilterMatches = null;
+            this.fileFilterAppliedMatches = null;
             this.renderFileList(this.currentFileList || [], this.currentFile, true);
             return;
         }
@@ -10390,7 +10406,21 @@ class PaperStatsApp {
         }
 
         if (token !== this.fileFilterComputeToken) return;
-        this.fileFilterMatches = matches;
+        this.fileFilterAppliedMatches = matches;
+        this.renderFileList(this.currentFileList || [], this.currentFile, true);
+    }
+
+    clearFileFilter() {
+        this.fileFilter = '';
+        const input = document.getElementById('fileFilterInput');
+        if (input) input.value = '';
+        this.fileFilterConditions = [this.createFileFilterCondition()];
+        this.fileFilterMatches = null;
+        this.fileFilterApplied = '';
+        this.fileFilterAppliedConditions = [];
+        this.fileFilterAppliedMatches = null;
+        this.fileFilterComputeToken += 1;
+        this.updateFileFilterUi();
         this.renderFileList(this.currentFileList || [], this.currentFile, true);
     }
 
