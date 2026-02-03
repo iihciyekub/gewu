@@ -272,9 +272,6 @@ body {
     color: white;
 }
 
-.btn-switch-project:hover {
-    background: var(--wos-blue-dark);
-}
 
 .btn-switch-project i {
     font-size: 10px;
@@ -4557,7 +4554,6 @@ body.theme-vscode .bib-collapse-btn:hover {
 
 .info-body {
     padding: 10px 12px;
-    max-height: 70vh;
     overflow: auto;
     font-size: 12px;
     line-height: 1.5;

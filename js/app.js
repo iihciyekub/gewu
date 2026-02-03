@@ -3280,6 +3280,14 @@ class PaperStatsApp {
     toggleStatusBarPosition() {
         const statusBar = document.getElementById('statusBar');
         if (!statusBar) return;
+        if (statusBar.classList.contains('status-bar-hidden')) {
+            statusBar.classList.remove('status-bar-hidden');
+            try {
+                localStorage.setItem('statusBarHidden', 'false');
+            } catch (e) {
+                console.warn('Failed to save status bar visibility state:', e);
+            }
+        }
         statusBar.classList.toggle('status-bar-top');
 
         // 保存位置状态
