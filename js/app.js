@@ -9465,6 +9465,17 @@ class PaperStatsApp {
         const panel = document.getElementById('fileFilterSettingsPanel');
         const btn = document.getElementById('fileFilterToggleBtn');
         const input = document.getElementById('fileFilterInput');
+        if (this.fileFilterVisible && forceVisible !== false) {
+            if (panel) this.moveSettingsPanelToEnd(panel);
+            this.updateSettingsPanelsVisibility();
+            this.saveSettingsPanelsState();
+            this.switchToView('settings');
+            this.renderFileFilterConditions();
+            if (input) {
+                setTimeout(() => input.focus({ preventScroll: true }), 0);
+            }
+            return;
+        }
         const next = typeof forceVisible === 'boolean' ? forceVisible : !this.fileFilterVisible;
         this.fileFilterVisible = next;
         if (panel) panel.classList.toggle('is-visible', next);
@@ -9488,6 +9499,17 @@ class PaperStatsApp {
         const panel = document.getElementById('createGroupSettingsPanel');
         const btn = document.getElementById('addGroupBtn');
         const input = document.getElementById('groupNamesInput');
+        if (this.createGroupVisible && forceVisible !== false) {
+            if (panel) this.moveSettingsPanelToEnd(panel);
+            this.updateSettingsPanelsVisibility();
+            this.saveSettingsPanelsState();
+            this.switchToView('settings');
+            if (input) {
+                setTimeout(() => input.focus({ preventScroll: true }), 0);
+            }
+            this.updateGroupPreview();
+            return;
+        }
         const next = typeof forceVisible === 'boolean' ? forceVisible : !this.createGroupVisible;
         this.createGroupVisible = next;
         if (panel) panel.classList.toggle('is-visible', next);
@@ -9512,6 +9534,16 @@ class PaperStatsApp {
 
     toggleApiSettingsPanel(forceVisible) {
         const panel = document.getElementById('apiSettingsPanel');
+        if (this.apiSettingsVisible && forceVisible !== false) {
+            if (panel) this.moveSettingsPanelToEnd(panel);
+            this.updateSettingsPanelsVisibility();
+            this.saveSettingsPanelsState();
+            this.switchToView('settings');
+            this.applyApiSettingsInputs();
+            const openaiInput = document.getElementById('openaiApiInput');
+            if (openaiInput) setTimeout(() => openaiInput.focus({ preventScroll: true }), 0);
+            return;
+        }
         const next = typeof forceVisible === 'boolean' ? forceVisible : !this.apiSettingsVisible;
         this.apiSettingsVisible = next;
         if (panel) panel.classList.toggle('is-visible', next);
@@ -9528,6 +9560,25 @@ class PaperStatsApp {
 
     toggleAutoSavePanel(forceVisible) {
         const panel = document.getElementById('autoSaveConfigPanel');
+        if (this.autoSaveConfigVisible && forceVisible !== false) {
+            if (panel) this.moveSettingsPanelToEnd(panel);
+            this.updateSettingsPanelsVisibility();
+            this.saveSettingsPanelsState();
+            this.switchToView('settings');
+            setTimeout(() => {
+                if (this.autoSaveConfigUI) {
+                    const container = document.getElementById('autoSaveConfigBody');
+                    if (container) {
+                        if (!this.autoSaveConfigUI.isInlineMode || container.innerHTML.trim() === '') {
+                            this.autoSaveConfigUI.renderInline(container);
+                        } else {
+                            this.autoSaveConfigUI.loadCurrentSettings();
+                        }
+                    }
+                }
+            }, 50);
+            return;
+        }
         const next = typeof forceVisible === 'boolean' ? forceVisible : !this.autoSaveConfigVisible;
         this.autoSaveConfigVisible = next;
         if (panel) panel.classList.toggle('is-visible', next);
@@ -9571,7 +9622,12 @@ class PaperStatsApp {
     moveSettingsPanelToEnd(panel) {
         const settingsContent = document.getElementById('settingsContent');
         if (!panel || !settingsContent) return;
-        settingsContent.appendChild(panel);
+        const first = settingsContent.firstElementChild;
+        if (first) {
+            settingsContent.insertBefore(panel, first);
+        } else {
+            settingsContent.appendChild(panel);
+        }
     }
 
     handleSettingsPanelEscape() {
@@ -9613,6 +9669,19 @@ class PaperStatsApp {
 
     toggleAutoSaveConfigPanel(forceVisible) {
         const panel = document.getElementById('autoSaveConfigPanel');
+        if (this.autoSaveConfigVisible && forceVisible !== false) {
+            if (panel) this.moveSettingsPanelToEnd(panel);
+            this.updateSettingsPanelsVisibility();
+            this.saveSettingsPanelsState();
+            this.switchToView('settings');
+            if (this.autoSaveManager && this.autoSaveConfigUI) {
+                const containerElement = document.getElementById('autoSaveConfigBody');
+                if (containerElement) {
+                    this.autoSaveConfigUI.renderInline(containerElement);
+                }
+            }
+            return;
+        }
         const next = typeof forceVisible === 'boolean' ? forceVisible : !this.autoSaveConfigVisible;
         this.autoSaveConfigVisible = next;
         if (panel) panel.classList.toggle('is-visible', next);
@@ -9635,6 +9704,18 @@ class PaperStatsApp {
         const panel = document.getElementById('queryExportPanel');
         const btn = document.getElementById('queryExportBtn');
         const queryDoiOrderInput = document.getElementById('queryDoiOrderInput');
+        if (this.queryExportVisible && forceVisible !== false) {
+            if (panel) this.moveSettingsPanelToEnd(panel);
+            this.updateSettingsPanelsVisibility();
+            this.saveSettingsPanelsState();
+            this.switchToView('settings');
+            if (queryDoiOrderInput) {
+                queryDoiOrderInput.value = this.queryDoiOrderText || '';
+            }
+            this.refreshQueryFieldOptions();
+            this.updateDoiStats();
+            return;
+        }
         const next = typeof forceVisible === 'boolean' ? forceVisible : !this.queryExportVisible;
         this.queryExportVisible = next;
         if (panel) panel.classList.toggle('is-visible', next);
@@ -11359,6 +11440,14 @@ class PaperStatsApp {
         const panel = document.getElementById('projectInfoPanel');
         const body = document.getElementById('projectInfoBody');
         if (!panel || !body) return;
+        if (this.projectInfoVisible && forceVisible !== false) {
+            if (!opts.skipClose) this.closeHeaderMenus('info');
+            this.moveSettingsPanelToEnd(panel);
+            this.updateSettingsPanelsVisibility();
+            this.switchToView('settings');
+            this.saveSettingsPanelsState();
+            return;
+        }
         const next = typeof forceVisible === 'boolean' ? forceVisible : !this.projectInfoVisible;
         if (next && !opts.skipClose) this.closeHeaderMenus('info');
         this.projectInfoVisible = next;
@@ -11379,6 +11468,15 @@ class PaperStatsApp {
         const panel = document.getElementById('thirdPartyInfoPanel');
         const body = document.getElementById('thirdPartyInfoBody');
         if (!panel || !body) return;
+        if (this.thirdPartyInfoVisible && forceVisible !== false) {
+            if (!opts.skipClose) this.closeHeaderMenus('thirdparty');
+            this.moveSettingsPanelToEnd(panel);
+            this.updateSettingsPanelsVisibility();
+            this.switchToView('settings');
+            await this.loadThirdPartyInfoContent();
+            this.saveSettingsPanelsState();
+            return;
+        }
         const next = typeof forceVisible === 'boolean' ? forceVisible : !this.thirdPartyInfoVisible;
         if (next && !opts.skipClose) this.closeHeaderMenus('thirdparty');
         this.thirdPartyInfoVisible = next;
@@ -11398,6 +11496,15 @@ class PaperStatsApp {
         const panel = document.getElementById('aboutPanel');
         const body = document.getElementById('aboutBody');
         if (!panel || !body) return;
+        if (this.aboutVisible && forceVisible !== false) {
+            if (!opts.skipClose) this.closeHeaderMenus('about');
+            this.moveSettingsPanelToEnd(panel);
+            this.updateSettingsPanelsVisibility();
+            this.switchToView('settings');
+            await this.loadAboutContent();
+            this.saveSettingsPanelsState();
+            return;
+        }
         const next = typeof forceVisible === 'boolean' ? forceVisible : !this.aboutVisible;
         if (next && !opts.skipClose) this.closeHeaderMenus('about');
         this.aboutVisible = next;
@@ -11450,6 +11557,15 @@ class PaperStatsApp {
         const panel = document.getElementById('shortcutsInfoPanel');
         const body = document.getElementById('shortcutsInfoBody');
         if (!panel || !body) return;
+        if (this.shortcutsVisible && forceVisible !== false) {
+            if (!opts.skipClose) this.closeHeaderMenus('shortcuts');
+            this.moveSettingsPanelToEnd(panel);
+            this.updateSettingsPanelsVisibility();
+            this.switchToView('settings');
+            await this.loadShortcutsInfoContent();
+            this.saveSettingsPanelsState();
+            return;
+        }
         const next = typeof forceVisible === 'boolean' ? forceVisible : !this.shortcutsVisible;
         if (next && !opts.skipClose) this.closeHeaderMenus('shortcuts');
         this.shortcutsVisible = next;
