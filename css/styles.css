@@ -2147,12 +2147,30 @@ body.theme-vscode .nested-index-cell {
     outline: none;
 }
 
-body.theme-dark .vis-network-view.active {
-    background: #0d1117;
+.vis-network-view.active {
+    background-color: #ffffff;
+    background-image:
+        linear-gradient(to right, rgba(148, 163, 184, 0.14) 1px, transparent 1px),
+        linear-gradient(to bottom, rgba(148, 163, 184, 0.14) 1px, transparent 1px);
+    background-size: 24px 24px, 24px 24px;
+    background-position: center, center;
 }
 
-body.theme-dark .vis-network-canvas {
-    background: #0b0f14;
+body.theme-dark .vis-network-view.active {
+    background-color: #0d1117;
+    background-image:
+        linear-gradient(to right, rgba(148, 163, 184, 0.12) 1px, transparent 1px),
+        linear-gradient(to bottom, rgba(148, 163, 184, 0.12) 1px, transparent 1px);
+    background-size: 24px 24px, 24px 24px;
+    background-position: center, center;
+}
+
+.vis-network-view.active.no-grid {
+    background-image: none;
+}
+
+.vis-network-canvas {
+    background: transparent;
 }
 
 .vis-network-canvas {

@@ -514,11 +514,11 @@
                 zoomInBtn: options.zoomInBtnId || 'visZoomInBtn',
                 zoomOutBtn: options.zoomOutBtnId || 'visZoomOutBtn',
                 zoomFitBtn: options.zoomFitBtnId || 'visZoomFitBtn',
-                zoomResetBtn: options.zoomResetBtnId || 'visZoomResetBtn',
                 zoomSlider: options.zoomSliderId || 'visZoomSlider',
                 zoomCollapseBtn: options.zoomCollapseBtnId || 'visZoomCollapseBtn',
                 zoomLockBtn: options.zoomLockBtnId || 'visZoomLockBtn',
                 zoomPanBtn: options.zoomPanBtnId || 'visZoomPanBtn',
+                gridToggleBtn: options.gridToggleBtnId || 'visGridToggleBtn',
                 exportSvgBtn: options.exportSvgBtnId || 'visExportSvgBtn',
                 exportPdfBtn: options.exportPdfBtnId || 'visExportPdfBtn'
             };
@@ -607,12 +607,12 @@
             const zoomInBtn = this.getEl(this.ids.zoomInBtn);
             const zoomOutBtn = this.getEl(this.ids.zoomOutBtn);
             const zoomFitBtn = this.getEl(this.ids.zoomFitBtn);
-            const zoomResetBtn = this.getEl(this.ids.zoomResetBtn);
             const zoomSlider = this.getEl(this.ids.zoomSlider);
             const zoomCollapseBtn = this.getEl(this.ids.zoomCollapseBtn);
             const zoomWrap = document.querySelector('.vis-network-zoom');
             const zoomLockBtn = this.getEl(this.ids.zoomLockBtn);
             const zoomPanBtn = this.getEl(this.ids.zoomPanBtn);
+            const gridToggleBtn = this.getEl(this.ids.gridToggleBtn);
             const exportSvgBtn = this.getEl(this.ids.exportSvgBtn);
             const exportPdfBtn = this.getEl(this.ids.exportPdfBtn);
 
@@ -754,21 +754,22 @@
                     }
                 });
             }
-            if (zoomResetBtn) {
-                zoomResetBtn.addEventListener('click', (e) => {
-                    e.preventDefault();
-                    if (this.visNetwork) {
-                        this.visNetwork.moveTo({ scale: 1, animation: { duration: 250 } });
-                        this.syncZoomSlider();
-                    }
-                });
-            }
             if (zoomSlider) {
                 zoomSlider.addEventListener('input', () => {
                     const value = Number(zoomSlider.value) / 100;
                     if (this.visNetwork) {
                         this.visNetwork.moveTo({ scale: this.clampZoom(value) });
                     }
+                });
+            }
+            if (gridToggleBtn) {
+                gridToggleBtn.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    const view = this.getEl(this.ids.view);
+                    if (!view) return;
+                    const next = !view.classList.contains('no-grid');
+                    view.classList.toggle('no-grid', next);
+                    gridToggleBtn.classList.toggle('is-active', next);
                 });
             }
             if (zoomCollapseBtn && zoomWrap) {
@@ -796,12 +797,12 @@
             }
             if (exportSvgBtn) {
                 exportSvgBtn.addEventListener('click', () => {
-                    this.exportNetworkSnapshot('svg');
+                    this.exportNetworkVector('svg');
                 });
             }
             if (exportPdfBtn) {
                 exportPdfBtn.addEventListener('click', () => {
-                    this.exportNetworkSnapshot('pdf');
+                    this.exportNetworkVector('pdf');
                 });
             }
             if (labelFieldInput && labelSuggest && !labelFieldInput.dataset.visBound) {
@@ -1082,55 +1083,102 @@
             const zoomInBtn = this.getEl(this.ids.zoomInBtn);
             const zoomOutBtn = this.getEl(this.ids.zoomOutBtn);
             const zoomFitBtn = this.getEl(this.ids.zoomFitBtn);
-            const zoomResetBtn = this.getEl(this.ids.zoomResetBtn);
             const zoomSlider = this.getEl(this.ids.zoomSlider);
             const disableZoom = isLocked || isPanOnly;
-            [zoomInBtn, zoomOutBtn, zoomFitBtn, zoomResetBtn].forEach((btn) => {
+            [zoomInBtn, zoomOutBtn, zoomFitBtn].forEach((btn) => {
                 if (btn) btn.disabled = disableZoom;
             });
             if (zoomSlider) zoomSlider.disabled = disableZoom;
         }
 
-        exportNetworkSnapshot(type) {
+        exportNetworkVector(type) {
             if (!this.visNetwork) return;
-            const canvas = this.visNetwork.canvas?.frame?.canvas;
-            if (!canvas) return;
-            const bounds = this.getNetworkBounds();
-            if (!bounds) return;
-            const ratio = canvas.clientWidth ? canvas.width / canvas.clientWidth : 1;
-            const margin = this.mmToPx(2);
-            const left = Math.max(0, bounds.left - margin);
-            const top = Math.max(0, bounds.top - margin);
-            const right = Math.min(canvas.clientWidth, bounds.right + margin);
-            const bottom = Math.min(canvas.clientHeight, bounds.bottom + margin);
-            const width = Math.max(1, right - left);
-            const height = Math.max(1, bottom - top);
-            const exportCanvas = document.createElement('canvas');
-            exportCanvas.width = Math.max(1, Math.round(width * ratio));
-            exportCanvas.height = Math.max(1, Math.round(height * ratio));
-            const ctx = exportCanvas.getContext('2d');
-            const bg = this.getCanvasBackground();
-            if (ctx) {
-                ctx.fillStyle = bg;
-                ctx.fillRect(0, 0, exportCanvas.width, exportCanvas.height);
-                ctx.drawImage(
-                    canvas,
-                    Math.round(left * ratio),
-                    Math.round(top * ratio),
-                    exportCanvas.width,
-                    exportCanvas.height,
-                    0,
-                    0,
-                    exportCanvas.width,
-                    exportCanvas.height
-                );
-            }
-            const dataUrl = exportCanvas.toDataURL('image/png');
+            const result = this.buildNetworkSvg(this.mmToPx(6));
+            if (!result) return;
             if (type === 'svg') {
-                this.downloadSvgFromPng(dataUrl, width, height);
+                this.downloadSvg(result.svg);
             } else {
-                this.openPdfPrintWindow(dataUrl, width, height);
+                this.openPdfPrintWindowWithSvg(result.svg, result.width, result.height);
             }
+        }
+
+        buildNetworkSvg(marginPx) {
+            if (!this.visNetwork) return null;
+            const dataset = this.visNetwork?.body?.data;
+            if (!dataset) return null;
+            const nodes = dataset.nodes?.get() || [];
+            const edges = dataset.edges?.get() || [];
+            if (!nodes.length) return null;
+            let left = Infinity;
+            let right = -Infinity;
+            let top = Infinity;
+            let bottom = -Infinity;
+            nodes.forEach((node) => {
+                const box = this.visNetwork.getBoundingBox(node.id);
+                if (!box) return;
+                left = Math.min(left, box.left);
+                right = Math.max(right, box.right);
+                top = Math.min(top, box.top);
+                bottom = Math.max(bottom, box.bottom);
+            });
+            if (!isFinite(left) || !isFinite(right) || !isFinite(top) || !isFinite(bottom)) {
+                return null;
+            }
+            const margin = Number.isFinite(marginPx) ? marginPx : 0;
+            const width = Math.max(1, right - left + margin * 2);
+            const height = Math.max(1, bottom - top + margin * 2);
+            const viewLeft = left - margin;
+            const viewTop = top - margin;
+            const bg = this.getCanvasBackground();
+            const nodeMap = new Map(nodes.map((n) => [n.id, n]));
+            const escape = (text) => String(text)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;');
+            const edgeSvg = edges.map((edge) => {
+                const fromPos = this.visNetwork.getPositions([edge.from])[edge.from];
+                const toPos = this.visNetwork.getPositions([edge.to])[edge.to];
+                if (!fromPos || !toPos) return '';
+                const stroke = edge.color?.color || '#111111';
+                const widthVal = Number(edge.width) || 1;
+                return `<line x1="${fromPos.x}" y1="${fromPos.y}" x2="${toPos.x}" y2="${toPos.y}" stroke="${stroke}" stroke-width="${widthVal}" stroke-linecap="round" />`;
+            }).join('');
+            const nodeSvg = nodes.map((node) => {
+                const pos = this.visNetwork.getPositions([node.id])[node.id];
+                if (!pos) return '';
+                const radius = Number(node.size) || 6;
+                const fill = node.color?.background || '#ffffff';
+                const stroke = node.color?.border || '#111111';
+                const strokeWidth = Number(node.borderWidth) || 1;
+                return `<circle cx="${pos.x}" cy="${pos.y}" r="${radius}" fill="${fill}" stroke="${stroke}" stroke-width="${strokeWidth}" />`;
+            }).join('');
+            const labelSvg = nodes.map((node) => {
+                const text = typeof node.hiddenLabel === 'string' ? node.hiddenLabel.trim() : '';
+                if (!text || node.labelHidden) return '';
+                const pos = this.visNetwork.getPositions([node.id])[node.id];
+                if (!pos) return '';
+                const style = node.labelStyle || {};
+                const fontSize = style.fontSize || 11;
+                const fontWeight = style.fontWeight || 500;
+                const color = style.textColor || '#111111';
+                const offsetY = (Number(node.size) || 6) + 10;
+                return `<text x="${pos.x}" y="${pos.y + offsetY}" font-size="${fontSize}" font-weight="${fontWeight}" fill="${color}" text-anchor="middle" font-family="Georgia, Times, serif">${escape(text)}</text>`;
+            }).join('');
+            const svg = `
+<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="${viewLeft} ${viewTop} ${width} ${height}">
+  <rect x="${viewLeft}" y="${viewTop}" width="${width}" height="${height}" fill="${bg}" />
+  <g>
+    ${edgeSvg}
+  </g>
+  <g>
+    ${nodeSvg}
+  </g>
+  <g>
+    ${labelSvg}
+  </g>
+</svg>`;
+            return { svg, width, height };
         }
 
         getNetworkBounds() {
@@ -1171,8 +1219,7 @@
             return (mm / 25.4) * 96;
         }
 
-        downloadSvgFromPng(pngDataUrl, width, height) {
-            const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}"><image href="${pngDataUrl}" width="${width}" height="${height}" /></svg>`;
+        downloadSvg(svg) {
             const blob = new Blob([svg], { type: 'image/svg+xml;charset=utf-8' });
             const url = URL.createObjectURL(blob);
             const link = document.createElement('a');
@@ -1184,7 +1231,7 @@
             URL.revokeObjectURL(url);
         }
 
-        openPdfPrintWindow(pngDataUrl, width, height) {
+        openPdfPrintWindowWithSvg(svg, width, height) {
             const pxToMm = (px) => (px / 96) * 25.4;
             const wMm = pxToMm(width + 0.01);
             const hMm = pxToMm(height + 0.01);
@@ -1195,11 +1242,11 @@
                         <style>
                             @page { size: ${wMm}mm ${hMm}mm; margin: 0; }
                             html, body { margin: 0; padding: 0; }
-                            img { display: block; width: 100%; height: auto; }
+                            svg { display: block; width: 100%; height: auto; }
                         </style>
                     </head>
                     <body>
-                        <img src="${pngDataUrl}" alt="vis-network" />
+                        ${svg}
                         <script>
                             window.onload = () => {
                                 setTimeout(() => {
@@ -1341,6 +1388,7 @@
             this.applyPhysicsSettings();
             this.applyEdgeFade();
             this.applyEdgeWidthRange();
+            this.applyLabelShowAll(true);
             this.queuePersistNetworkState();
         }
 
