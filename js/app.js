@@ -10567,6 +10567,7 @@ class PaperStatsApp {
         const collapseBtn = null;
         const dockSideBtn = panel?.querySelector('#mdChatDockSideBtn');
         const closeBtn = panel?.querySelector('.md-chat-btn[title="Close"]');
+        const clearBtn = panel?.querySelector('.md-chat-clear-btn');
         const editorContainer = document.querySelector('.editor-container');
         const chatToggleBtn = document.getElementById('mdChatToggleBtn');
         const slotButtons = panel?.querySelectorAll('.md-chat-slot-btn');
@@ -10812,6 +10813,27 @@ class PaperStatsApp {
                 panel.classList.add('is-hidden');
                 if (editorContainer) editorContainer.classList.remove('chat-docked');
                 localStorage.setItem('mdChatHidden', '1');
+            });
+        }
+
+        if (panel && clearBtn) {
+            clearBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                if (typeof this.clearMdChatQueryFields === 'function') {
+                    this.clearMdChatQueryFields();
+                } else {
+                    this.mdChatQueryFields = new Set();
+                    if (typeof this.renderMdChatQueryChips === 'function') {
+                        this.renderMdChatQueryChips();
+                    }
+                    if (typeof this.runMdChatFieldQuery === 'function') {
+                        this.runMdChatFieldQuery();
+                    }
+                }
+                if (textarea) {
+                    textarea.value = '';
+                    textarea.dispatchEvent(new Event('input', { bubbles: true }));
+                }
             });
         }
 

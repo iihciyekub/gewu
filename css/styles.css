@@ -2900,8 +2900,7 @@ body.theme-vscode .qa-bubble {
     height: calc(100% - 8px);
     border: 1px solid #d7d7d7;
     border-radius: 20px;
-    background: #fff;
-    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.12);
+    background: #fcfcfc;
     display: flex;
     flex-direction: column;
     overflow: hidden;
@@ -3022,8 +3021,6 @@ body.theme-vscode .qa-bubble {
 
 .md-chat-body {
     flex: 1;
-    background: #fff;
-    transition: opacity 0.2s ease;
     overflow-y: auto;
 }
 
@@ -3038,7 +3035,7 @@ body.theme-vscode .qa-bubble {
     display: flex;
     align-items: stretch;
     gap: 10px;
-    border-top: 1px solid #e6e6e6;
+    border-top: 1px solid #e6e1d8;
     position: relative;
     flex-direction: column;
 }
@@ -3066,9 +3063,9 @@ body.theme-vscode .qa-bubble {
 }
 
 .md-chat-chip {
-    border: 1px solid #d6e4f2;
-    background: #f0f6ff;
-    color: #0b3a6f;
+    border: 1px solid #d8d2c8;
+    background: #303030;
+    color: #ffffff;
     border-radius: 999px;
     padding: 2px 8px;
     font-size: 10px;
@@ -3131,11 +3128,12 @@ body.theme-vscode .qa-bubble {
     flex: 1;
     align-self: stretch;
     border: none;
-    border-top: 1px dashed #ded8d8;
+    border-top: 1px dashed #e2ddd4;
     padding: 4px 8px;
     outline: none;
-    font-size: 13px;
-    color: #333;
+    font-size: 12px;
+    color: #000000;
+    background: transparent;
     resize: none;
     min-height: 24px;
     height: 24px;
@@ -3145,7 +3143,7 @@ body.theme-vscode .qa-bubble {
 }
 
 .md-chat-input-text::placeholder {
-    color: #b2b2b2;
+    color: #b8b1a8;
 }
 
 body.theme-vscode .md-chat-input-text {

@@ -38,6 +38,15 @@
         };
 
         /**
+         * Clear all fields from the chat query
+         */
+        proto.clearMdChatQueryFields = function () {
+            this.mdChatQueryFields = new Set();
+            this.renderMdChatQueryChips();
+            this.runMdChatFieldQuery();
+        };
+
+        /**
          * Render the query field chips/tags in the chat panel
          */
         proto.renderMdChatQueryChips = function () {
