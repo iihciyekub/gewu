@@ -447,15 +447,27 @@
                         <h3>No Network Loaded</h3>
                         <p>Select a JSON file from the left panel to generate a vis-network graph</p>
                     </div>
+                    <div class="vis-network-zoom">
+                        <button class="btn btn-secondary" id="visZoomOutBtn" type="button" title="Zoom out">
+                            <i class="fas fa-minus"></i>
+                        </button>
+                        <input id="visZoomSlider" type="range" min="10" max="200" step="5" value="100">
+                        <button class="btn btn-secondary" id="visZoomInBtn" type="button" title="Zoom in">
+                            <i class="fas fa-plus"></i>
+                        </button>
+                        <button class="btn btn-secondary" id="visZoomFitBtn" type="button" title="Fit to view">
+                            <i class="fas fa-expand"></i>
+                        </button>
+                        <button class="btn btn-secondary" id="visZoomResetBtn" type="button" title="Reset zoom">
+                            <i class="fas fa-arrows-rotate"></i>
+                        </button>
+                    </div>
                     <div class="vis-network-toolbar">
                         <button class="btn btn-secondary" id="visInputToggleBtn" type="button">
                             <i class="fas fa-pen"></i> Input
                         </button>
                         <button class="btn btn-secondary" id="visToggleLabelsBtn" type="button">
                             <i class="fas fa-tags"></i><span>Labels</span>
-                        </button>
-                        <button class="btn btn-primary" id="visImportJsonBtn" type="button">
-                            <i class="fas fa-file-import"></i> Import JSON
                         </button>
                     </div>
                     <div class="vis-input-drawer" id="visInputDrawer" aria-hidden="true">
@@ -474,6 +486,7 @@
                         <div class="vis-input-actions">
                             <button class="btn btn-secondary" id="visInputCancelBtn" type="button">Close</button>
                             <button class="btn btn-secondary" id="visInputAppendBtn" type="button">Add</button>
+                            <button class="btn btn-secondary" id="visImportJsonBtn" type="button">Import JSON</button>
                             <button class="btn btn-secondary" id="visSaveNetworkBtn" type="button">Save</button>
                             <button class="btn btn-primary" id="visInputApplyBtn" type="button">Run</button>
                         </div>

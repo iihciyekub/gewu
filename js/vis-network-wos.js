@@ -448,6 +448,7 @@
             const saveBtn = this.getEl(this.ids.saveBtn);
             const restoreBtn = this.getEl(this.ids.restoreBtn);
             const deleteBtn = this.getEl(this.ids.deleteBtn);
+            const savedSelect = this.getEl(this.ids.savedSelect);
             const importBtn = this.getEl(this.ids.importBtn);
             const importInput = this.getEl(this.ids.importJsonFileInput);
 
@@ -487,6 +488,14 @@
                     this.restoreNetworkJson();
                 });
             }
+            if (savedSelect) {
+                const runRestore = () => {
+                    if (savedSelect.disabled) return;
+                    this.restoreNetworkJson();
+                };
+                savedSelect.addEventListener('change', runRestore);
+                savedSelect.addEventListener('click', runRestore);
+            }
             if (deleteBtn) {
                 deleteBtn.addEventListener('click', (e) => {
                     e.preventDefault();
@@ -497,6 +506,25 @@
                 importBtn.addEventListener('click', (e) => {
                     e.preventDefault();
                     importInput.click();
+                });
+            }
+            if (importInput && !importInput.dataset.visBound) {
+                importInput.dataset.visBound = '1';
+                importInput.addEventListener('change', async (e) => {
+                    const file = e.target.files && e.target.files[0];
+                    if (!file) return;
+                    try {
+                        const text = await file.text();
+                        const textarea = this.getEl(this.ids.inputTextarea);
+                        if (textarea) {
+                            textarea.value = text;
+                        }
+                        this.visInputText = text;
+                    } catch (err) {
+                        this.notify(`Failed to read JSON: ${err.message}`, 'error');
+                    } finally {
+                        e.target.value = '';
+                    }
                 });
             }
             if (!this._escBound) {

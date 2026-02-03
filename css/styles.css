@@ -2228,6 +2228,7 @@ body.theme-vscode .nested-index-cell {
     height: min(520px, calc(100vh - 120px));
     border: 1px solid #e5e7eb;
     border-radius: 12px;
+    transform: translateX(calc(100% + 24px));
 }
 
 .vis-input-drawer.is-open {

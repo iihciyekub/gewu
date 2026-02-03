@@ -206,6 +206,7 @@ class PaperStatsApp {
         this._lastClickTime = 0;
         this._lastClickTimer = null;
         this._currentSearchAbortController = null;
+        this._cmdShortcutTimestamp = 0;
 
         // PDF标注数据缓存
         this._pdfAnnotationsCache = {};
@@ -1868,6 +1869,28 @@ class PaperStatsApp {
         document.addEventListener('keydown', (e) => {
             const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
             const mod = isMac ? e.metaKey : e.ctrlKey;
+            const now = Date.now();
+            if (e.key === 'Meta' || e.key === 'Control') {
+                this._cmdShortcutTimestamp = now;
+                return;
+            }
+            if (this._cmdShortcutTimestamp && now - this._cmdShortcutTimestamp <= 1500) {
+                const key = e.key.toLowerCase();
+                if (['j', 'm', 'd', 'v', 's', 'o'].includes(key)) {
+                    e.preventDefault();
+                    if (key === 'j') this.switchToView('structured');
+                    if (key === 'm') this.switchToView('markdown');
+                    if (key === 'd') this.switchToView('draft');
+                    if (key === 'v') this.switchToView('vis-network');
+                    if (key === 's') this.switchToView('settings');
+                    if (key === 'o') {
+                        this.switchToView('settings');
+                        this.showProjectDetailsPanel();
+                    }
+                    this._cmdShortcutTimestamp = 0;
+                    return;
+                }
+            }
 
             if (mod && e.key.toLowerCase() === 'e') {
                 e.preventDefault();
@@ -10607,12 +10630,6 @@ class PaperStatsApp {
     }
 
     showProjectDetailsPanel() {
-        if (!this.currentProject) {
-            // 未加载项目时，打开项目选择器
-            this.showProjectSelector();
-            return;
-        }
-
         const panel = document.getElementById('projectInfoPanel');
         const body = document.getElementById('projectInfoBody');
         if (!panel || !body) return;
@@ -11602,6 +11619,7 @@ class PaperStatsApp {
             this._projectInfoEscHandler = null;
         }
         if (next) {
+            this.renderProjectInfoPanelContent();
             this.switchToView('settings');
         }
         this.saveSettingsPanelsState();
