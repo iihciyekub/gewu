@@ -2132,6 +2132,18 @@ body.theme-vscode .nested-index-cell {
     overflow: hidden;
 }
 
+.vis-network-view {
+    display: none;
+}
+
+.vis-network-view.active {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: hidden;
+}
+
 .settings-view {
     display: none;
 }
@@ -2279,7 +2291,8 @@ body.theme-vscode .nested-index-cell {
 
 .editor-container.chat-docked .structured-view.active,
 .editor-container.chat-docked .markdown-view.active,
-.editor-container.chat-docked .flat-view.active {
+.editor-container.chat-docked .flat-view.active,
+.editor-container.chat-docked .vis-network-view.active {
     flex: 1 1 auto;
     height: 100%;
     min-width: 0;
@@ -2315,6 +2328,7 @@ body.theme-vscode .nested-index-cell {
 .editor-container.chat-docked-left .structured-view,
 .editor-container.chat-docked-left .markdown-view,
 .editor-container.chat-docked-left .flat-view,
+.editor-container.chat-docked-left .vis-network-view,
 .editor-container.chat-docked-left .settings-view {
     order: 2;
 }

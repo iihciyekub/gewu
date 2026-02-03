@@ -15029,10 +15029,12 @@ class PaperStatsApp {
             const markdown = document.getElementById('markdownView');
             const flat = document.getElementById('flatView');
             const settings = document.getElementById('settingsView');
+            const visNetwork = document.getElementById('visNetworkView');
             if (structured) structured.classList.remove('active');
             if (markdown) markdown.classList.remove('active');
             if (flat) flat.classList.remove('active');
             if (settings) settings.classList.remove('active');
+            if (visNetwork) visNetwork.classList.remove('active');
 
             if (view === 'structured' && structured) {
                 structured.classList.add('active');
@@ -15040,6 +15042,8 @@ class PaperStatsApp {
                 markdown.classList.add('active');
             } else if (view === 'flat' && flat) {
                 flat.classList.add('active');
+            } else if (view === 'vis-network' && visNetwork) {
+                visNetwork.classList.add('active');
             } else if (view === 'settings' && settings) {
                 settings.classList.add('active');
             }
@@ -15118,7 +15122,7 @@ class PaperStatsApp {
 
     toggleTableMarkdownView(reverse = false) {
         const tabs = Array.from(document.querySelectorAll('#middleViewTabs .tab-btn'));
-        const order = tabs.map(tab => tab.dataset.view).filter(v => v && v !== 'settings');
+        const order = tabs.map(tab => tab.dataset.view).filter(v => v && v !== 'settings' && v !== 'vis-network');
         const fallbackOrder = ['structured', 'markdown', 'draft'];
         const sequence = order.length ? order : fallbackOrder;
         
@@ -18053,6 +18057,8 @@ class PaperStatsApp {
         let target = 'structured';
         if ((this.currentView || 'structured') === 'markdown') {
             target = this.isDraftViewActive ? 'draft' : 'markdown';
+        } else if ((this.currentView || 'structured') === 'vis-network') {
+            target = 'vis-network';
         } else if ((this.currentView || 'structured') === 'settings') {
             target = 'settings';
         }
