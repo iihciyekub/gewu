@@ -2786,18 +2786,7 @@ class PaperStatsApp {
         if (refreshDoiCacheBtn) {
             refreshDoiCacheBtn.addEventListener('click', async () => {
                 this.toggleSettingsMenu(false);
-                if (!this.doiCacheManager) {
-                    this.showNotification('DOI Cache Manager not initialized', 'error');
-                    return;
-                }
-                try {
-                    await this.doiCacheManager.clearCache();
-                    const data = await this.doiCacheManager.buildCache({ notify: true });
-                    this.showNotification(`DOI cache refreshed: ${data.length} entries`, 'success');
-                } catch (err) {
-                    console.error('Failed to refresh DOI cache:', err);
-                    this.showNotification(`Failed to refresh DOI cache: ${err.message}`, 'error');
-                }
+                await this.refreshDoiCacheFromUi();
             });
         }
 
@@ -2874,6 +2863,21 @@ class PaperStatsApp {
         const doiAutonumBtn = document.getElementById('doiAutonumBtn');
         if (doiAutonumBtn) {
             doiAutonumBtn.addEventListener('click', () => this.applyDoiAutoNumberFromInput());
+        }
+    }
+
+    async refreshDoiCacheFromUi() {
+        if (!this.doiCacheManager) {
+            this.showNotification('DOI Cache Manager not initialized', 'error');
+            return;
+        }
+        try {
+            await this.doiCacheManager.clearCache();
+            const data = await this.doiCacheManager.buildCache({ notify: true });
+            this.showNotification(`DOI cache refreshed: ${data.length} entries`, 'success');
+        } catch (err) {
+            console.error('Failed to refresh DOI cache:', err);
+            this.showNotification(`Failed to refresh DOI cache: ${err.message}`, 'error');
         }
     }
 

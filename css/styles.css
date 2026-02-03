@@ -4991,6 +4991,41 @@ body.theme-vscode .header-dropdown-item:hover {
     font-size: 11px;
 }
 
+.autocomplete-header {
+    display: none;
+    align-items: center;
+    justify-content: flex-end;
+    padding: 4px 4px 2px;
+    border-bottom: 1px solid var(--wos-border);
+    margin-bottom: 2px;
+}
+
+.autocomplete-doi-refresh {
+    border: none;
+    background: transparent;
+    color: var(--wos-text-light);
+    cursor: pointer;
+    padding: 2px 4px;
+    border-radius: 4px;
+    font-size: 12px;
+}
+
+.autocomplete-doi-refresh:hover {
+    background: var(--wos-hover);
+    color: var(--wos-blue);
+}
+
+.autocomplete-doi-refresh:disabled {
+    opacity: 0.6;
+    cursor: default;
+}
+
+.autocomplete-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+}
+
 .autocomplete-item {
     padding: 4px 8px;
     cursor: pointer;
@@ -5079,6 +5114,19 @@ body.theme-vscode .autocomplete-dropdown {
     background: #252526;
     border-color: #454545;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.36);
+}
+
+body.theme-vscode .autocomplete-header {
+    border-bottom-color: #3a3a3a;
+}
+
+body.theme-vscode .autocomplete-doi-refresh {
+    color: #9aa0a6;
+}
+
+body.theme-vscode .autocomplete-doi-refresh:hover {
+    background: #094771;
+    color: #d4d4d4;
 }
 
 body.theme-vscode .autocomplete-item:hover,
