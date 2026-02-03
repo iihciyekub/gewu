@@ -516,7 +516,11 @@
                 zoomFitBtn: options.zoomFitBtnId || 'visZoomFitBtn',
                 zoomResetBtn: options.zoomResetBtnId || 'visZoomResetBtn',
                 zoomSlider: options.zoomSliderId || 'visZoomSlider',
-                zoomCollapseBtn: options.zoomCollapseBtnId || 'visZoomCollapseBtn'
+                zoomCollapseBtn: options.zoomCollapseBtnId || 'visZoomCollapseBtn',
+                zoomLockBtn: options.zoomLockBtnId || 'visZoomLockBtn',
+                zoomPanBtn: options.zoomPanBtnId || 'visZoomPanBtn',
+                exportSvgBtn: options.exportSvgBtnId || 'visExportSvgBtn',
+                exportPdfBtn: options.exportPdfBtnId || 'visExportPdfBtn'
             };
             this.visNetwork = null;
             this.visNetworkData = null;
@@ -558,6 +562,8 @@
             this._networkSaveTimer = null;
             this.pendingLabelShowAll = null;
             this.labelShowAllState = false;
+            this.isLocked = false;
+            this.isPanOnly = false;
         }
 
         bind() {
@@ -605,6 +611,10 @@
             const zoomSlider = this.getEl(this.ids.zoomSlider);
             const zoomCollapseBtn = this.getEl(this.ids.zoomCollapseBtn);
             const zoomWrap = document.querySelector('.vis-network-zoom');
+            const zoomLockBtn = this.getEl(this.ids.zoomLockBtn);
+            const zoomPanBtn = this.getEl(this.ids.zoomPanBtn);
+            const exportSvgBtn = this.getEl(this.ids.exportSvgBtn);
+            const exportPdfBtn = this.getEl(this.ids.exportPdfBtn);
 
             if (inputToggleBtn) {
                 inputToggleBtn.addEventListener('click', (e) => {
@@ -764,6 +774,34 @@
             if (zoomCollapseBtn && zoomWrap) {
                 zoomCollapseBtn.addEventListener('click', () => {
                     zoomWrap.classList.toggle('is-collapsed');
+                });
+            }
+            if (zoomLockBtn) {
+                zoomLockBtn.addEventListener('click', () => {
+                    this.isLocked = !this.isLocked;
+                    if (this.isLocked) this.isPanOnly = false;
+                    this.applyInteractionMode();
+                    zoomLockBtn.classList.toggle('is-active', this.isLocked);
+                    if (zoomPanBtn) zoomPanBtn.classList.toggle('is-active', this.isPanOnly);
+                });
+            }
+            if (zoomPanBtn) {
+                zoomPanBtn.addEventListener('click', () => {
+                    this.isPanOnly = !this.isPanOnly;
+                    if (this.isPanOnly) this.isLocked = false;
+                    this.applyInteractionMode();
+                    zoomPanBtn.classList.toggle('is-active', this.isPanOnly);
+                    if (zoomLockBtn) zoomLockBtn.classList.toggle('is-active', this.isLocked);
+                });
+            }
+            if (exportSvgBtn) {
+                exportSvgBtn.addEventListener('click', () => {
+                    this.exportNetworkSnapshot('svg');
+                });
+            }
+            if (exportPdfBtn) {
+                exportPdfBtn.addEventListener('click', () => {
+                    this.exportNetworkSnapshot('pdf');
                 });
             }
             if (labelFieldInput && labelSuggest && !labelFieldInput.dataset.visBound) {
@@ -1023,6 +1061,159 @@
             // outside click to close disabled
         }
 
+        applyInteractionMode() {
+            if (!this.visNetwork) return;
+            const lock = this.isLocked;
+            const panOnly = this.isPanOnly;
+            this.visNetwork.setOptions({
+                interaction: {
+                    dragNodes: !lock && !panOnly,
+                    dragView: !lock,
+                    zoomView: !lock && !panOnly
+                }
+            });
+            this.updateZoomControlsDisabled(lock, panOnly);
+        }
+
+        updateZoomControlsDisabled(isLocked, isPanOnly) {
+            const zoomInBtn = this.getEl(this.ids.zoomInBtn);
+            const zoomOutBtn = this.getEl(this.ids.zoomOutBtn);
+            const zoomFitBtn = this.getEl(this.ids.zoomFitBtn);
+            const zoomResetBtn = this.getEl(this.ids.zoomResetBtn);
+            const zoomSlider = this.getEl(this.ids.zoomSlider);
+            const disableZoom = isLocked || isPanOnly;
+            [zoomInBtn, zoomOutBtn, zoomFitBtn, zoomResetBtn].forEach((btn) => {
+                if (btn) btn.disabled = disableZoom;
+            });
+            if (zoomSlider) zoomSlider.disabled = disableZoom;
+        }
+
+        exportNetworkSnapshot(type) {
+            if (!this.visNetwork) return;
+            const canvas = this.visNetwork.canvas?.frame?.canvas;
+            if (!canvas) return;
+            const bounds = this.getNetworkBounds();
+            if (!bounds) return;
+            const ratio = canvas.clientWidth ? canvas.width / canvas.clientWidth : 1;
+            const margin = this.mmToPx(2);
+            const left = Math.max(0, bounds.left - margin);
+            const top = Math.max(0, bounds.top - margin);
+            const right = Math.min(canvas.clientWidth, bounds.right + margin);
+            const bottom = Math.min(canvas.clientHeight, bounds.bottom + margin);
+            const width = Math.max(1, right - left);
+            const height = Math.max(1, bottom - top);
+            const exportCanvas = document.createElement('canvas');
+            exportCanvas.width = Math.max(1, Math.round(width * ratio));
+            exportCanvas.height = Math.max(1, Math.round(height * ratio));
+            const ctx = exportCanvas.getContext('2d');
+            const bg = this.getCanvasBackground();
+            if (ctx) {
+                ctx.fillStyle = bg;
+                ctx.fillRect(0, 0, exportCanvas.width, exportCanvas.height);
+                ctx.drawImage(
+                    canvas,
+                    Math.round(left * ratio),
+                    Math.round(top * ratio),
+                    exportCanvas.width,
+                    exportCanvas.height,
+                    0,
+                    0,
+                    exportCanvas.width,
+                    exportCanvas.height
+                );
+            }
+            const dataUrl = exportCanvas.toDataURL('image/png');
+            if (type === 'svg') {
+                this.downloadSvgFromPng(dataUrl, width, height);
+            } else {
+                this.openPdfPrintWindow(dataUrl, width, height);
+            }
+        }
+
+        getNetworkBounds() {
+            if (!this.visNetwork) return null;
+            const nodes = this.visNetwork.body?.data?.nodes;
+            const ids = nodes ? nodes.getIds() : [];
+            if (!ids.length) {
+                const canvas = this.visNetwork.canvas?.frame?.canvas;
+                if (!canvas) return null;
+                return { left: 0, top: 0, right: canvas.clientWidth, bottom: canvas.clientHeight };
+            }
+            let left = Infinity;
+            let right = -Infinity;
+            let top = Infinity;
+            let bottom = -Infinity;
+            ids.forEach((id) => {
+                const box = this.visNetwork.getBoundingBox(id);
+                if (!box) return;
+                left = Math.min(left, box.left);
+                right = Math.max(right, box.right);
+                top = Math.min(top, box.top);
+                bottom = Math.max(bottom, box.bottom);
+            });
+            if (!isFinite(left) || !isFinite(right) || !isFinite(top) || !isFinite(bottom)) {
+                return null;
+            }
+            return { left, right, top, bottom };
+        }
+
+        getCanvasBackground() {
+            const view = this.getEl(this.ids.view);
+            if (!view) return '#ffffff';
+            const style = window.getComputedStyle(view);
+            return style.backgroundColor || '#ffffff';
+        }
+
+        mmToPx(mm) {
+            return (mm / 25.4) * 96;
+        }
+
+        downloadSvgFromPng(pngDataUrl, width, height) {
+            const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}"><image href="${pngDataUrl}" width="${width}" height="${height}" /></svg>`;
+            const blob = new Blob([svg], { type: 'image/svg+xml;charset=utf-8' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `vis-network-${Date.now()}.svg`;
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            URL.revokeObjectURL(url);
+        }
+
+        openPdfPrintWindow(pngDataUrl, width, height) {
+            const pxToMm = (px) => (px / 96) * 25.4;
+            const wMm = pxToMm(width + 0.01);
+            const hMm = pxToMm(height + 0.01);
+            const html = `
+                <html>
+                    <head>
+                        <title>vis-network-export</title>
+                        <style>
+                            @page { size: ${wMm}mm ${hMm}mm; margin: 0; }
+                            html, body { margin: 0; padding: 0; }
+                            img { display: block; width: 100%; height: auto; }
+                        </style>
+                    </head>
+                    <body>
+                        <img src="${pngDataUrl}" alt="vis-network" />
+                        <script>
+                            window.onload = () => {
+                                setTimeout(() => {
+                                    window.focus();
+                                    window.print();
+                                }, 120);
+                            };
+                        </script>
+                    </body>
+                </html>`;
+            const win = window.open('', '_blank');
+            if (!win) return;
+            win.document.open();
+            win.document.write(html);
+            win.document.close();
+        }
+
         mountDrawer() {
             const drawer = this.getEl(this.ids.inputDrawer);
             if (!drawer || drawer.dataset.mounted) return;
@@ -1114,6 +1305,7 @@
             if (this.visNetwork) {
                 this.bindNetworkEvents(this.visNetwork);
                 this.bindZoomEvents(this.visNetwork);
+                this.applyInteractionMode();
             }
             if (data && typeof data === 'object') {
                 this.wosNodeIndex = this.buildWosNodeIndex(data);
@@ -1621,7 +1813,15 @@
             const data = this.getCurrentViewData();
             let nodeMap = this.ensureWosDataIndex(data);
             if (!nodeMap.size) {
-                console.warn('[WosVisManager] label index is empty. wos_data.wos_id not found in current view data. Falling back to file scan.');
+                const hasWosInView = !!(data && typeof data === 'object' && Object.values(data).some((payload) => {
+                    if (!payload) return false;
+                    if (payload.wos_data && (payload.wos_data.wos_id || payload.wos_data.wosid)) return true;
+                    if (!Array.isArray(payload.page_wosids)) return false;
+                    return payload.page_wosids.some((item) => item?.wos_data && (item.wos_data.wos_id || item.wos_data.wosid));
+                }));
+                if (hasWosInView) {
+                    console.warn('[WosVisManager] label index is empty. wos_data.wos_id not found in current view data. Falling back to file scan.');
+                }
                 nodeMap = await this.buildWosDataIndexForCurrentView();
             }
             this.labelValueMap = new Map();

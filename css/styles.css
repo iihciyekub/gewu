@@ -2206,6 +2206,17 @@ body.theme-dark .vis-network-canvas {
     display: none;
 }
 
+.vis-network-zoom .btn:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+}
+
+.vis-network-zoom .btn.is-active {
+    background: #111827;
+    border-color: #0f172a;
+    color: #f8fafc;
+}
+
 .vis-network-zoom .vis-zoom-collapse {
     width: 28px;
     min-width: 28px;
@@ -2278,6 +2289,12 @@ body.theme-dark .vis-network-zoom .btn {
 body.theme-dark .vis-network-zoom .btn:hover {
     background: rgba(55, 65, 81, 0.95);
     border-color: rgba(148, 163, 184, 0.45);
+}
+
+body.theme-dark .vis-network-zoom .btn.is-active {
+    background: rgba(226, 232, 240, 0.16);
+    border-color: rgba(148, 163, 184, 0.55);
+    color: #e2e8f0;
 }
 
 body.theme-dark .vis-network-zoom input[type="range"] {
