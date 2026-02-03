@@ -71,18 +71,17 @@ class AutocompleteManager {
         this.dropdown = document.createElement('div');
         this.dropdown.className = 'autocomplete-dropdown';
         this.dropdown.style.display = 'none';
-        const header = document.createElement('div');
-        header.className = 'autocomplete-header';
-        header.innerHTML = `
-            <button type="button" class="autocomplete-doi-refresh" title="Refresh DOI cache" aria-label="Refresh DOI cache">
-                <i class="fas fa-rotate"></i>
-            </button>
-        `;
+        const refreshBtn = document.createElement('button');
+        refreshBtn.type = 'button';
+        refreshBtn.className = 'autocomplete-doi-refresh';
+        refreshBtn.title = 'Refresh DOI cache';
+        refreshBtn.setAttribute('aria-label', 'Refresh DOI cache');
+        refreshBtn.innerHTML = '<i class="fas fa-rotate"></i>';
         const list = document.createElement('div');
         list.className = 'autocomplete-list';
-        this.dropdown.appendChild(header);
+        this.dropdown.appendChild(refreshBtn);
         this.dropdown.appendChild(list);
-        this._headerEl = header;
+        this._refreshBtn = refreshBtn;
         this._listEl = list;
         document.body.appendChild(this.dropdown);
     }
@@ -392,9 +391,9 @@ class AutocompleteManager {
             this.dropdown.innerHTML = items;
         }
 
-        const showHeader = this.activeProvider === 'doi';
-        if (this._headerEl) {
-            this._headerEl.style.display = showHeader ? 'flex' : 'none';
+        const showRefresh = this.activeProvider === 'doi';
+        if (this.dropdown) {
+            this.dropdown.classList.toggle('doi-refresh-visible', showRefresh);
         }
 
         // 绑定点击事件
@@ -405,25 +404,22 @@ class AutocompleteManager {
                 this.insertSelected();
             });
         });
-        if (this._headerEl) {
-            const refreshBtn = this._headerEl.querySelector('.autocomplete-doi-refresh');
-            if (refreshBtn && !refreshBtn.dataset.bound) {
-                refreshBtn.dataset.bound = 'true';
-                refreshBtn.addEventListener('click', async (e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    refreshBtn.disabled = true;
-                    try {
-                        if (window.paperStats && typeof window.paperStats.refreshDoiCacheFromUi === 'function') {
-                            await window.paperStats.refreshDoiCacheFromUi();
-                        } else if (typeof window.refreshDoiCache === 'function') {
-                            await window.refreshDoiCache();
-                        }
-                    } finally {
-                        refreshBtn.disabled = false;
+        if (this._refreshBtn && !this._refreshBtn.dataset.bound) {
+            this._refreshBtn.dataset.bound = 'true';
+            this._refreshBtn.addEventListener('click', async (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                this._refreshBtn.disabled = true;
+                try {
+                    if (window.paperStats && typeof window.paperStats.refreshDoiCacheFromUi === 'function') {
+                        await window.paperStats.refreshDoiCacheFromUi();
+                    } else if (typeof window.refreshDoiCache === 'function') {
+                        await window.refreshDoiCache();
                     }
-                });
-            }
+                } finally {
+                    this._refreshBtn.disabled = false;
+                }
+            });
         }
         this.scrollSelectionIntoView();
     }
