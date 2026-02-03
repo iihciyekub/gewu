@@ -11432,6 +11432,23 @@ class PaperStatsApp {
         }
     }
 
+    async ensureMdChatSlot0WhenEmpty() {
+        const body = this._mdChatBody || document.querySelector('.md-chat-body');
+        if (!body) return;
+        const hasEmptyMarker = !!body.querySelector('.md-chat-query-empty');
+        const isEmpty = hasEmptyMarker || !body.textContent || !body.textContent.trim();
+        if (!isEmpty) return;
+        if (!this.mdChatSavedSlotsLoaded) {
+            await this.loadMdChatSavedSlots();
+        }
+        const slots = Array.isArray(this.mdChatSavedSlots) ? this.mdChatSavedSlots : [];
+        const saved0 = Array.isArray(slots[0]) ? slots[0] : [];
+        if (!saved0.length) return;
+        this.mdChatQueryFields = new Set(saved0);
+        this.renderMdChatQueryChips();
+        this.runMdChatFieldQuery();
+    }
+
     updateMdChatFieldOptionsFromCurrentData() {
         if (!this.currentData || typeof this.currentData !== 'object') {
             this.mdChatFieldOptions = [];
@@ -13139,6 +13156,7 @@ class PaperStatsApp {
                         const doi = btn.dataset.citationDoi || '';
                         if (!doi) return;
                         await this.openFileByCitationDoi(doi);
+                        this.ensureMdChatSlot0WhenEmpty();
                     });
                 });
             } catch (err) {
@@ -15055,7 +15073,7 @@ class PaperStatsApp {
                 flat.classList.add('active');
             } else if (view === 'vis-network' && visNetwork) {
                 visNetwork.classList.add('active');
-                if (this.visManager) {
+                if (this.visManager && prevView !== 'vis-network') {
                     this.visManager.renderFromCurrentData();
                 }
             } else if (view === 'settings' && settings) {
@@ -18450,6 +18468,7 @@ class PaperStatsApp {
                     const doi = this.normalizeDoiString(href);
                     if (doi) {
                         await this.openFileByCitationDoi(doi);
+                        this.ensureMdChatSlot0WhenEmpty();
                         return;
                     }
                 }

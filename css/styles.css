@@ -2146,7 +2146,8 @@ body.theme-vscode .nested-index-cell {
 }
 
 .vis-network-canvas {
-    flex: 1 1 auto;
+    position: absolute;
+    inset: 0;
     min-height: 0;
 }
 
@@ -2218,6 +2219,15 @@ body.theme-vscode .nested-index-cell {
     display: flex;
     flex-direction: column;
     z-index: 4;
+}
+
+.vis-input-drawer.vis-input-drawer-float {
+    position: fixed;
+    top: 80px;
+    right: 16px;
+    height: min(520px, calc(100vh - 120px));
+    border: 1px solid #e5e7eb;
+    border-radius: 12px;
 }
 
 .vis-input-drawer.is-open {

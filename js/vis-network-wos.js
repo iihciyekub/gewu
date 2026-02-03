@@ -44,7 +44,7 @@
                 const related = item && item.related_count != null ? item.related_count : '';
                 const ref = item && item.ref_count != null ? item.ref_count : '';
                 const label = childId;
-                const title = `WOSID: ${childId}\nC:${citations} R:${related} Ref:${ref}`;
+                const title = `${childId}\nC:${citations} R:${related} Ref:${ref}`;
                 const citationsValue = parseNumber(citations);
                 addNode(childId, label, {
                     title,
@@ -71,16 +71,71 @@
             const citations = Number.isFinite(node.citationsValue) ? node.citationsValue : 0;
             minCitation = Math.min(minCitation, citations);
             maxCitation = Math.max(maxCitation, citations);
-            const rawSize = citations > 0 ? citations : minSize;
-            const size = Math.min(maxSize, minSize + Math.sqrt(rawSize));
+            let size = minSize;
+            if (Number.isFinite(minCitation) && Number.isFinite(maxCitation) && maxCitation > minCitation) {
+                const t = (citations - minCitation) / (maxCitation - minCitation);
+                size = minSize + t * (maxSize - minSize);
+            }
             node.size = size;
             minNodeSize = Math.min(minNodeSize, size);
             maxNodeSize = Math.max(maxNodeSize, size);
         });
+        let minRelated = Infinity;
+        let maxRelated = -Infinity;
         edges.forEach((edge) => {
+            const related = Number.isFinite(edge.relatedValue) ? edge.relatedValue : 0;
+            minRelated = Math.min(minRelated, related);
+            maxRelated = Math.max(maxRelated, related);
             const base = 1;
-            const width = Math.min(8, base + (edge.relatedValue || 0) * 0.08);
+            const width = Math.min(8, base + related * 0.08);
             edge.width = Number.isFinite(width) ? width : base;
+        });
+        const normalize = (val, min, max) => {
+            if (!Number.isFinite(val)) return 0;
+            if (!Number.isFinite(min) || !Number.isFinite(max) || min === max) return 0;
+            return (val - min) / (max - min);
+        };
+        const nodeRelatedMax = new Map();
+        edges.forEach((edge) => {
+            const related = Number.isFinite(edge.relatedValue) ? edge.relatedValue : 0;
+            const currentFrom = nodeRelatedMax.get(edge.from) || 0;
+            const currentTo = nodeRelatedMax.get(edge.to) || 0;
+            nodeRelatedMax.set(edge.from, Math.max(currentFrom, related));
+            nodeRelatedMax.set(edge.to, Math.max(currentTo, related));
+        });
+        edges.forEach((edge) => {
+            const related = Number.isFinite(edge.relatedValue) ? edge.relatedValue : 0;
+            const t = normalize(related, minRelated, maxRelated);
+            const alpha = 0.15 + t * 0.7;
+            edge.color = {
+                color: `rgba(0,0,0,${alpha.toFixed(3)})`,
+                highlight: `rgba(0,0,0,${Math.min(1, alpha + 0.1).toFixed(3)})`,
+                hover: `rgba(0,0,0,${Math.min(1, alpha + 0.15).toFixed(3)})`
+            };
+        });
+        nodes.forEach((node) => {
+            const related = nodeRelatedMax.get(node.id) || 0;
+            const t = normalize(related, minRelated, maxRelated);
+            const alpha = 0.35 + t * 0.55;
+            node.color = {
+                background: '#ffffff',
+                border: `rgba(0,0,0,${Math.min(1, alpha + 0.15).toFixed(3)})`,
+                highlight: {
+                    background: '#ffffff',
+                    border: `rgba(0,0,0,${Math.min(1, alpha + 0.25).toFixed(3)})`
+                },
+                hover: {
+                    background: '#ffffff',
+                    border: `rgba(0,0,0,${Math.min(1, alpha + 0.2).toFixed(3)})`
+                }
+            };
+            const labelGray = Math.max(30, Math.round(30 + (1 - t) * 60));
+            node.labelStyle = {
+                fontSize: Math.max(10, Math.min(16, 8 + Math.sqrt(Math.max(1, node.size)))),
+                textColor: `rgb(${labelGray}, ${labelGray}, ${labelGray})`,
+                borderColor: `rgba(0,0,0,${Math.min(1, alpha + 0.15).toFixed(3)})`,
+                backgroundColor: '#ffffff'
+            };
         });
         const meta = {
             minCitation: Number.isFinite(minCitation) ? minCitation : 0,
@@ -134,11 +189,30 @@
                     highlight: { background: '#ffffff', border: '#111111' },
                     hover: { background: '#ffffff', border: '#111111' }
                 },
-                borderWidth: 1
+                borderWidth: 1.5,
+                borderWidthSelected: 2.5,
+                shadow: {
+                    enabled: true,
+                    color: 'rgba(0, 0, 0, 0.18)',
+                    size: 10,
+                    x: 2,
+                    y: 3
+                },
+                shapeProperties: {
+                    borderDashes: false
+                }
             },
             edges: {
                 color: { color: '#111111', highlight: '#111111', hover: '#111111' },
-                width: 1
+                width: 1.4,
+                smooth: { type: 'dynamic', roundness: 0.25 },
+                shadow: {
+                    enabled: true,
+                    color: 'rgba(0, 0, 0, 0.2)',
+                    size: 6,
+                    x: 1,
+                    y: 2
+                }
             }
         };
         const network = options.network && options.network.setData
@@ -201,6 +275,7 @@
             const node = dataset.nodes.get(nodeId);
             if (!node) return;
             hoverLabel.textContent = node.hiddenLabel || '';
+            applyLabelStyle(hoverLabel, node);
             positionLabel(network, hoverLabel, nodeId);
             hoverLabel.classList.add('is-visible');
         };
@@ -302,6 +377,7 @@
             label.className = 'vis-node-label';
             label.dataset.nodeId = node.id;
             label.textContent = node.hiddenLabel || '';
+            applyLabelStyle(label, node);
             layer.appendChild(label);
         });
         const updatePositions = () => {
@@ -325,6 +401,15 @@
             if (keepHover && label.classList.contains('is-hover')) return;
             label.remove();
         });
+    }
+
+    function applyLabelStyle(label, node) {
+        if (!label || !node || !node.labelStyle) return;
+        const style = node.labelStyle;
+        if (style.fontSize) label.style.fontSize = `${style.fontSize}px`;
+        if (style.textColor) label.style.color = style.textColor;
+        if (style.borderColor) label.style.borderColor = style.borderColor;
+        if (style.backgroundColor) label.style.backgroundColor = style.backgroundColor;
     }
 
     class WosVisManager {
@@ -355,6 +440,7 @@
         }
 
         bind() {
+            this.mountDrawer();
             const inputToggleBtn = this.getEl(this.ids.inputToggleBtn);
             const inputCancelBtn = this.getEl(this.ids.inputCancelBtn);
             const inputApplyBtn = this.getEl(this.ids.inputApplyBtn);
@@ -413,6 +499,39 @@
                     importInput.click();
                 });
             }
+            if (!this._escBound) {
+                this._escBound = true;
+                document.addEventListener('keydown', (e) => {
+                    if (e.key !== 'Escape') return;
+                    const drawer = this.getEl(this.ids.inputDrawer);
+                    if (drawer && drawer.classList.contains('is-open')) {
+                        e.preventDefault();
+                        this.toggleInputDrawer(false);
+                    }
+                });
+            }
+            if (!this._outsideClickBound) {
+                this._outsideClickBound = true;
+                document.addEventListener('mousedown', (e) => {
+                    const drawer = this.getEl(this.ids.inputDrawer);
+                    if (!drawer || !drawer.classList.contains('is-open')) return;
+                    const target = e.target;
+                    if (drawer.contains(target)) return;
+                    const toggleBtn = this.getEl(this.ids.inputToggleBtn);
+                    if (toggleBtn && toggleBtn.contains(target)) return;
+                    this.toggleInputDrawer(false);
+                });
+            }
+        }
+
+        mountDrawer() {
+            const drawer = this.getEl(this.ids.inputDrawer);
+            if (!drawer || drawer.dataset.mounted) return;
+            drawer.dataset.mounted = '1';
+            drawer.classList.add('vis-input-drawer-float');
+            if (drawer.parentElement !== document.body) {
+                document.body.appendChild(drawer);
+            }
         }
 
         getEl(id) {
@@ -429,7 +548,7 @@
 
         renderFromJson(raw) {
             if (!global.WosVisNetwork) {
-                this.notify('WOS Vis 模块未加载', 'error');
+                this.notify('WOS Vis module not loaded', 'error');
                 return;
             }
             const { network, data } = global.WosVisNetwork.renderVisNetworkFromJson(raw, {
@@ -446,6 +565,9 @@
             if (network) this.visNetwork = network;
             if (data) this.visNetworkData = data;
             this.lastRenderedJson = typeof raw === 'string' ? raw : JSON.stringify(raw, null, 2);
+            if (this.visNetwork) {
+                this.bindNetworkEvents(this.visNetwork);
+            }
         }
 
         renderFromCurrentData() {
@@ -497,6 +619,11 @@
             const textarea = this.getEl(this.ids.inputTextarea);
             if (!textarea) return;
             this.visInputText = textarea.value || '';
+            try {
+                const parsed = JSON.parse(this.visInputText);
+                this.visInputText = JSON.stringify(parsed, null, 2);
+                textarea.value = this.visInputText;
+            } catch (_e) { }
             this.notify('Rendered', 'success');
             if (this.visInputText) {
                 this.renderFromJson(this.visInputText);
@@ -679,6 +806,91 @@
             await this.persistSavedList(list);
             this.renderSavedSelect(list);
             this.notify('Deleted', 'success');
+        }
+
+        bindNetworkEvents(network) {
+            if (!network) return;
+            if (this._boundNetwork === network) return;
+            if (this._boundNetwork) {
+                this._boundNetwork.off('click', this._onNetworkClick);
+            }
+            this._onNetworkClick = (params) => {
+                const evt = params?.event?.event || params?.event?.srcEvent;
+                const mod = evt ? (evt.metaKey || evt.ctrlKey) : false;
+                if (mod) {
+                    const nodeId = params?.nodes?.[0];
+                    if (nodeId) {
+                        const wosId = this.normalizeWosId(nodeId);
+                        if (wosId) {
+                            const url = `https://www.webofscience.com/wos/woscc/full-record/${encodeURIComponent(wosId)}`;
+                            window.open(url, '_blank', 'noopener');
+                        }
+                    }
+                    return;
+                }
+                const nodeId = params?.nodes?.[0];
+                if (!nodeId) return;
+                this.openFileByWosId(nodeId);
+            };
+            network.on('click', this._onNetworkClick);
+            this._boundNetwork = network;
+        }
+
+        normalizeWosId(value) {
+            if (!value) return '';
+            const raw = String(value).trim().toUpperCase();
+            if (!raw) return '';
+            return raw.startsWith('WOS:') ? raw : `WOS:${raw.replace(/^WOS[:_]?/i, '')}`;
+        }
+
+        async buildWosIndexForCurrentView() {
+            const app = this.app;
+            if (!app) return new Map();
+            const view = app.currentJsonView || 'view1';
+            if (this._wosIndexView === view && this._wosIndex && this._wosIndex.size) {
+                return this._wosIndex;
+            }
+            const index = new Map();
+            const metaByBase = app.fileMetaByBase || {};
+            const entries = Object.values(metaByBase);
+            for (const entry of entries) {
+                const path = entry?.views?.[view];
+                if (!path) continue;
+                try {
+                    const data = await app.readProjectFile(path);
+                    const wos = data?.wos_data || {};
+                    const rawId = wos.wosid || wos.wos_id || data?.wosid || data?.wos_id;
+                    const normalized = this.normalizeWosId(rawId);
+                    if (normalized) {
+                        index.set(normalized, entry.base);
+                    }
+                } catch (_e) {
+                    continue;
+                }
+            }
+            this._wosIndexView = view;
+            this._wosIndex = index;
+            return index;
+        }
+
+        async openFileByWosId(wosId) {
+            const app = this.app;
+            if (!app || typeof app.loadFile !== 'function') return;
+            const normalized = this.normalizeWosId(wosId);
+            if (!normalized) {
+                this.notify('Invalid WOS id', 'error');
+                return;
+            }
+            if (typeof app.ensureMdChatSlot0WhenEmpty === 'function') {
+                app.ensureMdChatSlot0WhenEmpty();
+            }
+            const index = await this.buildWosIndexForCurrentView();
+            const base = index.get(normalized);
+            if (!base) {
+                this.notify(`No file found for ${normalized}`, 'info');
+                return;
+            }
+            app.loadFile(base);
         }
 
         debugNode(nodeId) {
