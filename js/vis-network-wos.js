@@ -589,18 +589,7 @@
                     }
                 });
             }
-            if (!this._outsideClickBound) {
-                this._outsideClickBound = true;
-                document.addEventListener('mousedown', (e) => {
-                    const drawer = this.getEl(this.ids.inputDrawer);
-                    if (!drawer || !drawer.classList.contains('is-open')) return;
-                    const target = e.target;
-                    if (drawer.contains(target)) return;
-                    const toggleBtn = this.getEl(this.ids.inputToggleBtn);
-                    if (toggleBtn && toggleBtn.contains(target)) return;
-                    this.toggleInputDrawer(false);
-                });
-            }
+            // outside click to close disabled
         }
 
         mountDrawer() {

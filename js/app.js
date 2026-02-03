@@ -1874,6 +1874,9 @@ class PaperStatsApp {
                 this._cmdShortcutTimestamp = now;
                 return;
             }
+            if (mod) {
+                return;
+            }
             if (this._cmdShortcutTimestamp && now - this._cmdShortcutTimestamp <= 1500) {
                 const key = e.key.toLowerCase();
                 if (['j', 'm', 'd', 'v', 's', 'o'].includes(key)) {
