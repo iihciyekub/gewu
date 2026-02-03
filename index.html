@@ -517,52 +517,59 @@
                                 <div class="vis-label-hint">Example: wosid, title, wos_data.title</div>
                                 <div class="vis-label-fade">
                                     <label for="visLabelFadeSlider">Label fade by citations</label>
-                                    <input id="visLabelFadeSlider" type="range" min="0" max="100" step="5" value="0">
+                                    <input id="visLabelFadeSlider" type="number" step="0.1" value="0" inputmode="decimal">
                                 </div>
                                 <div class="vis-node-size">
                                     <label for="visNodeSizeMinSlider">Node size min</label>
-                                    <input id="visNodeSizeMinSlider" type="range" min="1" max="40" step="1" value="6">
+                                    <input id="visNodeSizeMinSlider" type="number" step="0.1" value="6" inputmode="decimal">
                                     <label for="visNodeSizeMaxSlider">Node size max</label>
-                                    <input id="visNodeSizeMaxSlider" type="range" min="10" max="120" step="1" value="60">
+                                    <input id="visNodeSizeMaxSlider" type="number" step="1" value="60" inputmode="decimal">
                                     <label for="visNodeSizeGammaSlider">Node size curve</label>
-                                    <input id="visNodeSizeGammaSlider" type="range" min="0.4" max="2.2" step="0.05" value="1">
+                                    <input id="visNodeSizeGammaSlider" type="number" step="0.05" value="1" inputmode="decimal">
                                 </div>
                                 <div class="vis-node-border">
                                     <label for="visNodeBorderSlider">Node border width</label>
-                                    <input id="visNodeBorderSlider" type="range" min="1" max="10" step="0.1" value="1.5">
+                                    <input id="visNodeBorderSlider" type="number" step="0.1" value="1.5" inputmode="decimal">
                                 </div>
                                 <div class="vis-physics">
                                     <label for="visPhysicsSpringSlider">Link distance</label>
-                                    <input id="visPhysicsSpringSlider" type="range" min="40" max="220" step="5" value="120">
+                                    <input id="visPhysicsSpringSlider" type="number" step="5" value="120" inputmode="decimal">
                                     <label for="visPhysicsStrengthSlider">Link strength</label>
-                                    <input id="visPhysicsStrengthSlider" type="range" min="0.01" max="0.2" step="0.01" value="0.05">
+                                    <input id="visPhysicsStrengthSlider" type="number" step="0.01" value="0.05" inputmode="decimal">
                                     <label for="visPhysicsGravitySlider">Gravity</label>
-                                    <input id="visPhysicsGravitySlider" type="range" min="-20000" max="-2000" step="500" value="-9000">
+                                    <input id="visPhysicsGravitySlider" type="number" step="100" value="-9000" inputmode="decimal">
                                 </div>
                                 <div class="vis-edge-fade">
                                     <label for="visEdgeFadeSlider">Link contrast</label>
-                                    <input id="visEdgeFadeSlider" type="range" min="0" max="100" step="5" value="100">
+                                    <input id="visEdgeFadeSlider" type="number" step="5" value="100" inputmode="decimal">
                                 </div>
                                 <div class="vis-edge-width">
                                     <label for="visEdgeMinWidthSlider">Link min width</label>
-                                    <input id="visEdgeMinWidthSlider" type="range" min="0.5" max="6" step="0.1" value="1">
+                                    <input id="visEdgeMinWidthSlider" type="number" step="0.1" value="1" inputmode="decimal">
                                     <label for="visEdgeMaxWidthSlider">Link max width</label>
-                                    <input id="visEdgeMaxWidthSlider" type="range" min="1" max="12" step="0.1" value="6">
+                                    <input id="visEdgeMaxWidthSlider" type="number" step="0.1" value="6" inputmode="decimal">
                                 </div>
                                 <div class="vis-label-threshold">
                                     <label for="visLabelMinSlider">Min citations to show</label>
                                     <div class="vis-label-threshold-row">
-                                        <input id="visLabelMinSlider" type="range" min="0" max="100" step="1" value="0">
-                                        <span id="visLabelMinValue">0</span>
+                                        <input id="visLabelMinSlider" type="number" step="1" value="0" inputmode="decimal">
                                     </div>
                                 </div>
                                 <div class="vis-label-size">
                                     <label for="visLabelSizeSlider">Label size</label>
-                                    <input id="visLabelSizeSlider" type="range" min="80" max="180" step="5" value="100">
+                                    <input id="visLabelSizeSlider" type="number" step="5" value="100" inputmode="decimal">
                                 </div>
                                 <div class="vis-label-weight">
                                     <label for="visLabelWeightSlider">Label weight</label>
-                                    <input id="visLabelWeightSlider" type="range" min="300" max="900" step="50" value="500">
+                                    <input id="visLabelWeightSlider" type="number" step="50" value="500" inputmode="decimal">
+                                </div>
+                                <div class="vis-label-weight">
+                                    <label for="visLabelFontMinInput">Label font min</label>
+                                    <input id="visLabelFontMinInput" type="number" step="1" value="9" inputmode="decimal">
+                                </div>
+                                <div class="vis-label-weight">
+                                    <label for="visLabelFontMaxInput">Label font max</label>
+                                    <input id="visLabelFontMaxInput" type="number" step="1" value="30" inputmode="decimal">
                                 </div>
                             </div>
                         </div>

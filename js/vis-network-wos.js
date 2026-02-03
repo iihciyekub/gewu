@@ -497,12 +497,13 @@
                 labelFadeSlider: options.labelFadeSliderId || 'visLabelFadeSlider',
                 labelSizeSlider: options.labelSizeSliderId || 'visLabelSizeSlider',
                 labelMinSlider: options.labelMinSliderId || 'visLabelMinSlider',
-                labelMinValue: options.labelMinValueId || 'visLabelMinValue',
                 nodeSizeMinSlider: options.nodeSizeMinSliderId || 'visNodeSizeMinSlider',
                 nodeSizeMaxSlider: options.nodeSizeMaxSliderId || 'visNodeSizeMaxSlider',
                 nodeSizeGammaSlider: options.nodeSizeGammaSliderId || 'visNodeSizeGammaSlider',
                 nodeBorderSlider: options.nodeBorderSliderId || 'visNodeBorderSlider',
                 labelWeightSlider: options.labelWeightSliderId || 'visLabelWeightSlider',
+                labelFontMinInput: options.labelFontMinInputId || 'visLabelFontMinInput',
+                labelFontMaxInput: options.labelFontMaxInputId || 'visLabelFontMaxInput',
                 physicsSpringSlider: options.physicsSpringSliderId || 'visPhysicsSpringSlider',
                 physicsStrengthSlider: options.physicsStrengthSliderId || 'visPhysicsStrengthSlider',
                 physicsGravitySlider: options.physicsGravitySliderId || 'visPhysicsGravitySlider',
@@ -541,6 +542,8 @@
             this.wosDataIndexSource = null;
             this.labelFieldsSelected = [];
             this.labelWeight = 500;
+            this.labelFontMin = 9;
+            this.labelFontMax = 30;
             this.nodeSizeMin = 6;
             this.nodeSizeMax = 60;
             this.nodeSizeGamma = 1;
@@ -592,12 +595,13 @@
             const labelFadeSlider = this.getEl(this.ids.labelFadeSlider);
             const labelSizeSlider = this.getEl(this.ids.labelSizeSlider);
             const labelMinSlider = this.getEl(this.ids.labelMinSlider);
-            const labelMinValue = this.getEl(this.ids.labelMinValue);
             const nodeSizeMinSlider = this.getEl(this.ids.nodeSizeMinSlider);
             const nodeSizeMaxSlider = this.getEl(this.ids.nodeSizeMaxSlider);
             const nodeSizeGammaSlider = this.getEl(this.ids.nodeSizeGammaSlider);
             const nodeBorderSlider = this.getEl(this.ids.nodeBorderSlider);
             const labelWeightSlider = this.getEl(this.ids.labelWeightSlider);
+            const labelFontMinInput = this.getEl(this.ids.labelFontMinInput);
+            const labelFontMaxInput = this.getEl(this.ids.labelFontMaxInput);
             const physicsSpringSlider = this.getEl(this.ids.physicsSpringSlider);
             const physicsStrengthSlider = this.getEl(this.ids.physicsStrengthSlider);
             const physicsGravitySlider = this.getEl(this.ids.physicsGravitySlider);
@@ -920,122 +924,119 @@
                     }
                 });
             }
-            if (labelFadeSlider && !labelFadeSlider.dataset.visBound) {
-                labelFadeSlider.dataset.visBound = '1';
-                labelFadeSlider.addEventListener('input', () => {
-                    const value = Number(labelFadeSlider.value);
-                    this.labelFade = Number.isFinite(value) ? value : 0;
-                    this.applyLabelFade();
-                    this.queuePersistSettings();
+            const bindNumberInput = (el, onValue) => {
+                if (!el || el.dataset.visBound) return;
+                el.dataset.visBound = '1';
+                const getStep = () => {
+                    const raw = Number(el.step);
+                    return Number.isFinite(raw) && raw > 0 ? raw : 1;
+                };
+                const getDecimals = () => {
+                    const stepRaw = String(el.step || '');
+                    if (!stepRaw.includes('.')) return 0;
+                    return stepRaw.split('.')[1].length;
+                };
+                const applyValue = (rawValue) => {
+                    const value = Number(rawValue);
+                    const next = Number.isFinite(value) ? value : 0;
+                    const decimals = getDecimals();
+                    el.value = decimals ? next.toFixed(decimals) : String(Math.round(next));
+                    onValue(next);
+                };
+                el.addEventListener('input', () => {
+                    applyValue(el.value);
                 });
-            }
-            if (labelMinSlider && !labelMinSlider.dataset.visBound) {
-                labelMinSlider.dataset.visBound = '1';
-                labelMinSlider.addEventListener('input', () => {
-                    const value = Number(labelMinSlider.value);
-                    this.labelMinCitations = Number.isFinite(value) ? value : 0;
-                    if (labelMinValue) labelMinValue.textContent = String(this.labelMinCitations);
-                    this.applyLabelThreshold();
-                    this.queuePersistSettings();
-                });
-            }
-            if (labelWeightSlider && !labelWeightSlider.dataset.visBound) {
-                labelWeightSlider.dataset.visBound = '1';
-                labelWeightSlider.addEventListener('input', () => {
-                    this.labelWeight = Number(labelWeightSlider.value) || 500;
-                    this.applyLabelWeight();
-                    this.queuePersistSettings();
-                });
-            }
-            if (physicsSpringSlider && !physicsSpringSlider.dataset.visBound) {
-                physicsSpringSlider.dataset.visBound = '1';
-                physicsSpringSlider.addEventListener('input', () => {
-                    this.physicsSpringLength = Number(physicsSpringSlider.value) || 120;
-                    this.applyPhysicsSettings();
-                    this.queuePersistSettings();
-                });
-            }
-            if (physicsStrengthSlider && !physicsStrengthSlider.dataset.visBound) {
-                physicsStrengthSlider.dataset.visBound = '1';
-                physicsStrengthSlider.addEventListener('input', () => {
-                    this.physicsSpringConstant = Number(physicsStrengthSlider.value) || 0.05;
-                    this.applyPhysicsSettings();
-                    this.queuePersistSettings();
-                });
-            }
-            if (physicsGravitySlider && !physicsGravitySlider.dataset.visBound) {
-                physicsGravitySlider.dataset.visBound = '1';
-                physicsGravitySlider.addEventListener('input', () => {
-                    this.physicsGravity = Number(physicsGravitySlider.value) || -9000;
-                    this.applyPhysicsSettings();
-                    this.queuePersistSettings();
-                });
-            }
-            if (edgeFadeSlider && !edgeFadeSlider.dataset.visBound) {
-                edgeFadeSlider.dataset.visBound = '1';
-                edgeFadeSlider.addEventListener('input', () => {
-                    this.edgeFade = Number(edgeFadeSlider.value) || 0;
-                    this.applyEdgeFade();
-                    this.queuePersistSettings();
-                });
-            }
-            if (edgeMinWidthSlider && !edgeMinWidthSlider.dataset.visBound) {
-                edgeMinWidthSlider.dataset.visBound = '1';
-                edgeMinWidthSlider.addEventListener('input', () => {
-                    this.edgeMinWidth = Number(edgeMinWidthSlider.value) || 1;
-                    this.applyEdgeWidthRange();
-                    this.queuePersistSettings();
-                });
-            }
-            if (edgeMaxWidthSlider && !edgeMaxWidthSlider.dataset.visBound) {
-                edgeMaxWidthSlider.dataset.visBound = '1';
-                edgeMaxWidthSlider.addEventListener('input', () => {
-                    this.edgeMaxWidth = Number(edgeMaxWidthSlider.value) || 6;
-                    this.applyEdgeWidthRange();
-                    this.queuePersistSettings();
-                });
-            }
-            if (nodeSizeMinSlider && !nodeSizeMinSlider.dataset.visBound) {
-                nodeSizeMinSlider.dataset.visBound = '1';
-                nodeSizeMinSlider.addEventListener('input', () => {
-                    this.nodeSizeMin = Number(nodeSizeMinSlider.value) || 1;
-                    this.applyNodeSizeScale();
-                    this.queuePersistSettings();
-                });
-            }
-            if (nodeSizeMaxSlider && !nodeSizeMaxSlider.dataset.visBound) {
-                nodeSizeMaxSlider.dataset.visBound = '1';
-                nodeSizeMaxSlider.addEventListener('input', () => {
-                    this.nodeSizeMax = Number(nodeSizeMaxSlider.value) || 60;
-                    this.applyNodeSizeScale();
-                    this.queuePersistSettings();
-                });
-            }
-            if (nodeSizeGammaSlider && !nodeSizeGammaSlider.dataset.visBound) {
-                nodeSizeGammaSlider.dataset.visBound = '1';
-                nodeSizeGammaSlider.addEventListener('input', () => {
-                    this.nodeSizeGamma = Number(nodeSizeGammaSlider.value) || 1;
-                    this.applyNodeSizeScale();
-                    this.queuePersistSettings();
-                });
-            }
-            if (nodeBorderSlider && !nodeBorderSlider.dataset.visBound) {
-                nodeBorderSlider.dataset.visBound = '1';
-                nodeBorderSlider.addEventListener('input', () => {
-                    this.nodeBorderWidth = Number(nodeBorderSlider.value) || 1.5;
-                    this.applyNodeBorderWidth();
-                    this.queuePersistSettings();
-                });
-            }
-            if (labelSizeSlider && !labelSizeSlider.dataset.visBound) {
-                labelSizeSlider.dataset.visBound = '1';
-                labelSizeSlider.addEventListener('input', () => {
-                    const value = Number(labelSizeSlider.value);
-                    const scale = Number.isFinite(value) ? value / 100 : 1;
-                    this.labelSizeScale = Math.max(0.6, Math.min(2.2, scale));
-                    this.applyLabelSizeScale();
-                });
-            }
+                el.addEventListener('wheel', (e) => {
+                    e.preventDefault();
+                    const step = getStep();
+                    const direction = e.deltaY < 0 ? -1 : 1;
+                    const current = Number(el.value);
+                    const next = (Number.isFinite(current) ? current : 0) + direction * step;
+                    applyValue(next);
+                }, { passive: false });
+            };
+
+            bindNumberInput(labelFadeSlider, (next) => {
+                this.labelFade = next;
+                this.applyLabelFade();
+                this.queuePersistSettings();
+            });
+            bindNumberInput(labelMinSlider, (next) => {
+                this.labelMinCitations = next;
+                this.applyLabelThreshold();
+                this.queuePersistSettings();
+            });
+            bindNumberInput(labelWeightSlider, (next) => {
+                this.labelWeight = next;
+                this.applyLabelWeight();
+                this.queuePersistSettings();
+            });
+            bindNumberInput(labelFontMinInput, (next) => {
+                this.labelFontMin = next;
+                this.applyLabelSizeScale();
+                this.queuePersistSettings();
+            });
+            bindNumberInput(labelFontMaxInput, (next) => {
+                this.labelFontMax = next;
+                this.applyLabelSizeScale();
+                this.queuePersistSettings();
+            });
+            bindNumberInput(physicsSpringSlider, (next) => {
+                this.physicsSpringLength = next;
+                this.applyPhysicsSettings();
+                this.queuePersistSettings();
+            });
+            bindNumberInput(physicsStrengthSlider, (next) => {
+                this.physicsSpringConstant = next;
+                this.applyPhysicsSettings();
+                this.queuePersistSettings();
+            });
+            bindNumberInput(physicsGravitySlider, (next) => {
+                this.physicsGravity = next;
+                this.applyPhysicsSettings();
+                this.queuePersistSettings();
+            });
+            bindNumberInput(edgeFadeSlider, (next) => {
+                this.edgeFade = next;
+                this.applyEdgeFade();
+                this.queuePersistSettings();
+            });
+            bindNumberInput(edgeMinWidthSlider, (next) => {
+                this.edgeMinWidth = next;
+                this.applyEdgeWidthRange();
+                this.queuePersistSettings();
+            });
+            bindNumberInput(edgeMaxWidthSlider, (next) => {
+                this.edgeMaxWidth = next;
+                this.applyEdgeWidthRange();
+                this.queuePersistSettings();
+            });
+            bindNumberInput(nodeSizeMinSlider, (next) => {
+                this.nodeSizeMin = next;
+                this.applyNodeSizeScale();
+                this.queuePersistSettings();
+            });
+            bindNumberInput(nodeSizeMaxSlider, (next) => {
+                this.nodeSizeMax = next;
+                this.applyNodeSizeScale();
+                this.queuePersistSettings();
+            });
+            bindNumberInput(nodeSizeGammaSlider, (next) => {
+                this.nodeSizeGamma = next;
+                this.applyNodeSizeScale();
+                this.queuePersistSettings();
+            });
+            bindNumberInput(nodeBorderSlider, (next) => {
+                this.nodeBorderWidth = next;
+                this.applyNodeBorderWidth();
+                this.queuePersistSettings();
+            });
+            bindNumberInput(labelSizeSlider, (next) => {
+                const scale = Number.isFinite(next) ? next / 100 : 1;
+                this.labelSizeScale = Math.max(0.6, Math.min(2.2, scale));
+                this.applyLabelSizeScale();
+                this.queuePersistSettings();
+            });
             if (labelFields && !labelFields.dataset.visBound) {
                 labelFields.dataset.visBound = '1';
                 labelFields.addEventListener('click', (e) => {
@@ -1363,19 +1364,8 @@
             }
             this.wrapLabelToggleButton();
             const minSlider = this.getEl(this.ids.labelMinSlider);
-            const minValue = this.getEl(this.ids.labelMinValue);
-            const maxCitation = Number.isFinite(this.visNetworkData?.meta?.maxCitation)
-                ? this.visNetworkData.meta.maxCitation
-                : 0;
             if (minSlider) {
-                const nextMax = Math.max(0, Math.ceil(maxCitation));
-                minSlider.max = String(nextMax);
-                if (Number(minSlider.value) > nextMax) {
-                    minSlider.value = String(nextMax);
-                }
-            }
-            if (minValue) {
-                minValue.textContent = String(this.labelMinCitations || 0);
+                minSlider.value = String(this.labelMinCitations || 0);
             }
             this.refreshLabelFieldOptions();
             void this.applyLabelField(this.labelField);
@@ -1512,11 +1502,13 @@
                 const slider = this.getEl(this.ids.labelFadeSlider);
                 if (slider) slider.value = String(this.labelFade || 0);
                 const minSlider = this.getEl(this.ids.labelMinSlider);
-                const minValue = this.getEl(this.ids.labelMinValue);
                 if (minSlider) minSlider.value = String(this.labelMinCitations || 0);
-                if (minValue) minValue.textContent = String(this.labelMinCitations || 0);
                 const sizeSlider = this.getEl(this.ids.labelSizeSlider);
                 if (sizeSlider) sizeSlider.value = String(Math.round((this.labelSizeScale || 1) * 100));
+                const labelFontMinInput = this.getEl(this.ids.labelFontMinInput);
+                const labelFontMaxInput = this.getEl(this.ids.labelFontMaxInput);
+                if (labelFontMinInput) labelFontMinInput.value = String(this.labelFontMin ?? 9);
+                if (labelFontMaxInput) labelFontMaxInput.value = String(this.labelFontMax ?? 30);
                 if (nodeSizeMinSlider) nodeSizeMinSlider.value = String(this.nodeSizeMin || 1);
                 if (nodeSizeMaxSlider) nodeSizeMaxSlider.value = String(this.nodeSizeMax || 60);
                 if (nodeSizeGammaSlider) nodeSizeGammaSlider.value = String(this.nodeSizeGamma || 1);
@@ -1984,10 +1976,17 @@
             const dataset = this.getNetworkNodesDataSet();
             if (!dataset) return;
             const scale = Number.isFinite(this.labelSizeScale) ? this.labelSizeScale : 1;
-            const range = Math.max(0, scale - 1);
+            const range = scale - 1;
             const meta = this.visNetworkData?.meta || {};
             const minCitation = Number.isFinite(meta.minCitation) ? meta.minCitation : 0;
             const maxCitation = Number.isFinite(meta.maxCitation) ? meta.maxCitation : minCitation;
+            let minFont = Number.isFinite(this.labelFontMin) ? this.labelFontMin : null;
+            let maxFont = Number.isFinite(this.labelFontMax) ? this.labelFontMax : null;
+            if (minFont != null && maxFont != null && maxFont < minFont) {
+                const swap = minFont;
+                minFont = maxFont;
+                maxFont = swap;
+            }
             const updates = dataset.get().map((node) => {
                 const base = node.labelBaseSize
                     || node.labelStyle?.fontSize
@@ -1998,9 +1997,11 @@
                 if (citations != null && maxCitation > minCitation) {
                     const t = (citations - minCitation) / (maxCitation - minCitation);
                     const delta = (t - 0.5) * 2 * range;
-                    factor = Math.max(0.6, 1 + delta);
+                    factor = 1 + delta;
                 }
-                const next = Math.max(9, Math.min(30, base * factor));
+                let next = Math.max(1, base * factor);
+                if (minFont != null) next = Math.max(minFont, next);
+                if (maxFont != null) next = Math.min(maxFont, next);
                 return {
                     id: node.id,
                     labelBaseSize: base,
@@ -2014,10 +2015,11 @@
         applyLabelWeight() {
             const dataset = this.getNetworkNodesDataSet();
             if (!dataset) return;
-            const weight = Math.max(300, Math.min(900, Number(this.labelWeight) || 500));
+            const weight = Number(this.labelWeight);
+            const next = Number.isFinite(weight) ? weight : 500;
             const updates = dataset.get().map((node) => ({
                 id: node.id,
-                labelStyle: { ...(node.labelStyle || {}), fontWeight: weight }
+                labelStyle: { ...(node.labelStyle || {}), fontWeight: next }
             }));
             dataset.update(updates);
             this.updateLabelLayer();
@@ -2029,16 +2031,17 @@
             const meta = this.visNetworkData?.meta || {};
             const minCitation = Number.isFinite(meta.minCitation) ? meta.minCitation : 0;
             const maxCitation = Number.isFinite(meta.maxCitation) ? meta.maxCitation : minCitation;
-            const fade = Math.max(0, Math.min(100, Number(this.labelFade) || 0)) / 100;
+            const fade = (Number(this.labelFade) || 0) / 100;
             const lightRange = Math.round(60 + fade * 120);
             const darkMode = isDarkTheme();
             const updates = dataset.get().map((node) => {
                 const citations = Number.isFinite(node.citationsValue) ? node.citationsValue : 0;
                 const t = maxCitation > minCitation ? (citations - minCitation) / (maxCitation - minCitation) : 1;
                 const k = Math.max(0, Math.min(1, t));
-                const gray = darkMode
+                const grayRaw = darkMode
                     ? Math.round(210 + (1 - k) * Math.min(50, lightRange * 0.4))
                     : Math.round(30 + (1 - k) * lightRange);
+                const gray = Math.max(0, Math.min(255, grayRaw));
                 const color = `rgb(${gray}, ${gray}, ${gray})`;
                 return {
                     id: node.id,
@@ -2079,13 +2082,14 @@
             const meta = this.visNetworkData?.meta || {};
             const minCitation = Number.isFinite(meta.minCitation) ? meta.minCitation : 0;
             const maxCitation = Number.isFinite(meta.maxCitation) ? meta.maxCitation : minCitation;
-            const minSize = Math.max(1, Number(this.nodeSizeMin) || 1);
-            const maxSize = Math.max(minSize + 1, Number(this.nodeSizeMax) || minSize + 1);
-            const gamma = Math.max(0.2, Math.min(4, Number(this.nodeSizeGamma) || 1));
+            const minSize = Number.isFinite(Number(this.nodeSizeMin)) ? Number(this.nodeSizeMin) : 1;
+            const maxSize = Number.isFinite(Number(this.nodeSizeMax)) ? Number(this.nodeSizeMax) : minSize + 1;
+            const gamma = Number.isFinite(Number(this.nodeSizeGamma)) ? Number(this.nodeSizeGamma) : 1;
             const updates = dataset.get().map((node) => {
                 const citations = Number.isFinite(node.citationsValue) ? node.citationsValue : 0;
                 const t = maxCitation > minCitation ? (citations - minCitation) / (maxCitation - minCitation) : 0;
-                const eased = Math.pow(Math.max(0, Math.min(1, t)), gamma);
+                const bounded = Math.max(0, Math.min(1, t));
+                const eased = bounded === 0 ? 0 : Math.pow(bounded, gamma);
                 const size = minSize + eased * (maxSize - minSize);
                 return { id: node.id, size };
             });
@@ -2098,15 +2102,15 @@
             const meta = this.visNetworkData?.meta || {};
             const minCitation = Number.isFinite(meta.minCitation) ? meta.minCitation : 0;
             const maxCitation = Number.isFinite(meta.maxCitation) ? meta.maxCitation : minCitation;
-            const base = Math.max(1, Math.min(10, Number(this.nodeBorderWidth) || 1.5));
-            const range = Math.max(0.6, Math.min(8, base * 2.2));
+            const base = Number.isFinite(Number(this.nodeBorderWidth)) ? Number(this.nodeBorderWidth) : 1.5;
+            const range = Math.abs(base) * 2.2;
             const updates = dataset.get().map((node) => {
                 const citations = Number.isFinite(node.citationsValue) ? node.citationsValue : 0;
                 let t = maxCitation > minCitation ? (citations - minCitation) / (maxCitation - minCitation) : 0;
                 t = Math.max(0, Math.min(1, t));
                 const eased = Math.pow(t, 1.6);
                 const width = base + eased * range;
-                const selected = Math.min(12, width + 0.8);
+                const selected = width + 0.8;
                 return {
                     id: node.id,
                     borderWidth: Number(width.toFixed(2)),
@@ -2123,14 +2127,15 @@
             const meta = this.visNetworkData?.meta || {};
             const minRelated = Number.isFinite(meta.minRelated) ? meta.minRelated : 0;
             const maxRelated = Number.isFinite(meta.maxRelated) ? meta.maxRelated : minRelated;
-            const contrast = Math.max(0, Math.min(100, Number(this.edgeFade) || 0)) / 100;
+            const contrast = (Number(this.edgeFade) || 0) / 100;
             const minAlpha = 0.15 + (1 - contrast) * 0.2;
             const maxAlpha = 0.85 - (1 - contrast) * 0.2;
             const darkMode = isDarkTheme();
             const updates = dataset.get().map((edge) => {
                 const related = Number.isFinite(edge.relatedValue) ? edge.relatedValue : 0;
                 const t = maxRelated > minRelated ? (related - minRelated) / (maxRelated - minRelated) : 0;
-                const alpha = minAlpha + Math.max(0, Math.min(1, t)) * (maxAlpha - minAlpha);
+                const alphaRaw = minAlpha + Math.max(0, Math.min(1, t)) * (maxAlpha - minAlpha);
+                const alpha = Math.max(0, Math.min(1, alphaRaw));
                 return {
                     id: edge.id,
                     color: {
@@ -2156,8 +2161,8 @@
             const meta = this.visNetworkData?.meta || {};
             const minRelated = Number.isFinite(meta.minRelated) ? meta.minRelated : 0;
             const maxRelated = Number.isFinite(meta.maxRelated) ? meta.maxRelated : minRelated;
-            const minW = Math.max(0.5, Math.min(10, Number(this.edgeMinWidth) || 1));
-            const maxW = Math.max(minW + 0.1, Math.min(16, Number(this.edgeMaxWidth) || 6));
+            const minW = Number.isFinite(Number(this.edgeMinWidth)) ? Number(this.edgeMinWidth) : 1;
+            const maxW = Number.isFinite(Number(this.edgeMaxWidth)) ? Number(this.edgeMaxWidth) : 6;
             const updates = dataset.get().map((edge) => {
                 const related = Number.isFinite(edge.relatedValue) ? edge.relatedValue : 0;
                 const t = maxRelated > minRelated ? (related - minRelated) / (maxRelated - minRelated) : 0;
@@ -2262,7 +2267,6 @@
             const labelSizeSlider = this.getEl(this.ids.labelSizeSlider);
             const labelFadeSlider = this.getEl(this.ids.labelFadeSlider);
             const labelMinSlider = this.getEl(this.ids.labelMinSlider);
-            const labelMinValue = this.getEl(this.ids.labelMinValue);
             const labelWeightSlider = this.getEl(this.ids.labelWeightSlider);
             const physicsSpringSlider = this.getEl(this.ids.physicsSpringSlider);
             const physicsStrengthSlider = this.getEl(this.ids.physicsStrengthSlider);
@@ -2278,7 +2282,6 @@
             if (labelSizeSlider) labelSizeSlider.value = String(Math.round(labelScale * 100));
             if (labelFadeSlider) labelFadeSlider.value = String(fade);
             if (labelMinSlider) labelMinSlider.value = String(minCite);
-            if (labelMinValue) labelMinValue.textContent = String(minCite);
             if (labelWeightSlider) labelWeightSlider.value = String(this.labelWeight || 500);
             if (physicsSpringSlider) physicsSpringSlider.value = String(this.physicsSpringLength);
             if (physicsStrengthSlider) physicsStrengthSlider.value = String(this.physicsSpringConstant);
@@ -2305,6 +2308,8 @@
                 labelSizeScale: this.labelSizeScale,
                 labelMinCitations: this.labelMinCitations,
                 labelWeight: this.labelWeight,
+                labelFontMin: this.labelFontMin,
+                labelFontMax: this.labelFontMax,
                 nodeSizeMin: this.nodeSizeMin,
                 nodeSizeMax: this.nodeSizeMax,
                 nodeSizeGamma: this.nodeSizeGamma,
@@ -2416,6 +2421,8 @@
                 if (Number.isFinite(payload.labelSizeScale)) this.labelSizeScale = payload.labelSizeScale;
                 if (Number.isFinite(payload.labelMinCitations)) this.labelMinCitations = payload.labelMinCitations;
                 if (Number.isFinite(payload.labelWeight)) this.labelWeight = payload.labelWeight;
+                if (Number.isFinite(payload.labelFontMin)) this.labelFontMin = payload.labelFontMin;
+                if (Number.isFinite(payload.labelFontMax)) this.labelFontMax = payload.labelFontMax;
                 if (Number.isFinite(payload.nodeSizeMin)) this.nodeSizeMin = payload.nodeSizeMin;
                 if (Number.isFinite(payload.nodeSizeMax)) this.nodeSizeMax = payload.nodeSizeMax;
                 if (Number.isFinite(payload.nodeSizeGamma)) this.nodeSizeGamma = payload.nodeSizeGamma;
@@ -2461,8 +2468,9 @@
             const labelFadeSlider = this.getEl(this.ids.labelFadeSlider);
             const labelSizeSlider = this.getEl(this.ids.labelSizeSlider);
             const labelMinSlider = this.getEl(this.ids.labelMinSlider);
-            const labelMinValue = this.getEl(this.ids.labelMinValue);
             const labelWeightSlider = this.getEl(this.ids.labelWeightSlider);
+            const labelFontMinInput = this.getEl(this.ids.labelFontMinInput);
+            const labelFontMaxInput = this.getEl(this.ids.labelFontMaxInput);
             const nodeSizeMinSlider = this.getEl(this.ids.nodeSizeMinSlider);
             const nodeSizeMaxSlider = this.getEl(this.ids.nodeSizeMaxSlider);
             const nodeSizeGammaSlider = this.getEl(this.ids.nodeSizeGammaSlider);
@@ -2477,8 +2485,9 @@
             if (labelFadeSlider) labelFadeSlider.value = String(this.labelFade || 0);
             if (labelSizeSlider) labelSizeSlider.value = String(Math.round((this.labelSizeScale || 1) * 100));
             if (labelMinSlider) labelMinSlider.value = String(this.labelMinCitations || 0);
-            if (labelMinValue) labelMinValue.textContent = String(this.labelMinCitations || 0);
             if (labelWeightSlider) labelWeightSlider.value = String(this.labelWeight || 500);
+            if (labelFontMinInput) labelFontMinInput.value = String(this.labelFontMin ?? 9);
+            if (labelFontMaxInput) labelFontMaxInput.value = String(this.labelFontMax ?? 30);
             if (nodeSizeMinSlider) nodeSizeMinSlider.value = String(this.nodeSizeMin || 1);
             if (nodeSizeMaxSlider) nodeSizeMaxSlider.value = String(this.nodeSizeMax || 60);
             if (nodeSizeGammaSlider) nodeSizeGammaSlider.value = String(this.nodeSizeGamma || 1);
