@@ -1922,6 +1922,7 @@ class PaperStatsApp {
         const jsonFormatItem = document.getElementById('jsonFormatItem');
         const jsonAddFieldItem = document.getElementById('jsonAddFieldItem');
         const jsonSaveItem = document.getElementById('jsonSaveItem');
+        const jsonAddCiteItem = document.getElementById('jsonAddCiteItem');
         const jsonMenuDropdown = document.getElementById('jsonMenuDropdown');
         if (jsonMenuToggleBtn && jsonMenu) {
             jsonMenuToggleBtn.addEventListener('click', (e) => {
@@ -1993,6 +1994,19 @@ class PaperStatsApp {
                 if (!this.hasUnsavedChanges && !(this.currentFile && this.tempDataCache[this.currentFile])) return;
                 await this.saveToFile();
                 this.toggleJsonMenu(false);
+            });
+        }
+        if (jsonAddCiteItem) {
+            jsonAddCiteItem.addEventListener('click', async (e) => {
+                e.preventDefault();
+                this.toggleJsonMenu(false);
+                if (!this.currentProject) {
+                    this.showNotification('Please load a project first', 'error');
+                    return;
+                }
+                const ok = confirm('Batch add wos_data.cite/citep for all JSON files in current view?\n\nThis will read DOI from wos_data.doi and may fetch citation metadata.');
+                if (!ok) return;
+                await this.addCiteToAllJsonFiles();
             });
         }
 
@@ -12799,6 +12813,110 @@ class PaperStatsApp {
 
         const message = `Fix JSON DOI completed! Fixed: ${fixed}, Skipped: ${skipped}, Errors: ${errors}`;
         this.showNotification(message, fixed > 0 ? 'success' : 'info');
+    }
+
+    async addCiteToAllJsonFiles() {
+        if (!this.currentProject) {
+            this.showNotification('Please load a project first', 'warning');
+            return;
+        }
+        if (!this.fileMetaByBase || !Object.keys(this.fileMetaByBase).length) {
+            await this.loadFileList(true);
+        }
+
+        const view = this.currentJsonView || 'view1';
+        const bases = Object.keys(this.fileMetaByBase || {}).filter((base) => {
+            const entry = this.fileMetaByBase?.[base];
+            return !!(entry?.views && entry.views[view]);
+        });
+        if (!bases.length) {
+            this.showNotification('No JSON files in current view', 'info');
+            return;
+        }
+
+        const tracker = (typeof this.createStatusProgressTracker === 'function')
+            ? this.createStatusProgressTracker('Add Cite')
+            : null;
+        if (tracker) tracker.update('Preparing...', 0);
+
+        const concurrency = 4;
+        const batchYield = 8;
+        let cursor = 0;
+        let processed = 0;
+        let updated = 0;
+        let skipped = 0;
+        let failed = 0;
+        let lastYield = 0;
+
+        const processBase = async (base) => {
+            const path = this.getViewPathForBase(base, view);
+            if (!path) return { status: 'skip' };
+            let data = null;
+            try {
+                data = (this.currentFile === path && this.currentData)
+                    ? this.currentData
+                    : (this.tempDataCache[path] || await this.readProjectFile(path));
+            } catch (_err) {
+                return { status: 'fail' };
+            }
+            if (!data || typeof data !== 'object') return { status: 'skip' };
+            const wos = data.wos_data;
+            if (!wos || typeof wos !== 'object') return { status: 'skip' };
+            const rawDoi = wos.doi || wos.DOI || data?.meta_info?.doi || '';
+            const doi = this.normalizeDoiString(rawDoi);
+            if (!doi) return { status: 'skip' };
+
+            const needCite = !wos.cite;
+            const needCitep = !wos.citep;
+            if (!needCite && !needCitep) return { status: 'skip' };
+
+            try {
+                if (needCite) {
+                    wos.cite = await this.formatCitation([doi], 'cite');
+                }
+                if (needCitep) {
+                    wos.citep = await this.formatCitation([doi], 'citep');
+                }
+                data.wos_data = wos;
+                await this.saveJsonPayload(path, data);
+                this.tempDataCache[path] = data;
+                if (this.currentFile === path) {
+                    this.currentData = data;
+                }
+                return { status: 'ok' };
+            } catch (_err) {
+                return { status: 'fail' };
+            }
+        };
+
+        const worker = async () => {
+            while (cursor < bases.length) {
+                const idx = cursor++;
+                const base = bases[idx];
+                const result = await processBase(base);
+                processed += 1;
+                if (result.status === 'ok') updated += 1;
+                if (result.status === 'skip') skipped += 1;
+                if (result.status === 'fail') failed += 1;
+                if (tracker) {
+                    const percent = Math.round((processed / bases.length) * 100);
+                    tracker.update(`Add cite (${processed}/${bases.length})`, percent);
+                }
+                lastYield += 1;
+                if (lastYield >= batchYield) {
+                    lastYield = 0;
+                    await new Promise((r) => setTimeout(r, 0));
+                }
+            }
+        };
+
+        const workers = Array.from({ length: Math.min(concurrency, bases.length) }, () => worker());
+        await Promise.all(workers);
+
+        if (tracker) {
+            tracker.finish(`Add cite done: updated ${updated}, skipped ${skipped}, failed ${failed}`, 1200);
+        }
+        this.showNotification(`Add cite finished: updated ${updated}, skipped ${skipped}, failed ${failed}`, 'success');
     }
 
     updateMarkdownToolbar() {

@@ -431,6 +431,7 @@
                 inputCancelBtn: options.inputCancelBtnId || 'visInputCancelBtn',
                 inputApplyBtn: options.inputApplyBtnId || 'visInputApplyBtn',
                 inputAppendBtn: options.inputAppendBtnId || 'visInputAppendBtn',
+                updateNodeBtn: options.updateNodeBtnId || 'visUpdateNodeBtn',
                 saveBtn: options.saveBtnId || 'visSaveNetworkBtn',
                 restoreBtn: options.restoreBtnId || 'visRestoreNetworkBtn',
                 deleteBtn: options.deleteBtnId || 'visDeleteNetworkBtn',
@@ -438,6 +439,7 @@
                 labelPanelBtn: options.labelPanelBtnId || 'visToggleLabelsBtn',
                 labelDrawer: options.labelDrawerId || 'visLabelDrawer',
                 labelToggleBtn: options.labelToggleBtnId || 'visLabelToggleAllBtn',
+                labelAutoBtn: options.labelAutoBtnId || 'visLabelAutoBtn',
                 labelCloseBtn: options.labelCloseBtnId || 'visLabelCloseBtn',
                 labelFieldInput: options.labelFieldInputId || 'visLabelFieldInput',
                 labelSuggest: options.labelSuggestId || 'visLabelSuggest',
@@ -446,6 +448,10 @@
                 labelSizeSlider: options.labelSizeSliderId || 'visLabelSizeSlider',
                 labelMinSlider: options.labelMinSliderId || 'visLabelMinSlider',
                 labelMinValue: options.labelMinValueId || 'visLabelMinValue',
+                nodeSizeMinSlider: options.nodeSizeMinSliderId || 'visNodeSizeMinSlider',
+                nodeSizeMaxSlider: options.nodeSizeMaxSliderId || 'visNodeSizeMaxSlider',
+                nodeSizeGammaSlider: options.nodeSizeGammaSliderId || 'visNodeSizeGammaSlider',
+                nodeBorderSlider: options.nodeBorderSliderId || 'visNodeBorderSlider',
                 importBtn: options.importBtnId || 'visImportJsonBtn',
                 importJsonFileInput: options.importJsonFileInputId || 'importJsonFileInput',
                 zoomInBtn: options.zoomInBtnId || 'visZoomInBtn',
@@ -472,6 +478,12 @@
             this.wosDataIndex = null;
             this.wosDataIndexSource = null;
             this.labelFieldsSelected = [];
+            this.nodeSizeMin = 6;
+            this.nodeSizeMax = 60;
+            this.nodeSizeGamma = 1;
+            this.nodeBorderWidth = 1.5;
+            this.wosNodeIndex = null;
+            this.wosNodeIndexSource = null;
         }
 
         bind() {
@@ -481,6 +493,8 @@
             const inputCancelBtn = this.getEl(this.ids.inputCancelBtn);
             const inputApplyBtn = this.getEl(this.ids.inputApplyBtn);
             const inputAppendBtn = this.getEl(this.ids.inputAppendBtn);
+            const inputTextarea = this.getEl(this.ids.inputTextarea);
+            const updateNodeBtn = this.getEl(this.ids.updateNodeBtn);
             const saveBtn = this.getEl(this.ids.saveBtn);
             const restoreBtn = this.getEl(this.ids.restoreBtn);
             const deleteBtn = this.getEl(this.ids.deleteBtn);
@@ -489,6 +503,7 @@
             const importInput = this.getEl(this.ids.importJsonFileInput);
             const labelPanelBtn = this.getEl(this.ids.labelPanelBtn);
             const labelCloseBtn = this.getEl(this.ids.labelCloseBtn);
+            const labelAutoBtn = this.getEl(this.ids.labelAutoBtn);
             const labelFieldInput = this.getEl(this.ids.labelFieldInput);
             const labelSuggest = this.getEl(this.ids.labelSuggest);
             const labelFields = this.getEl(this.ids.labelFields);
@@ -496,6 +511,10 @@
             const labelSizeSlider = this.getEl(this.ids.labelSizeSlider);
             const labelMinSlider = this.getEl(this.ids.labelMinSlider);
             const labelMinValue = this.getEl(this.ids.labelMinValue);
+            const nodeSizeMinSlider = this.getEl(this.ids.nodeSizeMinSlider);
+            const nodeSizeMaxSlider = this.getEl(this.ids.nodeSizeMaxSlider);
+            const nodeSizeGammaSlider = this.getEl(this.ids.nodeSizeGammaSlider);
+            const nodeBorderSlider = this.getEl(this.ids.nodeBorderSlider);
             const zoomInBtn = this.getEl(this.ids.zoomInBtn);
             const zoomOutBtn = this.getEl(this.ids.zoomOutBtn);
             const zoomFitBtn = this.getEl(this.ids.zoomFitBtn);
@@ -532,10 +551,34 @@
                     this.toggleLabelDrawer(false);
                 });
             }
+            if (labelAutoBtn) {
+                labelAutoBtn.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    this.applyAutoLabelTuning();
+                });
+            }
             if (inputApplyBtn) {
                 inputApplyBtn.addEventListener('click', (e) => {
                     e.preventDefault();
                     this.applyInput();
+                });
+            }
+            if (inputTextarea && !inputTextarea.dataset.visBound) {
+                inputTextarea.dataset.visBound = '1';
+                inputTextarea.addEventListener('keydown', (e) => {
+                    if (e.key !== 'Enter' || e.shiftKey) return;
+                    const updated = this.tryApplySingleNodeFromTextarea(inputTextarea);
+                    if (updated) {
+                        e.preventDefault();
+                    }
+                });
+            }
+            if (updateNodeBtn) {
+                updateNodeBtn.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    if (inputTextarea) {
+                        this.tryApplySingleNodeFromTextarea(inputTextarea);
+                    }
                 });
             }
             if (inputAppendBtn) {
@@ -669,7 +712,7 @@
                     renderSuggestions(labelFieldInput.value);
                 });
                 labelFieldInput.addEventListener('focus', () => {
-                    renderSuggestions(labelFieldInput.value, true);
+                    renderSuggestions(labelFieldInput.value, false);
                 });
                 labelFieldInput.addEventListener('blur', () => {
                     setTimeout(() => {
@@ -746,6 +789,34 @@
                     this.labelMinCitations = Number.isFinite(value) ? value : 0;
                     if (labelMinValue) labelMinValue.textContent = String(this.labelMinCitations);
                     this.applyLabelThreshold();
+                });
+            }
+            if (nodeSizeMinSlider && !nodeSizeMinSlider.dataset.visBound) {
+                nodeSizeMinSlider.dataset.visBound = '1';
+                nodeSizeMinSlider.addEventListener('input', () => {
+                    this.nodeSizeMin = Number(nodeSizeMinSlider.value) || 1;
+                    this.applyNodeSizeScale();
+                });
+            }
+            if (nodeSizeMaxSlider && !nodeSizeMaxSlider.dataset.visBound) {
+                nodeSizeMaxSlider.dataset.visBound = '1';
+                nodeSizeMaxSlider.addEventListener('input', () => {
+                    this.nodeSizeMax = Number(nodeSizeMaxSlider.value) || 60;
+                    this.applyNodeSizeScale();
+                });
+            }
+            if (nodeSizeGammaSlider && !nodeSizeGammaSlider.dataset.visBound) {
+                nodeSizeGammaSlider.dataset.visBound = '1';
+                nodeSizeGammaSlider.addEventListener('input', () => {
+                    this.nodeSizeGamma = Number(nodeSizeGammaSlider.value) || 1;
+                    this.applyNodeSizeScale();
+                });
+            }
+            if (nodeBorderSlider && !nodeBorderSlider.dataset.visBound) {
+                nodeBorderSlider.dataset.visBound = '1';
+                nodeBorderSlider.addEventListener('input', () => {
+                    this.nodeBorderWidth = Number(nodeBorderSlider.value) || 1.5;
+                    this.applyNodeBorderWidth();
                 });
             }
             if (labelSizeSlider && !labelSizeSlider.dataset.visBound) {
@@ -854,9 +925,15 @@
             this.wosDataIndexSource = null;
             this._wosDataIndex = null;
             this._wosDataIndexView = null;
+            this.wosNodeIndex = null;
+            this.wosNodeIndexSource = null;
             if (this.visNetwork) {
                 this.bindNetworkEvents(this.visNetwork);
                 this.bindZoomEvents(this.visNetwork);
+            }
+            if (data && typeof data === 'object') {
+                this.wosNodeIndex = this.buildWosNodeIndex(data);
+                this.wosNodeIndexSource = data;
             }
             this.wrapLabelToggleButton();
             const minSlider = this.getEl(this.ids.labelMinSlider);
@@ -879,6 +956,8 @@
             this.applyLabelFade();
             this.applyLabelSizeScale();
             this.applyLabelThreshold();
+            this.applyNodeSizeScale();
+            this.applyNodeBorderWidth();
         }
 
         wrapLabelToggleButton() {
@@ -974,6 +1053,10 @@
                 if (minValue) minValue.textContent = String(this.labelMinCitations || 0);
                 const sizeSlider = this.getEl(this.ids.labelSizeSlider);
                 if (sizeSlider) sizeSlider.value = String(Math.round((this.labelSizeScale || 1) * 100));
+                if (nodeSizeMinSlider) nodeSizeMinSlider.value = String(this.nodeSizeMin || 1);
+                if (nodeSizeMaxSlider) nodeSizeMaxSlider.value = String(this.nodeSizeMax || 60);
+                if (nodeSizeGammaSlider) nodeSizeGammaSlider.value = String(this.nodeSizeGamma || 1);
+                if (nodeBorderSlider) nodeBorderSlider.value = String(this.nodeBorderWidth || 1.5);
             }
         }
 
@@ -1042,6 +1125,44 @@
                 return this.app.currentData;
             }
             return this.getWorkingJson();
+        }
+
+        buildWosNodeIndex(data) {
+            const index = new Map();
+            if (!data || typeof data !== 'object') return index;
+            Object.entries(data).forEach(([rootId, payload]) => {
+                const rootKey = this.normalizeWosId(rootId);
+                if (rootKey && payload && typeof payload === 'object') {
+                    const list = index.get(rootKey) || [];
+                    list.push({ type: 'root', obj: payload });
+                    index.set(rootKey, list);
+                }
+                if (!payload || !Array.isArray(payload.page_wosids)) return;
+                payload.page_wosids.forEach((node) => {
+                    const nodeKey = this.normalizeWosId(node?.wosid);
+                    if (!nodeKey || !node || typeof node !== 'object') return;
+                    const list = index.get(nodeKey) || [];
+                    list.push({ type: 'child', obj: node });
+                    index.set(nodeKey, list);
+                });
+            });
+            return index;
+        }
+
+        isWosGraphData(data) {
+            if (!data || typeof data !== 'object') return false;
+            return Object.values(data).some((item) => Array.isArray(item?.page_wosids));
+        }
+
+        getVisInputData() {
+            const raw = this.visInputText || this.lastRenderedJson || null;
+            if (!raw) return null;
+            if (typeof raw === 'object') return raw;
+            try {
+                return JSON.parse(raw);
+            } catch (_e) {
+                return null;
+            }
         }
 
         ensureWosDataIndex(data) {
@@ -1161,6 +1282,11 @@
                 input.value = '';
                 input.focus();
             }
+            const suggest = this.getEl(this.ids.labelSuggest);
+            if (suggest) {
+                suggest.style.display = 'none';
+                suggest.innerHTML = '';
+            }
             this.renderLabelFieldChips();
         }
 
@@ -1183,6 +1309,79 @@
                 `;
                 container.appendChild(chip);
             });
+        }
+
+        applySingleNodeUpdate(item) {
+            const wosId = this.normalizeWosId(item?.wosid);
+            if (!wosId) return false;
+            let data = this.getVisInputData();
+            if (!this.isWosGraphData(data)) {
+                data = this.getCurrentViewData();
+            }
+            if (!data || typeof data !== 'object') return false;
+            if (!this.wosNodeIndex || this.wosNodeIndexSource !== data) {
+                this.wosNodeIndex = this.buildWosNodeIndex(data);
+                this.wosNodeIndexSource = data;
+            }
+            let updated = false;
+            const refs = this.wosNodeIndex.get(wosId) || [];
+            if (!refs.length) {
+                console.warn('[WosVisManager] Update node index miss', {
+                    wosId,
+                    indexSize: this.wosNodeIndex.size
+                });
+            }
+            refs.forEach((ref) => {
+                const target = ref?.obj;
+                if (!target || typeof target !== 'object') return;
+                Object.keys(item).forEach((key) => {
+                    if (key === 'wosid') return;
+                    target[key] = item[key];
+                });
+                updated = true;
+            });
+            console.log('[WosVisManager] Update node result', { wosId, updated });
+            if (!updated) return false;
+            const textarea = this.getEl(this.ids.inputTextarea);
+            const jsonText = JSON.stringify(data, null, 2);
+            this.visInputText = jsonText;
+            this.lastRenderedJson = jsonText;
+            if (textarea && textarea.value) {
+                textarea.value = jsonText;
+            }
+            this.renderFromJson(data);
+            return true;
+        }
+
+        tryApplySingleNodeFromTextarea(textarea) {
+            if (!textarea) return false;
+            const raw = (textarea.value || '').trim();
+            if (!raw || !raw.startsWith('{') || !raw.endsWith('}')) {
+                console.warn('[WosVisManager] Update node skipped: textarea not a single JSON object.');
+                return false;
+            }
+            let parsed = null;
+            try {
+                parsed = JSON.parse(raw);
+            } catch (_e) {
+                this.notify('Invalid JSON for update', 'error');
+                return false;
+            }
+            if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return false;
+            if (!parsed.wosid) {
+                this.notify('Missing wosid for update', 'info');
+                return false;
+            }
+            if (Object.prototype.hasOwnProperty.call(parsed, 'page_wosids')) return false;
+            console.log('[WosVisManager] Update node input', parsed);
+            const ok = this.applySingleNodeUpdate(parsed);
+            if (ok) {
+                textarea.value = '';
+                this.notify('Node updated from input', 'success');
+                return true;
+            }
+            this.notify('Node not found for update', 'info');
+            return false;
         }
 
         async applyLabelField(field) {
@@ -1268,14 +1467,15 @@
             const minCitation = Number.isFinite(meta.minCitation) ? meta.minCitation : 0;
             const maxCitation = Number.isFinite(meta.maxCitation) ? meta.maxCitation : minCitation;
             const fade = Math.max(0, Math.min(100, Number(this.labelFade) || 0)) / 100;
-            const minAlpha = Math.max(0.1, 1 - fade * 0.9);
+            const lightRange = Math.round(60 + fade * 120);
             const updates = dataset.get().map((node) => {
                 const citations = Number.isFinite(node.citationsValue) ? node.citationsValue : 0;
                 const t = maxCitation > minCitation ? (citations - minCitation) / (maxCitation - minCitation) : 1;
-                const alpha = minAlpha + (1 - minAlpha) * Math.max(0, Math.min(1, t));
+                const gray = Math.round(30 + (1 - Math.max(0, Math.min(1, t))) * lightRange);
+                const color = `rgb(${gray}, ${gray}, ${gray})`;
                 return {
                     id: node.id,
-                    labelStyle: { ...(node.labelStyle || {}), opacity: Number(alpha.toFixed(3)) }
+                    labelStyle: { ...(node.labelStyle || {}), textColor: color }
                 };
             });
             dataset.update(updates);
@@ -1304,6 +1504,103 @@
             });
             dataset.update(updates);
             this.updateLabelLayer();
+        }
+
+        applyNodeSizeScale() {
+            const dataset = this.getNetworkNodesDataSet();
+            if (!dataset) return;
+            const meta = this.visNetworkData?.meta || {};
+            const minCitation = Number.isFinite(meta.minCitation) ? meta.minCitation : 0;
+            const maxCitation = Number.isFinite(meta.maxCitation) ? meta.maxCitation : minCitation;
+            const minSize = Math.max(1, Number(this.nodeSizeMin) || 1);
+            const maxSize = Math.max(minSize + 1, Number(this.nodeSizeMax) || minSize + 1);
+            const gamma = Math.max(0.2, Math.min(4, Number(this.nodeSizeGamma) || 1));
+            const updates = dataset.get().map((node) => {
+                const citations = Number.isFinite(node.citationsValue) ? node.citationsValue : 0;
+                const t = maxCitation > minCitation ? (citations - minCitation) / (maxCitation - minCitation) : 0;
+                const eased = Math.pow(Math.max(0, Math.min(1, t)), gamma);
+                const size = minSize + eased * (maxSize - minSize);
+                return { id: node.id, size };
+            });
+            dataset.update(updates);
+        }
+
+        applyNodeBorderWidth() {
+            const dataset = this.getNetworkNodesDataSet();
+            if (!dataset) return;
+            const meta = this.visNetworkData?.meta || {};
+            const minCitation = Number.isFinite(meta.minCitation) ? meta.minCitation : 0;
+            const maxCitation = Number.isFinite(meta.maxCitation) ? meta.maxCitation : minCitation;
+            const base = Math.max(1, Math.min(10, Number(this.nodeBorderWidth) || 1.5));
+            const range = Math.max(0.6, Math.min(8, base * 2.2));
+            const updates = dataset.get().map((node) => {
+                const citations = Number.isFinite(node.citationsValue) ? node.citationsValue : 0;
+                let t = maxCitation > minCitation ? (citations - minCitation) / (maxCitation - minCitation) : 0;
+                t = Math.max(0, Math.min(1, t));
+                const eased = Math.pow(t, 1.6);
+                const width = base + eased * range;
+                const selected = Math.min(12, width + 0.8);
+                return {
+                    id: node.id,
+                    borderWidth: Number(width.toFixed(2)),
+                    borderWidthSelected: Number(selected.toFixed(2))
+                };
+            });
+            dataset.update(updates);
+        }
+
+        applyAutoLabelTuning() {
+            const view = this.getEl(this.ids.view);
+            const dataset = this.getNetworkNodesDataSet();
+            if (!view || !dataset) return;
+            const rect = view.getBoundingClientRect();
+            const area = Math.max(1, rect.width * rect.height);
+            const count = dataset.length || dataset.get().length || 1;
+            const density = count / area;
+
+            const meta = this.visNetworkData?.meta || {};
+            const maxCitation = Number.isFinite(meta.maxCitation) ? meta.maxCitation : 0;
+
+            // Heuristics tuned for clarity on dense vs sparse graphs
+            const sizeMin = density > 0.00006 ? 3 : density > 0.00002 ? 4 : 6;
+            const sizeMax = density > 0.00006 ? 22 : density > 0.00002 ? 36 : 60;
+            const gamma = density > 0.00006 ? 1.6 : density > 0.00002 ? 1.3 : 1.1;
+            const border = density > 0.00006 ? 1.2 : density > 0.00002 ? 1.6 : 2.0;
+            const labelScale = density > 0.00006 ? 0.85 : density > 0.00002 ? 0.95 : 1.05;
+            const fade = density > 0.00006 ? 70 : density > 0.00002 ? 55 : 35;
+            const minCite = maxCitation > 0 ? Math.round(maxCitation * (density > 0.00006 ? 0.35 : density > 0.00002 ? 0.2 : 0.1)) : 0;
+
+            this.nodeSizeMin = sizeMin;
+            this.nodeSizeMax = sizeMax;
+            this.nodeSizeGamma = gamma;
+            this.nodeBorderWidth = border;
+            this.labelSizeScale = labelScale;
+            this.labelFade = fade;
+            this.labelMinCitations = minCite;
+
+            const nodeSizeMinSlider = this.getEl(this.ids.nodeSizeMinSlider);
+            const nodeSizeMaxSlider = this.getEl(this.ids.nodeSizeMaxSlider);
+            const nodeSizeGammaSlider = this.getEl(this.ids.nodeSizeGammaSlider);
+            const nodeBorderSlider = this.getEl(this.ids.nodeBorderSlider);
+            const labelSizeSlider = this.getEl(this.ids.labelSizeSlider);
+            const labelFadeSlider = this.getEl(this.ids.labelFadeSlider);
+            const labelMinSlider = this.getEl(this.ids.labelMinSlider);
+            const labelMinValue = this.getEl(this.ids.labelMinValue);
+
+            if (nodeSizeMinSlider) nodeSizeMinSlider.value = String(sizeMin);
+            if (nodeSizeMaxSlider) nodeSizeMaxSlider.value = String(sizeMax);
+            if (nodeSizeGammaSlider) nodeSizeGammaSlider.value = String(gamma);
+            if (nodeBorderSlider) nodeBorderSlider.value = String(border);
+            if (labelSizeSlider) labelSizeSlider.value = String(Math.round(labelScale * 100));
+            if (labelFadeSlider) labelFadeSlider.value = String(fade);
+            if (labelMinSlider) labelMinSlider.value = String(minCite);
+            if (labelMinValue) labelMinValue.textContent = String(minCite);
+
+            this.applyNodeSizeScale();
+            this.applyNodeBorderWidth();
+            this.applyLabelSizeScale();
+            this.applyLabelFade();
+            this.applyLabelThreshold();
         }
 
         updateLabelLayer() {

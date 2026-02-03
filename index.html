@@ -486,6 +486,7 @@
                         <div class="vis-input-actions">
                             <button class="btn btn-secondary" id="visInputCancelBtn" type="button">Close</button>
                             <button class="btn btn-secondary" id="visInputAppendBtn" type="button">Add</button>
+                            <button class="btn btn-secondary" id="visUpdateNodeBtn" type="button">Update Node</button>
                             <button class="btn btn-secondary" id="visImportJsonBtn" type="button">Import JSON</button>
                             <button class="btn btn-secondary" id="visSaveNetworkBtn" type="button">Save</button>
                             <button class="btn btn-primary" id="visInputApplyBtn" type="button">Run</button>
@@ -504,6 +505,18 @@
                                     <label for="visLabelFadeSlider">Label fade by citations</label>
                                     <input id="visLabelFadeSlider" type="range" min="0" max="100" step="5" value="0">
                                 </div>
+                                <div class="vis-node-size">
+                                    <label for="visNodeSizeMinSlider">Node size min</label>
+                                    <input id="visNodeSizeMinSlider" type="range" min="1" max="40" step="1" value="6">
+                                    <label for="visNodeSizeMaxSlider">Node size max</label>
+                                    <input id="visNodeSizeMaxSlider" type="range" min="10" max="120" step="1" value="60">
+                                    <label for="visNodeSizeGammaSlider">Node size curve</label>
+                                    <input id="visNodeSizeGammaSlider" type="range" min="0.4" max="2.2" step="0.05" value="1">
+                                </div>
+                                <div class="vis-node-border">
+                                    <label for="visNodeBorderSlider">Node border width</label>
+                                    <input id="visNodeBorderSlider" type="range" min="1" max="10" step="0.1" value="1.5">
+                                </div>
                                 <div class="vis-label-threshold">
                                     <label for="visLabelMinSlider">Min citations to show</label>
                                     <div class="vis-label-threshold-row">
@@ -519,6 +532,9 @@
                         </div>
                         <div class="vis-input-actions">
                             <button class="btn btn-secondary" id="visLabelCloseBtn" type="button">Close</button>
+                            <button class="btn btn-secondary" id="visLabelAutoBtn" type="button">
+                                <i class="fas fa-wand-magic-sparkles"></i><span>Auto Tune</span>
+                            </button>
                             <button class="btn btn-secondary" id="visLabelToggleAllBtn" type="button">
                                 <i class="fas fa-tags"></i><span>Show Labels</span>
                             </button>
@@ -886,6 +902,10 @@
                         <button class="header-dropdown-item" id="jsonSaveItem" type="button" role="menuitem"
                             title="Save JSON (Ctrl+S)">
                             <i class="fas fa-save"></i><span>Save JSON</span>
+                        </button>
+                        <button class="header-dropdown-item" id="jsonAddCiteItem" type="button" role="menuitem"
+                            title="Add wos_data.cite / wos_data.citep for all JSON files">
+                            <i class="fas fa-quote-right"></i><span>Add Cite</span>
                         </button>
                         <div class="header-dropdown-divider"></div>
                         <button class="header-dropdown-item" id="fixAllJsonDoisBtn" type="button" role="menuitem"
