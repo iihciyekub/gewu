@@ -65,17 +65,17 @@ class AutoSaveConfigUI {
 
                 <div class="auto-save-mode-options">
                     <dl>
-                        <dt>Disable Auto Save</dt>
-                        <dd>Manually save all changes</dd>
+                        <dt data-mode="off">Disable Auto Save</dt>
+                        <dd data-mode="off">Manually save all changes</dd>
 
-                        <dt>Save After Delay</dt>
-                        <dd>Auto save after a period of inactivity (Recommended)</dd>
+                        <dt data-mode="afterDelay">Save After Delay</dt>
+                        <dd data-mode="afterDelay">Auto save after a period of inactivity (Recommended)</dd>
 
-                        <dt>Save on Focus Change</dt>
-                        <dd>Auto save when leaving the editor</dd>
+                        <dt data-mode="onFocusChange">Save on Focus Change</dt>
+                        <dd data-mode="onFocusChange">Auto save when leaving the editor</dd>
 
-                        <dt>Save on Window Change</dt>
-                        <dd>Auto save when switching to other applications</dd>
+                        <dt data-mode="onWindowChange">Save on Window Change</dt>
+                        <dd data-mode="onWindowChange">Auto save when switching to other applications</dd>
                     </dl>
                 </div>
             </div>
@@ -192,17 +192,17 @@ class AutoSaveConfigUI {
 
                 <div class="auto-save-mode-options">
                     <dl>
-                        <dt>Disable Auto Save</dt>
-                        <dd>Manually save all changes</dd>
+                        <dt data-mode="off">Disable Auto Save</dt>
+                        <dd data-mode="off">Manually save all changes</dd>
 
-                        <dt>Save After Delay</dt>
-                        <dd>Auto save after a period of inactivity (Recommended)</dd>
+                        <dt data-mode="afterDelay">Save After Delay</dt>
+                        <dd data-mode="afterDelay">Auto save after a period of inactivity (Recommended)</dd>
 
-                        <dt>Save on Focus Change</dt>
-                        <dd>Auto save when leaving the editor</dd>
+                        <dt data-mode="onFocusChange">Save on Focus Change</dt>
+                        <dd data-mode="onFocusChange">Auto save when leaving the editor</dd>
 
-                        <dt>Save on Window Change</dt>
-                        <dd>Auto save when switching to other applications</dd>
+                        <dt data-mode="onWindowChange">Save on Window Change</dt>
+                        <dd data-mode="onWindowChange">Auto save when switching to other applications</dd>
                     </dl>
                 </div>
             </div>
@@ -320,7 +320,8 @@ class AutoSaveConfigUI {
      * Update delay time input visibility
      */
     updateDelayVisibility(mode) {
-        const delaySection = document.getElementById('delaySection');
+        const scope = this.getScopeElement();
+        const delaySection = scope ? scope.querySelector('#delaySection') : document.getElementById('delaySection');
         if (delaySection) {
             if (mode === 'afterDelay') {
                 delaySection.style.display = 'block';
@@ -328,6 +329,31 @@ class AutoSaveConfigUI {
                 delaySection.style.display = 'none';
             }
         }
+
+        this.updateModeOptionsVisibility(mode);
+    }
+
+    /**
+     * Update mode description visibility
+     */
+    updateModeOptionsVisibility(mode) {
+        const scope = this.getScopeElement();
+        const options = (scope ? scope.querySelectorAll('.auto-save-mode-options [data-mode]') : document.querySelectorAll('.auto-save-mode-options [data-mode]'));
+        if (!options.length) return;
+        options.forEach((node) => {
+            const nodeMode = node.getAttribute('data-mode');
+            if (!nodeMode) return;
+            node.style.display = nodeMode === mode ? '' : 'none';
+        });
+    }
+
+    /**
+     * Get current UI scope element
+     */
+    getScopeElement() {
+        if (this.isInlineMode && this.containerElement) return this.containerElement;
+        if (!this.isInlineMode && this.panel) return this.panel;
+        return null;
     }
 
     /**
@@ -336,11 +362,12 @@ class AutoSaveConfigUI {
     loadCurrentSettings() {
         const config = this.manager.config;
 
-        const modeEl = document.getElementById('autoSaveMode');
-        const delayEl = document.getElementById('autoSaveDelay');
-        const retriesEl = document.getElementById('retryAttempts');
-        const silentEl = document.getElementById('silentSave');
-        const indicatorEl = document.getElementById('showStatusIndicator');
+        const scope = this.getScopeElement();
+        const modeEl = scope ? scope.querySelector('#autoSaveMode') : document.getElementById('autoSaveMode');
+        const delayEl = scope ? scope.querySelector('#autoSaveDelay') : document.getElementById('autoSaveDelay');
+        const retriesEl = scope ? scope.querySelector('#retryAttempts') : document.getElementById('retryAttempts');
+        const silentEl = scope ? scope.querySelector('#silentSave') : document.getElementById('silentSave');
+        const indicatorEl = scope ? scope.querySelector('#showStatusIndicator') : document.getElementById('showStatusIndicator');
 
         if (modeEl) modeEl.value = config.mode;
         if (delayEl) delayEl.value = config.delay;
@@ -355,11 +382,12 @@ class AutoSaveConfigUI {
      * Save settings
      */
     saveSettings() {
-        const modeEl = document.getElementById('autoSaveMode');
-        const delayEl = document.getElementById('autoSaveDelay');
-        const retriesEl = document.getElementById('retryAttempts');
-        const silentEl = document.getElementById('silentSave');
-        const indicatorEl = document.getElementById('showStatusIndicator');
+        const scope = this.getScopeElement();
+        const modeEl = scope ? scope.querySelector('#autoSaveMode') : document.getElementById('autoSaveMode');
+        const delayEl = scope ? scope.querySelector('#autoSaveDelay') : document.getElementById('autoSaveDelay');
+        const retriesEl = scope ? scope.querySelector('#retryAttempts') : document.getElementById('retryAttempts');
+        const silentEl = scope ? scope.querySelector('#silentSave') : document.getElementById('silentSave');
+        const indicatorEl = scope ? scope.querySelector('#showStatusIndicator') : document.getElementById('showStatusIndicator');
 
         const mode = modeEl ? modeEl.value : this.manager.config.mode;
         const delay = delayEl ? parseInt(delayEl.value, 10) : this.manager.config.delay;
