@@ -3000,6 +3000,7 @@ body.theme-vscode .qa-bubble {
     flex: 1 1 auto;
     min-height: 0;
     min-width: 0;
+    position: relative;
 }
 
 .md-chat-panel.is-docked .md-chat-resizer {
@@ -3019,9 +3020,17 @@ body.theme-vscode .qa-bubble {
     align-items: center;
     justify-content: space-between;
     padding: 2px 16px;
+    background: #fcfcfc;
     transition: opacity 0.2s ease, max-height 0.2s ease;
     max-height: 30px;
     gap: 12px;
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 2;
+    opacity: 0;
+    pointer-events: auto;
 }
 
 .md-chat-handle {
@@ -3131,9 +3140,26 @@ body.theme-vscode .qa-bubble {
     display: flex;
     align-items: stretch;
     gap: 10px;
+    background: #fcfcfc;
     border-top: 1px solid #e6e1d8;
-    position: relative;
     flex-direction: column;
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 2;
+    opacity: 0;
+    pointer-events: auto;
+}
+
+.md-chat-shell:hover .md-chat-top,
+.md-chat-shell:hover .md-chat-input {
+    opacity: 1;
+}
+
+.md-chat-shell:has(.md-chat-body:hover) .md-chat-top,
+.md-chat-shell:has(.md-chat-body:hover) .md-chat-input {
+    opacity: 0;
 }
 
 .md-chat-panel:not(.is-docked) .md-chat-input-stack {
