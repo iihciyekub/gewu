@@ -21,7 +21,9 @@ class ProjectStorageManager {
             'ui-preferences': 'ui-preferences.json',
             'file-filter-history': 'file-filter-history.json',
             'md-chat-fields': 'md-chat-fields.json',
-            'vis-network-saved': 'vis-network-saved.json'
+            'vis-network-saved': 'vis-network-saved.json',
+            'vis-network-last': 'vis-network-last.json',
+            'vis-network-settings': 'vis-network-settings.json'
         };
     }
     

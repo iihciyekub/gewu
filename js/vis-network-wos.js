@@ -144,7 +144,9 @@
             minCitation: Number.isFinite(minCitation) ? minCitation : 0,
             maxCitation: Number.isFinite(maxCitation) ? maxCitation : 0,
             minNodeSize: Number.isFinite(minNodeSize) ? minNodeSize : minSize,
-            maxNodeSize: Number.isFinite(maxNodeSize) ? maxNodeSize : minSize
+            maxNodeSize: Number.isFinite(maxNodeSize) ? maxNodeSize : minSize,
+            minRelated: Number.isFinite(minRelated) ? minRelated : 0,
+            maxRelated: Number.isFinite(maxRelated) ? maxRelated : 0
         };
         return { nodes, edges, meta };
     }
@@ -368,7 +370,7 @@
         const position = network.getPositions([nodeId])[nodeId];
         if (!position) return;
         const domPos = network.canvasToDOM(position);
-        const offsetY = 18;
+        const offsetY = 8;
         labelEl.style.transform = `translate(${domPos.x}px, ${domPos.y + offsetY}px)`;
     }
 
@@ -411,6 +413,7 @@
         if (!label || !node || !node.labelStyle) return;
         const style = node.labelStyle;
         if (style.fontSize) label.style.fontSize = `${style.fontSize}px`;
+        if (style.fontWeight) label.style.fontWeight = String(style.fontWeight);
         if (style.textColor) label.style.color = style.textColor;
         if (style.borderColor) label.style.borderColor = style.borderColor;
         if (style.backgroundColor) label.style.backgroundColor = style.backgroundColor;
@@ -452,6 +455,13 @@
                 nodeSizeMaxSlider: options.nodeSizeMaxSliderId || 'visNodeSizeMaxSlider',
                 nodeSizeGammaSlider: options.nodeSizeGammaSliderId || 'visNodeSizeGammaSlider',
                 nodeBorderSlider: options.nodeBorderSliderId || 'visNodeBorderSlider',
+                labelWeightSlider: options.labelWeightSliderId || 'visLabelWeightSlider',
+                physicsSpringSlider: options.physicsSpringSliderId || 'visPhysicsSpringSlider',
+                physicsStrengthSlider: options.physicsStrengthSliderId || 'visPhysicsStrengthSlider',
+                physicsGravitySlider: options.physicsGravitySliderId || 'visPhysicsGravitySlider',
+                edgeFadeSlider: options.edgeFadeSliderId || 'visEdgeFadeSlider',
+                edgeMinWidthSlider: options.edgeMinWidthSliderId || 'visEdgeMinWidthSlider',
+                edgeMaxWidthSlider: options.edgeMaxWidthSliderId || 'visEdgeMaxWidthSlider',
                 importBtn: options.importBtnId || 'visImportJsonBtn',
                 importJsonFileInput: options.importJsonFileInputId || 'importJsonFileInput',
                 zoomInBtn: options.zoomInBtnId || 'visZoomInBtn',
@@ -478,17 +488,35 @@
             this.wosDataIndex = null;
             this.wosDataIndexSource = null;
             this.labelFieldsSelected = [];
+            this.labelWeight = 500;
             this.nodeSizeMin = 6;
             this.nodeSizeMax = 60;
             this.nodeSizeGamma = 1;
             this.nodeBorderWidth = 1.5;
+            this.physicsSpringLength = 120;
+            this.physicsSpringConstant = 0.05;
+            this.physicsGravity = -9000;
+            this.edgeFade = 100;
+            this.edgeMinWidth = 1;
+            this.edgeMaxWidth = 6;
             this.wosNodeIndex = null;
             this.wosNodeIndexSource = null;
+            this.labelFieldHistory = [];
+            this.labelFieldHistoryIndex = -1;
+            this.settingsKey = 'vis-network-settings';
+            this._settingsSaveTimer = null;
+            this._settingsLoaded = false;
+            this.networkStateKey = 'vis-network-last';
+            this._networkSaveTimer = null;
+            this.pendingLabelShowAll = null;
+            this.labelShowAllState = false;
         }
 
         bind() {
             this.mountDrawer();
             this.mountLabelDrawer();
+            this.loadPersistedSettings();
+            this.loadNetworkState();
             const inputToggleBtn = this.getEl(this.ids.inputToggleBtn);
             const inputCancelBtn = this.getEl(this.ids.inputCancelBtn);
             const inputApplyBtn = this.getEl(this.ids.inputApplyBtn);
@@ -515,6 +543,13 @@
             const nodeSizeMaxSlider = this.getEl(this.ids.nodeSizeMaxSlider);
             const nodeSizeGammaSlider = this.getEl(this.ids.nodeSizeGammaSlider);
             const nodeBorderSlider = this.getEl(this.ids.nodeBorderSlider);
+            const labelWeightSlider = this.getEl(this.ids.labelWeightSlider);
+            const physicsSpringSlider = this.getEl(this.ids.physicsSpringSlider);
+            const physicsStrengthSlider = this.getEl(this.ids.physicsStrengthSlider);
+            const physicsGravitySlider = this.getEl(this.ids.physicsGravitySlider);
+            const edgeFadeSlider = this.getEl(this.ids.edgeFadeSlider);
+            const edgeMinWidthSlider = this.getEl(this.ids.edgeMinWidthSlider);
+            const edgeMaxWidthSlider = this.getEl(this.ids.edgeMaxWidthSlider);
             const zoomInBtn = this.getEl(this.ids.zoomInBtn);
             const zoomOutBtn = this.getEl(this.ids.zoomOutBtn);
             const zoomFitBtn = this.getEl(this.ids.zoomFitBtn);
@@ -761,6 +796,20 @@
                             if (next >= items.length) next = 0;
                             this.labelSuggestIndex = next;
                             items.forEach((el, idx) => el.classList.toggle('active', idx === this.labelSuggestIndex));
+                        } else {
+                            if (!this.labelFieldHistory.length) return;
+                            e.preventDefault();
+                            if (this.labelFieldHistoryIndex === -1) {
+                                this.labelFieldHistoryIndex = this.labelFieldHistory.length;
+                            }
+                            const delta = e.key === 'ArrowDown' ? 1 : -1;
+                            let next = this.labelFieldHistoryIndex + delta;
+                            if (next < 0) next = 0;
+                            if (next >= this.labelFieldHistory.length) next = this.labelFieldHistory.length - 1;
+                            this.labelFieldHistoryIndex = next;
+                            const value = this.labelFieldHistory[next] || '';
+                            labelFieldInput.value = value;
+                            renderSuggestions(labelFieldInput.value);
                         }
                     }
                 });
@@ -780,6 +829,7 @@
                     const value = Number(labelFadeSlider.value);
                     this.labelFade = Number.isFinite(value) ? value : 0;
                     this.applyLabelFade();
+                    this.queuePersistSettings();
                 });
             }
             if (labelMinSlider && !labelMinSlider.dataset.visBound) {
@@ -789,6 +839,63 @@
                     this.labelMinCitations = Number.isFinite(value) ? value : 0;
                     if (labelMinValue) labelMinValue.textContent = String(this.labelMinCitations);
                     this.applyLabelThreshold();
+                    this.queuePersistSettings();
+                });
+            }
+            if (labelWeightSlider && !labelWeightSlider.dataset.visBound) {
+                labelWeightSlider.dataset.visBound = '1';
+                labelWeightSlider.addEventListener('input', () => {
+                    this.labelWeight = Number(labelWeightSlider.value) || 500;
+                    this.applyLabelWeight();
+                    this.queuePersistSettings();
+                });
+            }
+            if (physicsSpringSlider && !physicsSpringSlider.dataset.visBound) {
+                physicsSpringSlider.dataset.visBound = '1';
+                physicsSpringSlider.addEventListener('input', () => {
+                    this.physicsSpringLength = Number(physicsSpringSlider.value) || 120;
+                    this.applyPhysicsSettings();
+                    this.queuePersistSettings();
+                });
+            }
+            if (physicsStrengthSlider && !physicsStrengthSlider.dataset.visBound) {
+                physicsStrengthSlider.dataset.visBound = '1';
+                physicsStrengthSlider.addEventListener('input', () => {
+                    this.physicsSpringConstant = Number(physicsStrengthSlider.value) || 0.05;
+                    this.applyPhysicsSettings();
+                    this.queuePersistSettings();
+                });
+            }
+            if (physicsGravitySlider && !physicsGravitySlider.dataset.visBound) {
+                physicsGravitySlider.dataset.visBound = '1';
+                physicsGravitySlider.addEventListener('input', () => {
+                    this.physicsGravity = Number(physicsGravitySlider.value) || -9000;
+                    this.applyPhysicsSettings();
+                    this.queuePersistSettings();
+                });
+            }
+            if (edgeFadeSlider && !edgeFadeSlider.dataset.visBound) {
+                edgeFadeSlider.dataset.visBound = '1';
+                edgeFadeSlider.addEventListener('input', () => {
+                    this.edgeFade = Number(edgeFadeSlider.value) || 0;
+                    this.applyEdgeFade();
+                    this.queuePersistSettings();
+                });
+            }
+            if (edgeMinWidthSlider && !edgeMinWidthSlider.dataset.visBound) {
+                edgeMinWidthSlider.dataset.visBound = '1';
+                edgeMinWidthSlider.addEventListener('input', () => {
+                    this.edgeMinWidth = Number(edgeMinWidthSlider.value) || 1;
+                    this.applyEdgeWidthRange();
+                    this.queuePersistSettings();
+                });
+            }
+            if (edgeMaxWidthSlider && !edgeMaxWidthSlider.dataset.visBound) {
+                edgeMaxWidthSlider.dataset.visBound = '1';
+                edgeMaxWidthSlider.addEventListener('input', () => {
+                    this.edgeMaxWidth = Number(edgeMaxWidthSlider.value) || 6;
+                    this.applyEdgeWidthRange();
+                    this.queuePersistSettings();
                 });
             }
             if (nodeSizeMinSlider && !nodeSizeMinSlider.dataset.visBound) {
@@ -796,6 +903,7 @@
                 nodeSizeMinSlider.addEventListener('input', () => {
                     this.nodeSizeMin = Number(nodeSizeMinSlider.value) || 1;
                     this.applyNodeSizeScale();
+                    this.queuePersistSettings();
                 });
             }
             if (nodeSizeMaxSlider && !nodeSizeMaxSlider.dataset.visBound) {
@@ -803,6 +911,7 @@
                 nodeSizeMaxSlider.addEventListener('input', () => {
                     this.nodeSizeMax = Number(nodeSizeMaxSlider.value) || 60;
                     this.applyNodeSizeScale();
+                    this.queuePersistSettings();
                 });
             }
             if (nodeSizeGammaSlider && !nodeSizeGammaSlider.dataset.visBound) {
@@ -810,6 +919,7 @@
                 nodeSizeGammaSlider.addEventListener('input', () => {
                     this.nodeSizeGamma = Number(nodeSizeGammaSlider.value) || 1;
                     this.applyNodeSizeScale();
+                    this.queuePersistSettings();
                 });
             }
             if (nodeBorderSlider && !nodeBorderSlider.dataset.visBound) {
@@ -817,6 +927,7 @@
                 nodeBorderSlider.addEventListener('input', () => {
                     this.nodeBorderWidth = Number(nodeBorderSlider.value) || 1.5;
                     this.applyNodeBorderWidth();
+                    this.queuePersistSettings();
                 });
             }
             if (labelSizeSlider && !labelSizeSlider.dataset.visBound) {
@@ -907,8 +1018,17 @@
                 this.notify('WOS Vis module not loaded', 'error');
                 return;
             }
+            const canvas = this.getEl(this.ids.canvas);
+            if (canvas && !canvas.dataset.visFocusGuard) {
+                canvas.dataset.visFocusGuard = '1';
+                canvas.tabIndex = -1;
+                canvas.addEventListener('focus', (e) => {
+                    e.preventDefault();
+                    canvas.blur();
+                });
+            }
             const { network, data } = global.WosVisNetwork.renderVisNetworkFromJson(raw, {
-                container: this.getEl(this.ids.canvas),
+                container: canvas,
                 view: this.getEl(this.ids.view),
                 network: this.visNetwork,
                 labelToggleButton: this.getEl(this.ids.labelToggleBtn),
@@ -955,25 +1075,42 @@
             void this.applyLabelField(this.labelField);
             this.applyLabelFade();
             this.applyLabelSizeScale();
+            this.applyLabelWeight();
             this.applyLabelThreshold();
             this.applyNodeSizeScale();
             this.applyNodeBorderWidth();
+            this.applyPhysicsSettings();
+            this.applyEdgeFade();
+            this.applyEdgeWidthRange();
+            this.queuePersistNetworkState();
+            if (this.pendingLabelShowAll !== null) {
+                this.applyLabelShowAll(this.pendingLabelShowAll);
+                this.queuePersistNetworkState();
+            }
         }
 
         wrapLabelToggleButton() {
             const btn = this.getEl(this.ids.labelToggleBtn);
             if (!btn || btn.dataset.visWrapped) return;
             const original = btn.onclick;
-            btn.onclick = (e) => {
+            btn.onclick = async (e) => {
                 const input = this.getEl(this.ids.labelFieldInput);
                 const currentField = input && input.value ? input.value.trim() : this.labelField;
-                void this.applyLabelField(currentField);
+                await this.applyLabelField(currentField);
                 this.applyLabelFade();
                 this.applyLabelSizeScale();
+                this.applyLabelWeight();
                 this.applyLabelThreshold();
+                this.applyPhysicsSettings();
+                this.applyEdgeFade();
+                this.applyEdgeWidthRange();
+                this.queuePersistNetworkState();
                 if (typeof original === 'function') {
                     original.call(btn, e);
                 }
+                const showAll = !!(this.visNetwork?._wosLabelState?.showAll);
+                this.labelShowAllState = showAll;
+                this.queuePersistNetworkState();
             };
             btn.dataset.visWrapped = '1';
         }
@@ -1057,6 +1194,13 @@
                 if (nodeSizeMaxSlider) nodeSizeMaxSlider.value = String(this.nodeSizeMax || 60);
                 if (nodeSizeGammaSlider) nodeSizeGammaSlider.value = String(this.nodeSizeGamma || 1);
                 if (nodeBorderSlider) nodeBorderSlider.value = String(this.nodeBorderWidth || 1.5);
+                if (labelWeightSlider) labelWeightSlider.value = String(this.labelWeight || 500);
+                if (physicsSpringSlider) physicsSpringSlider.value = String(this.physicsSpringLength || 120);
+                if (physicsStrengthSlider) physicsStrengthSlider.value = String(this.physicsSpringConstant || 0.05);
+                if (physicsGravitySlider) physicsGravitySlider.value = String(this.physicsGravity || -9000);
+                if (edgeFadeSlider) edgeFadeSlider.value = String(this.edgeFade || 100);
+                if (edgeMinWidthSlider) edgeMinWidthSlider.value = String(this.edgeMinWidth || 1);
+                if (edgeMaxWidthSlider) edgeMaxWidthSlider.value = String(this.edgeMaxWidth || 6);
             }
         }
 
@@ -1273,10 +1417,18 @@
                 this.notify(`Field not found: ${next}`, 'info');
                 return;
             }
+            if (this.labelFieldHistory.length === 0 || this.labelFieldHistory[this.labelFieldHistory.length - 1] !== next) {
+                this.labelFieldHistory.push(next);
+                if (this.labelFieldHistory.length > 100) {
+                    this.labelFieldHistory = this.labelFieldHistory.slice(-100);
+                }
+            }
+            this.labelFieldHistoryIndex = -1;
             if (!this.labelFieldsSelected.includes(next)) {
                 this.labelFieldsSelected.push(next);
             }
             this.labelField = this.labelFieldsSelected.join(', ');
+            this.queuePersistNetworkState();
             const input = this.getEl(this.ids.labelFieldInput);
             if (input) {
                 input.value = '';
@@ -1293,6 +1445,7 @@
         removeLabelField(field) {
             this.labelFieldsSelected = this.labelFieldsSelected.filter((item) => item !== field);
             this.labelField = this.labelFieldsSelected.join(', ');
+            this.queuePersistNetworkState();
             this.renderLabelFieldChips();
         }
 
@@ -1460,6 +1613,18 @@
             this.updateLabelLayer();
         }
 
+        applyLabelWeight() {
+            const dataset = this.getNetworkNodesDataSet();
+            if (!dataset) return;
+            const weight = Math.max(300, Math.min(900, Number(this.labelWeight) || 500));
+            const updates = dataset.get().map((node) => ({
+                id: node.id,
+                labelStyle: { ...(node.labelStyle || {}), fontWeight: weight }
+            }));
+            dataset.update(updates);
+            this.updateLabelLayer();
+        }
+
         applyLabelFade() {
             const dataset = this.getNetworkNodesDataSet();
             if (!dataset) return;
@@ -1549,6 +1714,91 @@
             dataset.update(updates);
         }
 
+        applyEdgeFade() {
+            if (!this.visNetwork) return;
+            const dataset = this.visNetwork?.body?.data?.edges;
+            if (!dataset) return;
+            const meta = this.visNetworkData?.meta || {};
+            const minRelated = Number.isFinite(meta.minRelated) ? meta.minRelated : 0;
+            const maxRelated = Number.isFinite(meta.maxRelated) ? meta.maxRelated : minRelated;
+            const contrast = Math.max(0, Math.min(100, Number(this.edgeFade) || 0)) / 100;
+            const minAlpha = 0.15 + (1 - contrast) * 0.2;
+            const maxAlpha = 0.85 - (1 - contrast) * 0.2;
+            const updates = dataset.get().map((edge) => {
+                const related = Number.isFinite(edge.relatedValue) ? edge.relatedValue : 0;
+                const t = maxRelated > minRelated ? (related - minRelated) / (maxRelated - minRelated) : 0;
+                const alpha = minAlpha + Math.max(0, Math.min(1, t)) * (maxAlpha - minAlpha);
+                return {
+                    id: edge.id,
+                    color: {
+                        color: `rgba(0,0,0,${alpha.toFixed(3)})`,
+                        highlight: `rgba(0,0,0,${Math.min(1, alpha + 0.1).toFixed(3)})`,
+                        hover: `rgba(0,0,0,${Math.min(1, alpha + 0.15).toFixed(3)})`
+                    }
+                };
+            });
+            dataset.update(updates);
+        }
+
+        applyEdgeWidthRange() {
+            if (!this.visNetwork) return;
+            const dataset = this.visNetwork?.body?.data?.edges;
+            if (!dataset) return;
+            const meta = this.visNetworkData?.meta || {};
+            const minRelated = Number.isFinite(meta.minRelated) ? meta.minRelated : 0;
+            const maxRelated = Number.isFinite(meta.maxRelated) ? meta.maxRelated : minRelated;
+            const minW = Math.max(0.5, Math.min(10, Number(this.edgeMinWidth) || 1));
+            const maxW = Math.max(minW + 0.1, Math.min(16, Number(this.edgeMaxWidth) || 6));
+            const updates = dataset.get().map((edge) => {
+                const related = Number.isFinite(edge.relatedValue) ? edge.relatedValue : 0;
+                const t = maxRelated > minRelated ? (related - minRelated) / (maxRelated - minRelated) : 0;
+                const width = minW + Math.max(0, Math.min(1, t)) * (maxW - minW);
+                return { id: edge.id, width: Number(width.toFixed(2)) };
+            });
+            dataset.update(updates);
+        }
+
+        applyLabelShowAll(showAll) {
+            if (!this.visNetwork) {
+                this.pendingLabelShowAll = showAll;
+                return;
+            }
+            const state = this.visNetwork._wosLabelState || { showAll: false };
+            if (state.showAll === showAll) {
+                this.labelShowAllState = showAll;
+                this.pendingLabelShowAll = null;
+                this.queuePersistNetworkState();
+                return;
+            }
+            const btn = this.getEl(this.ids.labelToggleBtn);
+            if (btn) {
+                btn.click();
+                this.pendingLabelShowAll = null;
+                return;
+            }
+            // fallback: mark state and refresh labels on next toggle
+            state.showAll = showAll;
+            this.visNetwork._wosLabelState = state;
+            this.labelShowAllState = showAll;
+            this.pendingLabelShowAll = null;
+            this.queuePersistNetworkState();
+        }
+
+        applyPhysicsSettings() {
+            if (!this.visNetwork) return;
+            this.visNetwork.setOptions({
+                physics: {
+                    enabled: true,
+                    solver: 'barnesHut',
+                    barnesHut: {
+                        springLength: this.physicsSpringLength,
+                        springConstant: this.physicsSpringConstant,
+                        gravitationalConstant: this.physicsGravity
+                    }
+                }
+            });
+        }
+
         applyAutoLabelTuning() {
             const view = this.getEl(this.ids.view);
             const dataset = this.getNetworkNodesDataSet();
@@ -1577,6 +1827,13 @@
             this.labelSizeScale = labelScale;
             this.labelFade = fade;
             this.labelMinCitations = minCite;
+            this.labelWeight = density > 0.00006 ? 500 : density > 0.00002 ? 550 : 600;
+            this.physicsSpringLength = density > 0.00006 ? 80 : density > 0.00002 ? 110 : 150;
+            this.physicsSpringConstant = density > 0.00006 ? 0.08 : density > 0.00002 ? 0.06 : 0.04;
+            this.physicsGravity = density > 0.00006 ? -12000 : density > 0.00002 ? -9000 : -7000;
+            this.edgeFade = density > 0.00006 ? 90 : 100;
+            this.edgeMinWidth = density > 0.00006 ? 0.8 : 1;
+            this.edgeMaxWidth = density > 0.00006 ? 4 : 6;
 
             const nodeSizeMinSlider = this.getEl(this.ids.nodeSizeMinSlider);
             const nodeSizeMaxSlider = this.getEl(this.ids.nodeSizeMaxSlider);
@@ -1586,6 +1843,13 @@
             const labelFadeSlider = this.getEl(this.ids.labelFadeSlider);
             const labelMinSlider = this.getEl(this.ids.labelMinSlider);
             const labelMinValue = this.getEl(this.ids.labelMinValue);
+            const labelWeightSlider = this.getEl(this.ids.labelWeightSlider);
+            const physicsSpringSlider = this.getEl(this.ids.physicsSpringSlider);
+            const physicsStrengthSlider = this.getEl(this.ids.physicsStrengthSlider);
+            const physicsGravitySlider = this.getEl(this.ids.physicsGravitySlider);
+            const edgeFadeSlider = this.getEl(this.ids.edgeFadeSlider);
+            const edgeMinWidthSlider = this.getEl(this.ids.edgeMinWidthSlider);
+            const edgeMaxWidthSlider = this.getEl(this.ids.edgeMaxWidthSlider);
 
             if (nodeSizeMinSlider) nodeSizeMinSlider.value = String(sizeMin);
             if (nodeSizeMaxSlider) nodeSizeMaxSlider.value = String(sizeMax);
@@ -1595,12 +1859,223 @@
             if (labelFadeSlider) labelFadeSlider.value = String(fade);
             if (labelMinSlider) labelMinSlider.value = String(minCite);
             if (labelMinValue) labelMinValue.textContent = String(minCite);
+            if (labelWeightSlider) labelWeightSlider.value = String(this.labelWeight || 500);
+            if (physicsSpringSlider) physicsSpringSlider.value = String(this.physicsSpringLength);
+            if (physicsStrengthSlider) physicsStrengthSlider.value = String(this.physicsSpringConstant);
+            if (physicsGravitySlider) physicsGravitySlider.value = String(this.physicsGravity);
+            if (edgeFadeSlider) edgeFadeSlider.value = String(this.edgeFade);
+            if (edgeMinWidthSlider) edgeMinWidthSlider.value = String(this.edgeMinWidth);
+            if (edgeMaxWidthSlider) edgeMaxWidthSlider.value = String(this.edgeMaxWidth);
 
             this.applyNodeSizeScale();
             this.applyNodeBorderWidth();
             this.applyLabelSizeScale();
             this.applyLabelFade();
             this.applyLabelThreshold();
+            this.applyLabelWeight();
+            this.applyPhysicsSettings();
+            this.applyEdgeFade();
+            this.applyEdgeWidthRange();
+            this.queuePersistSettings();
+        }
+
+        getPersistedSettingsPayload() {
+            return {
+                labelFade: this.labelFade,
+                labelSizeScale: this.labelSizeScale,
+                labelMinCitations: this.labelMinCitations,
+                labelWeight: this.labelWeight,
+                nodeSizeMin: this.nodeSizeMin,
+                nodeSizeMax: this.nodeSizeMax,
+                nodeSizeGamma: this.nodeSizeGamma,
+                nodeBorderWidth: this.nodeBorderWidth,
+                physicsSpringLength: this.physicsSpringLength,
+                physicsSpringConstant: this.physicsSpringConstant,
+                physicsGravity: this.physicsGravity,
+                edgeFade: this.edgeFade,
+                edgeMinWidth: this.edgeMinWidth,
+                edgeMaxWidth: this.edgeMaxWidth
+            };
+        }
+
+        queuePersistSettings() {
+            if (this._settingsSaveTimer) clearTimeout(this._settingsSaveTimer);
+            this._settingsSaveTimer = setTimeout(() => {
+                this.persistSettings();
+            }, 200);
+        }
+
+        queuePersistNetworkState() {
+            if (this._networkSaveTimer) clearTimeout(this._networkSaveTimer);
+            this._networkSaveTimer = setTimeout(() => {
+                this.persistNetworkState();
+            }, 200);
+        }
+
+        persistNetworkState() {
+            const payload = {
+                json: this.lastRenderedJson || this.visInputText || '',
+                labelFieldsSelected: Array.from(this.labelFieldsSelected || []),
+                labelField: this.labelField || 'wosid',
+                labelShowAll: typeof this.labelShowAllState === 'boolean'
+                    ? this.labelShowAllState
+                    : !!(this.visNetwork?._wosLabelState?.showAll)
+            };
+            if (this.app && this.app.projectStorage && this.app.currentProject) {
+                this.app.projectStorage.update(this.networkStateKey, payload);
+            }
+            try {
+                localStorage.setItem(this.networkStateKey, JSON.stringify(payload));
+            } catch (_e) {
+                // ignore
+            }
+        }
+
+        loadNetworkState() {
+            const apply = (payload) => {
+                if (!payload || typeof payload !== 'object') return;
+                if (Array.isArray(payload.labelFieldsSelected)) {
+                    this.labelFieldsSelected = payload.labelFieldsSelected;
+                }
+                if (payload.labelField) {
+                    this.labelField = payload.labelField;
+                }
+                if (!this.labelFieldsSelected.length && this.labelField) {
+                    this.labelFieldsSelected = this.parseLabelFields(this.labelField);
+                }
+                if (typeof payload.labelShowAll === 'boolean') {
+                    this.pendingLabelShowAll = payload.labelShowAll;
+                    this.labelShowAllState = payload.labelShowAll;
+                }
+                if (payload.json && typeof payload.json === 'string') {
+                    this.visInputText = payload.json;
+                    this.lastRenderedJson = payload.json;
+                    this.renderFromJson(payload.json);
+                } else {
+                    this.renderLabelFieldChips();
+                }
+            };
+
+            try {
+                const raw = localStorage.getItem(this.networkStateKey);
+                if (raw) apply(JSON.parse(raw));
+            } catch (_e) {
+                // ignore
+            }
+
+            if (this.app && this.app.projectStorage && this.app.currentProject) {
+                this.app.projectStorage.load(this.networkStateKey).then((data) => {
+                    apply(data);
+                }).catch(() => {
+                    // ignore
+                });
+            } else {
+                setTimeout(() => {
+                    if (this.app && this.app.projectStorage && this.app.currentProject) {
+                        this.app.projectStorage.load(this.networkStateKey).then((data) => {
+                            apply(data);
+                        }).catch(() => {
+                            // ignore
+                        });
+                    }
+                }, 600);
+            }
+        }
+
+        persistSettings() {
+            const payload = this.getPersistedSettingsPayload();
+            if (this.app && this.app.projectStorage && this.app.currentProject) {
+                this.app.projectStorage.update(this.settingsKey, payload);
+            }
+            try {
+                localStorage.setItem(this.settingsKey, JSON.stringify(payload));
+            } catch (_e) {
+                // ignore
+            }
+        }
+
+        loadPersistedSettings() {
+            if (this._settingsLoaded) return;
+            this._settingsLoaded = true;
+            const apply = (payload) => {
+                if (!payload || typeof payload !== 'object') return;
+                if (Number.isFinite(payload.labelFade)) this.labelFade = payload.labelFade;
+                if (Number.isFinite(payload.labelSizeScale)) this.labelSizeScale = payload.labelSizeScale;
+                if (Number.isFinite(payload.labelMinCitations)) this.labelMinCitations = payload.labelMinCitations;
+                if (Number.isFinite(payload.labelWeight)) this.labelWeight = payload.labelWeight;
+                if (Number.isFinite(payload.nodeSizeMin)) this.nodeSizeMin = payload.nodeSizeMin;
+                if (Number.isFinite(payload.nodeSizeMax)) this.nodeSizeMax = payload.nodeSizeMax;
+                if (Number.isFinite(payload.nodeSizeGamma)) this.nodeSizeGamma = payload.nodeSizeGamma;
+                if (Number.isFinite(payload.nodeBorderWidth)) this.nodeBorderWidth = payload.nodeBorderWidth;
+                if (Number.isFinite(payload.physicsSpringLength)) this.physicsSpringLength = payload.physicsSpringLength;
+                if (Number.isFinite(payload.physicsSpringConstant)) this.physicsSpringConstant = payload.physicsSpringConstant;
+                if (Number.isFinite(payload.physicsGravity)) this.physicsGravity = payload.physicsGravity;
+                if (Number.isFinite(payload.edgeFade)) this.edgeFade = payload.edgeFade;
+                if (Number.isFinite(payload.edgeMinWidth)) this.edgeMinWidth = payload.edgeMinWidth;
+                if (Number.isFinite(payload.edgeMaxWidth)) this.edgeMaxWidth = payload.edgeMaxWidth;
+            };
+
+            try {
+                const raw = localStorage.getItem(this.settingsKey);
+                if (raw) apply(JSON.parse(raw));
+            } catch (_e) {
+                // ignore
+            }
+            this.syncSettingsSliders();
+
+            if (this.app && this.app.projectStorage && this.app.currentProject) {
+                this.app.projectStorage.load(this.settingsKey).then((data) => {
+                    apply(data);
+                    this.syncSettingsSliders();
+                }).catch(() => {
+                    // ignore
+                });
+            } else {
+                setTimeout(() => {
+                    if (this.app && this.app.projectStorage && this.app.currentProject) {
+                        this.app.projectStorage.load(this.settingsKey).then((data) => {
+                            apply(data);
+                            this.syncSettingsSliders();
+                        }).catch(() => {
+                            // ignore
+                        });
+                    }
+                }, 600);
+            }
+        }
+
+        syncSettingsSliders() {
+            const labelFadeSlider = this.getEl(this.ids.labelFadeSlider);
+            const labelSizeSlider = this.getEl(this.ids.labelSizeSlider);
+            const labelMinSlider = this.getEl(this.ids.labelMinSlider);
+            const labelMinValue = this.getEl(this.ids.labelMinValue);
+            const labelWeightSlider = this.getEl(this.ids.labelWeightSlider);
+            const nodeSizeMinSlider = this.getEl(this.ids.nodeSizeMinSlider);
+            const nodeSizeMaxSlider = this.getEl(this.ids.nodeSizeMaxSlider);
+            const nodeSizeGammaSlider = this.getEl(this.ids.nodeSizeGammaSlider);
+            const nodeBorderSlider = this.getEl(this.ids.nodeBorderSlider);
+            const physicsSpringSlider = this.getEl(this.ids.physicsSpringSlider);
+            const physicsStrengthSlider = this.getEl(this.ids.physicsStrengthSlider);
+            const physicsGravitySlider = this.getEl(this.ids.physicsGravitySlider);
+            const edgeFadeSlider = this.getEl(this.ids.edgeFadeSlider);
+            const edgeMinWidthSlider = this.getEl(this.ids.edgeMinWidthSlider);
+            const edgeMaxWidthSlider = this.getEl(this.ids.edgeMaxWidthSlider);
+
+            if (labelFadeSlider) labelFadeSlider.value = String(this.labelFade || 0);
+            if (labelSizeSlider) labelSizeSlider.value = String(Math.round((this.labelSizeScale || 1) * 100));
+            if (labelMinSlider) labelMinSlider.value = String(this.labelMinCitations || 0);
+            if (labelMinValue) labelMinValue.textContent = String(this.labelMinCitations || 0);
+            if (labelWeightSlider) labelWeightSlider.value = String(this.labelWeight || 500);
+            if (nodeSizeMinSlider) nodeSizeMinSlider.value = String(this.nodeSizeMin || 1);
+            if (nodeSizeMaxSlider) nodeSizeMaxSlider.value = String(this.nodeSizeMax || 60);
+            if (nodeSizeGammaSlider) nodeSizeGammaSlider.value = String(this.nodeSizeGamma || 1);
+            if (nodeBorderSlider) nodeBorderSlider.value = String(this.nodeBorderWidth || 1.5);
+            if (physicsSpringSlider) physicsSpringSlider.value = String(this.physicsSpringLength || 120);
+            if (physicsStrengthSlider) physicsStrengthSlider.value = String(this.physicsSpringConstant || 0.05);
+            if (physicsGravitySlider) physicsGravitySlider.value = String(this.physicsGravity || -9000);
+            if (edgeFadeSlider) edgeFadeSlider.value = String(this.edgeFade || 100);
+            if (edgeMinWidthSlider) edgeMinWidthSlider.value = String(this.edgeMinWidth || 1);
+            if (edgeMaxWidthSlider) edgeMaxWidthSlider.value = String(this.edgeMaxWidth || 6);
         }
 
         updateLabelLayer() {
