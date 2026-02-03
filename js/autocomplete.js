@@ -18,6 +18,10 @@ class AutocompleteManager {
         this.onSelect = typeof options.onSelect === 'function' ? options.onSelect : null;
         this.onConfirm = typeof options.onConfirm === 'function' ? options.onConfirm : null;
         this.activeProvider = null;
+        this.doiPageSize = Number.isFinite(options.doiPageSize) ? options.doiPageSize : 50;
+        this._doiFullSuggestions = null;
+        this._doiPage = 1;
+        this._doiTotalCount = 0;
         
         // UI 元素
         this.dropdown = null;
@@ -71,6 +75,9 @@ class AutocompleteManager {
         this.dropdown = document.createElement('div');
         this.dropdown.className = 'autocomplete-dropdown';
         this.dropdown.style.display = 'none';
+        const count = document.createElement('div');
+        count.className = 'autocomplete-doi-count';
+        count.textContent = '';
         const refreshBtn = document.createElement('button');
         refreshBtn.type = 'button';
         refreshBtn.className = 'autocomplete-doi-refresh';
@@ -79,11 +86,25 @@ class AutocompleteManager {
         refreshBtn.innerHTML = '<i class="fas fa-rotate"></i>';
         const list = document.createElement('div');
         list.className = 'autocomplete-list';
+        this.dropdown.appendChild(count);
         this.dropdown.appendChild(refreshBtn);
         this.dropdown.appendChild(list);
+        this._countEl = count;
         this._refreshBtn = refreshBtn;
         this._listEl = list;
         document.body.appendChild(this.dropdown);
+        list.addEventListener('scroll', () => {
+            if (this.activeProvider !== 'doi' || !this._doiFullSuggestions) return;
+            const nearBottom = list.scrollTop + list.clientHeight >= list.scrollHeight - 24;
+            if (!nearBottom) return;
+            const totalPages = Math.ceil(this._doiFullSuggestions.length / this.doiPageSize);
+            if (this._doiPage >= totalPages) return;
+            this._doiPage += 1;
+            const prevTop = list.scrollTop;
+            this.filteredCommands = this._doiFullSuggestions.slice(0, this._doiPage * this.doiPageSize);
+            this.renderDropdown();
+            list.scrollTop = prevTop;
+        });
     }
     
     bindEvents() {
@@ -323,7 +344,16 @@ class AutocompleteManager {
     }
 
     showSuggestions(suggestions) {
-        this.filteredCommands = suggestions;
+        if (this.activeProvider === 'doi' && Array.isArray(suggestions)) {
+            this._doiFullSuggestions = suggestions;
+            this._doiTotalCount = suggestions.length;
+            this._doiPage = 1;
+            this.filteredCommands = suggestions.slice(0, this.doiPageSize);
+        } else {
+            this._doiFullSuggestions = null;
+            this._doiTotalCount = 0;
+            this.filteredCommands = suggestions;
+        }
         this.selectedIndex = 0;
         if (this.filteredCommands.length > 0) {
             this.show();
@@ -394,6 +424,16 @@ class AutocompleteManager {
         const showRefresh = this.activeProvider === 'doi';
         if (this.dropdown) {
             this.dropdown.classList.toggle('doi-refresh-visible', showRefresh);
+        }
+        if (this._countEl) {
+            if (this.activeProvider === 'doi') {
+                const total = this._doiTotalCount || this.filteredCommands.length;
+                this._countEl.textContent = `${this.filteredCommands.length} / ${total} DOI`;
+                this._countEl.style.display = 'block';
+            } else {
+                this._countEl.textContent = '';
+                this._countEl.style.display = 'none';
+            }
         }
 
         // 绑定点击事件

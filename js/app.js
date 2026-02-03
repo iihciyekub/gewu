@@ -15451,7 +15451,8 @@ class PaperStatsApp {
 
         // 返回增强的建议列表
         // 格式：{ label, insertText, detail, year, authorDisplay, title }
-        return matches.slice(0, 20).map(item => {
+        const capped = matches.slice(0, 2000);
+        return capped.map(item => {
             // 构建显示详情
             const yearPart = item.year ? `(${item.year})` : '';
             const authorYearDisplay = item.authorDisplay && item.year

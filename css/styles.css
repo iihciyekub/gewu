@@ -5440,6 +5440,20 @@ body.theme-vscode .header-dropdown-item:hover {
     font-size: 12px;
 }
 
+.autocomplete-doi-count {
+    display: none;
+    position: absolute;
+    top: 4px;
+    left: 6px;
+    font-size: 10px;
+    color: var(--wos-text-light);
+    letter-spacing: 0.2px;
+}
+
+.autocomplete-dropdown.doi-refresh-visible .autocomplete-doi-count {
+    display: block;
+}
+
 .autocomplete-dropdown.doi-refresh-visible .autocomplete-doi-refresh {
     display: inline-flex;
     align-items: center;
