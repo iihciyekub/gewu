@@ -2100,6 +2100,16 @@ body.theme-vscode .nested-index-cell {
     overflow: hidden;
 }
 
+.settings-view.active ~ .md-chat-panel,
+.settings-view.active ~ .md-chat-dock-resizer {
+    display: none;
+}
+
+.editor-container:has(.settings-view.active) .md-chat-panel,
+.editor-container:has(.settings-view.active) .md-chat-dock-resizer {
+    display: none;
+}
+
 .settings-content {
     flex: 1 1 auto;
     min-height: 0;
