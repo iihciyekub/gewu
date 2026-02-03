@@ -2163,6 +2163,25 @@ body.theme-vscode .nested-index-cell {
     background: transparent;
 }
 
+.vis-network-zoom {
+    position: absolute;
+    left: 16px;
+    bottom: 16px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    z-index: 3;
+    background: rgba(255, 255, 255, 0.9);
+    border: 1px solid #e5e7eb;
+    border-radius: 10px;
+    padding: 6px 8px;
+    box-shadow: 0 8px 18px rgba(0, 0, 0, 0.08);
+}
+
+.vis-network-zoom input[type="range"] {
+    width: 120px;
+}
+
 .vis-network-label-layer {
     position: absolute;
     inset: 0;

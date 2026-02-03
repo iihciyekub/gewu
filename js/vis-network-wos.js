@@ -430,13 +430,21 @@
                 savedSelect: options.savedSelectId || 'visSavedSelect',
                 labelToggleBtn: options.labelToggleBtnId || 'visToggleLabelsBtn',
                 importBtn: options.importBtnId || 'visImportJsonBtn',
-                importJsonFileInput: options.importJsonFileInputId || 'importJsonFileInput'
+                importJsonFileInput: options.importJsonFileInputId || 'importJsonFileInput',
+                zoomInBtn: options.zoomInBtnId || 'visZoomInBtn',
+                zoomOutBtn: options.zoomOutBtnId || 'visZoomOutBtn',
+                zoomFitBtn: options.zoomFitBtnId || 'visZoomFitBtn',
+                zoomResetBtn: options.zoomResetBtnId || 'visZoomResetBtn',
+                zoomSlider: options.zoomSliderId || 'visZoomSlider'
             };
             this.visNetwork = null;
             this.visNetworkData = null;
             this.visInputText = '';
             this.lastRenderedJson = '';
             this.visNetworkSavedKey = options.visNetworkSavedKey || 'vis-network-saved';
+            this.zoomMin = 0.1;
+            this.zoomMax = 2.0;
+            this.zoomStep = 0.1;
         }
 
         bind() {
@@ -451,6 +459,11 @@
             const savedSelect = this.getEl(this.ids.savedSelect);
             const importBtn = this.getEl(this.ids.importBtn);
             const importInput = this.getEl(this.ids.importJsonFileInput);
+            const zoomInBtn = this.getEl(this.ids.zoomInBtn);
+            const zoomOutBtn = this.getEl(this.ids.zoomOutBtn);
+            const zoomFitBtn = this.getEl(this.ids.zoomFitBtn);
+            const zoomResetBtn = this.getEl(this.ids.zoomResetBtn);
+            const zoomSlider = this.getEl(this.ids.zoomSlider);
 
             if (inputToggleBtn) {
                 inputToggleBtn.addEventListener('click', (e) => {
@@ -527,6 +540,44 @@
                     }
                 });
             }
+            if (zoomInBtn) {
+                zoomInBtn.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    this.adjustZoom(this.zoomStep);
+                });
+            }
+            if (zoomOutBtn) {
+                zoomOutBtn.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    this.adjustZoom(-this.zoomStep);
+                });
+            }
+            if (zoomFitBtn) {
+                zoomFitBtn.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    if (this.visNetwork) {
+                        this.visNetwork.fit({ animation: { duration: 250 } });
+                        this.syncZoomSlider();
+                    }
+                });
+            }
+            if (zoomResetBtn) {
+                zoomResetBtn.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    if (this.visNetwork) {
+                        this.visNetwork.moveTo({ scale: 1, animation: { duration: 250 } });
+                        this.syncZoomSlider();
+                    }
+                });
+            }
+            if (zoomSlider) {
+                zoomSlider.addEventListener('input', () => {
+                    const value = Number(zoomSlider.value) / 100;
+                    if (this.visNetwork) {
+                        this.visNetwork.moveTo({ scale: this.clampZoom(value) });
+                    }
+                });
+            }
             if (!this._escBound) {
                 this._escBound = true;
                 document.addEventListener('keydown', (e) => {
@@ -595,6 +646,7 @@
             this.lastRenderedJson = typeof raw === 'string' ? raw : JSON.stringify(raw, null, 2);
             if (this.visNetwork) {
                 this.bindNetworkEvents(this.visNetwork);
+                this.bindZoomEvents(this.visNetwork);
             }
         }
 
@@ -862,6 +914,42 @@
             };
             network.on('click', this._onNetworkClick);
             this._boundNetwork = network;
+        }
+
+        bindZoomEvents(network) {
+            if (!network) return;
+            if (this._boundZoomNetwork === network) return;
+            if (this._boundZoomNetwork) {
+                this._boundZoomNetwork.off('zoom', this._onNetworkZoom);
+                this._boundZoomNetwork.off('dragEnd', this._onNetworkZoom);
+            }
+            this._onNetworkZoom = () => {
+                this.syncZoomSlider();
+            };
+            network.on('zoom', this._onNetworkZoom);
+            network.on('dragEnd', this._onNetworkZoom);
+            this._boundZoomNetwork = network;
+            this.syncZoomSlider();
+        }
+
+        syncZoomSlider() {
+            const slider = this.getEl(this.ids.zoomSlider);
+            if (!slider || !this.visNetwork) return;
+            const scale = this.visNetwork.getScale();
+            const percent = Math.round(scale * 100);
+            slider.value = String(Math.max(10, Math.min(200, percent)));
+        }
+
+        clampZoom(value) {
+            return Math.max(this.zoomMin, Math.min(this.zoomMax, value));
+        }
+
+        adjustZoom(delta) {
+            if (!this.visNetwork) return;
+            const current = this.visNetwork.getScale();
+            const next = this.clampZoom(current + delta);
+            this.visNetwork.moveTo({ scale: next });
+            this.syncZoomSlider();
         }
 
         normalizeWosId(value) {
