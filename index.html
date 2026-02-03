@@ -491,6 +491,39 @@
                             <button class="btn btn-primary" id="visInputApplyBtn" type="button">Run</button>
                         </div>
                     </div>
+                    <div class="vis-input-drawer vis-label-drawer" id="visLabelDrawer" aria-hidden="true">
+                        <div class="vis-input-body">
+                            <div class="vis-label-panel">
+                                <label for="visLabelFieldInput">Label field</label>
+                                <input id="visLabelFieldInput" type="text" placeholder="Search field (default: wosid)"
+                                    autocomplete="off">
+                                <div class="vis-label-fields" id="visLabelFields"></div>
+                                <div class="vis-label-suggest" id="visLabelSuggest"></div>
+                                <div class="vis-label-hint">Example: wosid, title, wos_data.title</div>
+                                <div class="vis-label-fade">
+                                    <label for="visLabelFadeSlider">Label fade by citations</label>
+                                    <input id="visLabelFadeSlider" type="range" min="0" max="100" step="5" value="0">
+                                </div>
+                                <div class="vis-label-threshold">
+                                    <label for="visLabelMinSlider">Min citations to show</label>
+                                    <div class="vis-label-threshold-row">
+                                        <input id="visLabelMinSlider" type="range" min="0" max="100" step="1" value="0">
+                                        <span id="visLabelMinValue">0</span>
+                                    </div>
+                                </div>
+                                <div class="vis-label-size">
+                                    <label for="visLabelSizeSlider">Label size</label>
+                                    <input id="visLabelSizeSlider" type="range" min="80" max="180" step="5" value="100">
+                                </div>
+                            </div>
+                        </div>
+                        <div class="vis-input-actions">
+                            <button class="btn btn-secondary" id="visLabelCloseBtn" type="button">Close</button>
+                            <button class="btn btn-secondary" id="visLabelToggleAllBtn" type="button">
+                                <i class="fas fa-tags"></i><span>Show Labels</span>
+                            </button>
+                        </div>
+                    </div>
                 </div>
                 <div class="settings-view" id="settingsView">
                     <div class="settings-layout">

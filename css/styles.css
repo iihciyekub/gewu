@@ -2261,6 +2261,143 @@ body.theme-vscode .nested-index-cell {
     display: flex;
 }
 
+.vis-label-drawer .vis-input-body {
+    flex-direction: column;
+}
+
+.vis-label-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    width: 100%;
+    position: relative;
+}
+
+.vis-label-panel label {
+    font-size: 12px;
+    color: #374151;
+}
+
+.vis-label-panel input[type="text"] {
+    width: 100%;
+    padding: 8px 10px;
+    border: 1px solid #d7dce3;
+    border-radius: 8px;
+    font-size: 13px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+}
+
+.vis-label-suggest {
+    position: absolute;
+    top: 68px;
+    left: 0;
+    right: 0;
+    background: #ffffff;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    box-shadow: 0 10px 18px rgba(15, 23, 42, 0.12);
+    display: none;
+    flex-direction: column;
+    gap: 4px;
+    padding: 6px;
+    z-index: 2;
+    max-height: 180px;
+    overflow: auto;
+}
+
+.vis-label-suggest .vis-label-suggest-item {
+    text-align: left;
+    padding: 6px 8px;
+    border-radius: 6px;
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    font-size: 12px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+    color: #111827;
+}
+
+.vis-label-fields {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    min-height: 24px;
+}
+
+.vis-label-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 8px;
+    border-radius: 999px;
+    border: 1px solid #d1d5db;
+    background: #f9fafb;
+    font-size: 12px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+    color: #111827;
+}
+
+.vis-label-chip button {
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    font-size: 12px;
+    line-height: 1;
+    color: #6b7280;
+}
+
+.vis-label-suggest .vis-label-suggest-item.active,
+.vis-label-suggest .vis-label-suggest-item:hover {
+    background: #f3f4f6;
+}
+
+.vis-label-hint {
+    font-size: 11px;
+    color: #6b7280;
+}
+
+.vis-label-fade {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-top: 8px;
+}
+
+.vis-label-threshold {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-top: 8px;
+}
+
+.vis-label-threshold-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.vis-label-threshold-row input[type="range"] {
+    flex: 1;
+}
+
+.vis-label-threshold-row span {
+    min-width: 28px;
+    text-align: right;
+    font-size: 12px;
+    color: #374151;
+}
+
+.vis-label-size {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-top: 6px;
+}
+
+.vis-label-fade input[type="range"] {
+    width: 100%;
+}
+
 
 .vis-input-restore {
     padding: 10px 14px;
