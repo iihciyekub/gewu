@@ -2134,6 +2134,7 @@ body.theme-vscode .nested-index-cell {
 
 .vis-network-view {
     display: none;
+    position: relative;
 }
 
 .vis-network-view.active {
@@ -2142,6 +2143,73 @@ body.theme-vscode .nested-index-cell {
     flex: 1 1 auto;
     min-height: 0;
     overflow: hidden;
+}
+
+.vis-network-toolbar {
+    position: absolute;
+    right: 16px;
+    bottom: 16px;
+    display: flex;
+    gap: 8px;
+    z-index: 3;
+}
+
+.vis-input-drawer {
+    position: absolute;
+    top: 0;
+    right: 0;
+    width: min(380px, 92%);
+    height: 100%;
+    background: #ffffff;
+    border-left: 1px solid #e5e7eb;
+    box-shadow: -12px 0 24px rgba(15, 23, 42, 0.12);
+    transform: translateX(100%);
+    transition: transform 220ms ease;
+    display: flex;
+    flex-direction: column;
+    z-index: 4;
+}
+
+.vis-input-drawer.is-open {
+    transform: translateX(0%);
+}
+
+.vis-input-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 14px;
+    border-bottom: 1px solid #e5e7eb;
+    font-size: 13px;
+    font-weight: 600;
+}
+
+.vis-input-body {
+    padding: 12px 14px;
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+}
+
+#visInputTextarea {
+    width: 100%;
+    min-height: 100%;
+    resize: none;
+    border: 1px solid #d7dce3;
+    border-radius: 8px;
+    padding: 10px;
+    font-size: 12px;
+    line-height: 1.4;
+    font-family: "SFMono-Regular", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono",
+        "Courier New", monospace;
+}
+
+.vis-input-actions {
+    padding: 12px 14px;
+    border-top: 1px solid #e5e7eb;
+    display: flex;
+    gap: 8px;
+    justify-content: flex-end;
 }
 
 .settings-view {
@@ -3251,13 +3319,16 @@ body.theme-vscode .qa-bubble {
     border: none;
     background: transparent;
     font-size: 10px;
-    color: #484848;
+    font-family: "SFMono-Regular", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono",
+        "Courier New", monospace;
+    color: #1f2933;
+    font-weight: 500;
     cursor: pointer;
 }
 
 .md-chat-suggest-item:hover,
 .md-chat-suggest-item.active {
-    background: #eef4ff;
+    background: #eef2f7;
 }
 
 .md-chat-input-text {

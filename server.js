@@ -1181,8 +1181,6 @@ const server = http.createServer((req, res) => {
                 // 创建目录
                 fs.mkdirSync(absolutePath, { recursive: true });
 
-                console.log(`✓ Ensured directory: ${absolutePath}`);
-
                 res.writeHead(200, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify({
                     success: true,

@@ -110,6 +110,7 @@ class PaperStatsApp {
         this.rawJsonParseTimer = null;
         this.currentLoadToken = 0;
         this._eventListenersBound = false;
+        this.visInputText = '';
         this.sectionExpandedStateByProject = this.loadSectionExpandedState();
         this.lastSelectedFileByProject = this.loadLastSelectedFileByProject();
         this.uiPreferences = {};
@@ -2605,6 +2606,41 @@ class PaperStatsApp {
                 e.preventDefault();
                 importWosInput.click();
                 this.toggleImportMenu(false);
+            });
+        }
+        const visInputToggleBtn = document.getElementById('visInputToggleBtn');
+        const visInputCloseBtn = document.getElementById('visInputCloseBtn');
+        const visInputCancelBtn = document.getElementById('visInputCancelBtn');
+        const visInputApplyBtn = document.getElementById('visInputApplyBtn');
+        const visImportJsonBtn = document.getElementById('visImportJsonBtn');
+        if (visInputToggleBtn) {
+            visInputToggleBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                this.toggleVisInputDrawer(true);
+            });
+        }
+        if (visInputCloseBtn) {
+            visInputCloseBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                this.toggleVisInputDrawer(false);
+            });
+        }
+        if (visInputCancelBtn) {
+            visInputCancelBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                this.toggleVisInputDrawer(false);
+            });
+        }
+        if (visInputApplyBtn) {
+            visInputApplyBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                this.applyVisInput();
+            });
+        }
+        if (visImportJsonBtn && importJsonFileInput) {
+            visImportJsonBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                importJsonFileInput.click();
             });
         }
         if (apiSettingsMenuItem) {
@@ -9363,6 +9399,32 @@ class PaperStatsApp {
         if (next) this.closeHeaderMenus('import');
         this.importMenuVisible = next;
         menu.classList.toggle('visible', next);
+    }
+
+    toggleVisInputDrawer(forceOpen) {
+        const drawer = document.getElementById('visInputDrawer');
+        if (!drawer) return;
+        const next = typeof forceOpen === 'boolean' ? forceOpen : !drawer.classList.contains('is-open');
+        drawer.classList.toggle('is-open', next);
+        drawer.setAttribute('aria-hidden', next ? 'false' : 'true');
+        if (next) {
+            const textarea = document.getElementById('visInputTextarea');
+            if (textarea) {
+                if (this.visInputText && !textarea.value) {
+                    textarea.value = this.visInputText;
+                }
+                textarea.focus();
+                textarea.setSelectionRange(textarea.value.length, textarea.value.length);
+            }
+        }
+    }
+
+    applyVisInput() {
+        const textarea = document.getElementById('visInputTextarea');
+        if (!textarea) return;
+        this.visInputText = textarea.value || '';
+        this.showNotification('输入内容已保存', 'success');
+        this.toggleVisInputDrawer(false);
     }
 
     constrainDropdownMenu(menuEl, dropdownEl) {

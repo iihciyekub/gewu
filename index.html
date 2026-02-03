@@ -446,6 +446,30 @@
                         <h3>No Network Loaded</h3>
                         <p>Select a JSON file from the left panel to generate a vis-network graph</p>
                     </div>
+                    <div class="vis-network-toolbar">
+                        <button class="btn btn-secondary" id="visInputToggleBtn" type="button">
+                            <i class="fas fa-pen"></i> 输入
+                        </button>
+                        <button class="btn btn-primary" id="visImportJsonBtn" type="button">
+                            <i class="fas fa-file-import"></i> 导入 JSON
+                        </button>
+                    </div>
+                    <div class="vis-input-drawer" id="visInputDrawer" aria-hidden="true">
+                        <div class="vis-input-header">
+                            <span>输入内容</span>
+                            <button class="btn btn-secondary" id="visInputCloseBtn" type="button" aria-label="Close">
+                                <i class="fas fa-times"></i>
+                            </button>
+                        </div>
+                        <div class="vis-input-body">
+                            <textarea id="visInputTextarea" spellcheck="false"
+                                placeholder="在这里输入内容..."></textarea>
+                        </div>
+                        <div class="vis-input-actions">
+                            <button class="btn btn-secondary" id="visInputCancelBtn" type="button">关闭</button>
+                            <button class="btn btn-primary" id="visInputApplyBtn" type="button">确认</button>
+                        </div>
+                    </div>
                 </div>
                 <div class="settings-view" id="settingsView">
                     <div class="settings-layout">
