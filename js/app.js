@@ -804,6 +804,9 @@ class PaperStatsApp {
             this.lastPdfLoadedUrl = '';
             this.ensurePdfLoaded();
         }
+        if (window.paperStats?.visManager?.refreshTheme) {
+            window.paperStats.visManager.refreshTheme();
+        }
     }
 
     updateThemeToggleButton(isDark) {

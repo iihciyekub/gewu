@@ -440,7 +440,7 @@
                         <p>Select a JSON file from the left panel to view raw JSON</p>
                     </div>
                 </div>
-                <div class="vis-network-view" id="visNetworkView">
+                <div class="vis-network-view" id="visNetworkView" tabindex="-1">
                     <div class="vis-network-canvas" id="visNetworkCanvas"></div>
                     <div class="empty-state">
                         <i class="fas fa-project-diagram"></i>
@@ -461,13 +461,15 @@
                         <button class="btn btn-secondary" id="visZoomResetBtn" type="button" title="Reset zoom">
                             <i class="fas fa-arrows-rotate"></i>
                         </button>
-                    </div>
-                    <div class="vis-network-toolbar">
-                        <button class="btn btn-secondary" id="visInputToggleBtn" type="button">
-                            <i class="fas fa-pen"></i> Input
+                        <button class="btn btn-secondary" id="visInputToggleBtn" type="button" title="Input panel">
+                            <i class="fas fa-pen"></i>
                         </button>
-                        <button class="btn btn-secondary" id="visToggleLabelsBtn" type="button">
-                            <i class="fas fa-tags"></i><span>Labels</span>
+                        <button class="btn btn-secondary" id="visToggleLabelsBtn" type="button" title="Labels">
+                            <i class="fas fa-tags"></i>
+                        </button>
+                        <button class="btn btn-secondary vis-zoom-collapse" id="visZoomCollapseBtn" type="button"
+                            title="Collapse panel">
+                            <i class="fas fa-chevron-right"></i>
                         </button>
                     </div>
                     <div class="vis-input-drawer" id="visInputDrawer" aria-hidden="true">

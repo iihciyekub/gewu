@@ -1,6 +1,51 @@
 (function (global) {
     'use strict';
 
+    function isDarkTheme() {
+        return document?.body?.classList?.contains('theme-dark');
+    }
+
+    function applyThemeToVisData(visData, darkMode) {
+        if (!visData || !darkMode) return;
+        const minRelated = Number.isFinite(visData.meta?.minRelated) ? visData.meta.minRelated : 0;
+        const maxRelated = Number.isFinite(visData.meta?.maxRelated) ? visData.meta.maxRelated : minRelated;
+        const normalize = (val, min, max) => {
+            if (!Number.isFinite(val)) return 0;
+            if (!Number.isFinite(min) || !Number.isFinite(max) || min === max) return 0;
+            return (val - min) / (max - min);
+        };
+        visData.nodes.forEach((node) => {
+            const border = 'rgba(255,255,255,0.65)';
+            node.color = {
+                background: '#f8fafc',
+                border,
+                highlight: { background: '#ffffff', border: 'rgba(255,255,255,0.9)' },
+                hover: { background: '#ffffff', border: 'rgba(255,255,255,0.8)' }
+            };
+            if (node.font) {
+                node.font.color = '#e2e8f0';
+            }
+            if (node.labelStyle) {
+                node.labelStyle = {
+                    ...node.labelStyle,
+                    textColor: 'rgb(226, 232, 240)',
+                    backgroundColor: 'rgba(15, 23, 42, 0.92)',
+                    borderColor: 'rgba(255,255,255,0.18)'
+                };
+            }
+        });
+        visData.edges.forEach((edge) => {
+            const related = Number.isFinite(edge.relatedValue) ? edge.relatedValue : 0;
+            const t = normalize(related, minRelated, maxRelated);
+            const alpha = 0.2 + t * 0.7;
+            edge.color = {
+                color: `rgba(255,255,255,${alpha.toFixed(3)})`,
+                highlight: `rgba(255,255,255,${Math.min(1, alpha + 0.1).toFixed(3)})`,
+                hover: `rgba(255,255,255,${Math.min(1, alpha + 0.15).toFixed(3)})`
+            };
+        });
+    }
+
     function buildVisNetworkDataFromWos(raw) {
         const nodes = [];
         const edges = [];
@@ -169,6 +214,7 @@
             }
         }
         const visData = buildVisNetworkDataFromWos(data);
+        applyThemeToVisData(visData, isDarkTheme());
         if (!visData.nodes.length) {
             view.classList.remove('has-network');
             if (options.onInfo) options.onInfo('没有可渲染的节点');
@@ -179,6 +225,7 @@
             nodes: new vis.DataSet(visData.nodes),
             edges: new vis.DataSet(visData.edges)
         };
+        const darkMode = isDarkTheme();
         const visOptions = options.visOptions || {
             layout: { hierarchical: false },
             interaction: { hover: true, dragNodes: true, dragView: true },
@@ -189,16 +236,16 @@
             nodes: {
                 scaling: { enabled: false },
                 color: {
-                    background: '#ffffff',
-                    border: '#111111',
-                    highlight: { background: '#ffffff', border: '#111111' },
-                    hover: { background: '#ffffff', border: '#111111' }
+                    background: darkMode ? '#f8fafc' : '#ffffff',
+                    border: darkMode ? 'rgba(255,255,255,0.7)' : '#111111',
+                    highlight: { background: '#ffffff', border: darkMode ? 'rgba(255,255,255,0.9)' : '#111111' },
+                    hover: { background: '#ffffff', border: darkMode ? 'rgba(255,255,255,0.8)' : '#111111' }
                 },
                 borderWidth: 1.5,
                 borderWidthSelected: 2.5,
                 shadow: {
                     enabled: true,
-                    color: 'rgba(0, 0, 0, 0.18)',
+                    color: darkMode ? 'rgba(0, 0, 0, 0.4)' : 'rgba(0, 0, 0, 0.18)',
                     size: 10,
                     x: 2,
                     y: 3
@@ -208,12 +255,12 @@
                 }
             },
             edges: {
-                color: { color: '#111111', highlight: '#111111', hover: '#111111' },
+                color: { color: darkMode ? '#e2e8f0' : '#111111', highlight: darkMode ? '#f8fafc' : '#111111', hover: darkMode ? '#f1f5f9' : '#111111' },
                 width: 1.4,
                 smooth: { type: 'dynamic', roundness: 0.25 },
                 shadow: {
                     enabled: true,
-                    color: 'rgba(0, 0, 0, 0.2)',
+                    color: darkMode ? 'rgba(0, 0, 0, 0.4)' : 'rgba(0, 0, 0, 0.2)',
                     size: 6,
                     x: 1,
                     y: 2
@@ -468,7 +515,8 @@
                 zoomOutBtn: options.zoomOutBtnId || 'visZoomOutBtn',
                 zoomFitBtn: options.zoomFitBtnId || 'visZoomFitBtn',
                 zoomResetBtn: options.zoomResetBtnId || 'visZoomResetBtn',
-                zoomSlider: options.zoomSliderId || 'visZoomSlider'
+                zoomSlider: options.zoomSliderId || 'visZoomSlider',
+                zoomCollapseBtn: options.zoomCollapseBtnId || 'visZoomCollapseBtn'
             };
             this.visNetwork = null;
             this.visNetworkData = null;
@@ -555,6 +603,8 @@
             const zoomFitBtn = this.getEl(this.ids.zoomFitBtn);
             const zoomResetBtn = this.getEl(this.ids.zoomResetBtn);
             const zoomSlider = this.getEl(this.ids.zoomSlider);
+            const zoomCollapseBtn = this.getEl(this.ids.zoomCollapseBtn);
+            const zoomWrap = document.querySelector('.vis-network-zoom');
 
             if (inputToggleBtn) {
                 inputToggleBtn.addEventListener('click', (e) => {
@@ -709,6 +759,11 @@
                     if (this.visNetwork) {
                         this.visNetwork.moveTo({ scale: this.clampZoom(value) });
                     }
+                });
+            }
+            if (zoomCollapseBtn && zoomWrap) {
+                zoomCollapseBtn.addEventListener('click', () => {
+                    zoomWrap.classList.toggle('is-collapsed');
                 });
             }
             if (labelFieldInput && labelSuggest && !labelFieldInput.dataset.visBound) {
@@ -1019,6 +1074,7 @@
                 return;
             }
             const canvas = this.getEl(this.ids.canvas);
+            const view = this.getEl(this.ids.view);
             if (canvas && !canvas.dataset.visFocusGuard) {
                 canvas.dataset.visFocusGuard = '1';
                 canvas.tabIndex = -1;
@@ -1027,9 +1083,17 @@
                     canvas.blur();
                 });
             }
+            if (view && !view.dataset.visFocusGuard) {
+                view.dataset.visFocusGuard = '1';
+                view.tabIndex = -1;
+                view.addEventListener('focus', (e) => {
+                    e.preventDefault();
+                    view.blur();
+                });
+            }
             const { network, data } = global.WosVisNetwork.renderVisNetworkFromJson(raw, {
                 container: canvas,
-                view: this.getEl(this.ids.view),
+                view: view,
                 network: this.visNetwork,
                 labelToggleButton: this.getEl(this.ids.labelToggleBtn),
                 onError: (msg) => this.notify(msg, 'error'),
@@ -1129,6 +1193,17 @@
             } else {
                 const view = this.getEl(this.ids.view);
                 if (view) view.classList.remove('has-network');
+            }
+        }
+
+        refreshTheme() {
+            if (this.visInputText || this.lastRenderedJson) {
+                this.renderFromJson(this.lastRenderedJson || this.visInputText);
+                return;
+            }
+            const currentData = this.app ? this.app.currentData : null;
+            if (currentData && typeof currentData === 'object') {
+                this.renderFromJson(currentData);
             }
         }
 
@@ -1633,10 +1708,14 @@
             const maxCitation = Number.isFinite(meta.maxCitation) ? meta.maxCitation : minCitation;
             const fade = Math.max(0, Math.min(100, Number(this.labelFade) || 0)) / 100;
             const lightRange = Math.round(60 + fade * 120);
+            const darkMode = isDarkTheme();
             const updates = dataset.get().map((node) => {
                 const citations = Number.isFinite(node.citationsValue) ? node.citationsValue : 0;
                 const t = maxCitation > minCitation ? (citations - minCitation) / (maxCitation - minCitation) : 1;
-                const gray = Math.round(30 + (1 - Math.max(0, Math.min(1, t))) * lightRange);
+                const k = Math.max(0, Math.min(1, t));
+                const gray = darkMode
+                    ? Math.round(210 + (1 - k) * Math.min(50, lightRange * 0.4))
+                    : Math.round(30 + (1 - k) * lightRange);
                 const color = `rgb(${gray}, ${gray}, ${gray})`;
                 return {
                     id: node.id,
@@ -1724,6 +1803,7 @@
             const contrast = Math.max(0, Math.min(100, Number(this.edgeFade) || 0)) / 100;
             const minAlpha = 0.15 + (1 - contrast) * 0.2;
             const maxAlpha = 0.85 - (1 - contrast) * 0.2;
+            const darkMode = isDarkTheme();
             const updates = dataset.get().map((edge) => {
                 const related = Number.isFinite(edge.relatedValue) ? edge.relatedValue : 0;
                 const t = maxRelated > minRelated ? (related - minRelated) / (maxRelated - minRelated) : 0;
@@ -1731,9 +1811,15 @@
                 return {
                     id: edge.id,
                     color: {
-                        color: `rgba(0,0,0,${alpha.toFixed(3)})`,
-                        highlight: `rgba(0,0,0,${Math.min(1, alpha + 0.1).toFixed(3)})`,
-                        hover: `rgba(0,0,0,${Math.min(1, alpha + 0.15).toFixed(3)})`
+                        color: darkMode
+                            ? `rgba(255,255,255,${alpha.toFixed(3)})`
+                            : `rgba(0,0,0,${alpha.toFixed(3)})`,
+                        highlight: darkMode
+                            ? `rgba(255,255,255,${Math.min(1, alpha + 0.1).toFixed(3)})`
+                            : `rgba(0,0,0,${Math.min(1, alpha + 0.1).toFixed(3)})`,
+                        hover: darkMode
+                            ? `rgba(255,255,255,${Math.min(1, alpha + 0.15).toFixed(3)})`
+                            : `rgba(0,0,0,${Math.min(1, alpha + 0.15).toFixed(3)})`
                     }
                 };
             });
@@ -1805,20 +1891,32 @@
             if (!view || !dataset) return;
             const rect = view.getBoundingClientRect();
             const area = Math.max(1, rect.width * rect.height);
-            const count = dataset.length || dataset.get().length || 1;
+            const nodes = dataset.get();
+            const count = nodes.length || 1;
+            const edges = this.visNetwork?.body?.data?.edges?.get()?.length || 0;
             const density = count / area;
+            const avgDegree = count ? (edges * 2) / count : 0;
+            const scale = this.visNetwork ? this.visNetwork.getScale() : 1;
 
             const meta = this.visNetworkData?.meta || {};
             const maxCitation = Number.isFinite(meta.maxCitation) ? meta.maxCitation : 0;
 
-            // Heuristics tuned for clarity on dense vs sparse graphs
-            const sizeMin = density > 0.00006 ? 3 : density > 0.00002 ? 4 : 6;
-            const sizeMax = density > 0.00006 ? 22 : density > 0.00002 ? 36 : 60;
-            const gamma = density > 0.00006 ? 1.6 : density > 0.00002 ? 1.3 : 1.1;
-            const border = density > 0.00006 ? 1.2 : density > 0.00002 ? 1.6 : 2.0;
-            const labelScale = density > 0.00006 ? 0.85 : density > 0.00002 ? 0.95 : 1.05;
-            const fade = density > 0.00006 ? 70 : density > 0.00002 ? 55 : 35;
-            const minCite = maxCitation > 0 ? Math.round(maxCitation * (density > 0.00006 ? 0.35 : density > 0.00002 ? 0.2 : 0.1)) : 0;
+            const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+            const norm = clamp(Math.log10(count + 10) / 3, 0, 1);
+            const dense = clamp(density * 15000, 0, 1);
+            const degree = clamp(avgDegree / 8, 0, 1);
+            const zoom = clamp(scale / 1.2, 0.6, 1.4);
+
+            // Heuristics tuned by size, density, and connectivity
+            const sizeMin = Math.round(clamp(7 - 3.5 * norm - 2.5 * dense, 3, 8));
+            const sizeMax = Math.round(clamp(58 - 18 * norm - 14 * dense - 6 * degree, 18, 64));
+            const gamma = clamp(1.0 + 0.7 * dense + 0.4 * degree, 0.9, 2.0);
+            const border = clamp(1.2 + 0.9 * (1 - dense) + 0.3 * (1 - degree), 1.0, 2.6);
+            const labelScale = clamp(1.1 - 0.25 * dense - 0.2 * degree, 0.75, 1.15) * zoom;
+            const fade = Math.round(clamp(35 + 45 * dense + 15 * degree, 20, 85));
+            const minCite = maxCitation > 0
+                ? Math.round(maxCitation * clamp(0.08 + 0.25 * dense + 0.12 * degree, 0.05, 0.45))
+                : 0;
 
             this.nodeSizeMin = sizeMin;
             this.nodeSizeMax = sizeMax;
@@ -1828,12 +1926,12 @@
             this.labelFade = fade;
             this.labelMinCitations = minCite;
             this.labelWeight = density > 0.00006 ? 500 : density > 0.00002 ? 550 : 600;
-            this.physicsSpringLength = density > 0.00006 ? 80 : density > 0.00002 ? 110 : 150;
-            this.physicsSpringConstant = density > 0.00006 ? 0.08 : density > 0.00002 ? 0.06 : 0.04;
-            this.physicsGravity = density > 0.00006 ? -12000 : density > 0.00002 ? -9000 : -7000;
-            this.edgeFade = density > 0.00006 ? 90 : 100;
-            this.edgeMinWidth = density > 0.00006 ? 0.8 : 1;
-            this.edgeMaxWidth = density > 0.00006 ? 4 : 6;
+            this.physicsSpringLength = Math.round(clamp(160 - 60 * dense - 30 * degree, 70, 180));
+            this.physicsSpringConstant = Number(clamp(0.04 + 0.06 * dense + 0.03 * degree, 0.03, 0.12).toFixed(2));
+            this.physicsGravity = Math.round(clamp(-7000 - 6000 * dense - 2000 * degree, -16000, -5000));
+            this.edgeFade = Math.round(clamp(100 - 20 * dense, 70, 100));
+            this.edgeMinWidth = Number(clamp(1 - 0.25 * dense, 0.6, 1.2).toFixed(2));
+            this.edgeMaxWidth = Number(clamp(6 - 1.8 * dense - 0.8 * degree, 3.5, 7).toFixed(2));
 
             const nodeSizeMinSlider = this.getEl(this.ids.nodeSizeMinSlider);
             const nodeSizeMaxSlider = this.getEl(this.ids.nodeSizeMaxSlider);
