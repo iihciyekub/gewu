@@ -2083,6 +2083,28 @@
             const layer = view ? view.querySelector('.vis-network-label-layer') : null;
             const dataset = this.getNetworkNodesDataSet();
             if (!layer || !dataset) return;
+            if (!layer.dataset.interactionBound) {
+                layer.dataset.interactionBound = '1';
+                layer.addEventListener('click', (e) => {
+                    const label = e.target.closest('.vis-node-label');
+                    if (!label) return;
+                    const nodeId = label.dataset.nodeId;
+                    if (!nodeId) return;
+                    this.focusNode(nodeId);
+                });
+                layer.addEventListener('mouseover', (e) => {
+                    const label = e.target.closest('.vis-node-label');
+                    if (!label || !this.visNetwork) return;
+                    const nodeId = label.dataset.nodeId;
+                    if (!nodeId) return;
+                    this.visNetwork.selectNodes([nodeId]);
+                });
+                layer.addEventListener('mouseout', (e) => {
+                    const label = e.target.closest('.vis-node-label');
+                    if (!label || !this.visNetwork) return;
+                    this.visNetwork.unselectAll();
+                });
+            }
             const labels = Array.from(layer.querySelectorAll('.vis-node-label'));
             labels.forEach((label) => {
                 const nodeId = label.dataset.nodeId;

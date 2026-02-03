@@ -1875,23 +1875,24 @@ class PaperStatsApp {
                 return;
             }
             if (mod) {
-                return;
-            }
-            if (this._cmdShortcutTimestamp && now - this._cmdShortcutTimestamp <= 1500) {
-                const key = e.key.toLowerCase();
-                if (['j', 'm', 'd', 'v', 's', 'o'].includes(key)) {
-                    e.preventDefault();
-                    if (key === 'j') this.switchToView('structured');
-                    if (key === 'm') this.switchToView('markdown');
-                    if (key === 'd') this.switchToView('draft');
-                    if (key === 'v') this.switchToView('vis-network');
-                    if (key === 's') this.switchToView('settings');
-                    if (key === 'o') {
-                        this.switchToView('settings');
-                        this.showProjectDetailsPanel();
+                // allow specific mod shortcuts below (e.g., Cmd/Ctrl + /)
+            } else {
+                if (this._cmdShortcutTimestamp && now - this._cmdShortcutTimestamp <= 1500) {
+                    const key = e.key.toLowerCase();
+                    if (['j', 'm', 'd', 'v', 's', 'o'].includes(key)) {
+                        e.preventDefault();
+                        if (key === 'j') this.switchToView('structured');
+                        if (key === 'm') this.switchToView('markdown');
+                        if (key === 'd') this.switchToView('draft');
+                        if (key === 'v') this.switchToView('vis-network');
+                        if (key === 's') this.switchToView('settings');
+                        if (key === 'o') {
+                            this.switchToView('settings');
+                            this.showProjectDetailsPanel();
+                        }
+                        this._cmdShortcutTimestamp = 0;
+                        return;
                     }
-                    this._cmdShortcutTimestamp = 0;
-                    return;
                 }
             }
 
@@ -1905,8 +1906,20 @@ class PaperStatsApp {
                 this.switchToView('settings');
                 return;
             }
-            if (mod && e.key === '/') {
+            if (mod && (e.code === 'Slash' || e.key === '/' || e.key === '?')) {
+                const target = e.target;
+                const tag = (target && target.tagName) ? target.tagName.toLowerCase() : '';
+                const allowInEditor = target && (target.id === 'markdownTextarea' || target.id === 'jsonEditorTextarea');
+                if ((tag === 'input' || tag === 'textarea' || target?.isContentEditable) && !allowInEditor) {
+                    return;
+                }
                 e.preventDefault();
+                this._cmdShortcutTimestamp = 0;
+                const toggleBtn = document.getElementById('statusToggleSourceBtn');
+                if (toggleBtn) {
+                    toggleBtn.click();
+                    return;
+                }
                 if ((this.currentView || 'structured') === 'settings') {
                     this.switchToView('draft');
                     return;
