@@ -267,8 +267,71 @@ body.theme-dark .settings-panel-header {
     color: var(--vscode-text);
 }
 
+body.theme-dark .auto-save-settings-panel .auto-save-config-content {
+    color: var(--vscode-text);
+}
+
+body.theme-dark .auto-save-settings-panel .auto-save-config-content .auto-save-config-section label {
+    color: var(--vscode-text);
+}
+
+body.theme-dark .auto-save-settings-panel .auto-save-config-content select,
+body.theme-dark .auto-save-settings-panel .auto-save-config-content input[type="number"] {
+    background: #1f1f1f;
+    color: var(--vscode-text);
+    border-color: var(--vscode-border);
+}
+
+body.theme-dark .auto-save-settings-panel .auto-save-config-content select:focus,
+body.theme-dark .auto-save-settings-panel .auto-save-config-content input[type="number"]:focus {
+    border-color: var(--vscode-accent);
+    box-shadow: 0 0 0 2px rgba(14, 99, 156, 0.25);
+}
+
+body.theme-dark .auto-save-settings-panel .auto-save-config-content .help-text {
+    color: #a7a7a7;
+}
+
+body.theme-dark .auto-save-settings-panel .auto-save-config-content .auto-save-mode-options {
+    color: var(--vscode-text);
+}
+
+body.theme-dark .auto-save-settings-panel .auto-save-config-content .auto-save-mode-options dt {
+    color: var(--vscode-text);
+}
+
+body.theme-dark .auto-save-settings-panel .auto-save-config-content .auto-save-mode-options dd {
+    color: #b8b8b8;
+}
+
+body.theme-dark .auto-save-settings-panel .auto-save-config-content .auto-save-config-buttons {
+    border-top-color: var(--vscode-border);
+}
+
+body.theme-dark .auto-save-settings-panel .auto-save-config-content .auto-save-config-buttons button {
+    background: var(--vscode-hover);
+    color: var(--vscode-text);
+    border-color: var(--vscode-border);
+}
+
+body.theme-dark .auto-save-settings-panel .auto-save-config-content .auto-save-config-buttons button:hover {
+    background: var(--vscode-active);
+    border-color: var(--vscode-border);
+}
+
+body.theme-dark .auto-save-settings-panel .auto-save-config-content .auto-save-config-buttons button.primary {
+    background: var(--vscode-accent);
+    color: #fff;
+    border-color: var(--vscode-accent);
+}
+
+body.theme-dark .auto-save-settings-panel .auto-save-config-content .auto-save-config-buttons button.primary:hover {
+    background: var(--vscode-active);
+    border-color: var(--vscode-active);
+}
+
 body.theme-dark .file-filter-history-item {
-    background: #1f2328;
+    background: #1e1e1e;
     border-color: var(--vscode-border);
     color: var(--vscode-text);
 }
@@ -551,7 +614,7 @@ body.theme-dark #shortcutsInfoBody {
 
 body.theme-dark .info-body li {
     border: 1px solid var(--vscode-border);
-    background: linear-gradient(135deg, #22242a, #1e1f24);
+    background: #1e1e1e;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
     color: var(--vscode-text);
 }

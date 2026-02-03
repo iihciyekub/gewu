@@ -65,16 +65,12 @@ class AutoSaveConfigUI {
 
                 <div class="auto-save-mode-options">
                     <dl>
-                        <dt data-mode="off">Disable Auto Save</dt>
                         <dd data-mode="off">Manually save all changes</dd>
 
-                        <dt data-mode="afterDelay">Save After Delay</dt>
                         <dd data-mode="afterDelay">Auto save after a period of inactivity (Recommended)</dd>
 
-                        <dt data-mode="onFocusChange">Save on Focus Change</dt>
                         <dd data-mode="onFocusChange">Auto save when leaving the editor</dd>
 
-                        <dt data-mode="onWindowChange">Save on Window Change</dt>
                         <dd data-mode="onWindowChange">Auto save when switching to other applications</dd>
                     </dl>
                 </div>

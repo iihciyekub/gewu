@@ -52,6 +52,7 @@ class PaperStatsApp {
         this.fileFilterHistory = [];
         this.createGroupVisible = false;
         this.autoSaveConfigVisible = false;
+        this.autoSaveConfigNeedsRender = false;
         this.settingsPanelsStateKey = '';
         this.queryExportVisible = false;
         this.debugEnabled = this.loadDebugEnabled();
@@ -2225,6 +2226,11 @@ class PaperStatsApp {
         document.addEventListener('keydown', (e) => {
             const mod = e.metaKey || e.ctrlKey;
             const key = (e.key || '').toLowerCase();
+            if (mod && e.shiftKey && e.code === 'Space') {
+                e.preventDefault();
+                this.cycleMdChatDockPosition();
+                return;
+            }
             if (mod && e.code === 'Space') {
                 e.preventDefault();
                 const btn = document.getElementById('mdChatToggleBtn');
@@ -2607,7 +2613,7 @@ class PaperStatsApp {
         if (autoSaveSettingsMenuItem) {
             autoSaveSettingsMenuItem.addEventListener('click', (e) => {
                 e.preventDefault();
-                this.toggleAutoSavePanel(); // 切换显示/隐藏
+                this.toggleAutoSavePanel(true);
                 this.toggleSettingsMenu(false);
             });
         }
@@ -9672,8 +9678,8 @@ class PaperStatsApp {
             thirdPartyInfoVisible: !!this.thirdPartyInfoVisible,
             shortcutsVisible: !!this.shortcutsVisible,
             queryExportVisible: !!this.queryExportVisible,
-            apiSettingsVisible: !!this.apiSettingsVisible
-            // autoSaveConfigVisible 不持久化保存，每次加载时默认关闭
+            apiSettingsVisible: !!this.apiSettingsVisible,
+            autoSaveConfigVisible: !!this.autoSaveConfigVisible
         };
         try {
             localStorage.setItem(key, JSON.stringify(payload));
@@ -9691,7 +9697,7 @@ class PaperStatsApp {
         this.shortcutsVisible = !!state.shortcutsVisible;
         this.queryExportVisible = !!state.queryExportVisible;
         this.apiSettingsVisible = !!state.apiSettingsVisible;
-        // autoSaveConfigVisible 不从 state 恢复，始终从构造函数的默认值 false 开始
+        this.autoSaveConfigVisible = !!state.autoSaveConfigVisible;
 
         const fileFilterPanel = document.getElementById('fileFilterSettingsPanel');
         const createGroupPanel = document.getElementById('createGroupSettingsPanel');
@@ -9712,8 +9718,7 @@ class PaperStatsApp {
         if (shortcutsPanel) shortcutsPanel.classList.toggle('is-visible', this.shortcutsVisible);
         if (queryExportPanel) queryExportPanel.classList.toggle('is-visible', this.queryExportVisible);
         if (apiSettingsPanel) apiSettingsPanel.classList.toggle('is-visible', this.apiSettingsVisible);
-        // autoSaveConfigPanel 默认不显示（使用构造函数中的默认值 false）
-        if (autoSaveConfigPanel) autoSaveConfigPanel.classList.remove('is-visible');
+        if (autoSaveConfigPanel) autoSaveConfigPanel.classList.toggle('is-visible', this.autoSaveConfigVisible);
         if (fileFilterBtn) fileFilterBtn.classList.toggle('active', this.fileFilterVisible);
         if (addGroupBtn) addGroupBtn.classList.toggle('active', this.createGroupVisible);
         if (queryExportBtn) queryExportBtn.classList.toggle('active', this.queryExportVisible);
@@ -9749,11 +9754,12 @@ class PaperStatsApp {
         if (this.autoSaveConfigVisible) {
             // 渲染自动保存配置内容
             setTimeout(() => {
-                if (this.autoSaveConfigUI) {
-                    const container = document.getElementById('autoSaveConfigBody');
-                    if (container && container.innerHTML.trim() === '') {
-                        this.autoSaveConfigUI.renderInline(container);
-                    }
+                const container = document.getElementById('autoSaveConfigBody');
+                if (this.autoSaveConfigUI && container) {
+                    this.autoSaveConfigUI.renderInline(container);
+                    this.autoSaveConfigNeedsRender = false;
+                } else if (!this.autoSaveConfigUI) {
+                    this.autoSaveConfigNeedsRender = true;
                 }
             }, 100);
         }
@@ -11050,6 +11056,103 @@ class PaperStatsApp {
                         : idx);
                 });
             });
+        }
+    }
+
+    cycleMdChatDockPosition() {
+        const panel = document.getElementById('mdChatPanel');
+        const editorContainer = document.querySelector('.editor-container');
+        if (!panel || !editorContainer) return;
+        const shell = panel.querySelector('.md-chat-shell');
+        const body = panel.querySelector('.md-chat-body');
+        const top = panel.querySelector('.md-chat-top');
+        const textarea = panel.querySelector('.md-chat-input-text');
+        const dockSideBtn = panel.querySelector('#mdChatDockSideBtn');
+        const minHeight = 140;
+        const dockMinWidth = 220;
+        let dockSide = localStorage.getItem('mdChatDockSide') === 'left' ? 'left' : 'right';
+
+        const updateDockButton = () => {
+            if (!dockSideBtn) return;
+            const icon = dockSideBtn.querySelector('i');
+            if (!icon) return;
+            if (!panel.classList.contains('is-docked')) {
+                icon.className = 'fa-solid fa-arrow-right-from-bracket fa-flip-horizontal';
+                dockSideBtn.title = 'Dock position';
+                return;
+            }
+            icon.className = dockSide === 'left'
+                ? 'fa-solid fa-right-left fa-rotate-180'
+                : 'fa-solid fa-right-left';
+            dockSideBtn.title = dockSide === 'left'
+                ? 'Docked left'
+                : 'Docked right';
+        };
+
+        const setCollapsedState = (collapsed) => {
+            if (!shell || !body || !top) return;
+            shell.classList.toggle('is-collapsed', collapsed);
+            body.style.display = collapsed ? 'none' : '';
+            top.style.display = collapsed ? 'none' : '';
+        };
+
+        const applyDockSide = (side) => {
+            dockSide = side === 'left' ? 'left' : 'right';
+            localStorage.setItem('mdChatDockSide', dockSide);
+            editorContainer.classList.toggle('chat-docked-left', dockSide === 'left' && panel.classList.contains('is-docked'));
+            updateDockButton();
+        };
+
+        const setDockState = (nextState) => {
+            if (nextState === 'bottom') {
+                panel.classList.remove('is-docked');
+                editorContainer.classList.remove('chat-docked');
+                setCollapsedState(false);
+                const container = panel.parentElement;
+                const baseHeight = container ? container.getBoundingClientRect().height : window.innerHeight;
+                const targetHeight = Math.max(minHeight, Math.round(baseHeight * 0.5));
+                panel.style.height = `${targetHeight}px`;
+                if (shell) shell.style.height = '';
+                panel.style.width = '';
+                localStorage.setItem('mdChatDocked', '0');
+                localStorage.setItem('mdChatDockPos', 'bottom');
+                editorContainer.classList.remove('chat-docked-left');
+                updateDockButton();
+                return;
+            }
+            panel.classList.add('is-docked');
+            editorContainer.classList.add('chat-docked');
+            applyDockSide(nextState);
+            setCollapsedState(false);
+            panel.dataset.prevHeight = String(Math.round(panel.getBoundingClientRect().height));
+            panel.style.height = '100%';
+            if (shell) shell.style.height = '100%';
+            const width = Number(localStorage.getItem('mdChatDockWidth'));
+            if (Number.isFinite(width) && width > dockMinWidth) {
+                panel.style.width = `${width}px`;
+            }
+            localStorage.setItem('mdChatDocked', '1');
+            localStorage.setItem('mdChatDockPos', nextState);
+            updateDockButton();
+        };
+
+        const currentState = panel.classList.contains('is-docked')
+            ? (dockSide === 'left' ? 'left' : 'right')
+            : 'bottom';
+        const nextState = currentState === 'bottom'
+            ? 'left'
+            : currentState === 'left'
+                ? 'right'
+                : 'bottom';
+
+        if (panel.classList.contains('is-hidden')) {
+            panel.classList.remove('is-hidden');
+            localStorage.setItem('mdChatHidden', '0');
+        }
+
+        setDockState(nextState);
+        if (textarea) {
+            setTimeout(() => textarea.focus(), 0);
         }
     }
 
@@ -18651,12 +18754,13 @@ document.addEventListener('DOMContentLoaded', () => {
             console.log('[AutoSave] ✅ 已初始化 | 模式:', app.autoSaveManager.config.mode);
 
             // 如果之前自动保存面板是打开的，重新渲染内容
-            if (app.autoSaveConfigVisible) {
+            if (app.autoSaveConfigVisible || app.autoSaveConfigNeedsRender) {
                 setTimeout(() => {
                     const container = document.getElementById('autoSaveConfigBody');
                     const panel = document.getElementById('autoSaveConfigPanel');
                     if (container && panel && panel.classList.contains('is-visible')) {
                         app.autoSaveConfigUI.renderInline(container);
+                        app.autoSaveConfigNeedsRender = false;
                         console.log('[AutoSave] 🔄 恢复面板状态并渲染内容');
                     }
                 }, 150);
