@@ -110,10 +110,7 @@ class PaperStatsApp {
         this.rawJsonParseTimer = null;
         this.currentLoadToken = 0;
         this._eventListenersBound = false;
-        this.visInputText = '';
-        this.visNetwork = null;
-        this.visNetworkData = null;
-        this.visNetworkSavedKey = 'vis-network-saved';
+        this.visManager = null;
         this.sectionExpandedStateByProject = this.loadSectionExpandedState();
         this.lastSelectedFileByProject = this.loadLastSelectedFileByProject();
         this.uiPreferences = {};
@@ -1627,6 +1624,7 @@ class PaperStatsApp {
         }
 
         this.setupEventListeners();
+        this.initVisManager();
         this.bindApiSettingsInputs();
         this.updateJsonMenuState();
         this.updateAutoLoadMenuState();
@@ -2609,69 +2607,6 @@ class PaperStatsApp {
                 e.preventDefault();
                 importWosInput.click();
                 this.toggleImportMenu(false);
-            });
-        }
-        const visInputToggleBtn = document.getElementById('visInputToggleBtn');
-        const visInputCloseBtn = document.getElementById('visInputCloseBtn');
-        const visInputCancelBtn = document.getElementById('visInputCancelBtn');
-        const visInputApplyBtn = document.getElementById('visInputApplyBtn');
-        const visInputAppendBtn = document.getElementById('visInputAppendBtn');
-        const visImportJsonBtn = document.getElementById('visImportJsonBtn');
-        if (visInputToggleBtn) {
-            visInputToggleBtn.addEventListener('click', (e) => {
-                e.preventDefault();
-                this.toggleVisInputDrawer(true);
-            });
-        }
-        if (visInputCloseBtn) {
-            visInputCloseBtn.addEventListener('click', (e) => {
-                e.preventDefault();
-                this.toggleVisInputDrawer(false);
-            });
-        }
-        if (visInputCancelBtn) {
-            visInputCancelBtn.addEventListener('click', (e) => {
-                e.preventDefault();
-                this.toggleVisInputDrawer(false);
-            });
-        }
-        if (visInputApplyBtn) {
-            visInputApplyBtn.addEventListener('click', (e) => {
-                e.preventDefault();
-                this.applyVisInput();
-            });
-        }
-        if (visInputAppendBtn) {
-            visInputAppendBtn.addEventListener('click', (e) => {
-                e.preventDefault();
-                this.appendVisInput();
-            });
-        }
-        if (visImportJsonBtn && importJsonFileInput) {
-            visImportJsonBtn.addEventListener('click', (e) => {
-                e.preventDefault();
-                importJsonFileInput.click();
-            });
-        }
-        const visSaveNetworkBtn = document.getElementById('visSaveNetworkBtn');
-        const visRestoreNetworkBtn = document.getElementById('visRestoreNetworkBtn');
-        const visDeleteNetworkBtn = document.getElementById('visDeleteNetworkBtn');
-        if (visSaveNetworkBtn) {
-            visSaveNetworkBtn.addEventListener('click', (e) => {
-                e.preventDefault();
-                this.saveVisNetworkJson();
-            });
-        }
-        if (visRestoreNetworkBtn) {
-            visRestoreNetworkBtn.addEventListener('click', (e) => {
-                e.preventDefault();
-                this.restoreVisNetworkJson();
-            });
-        }
-        if (visDeleteNetworkBtn) {
-            visDeleteNetworkBtn.addEventListener('click', (e) => {
-                e.preventDefault();
-                this.deleteVisNetworkJson();
             });
         }
         if (apiSettingsMenuItem) {
@@ -9432,244 +9367,13 @@ class PaperStatsApp {
         menu.classList.toggle('visible', next);
     }
 
-    renderVisNetworkFromJson(raw) {
-        if (!window.WosVisNetwork) {
-            this.showNotification('WOS Vis 模块未加载', 'error');
+    initVisManager() {
+        if (!window.WosVisManager) {
+            console.warn('WosVisManager not loaded.');
             return;
         }
-        const { network, data } = window.WosVisNetwork.renderVisNetworkFromJson(raw, {
-            container: document.getElementById('visNetworkCanvas'),
-            view: document.getElementById('visNetworkView'),
-            network: this.visNetwork,
-            labelToggleButton: document.getElementById('visToggleLabelsBtn'),
-            onError: (msg) => this.showNotification(msg, 'error'),
-            onInfo: (msg) => this.showNotification(msg, 'info')
-        });
-        if (network) this.visNetwork = network;
-        if (data) this.visNetworkData = data;
-    }
-
-    renderVisNetworkFromCurrentData() {
-        if (this.currentData && typeof this.currentData === 'object') {
-            const hasWos = Object.values(this.currentData).some((item) => Array.isArray(item?.page_wosids));
-            if (hasWos) {
-                this.renderVisNetworkFromJson(this.currentData);
-                return;
-            }
-        }
-        if (this.visInputText) {
-            this.renderVisNetworkFromJson(this.visInputText);
-        } else {
-            const view = document.getElementById('visNetworkView');
-            if (view) view.classList.remove('has-network');
-        }
-    }
-
-    async loadVisNetworkSavedList() {
-        if (!this.projectStorage) return [];
-        try {
-            const data = await this.projectStorage.load(this.visNetworkSavedKey);
-            if (Array.isArray(data)) return data;
-            if (data && Array.isArray(data.items)) return data.items;
-            return [];
-        } catch (_e) {
-            return [];
-        }
-    }
-
-    async persistVisNetworkSavedList(list) {
-        if (!this.projectStorage) return;
-        try {
-            await this.projectStorage.save(this.visNetworkSavedKey, list);
-        } catch (_e) { }
-    }
-
-    renderVisNetworkSavedSelect(list) {
-        const select = document.getElementById('visSavedSelect');
-        if (!select) return;
-        select.innerHTML = '';
-        if (!list.length) {
-            const opt = document.createElement('option');
-            opt.value = '';
-            opt.textContent = 'No saved items';
-            select.appendChild(opt);
-            select.disabled = true;
-            return;
-        }
-        select.disabled = false;
-        list.forEach((item, idx) => {
-            const opt = document.createElement('option');
-            opt.value = String(idx);
-            opt.textContent = item?.name || `记录 ${idx + 1}`;
-            select.appendChild(opt);
-        });
-    }
-
-    async saveVisNetworkJson() {
-        let payload = this.visInputText;
-        if (!payload && this.currentData && typeof this.currentData === 'object') {
-            try {
-                payload = JSON.stringify(this.currentData, null, 2);
-            } catch (_e) { }
-        }
-        if (!payload) {
-            this.showNotification('没有可保存的 JSON 内容', 'info');
-            return;
-        }
-        let parsed = null;
-        try {
-            parsed = typeof payload === 'string' ? JSON.parse(payload) : payload;
-        } catch (err) {
-            this.showNotification(`JSON 解析失败: ${err.message}`, 'error');
-            return;
-        }
-        const name = prompt('Save name', `network-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, '')}`);
-        if (!name) return;
-        const list = await this.loadVisNetworkSavedList();
-        list.unshift({
-            name,
-            createdAt: Date.now(),
-            json: JSON.stringify(parsed)
-        });
-        const trimmed = list.slice(0, 50);
-        await this.persistVisNetworkSavedList(trimmed);
-        this.renderVisNetworkSavedSelect(trimmed);
-        this.showNotification('Network JSON saved', 'success');
-    }
-
-    async restoreVisNetworkJson() {
-        const list = await this.loadVisNetworkSavedList();
-        if (!list.length) {
-            this.showNotification('No saved items', 'info');
-            return;
-        }
-        const select = document.getElementById('visSavedSelect');
-        const idx = select ? Number.parseInt(select.value, 10) : 0;
-        const item = list[idx] || list[0];
-        if (!item || !item.json) {
-            this.showNotification('Invalid selection', 'error');
-            return;
-        }
-        this.visInputText = item.json;
-        const textarea = document.getElementById('visInputTextarea');
-        if (textarea) textarea.value = item.json;
-        this.renderVisNetworkFromJson(item.json);
-        this.showNotification('Network JSON restored', 'success');
-    }
-
-    async deleteVisNetworkJson() {
-        const list = await this.loadVisNetworkSavedList();
-        if (!list.length) {
-            this.showNotification('No saved items', 'info');
-            return;
-        }
-        const select = document.getElementById('visSavedSelect');
-        const idx = select ? Number.parseInt(select.value, 10) : 0;
-        const item = list[idx] || list[0];
-        if (!item) {
-            this.showNotification('Invalid selection', 'error');
-            return;
-        }
-        const ok = confirm(`Delete: ${item.name || 'Untitled'}?`);
-        if (!ok) return;
-        list.splice(idx, 1);
-        await this.persistVisNetworkSavedList(list);
-        this.renderVisNetworkSavedSelect(list);
-        this.showNotification('Deleted', 'success');
-    }
-
-    mergeWosJson(base, incoming) {
-        if (!incoming || typeof incoming !== 'object') return base || {};
-        if (!base || typeof base !== 'object') return incoming;
-        const result = { ...base };
-        Object.entries(incoming).forEach(([rootId, payload]) => {
-            if (!rootId) return;
-            const existing = result[rootId];
-            if (!existing || typeof existing !== 'object') {
-                result[rootId] = payload;
-                return;
-            }
-            const merged = { ...existing, ...payload };
-            const baseList = Array.isArray(existing.page_wosids) ? existing.page_wosids : [];
-            const addList = Array.isArray(payload.page_wosids) ? payload.page_wosids : [];
-            const byId = new Map();
-            baseList.forEach((item) => {
-                const id = item?.wosid;
-                if (id) byId.set(id, item);
-            });
-            addList.forEach((item) => {
-                const id = item?.wosid;
-                if (id) byId.set(id, item);
-            });
-            merged.page_wosids = Array.from(byId.values());
-            result[rootId] = merged;
-        });
-        return result;
-    }
-
-    appendVisInput() {
-        const textarea = document.getElementById('visInputTextarea');
-        if (!textarea) return;
-        let incoming = null;
-        try {
-            incoming = JSON.parse(textarea.value || '');
-        } catch (err) {
-            this.showNotification(`JSON 解析失败: ${err.message}`, 'error');
-            return;
-        }
-        let base = null;
-        if (this.visInputText) {
-            try {
-                base = JSON.parse(this.visInputText);
-            } catch (_e) {
-                base = null;
-            }
-        } else if (this.currentData && typeof this.currentData === 'object') {
-            base = this.currentData;
-        }
-        const merged = this.mergeWosJson(base || {}, incoming);
-        this.visInputText = JSON.stringify(merged, null, 2);
-        textarea.value = this.visInputText;
-        this.renderVisNetworkFromJson(this.visInputText);
-        this.showNotification('Merged and rendered', 'success');
-    }
-
-    toggleVisInputDrawer(forceOpen) {
-        const drawer = document.getElementById('visInputDrawer');
-        if (!drawer) return;
-        const next = typeof forceOpen === 'boolean' ? forceOpen : !drawer.classList.contains('is-open');
-        if (!next) {
-            const active = document.activeElement;
-            if (active && drawer.contains(active)) {
-                active.blur();
-            }
-        }
-        drawer.classList.toggle('is-open', next);
-        drawer.setAttribute('aria-hidden', next ? 'false' : 'true');
-        drawer.toggleAttribute('inert', !next);
-        if (next) {
-            const textarea = document.getElementById('visInputTextarea');
-            if (textarea) {
-                if (this.visInputText && !textarea.value) {
-                    textarea.value = this.visInputText;
-                }
-                textarea.focus();
-                textarea.setSelectionRange(textarea.value.length, textarea.value.length);
-            }
-            this.loadVisNetworkSavedList().then((list) => {
-                this.renderVisNetworkSavedSelect(list);
-            });
-        }
-    }
-
-    applyVisInput() {
-        const textarea = document.getElementById('visInputTextarea');
-        if (!textarea) return;
-        this.visInputText = textarea.value || '';
-        this.showNotification('Rendered', 'success');
-        if (this.visInputText) {
-            this.renderVisNetworkFromJson(this.visInputText);
-        }
+        this.visManager = new window.WosVisManager({ app: this });
+        this.visManager.bind();
     }
 
     constrainDropdownMenu(menuEl, dropdownEl) {
@@ -15351,7 +15055,9 @@ class PaperStatsApp {
                 flat.classList.add('active');
             } else if (view === 'vis-network' && visNetwork) {
                 visNetwork.classList.add('active');
-                this.renderVisNetworkFromCurrentData();
+                if (this.visManager) {
+                    this.visManager.renderFromCurrentData();
+                }
             } else if (view === 'settings' && settings) {
                 settings.classList.add('active');
             }

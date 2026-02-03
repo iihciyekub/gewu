@@ -287,9 +287,370 @@
         });
     }
 
+    class WosVisManager {
+        constructor(options = {}) {
+            this.app = options.app || null;
+            this.ids = {
+                view: options.viewId || 'visNetworkView',
+                canvas: options.canvasId || 'visNetworkCanvas',
+                inputDrawer: options.inputDrawerId || 'visInputDrawer',
+                inputTextarea: options.inputTextareaId || 'visInputTextarea',
+                inputToggleBtn: options.inputToggleBtnId || 'visInputToggleBtn',
+                inputCloseBtn: options.inputCloseBtnId || 'visInputCloseBtn',
+                inputCancelBtn: options.inputCancelBtnId || 'visInputCancelBtn',
+                inputApplyBtn: options.inputApplyBtnId || 'visInputApplyBtn',
+                inputAppendBtn: options.inputAppendBtnId || 'visInputAppendBtn',
+                saveBtn: options.saveBtnId || 'visSaveNetworkBtn',
+                restoreBtn: options.restoreBtnId || 'visRestoreNetworkBtn',
+                deleteBtn: options.deleteBtnId || 'visDeleteNetworkBtn',
+                savedSelect: options.savedSelectId || 'visSavedSelect',
+                labelToggleBtn: options.labelToggleBtnId || 'visToggleLabelsBtn',
+                importBtn: options.importBtnId || 'visImportJsonBtn',
+                importJsonFileInput: options.importJsonFileInputId || 'importJsonFileInput'
+            };
+            this.visNetwork = null;
+            this.visNetworkData = null;
+            this.visInputText = '';
+            this.lastRenderedJson = '';
+            this.visNetworkSavedKey = options.visNetworkSavedKey || 'vis-network-saved';
+        }
+
+        bind() {
+            const inputToggleBtn = this.getEl(this.ids.inputToggleBtn);
+            const inputCloseBtn = this.getEl(this.ids.inputCloseBtn);
+            const inputCancelBtn = this.getEl(this.ids.inputCancelBtn);
+            const inputApplyBtn = this.getEl(this.ids.inputApplyBtn);
+            const inputAppendBtn = this.getEl(this.ids.inputAppendBtn);
+            const saveBtn = this.getEl(this.ids.saveBtn);
+            const restoreBtn = this.getEl(this.ids.restoreBtn);
+            const deleteBtn = this.getEl(this.ids.deleteBtn);
+            const importBtn = this.getEl(this.ids.importBtn);
+            const importInput = this.getEl(this.ids.importJsonFileInput);
+
+            if (inputToggleBtn) {
+                inputToggleBtn.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    this.toggleInputDrawer(true);
+                });
+            }
+            if (inputCloseBtn) {
+                inputCloseBtn.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    this.toggleInputDrawer(false);
+                });
+            }
+            if (inputCancelBtn) {
+                inputCancelBtn.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    this.toggleInputDrawer(false);
+                });
+            }
+            if (inputApplyBtn) {
+                inputApplyBtn.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    this.applyInput();
+                });
+            }
+            if (inputAppendBtn) {
+                inputAppendBtn.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    this.appendInput();
+                });
+            }
+            if (saveBtn) {
+                saveBtn.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    this.saveNetworkJson();
+                });
+            }
+            if (restoreBtn) {
+                restoreBtn.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    this.restoreNetworkJson();
+                });
+            }
+            if (deleteBtn) {
+                deleteBtn.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    this.deleteNetworkJson();
+                });
+            }
+            if (importBtn && importInput) {
+                importBtn.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    importInput.click();
+                });
+            }
+        }
+
+        getEl(id) {
+            return id ? document.getElementById(id) : null;
+        }
+
+        notify(message, type = 'info') {
+            if (this.app && typeof this.app.showNotification === 'function') {
+                this.app.showNotification(message, type);
+                return;
+            }
+            console[type === 'error' ? 'error' : 'log'](message);
+        }
+
+        renderFromJson(raw) {
+            if (!global.WosVisNetwork) {
+                this.notify('WOS Vis 模块未加载', 'error');
+                return;
+            }
+            const { network, data } = global.WosVisNetwork.renderVisNetworkFromJson(raw, {
+                container: this.getEl(this.ids.canvas),
+                view: this.getEl(this.ids.view),
+                network: this.visNetwork,
+                labelToggleButton: this.getEl(this.ids.labelToggleBtn),
+                onError: (msg) => this.notify(msg, 'error'),
+                onInfo: (msg) => this.notify(msg, 'info')
+            });
+            if (network) this.visNetwork = network;
+            if (data) this.visNetworkData = data;
+            this.lastRenderedJson = typeof raw === 'string' ? raw : JSON.stringify(raw, null, 2);
+        }
+
+        renderFromCurrentData() {
+            const currentData = this.app ? this.app.currentData : null;
+            if (currentData && typeof currentData === 'object') {
+                const hasWos = Object.values(currentData).some((item) => Array.isArray(item?.page_wosids));
+                if (hasWos) {
+                    this.renderFromJson(currentData);
+                    return;
+                }
+            }
+            if (this.visInputText) {
+                this.renderFromJson(this.visInputText);
+            } else {
+                const view = this.getEl(this.ids.view);
+                if (view) view.classList.remove('has-network');
+            }
+        }
+
+        toggleInputDrawer(forceOpen) {
+            const drawer = this.getEl(this.ids.inputDrawer);
+            if (!drawer) return;
+            const next = typeof forceOpen === 'boolean' ? forceOpen : !drawer.classList.contains('is-open');
+            if (!next) {
+                const active = document.activeElement;
+                if (active && drawer.contains(active)) {
+                    active.blur();
+                }
+            }
+            drawer.classList.toggle('is-open', next);
+            drawer.setAttribute('aria-hidden', next ? 'false' : 'true');
+            drawer.toggleAttribute('inert', !next);
+            if (next) {
+                const textarea = this.getEl(this.ids.inputTextarea);
+                if (textarea) {
+                    if (this.visInputText && !textarea.value) {
+                        textarea.value = this.visInputText;
+                    }
+                    textarea.focus();
+                    textarea.setSelectionRange(textarea.value.length, textarea.value.length);
+                }
+                this.loadSavedList().then((list) => {
+                    this.renderSavedSelect(list);
+                });
+            }
+        }
+
+        applyInput() {
+            const textarea = this.getEl(this.ids.inputTextarea);
+            if (!textarea) return;
+            this.visInputText = textarea.value || '';
+            this.notify('Rendered', 'success');
+            if (this.visInputText) {
+                this.renderFromJson(this.visInputText);
+            }
+        }
+
+        appendInput() {
+            const textarea = this.getEl(this.ids.inputTextarea);
+            if (!textarea) return;
+            let incoming = null;
+            try {
+                incoming = JSON.parse(textarea.value || '');
+            } catch (err) {
+                this.notify(`JSON 解析失败: ${err.message}`, 'error');
+                return;
+            }
+            let base = null;
+            if (this.visInputText) {
+                try {
+                    base = JSON.parse(this.visInputText);
+                } catch (_e) {
+                    base = null;
+                }
+            } else if (this.lastRenderedJson) {
+                try {
+                    base = JSON.parse(this.lastRenderedJson);
+                } catch (_e) {
+                    base = null;
+                }
+            } else if (this.app && this.app.currentData && typeof this.app.currentData === 'object') {
+                base = this.app.currentData;
+            }
+            const merged = this.mergeWosJson(base || {}, incoming);
+            this.visInputText = JSON.stringify(merged, null, 2);
+            textarea.value = this.visInputText;
+            this.renderFromJson(this.visInputText);
+            this.notify('Merged and rendered', 'success');
+        }
+
+        mergeWosJson(base, incoming) {
+            if (!incoming || typeof incoming !== 'object') return base || {};
+            if (!base || typeof base !== 'object') return incoming;
+            const result = { ...base };
+            Object.entries(incoming).forEach(([rootId, payload]) => {
+                if (!rootId) return;
+                const existing = result[rootId];
+                if (!existing || typeof existing !== 'object') {
+                    result[rootId] = payload;
+                    return;
+                }
+                const merged = { ...existing, ...payload };
+                const baseList = Array.isArray(existing.page_wosids) ? existing.page_wosids : [];
+                const addList = Array.isArray(payload.page_wosids) ? payload.page_wosids : [];
+                const byId = new Map();
+                baseList.forEach((item) => {
+                    const id = item?.wosid;
+                    if (id) byId.set(id, item);
+                });
+                addList.forEach((item) => {
+                    const id = item?.wosid;
+                    if (id) byId.set(id, item);
+                });
+                merged.page_wosids = Array.from(byId.values());
+                result[rootId] = merged;
+            });
+            return result;
+        }
+
+        async loadSavedList() {
+            const storage = this.app && this.app.projectStorage;
+            if (!storage) return [];
+            try {
+                const data = await storage.load(this.visNetworkSavedKey);
+                if (Array.isArray(data)) return data;
+                if (data && Array.isArray(data.items)) return data.items;
+                return [];
+            } catch (_e) {
+                return [];
+            }
+        }
+
+        async persistSavedList(list) {
+            const storage = this.app && this.app.projectStorage;
+            if (!storage) return;
+            try {
+                await storage.save(this.visNetworkSavedKey, list);
+            } catch (_e) { }
+        }
+
+        renderSavedSelect(list) {
+            const select = this.getEl(this.ids.savedSelect);
+            if (!select) return;
+            select.innerHTML = '';
+            if (!list.length) {
+                const opt = document.createElement('option');
+                opt.value = '';
+                opt.textContent = 'No saved items';
+                select.appendChild(opt);
+                select.disabled = true;
+                return;
+            }
+            select.disabled = false;
+            list.forEach((item, idx) => {
+                const opt = document.createElement('option');
+                opt.value = String(idx);
+                opt.textContent = item?.name || `Record ${idx + 1}`;
+                select.appendChild(opt);
+            });
+        }
+
+        async saveNetworkJson() {
+            let payload = this.lastRenderedJson || this.visInputText;
+            if (!payload && this.app && this.app.currentData && typeof this.app.currentData === 'object') {
+                try {
+                    payload = JSON.stringify(this.app.currentData, null, 2);
+                } catch (_e) { }
+            }
+            if (!payload) {
+                this.notify('No JSON to save', 'info');
+                return;
+            }
+            let parsed = null;
+            try {
+                parsed = typeof payload === 'string' ? JSON.parse(payload) : payload;
+            } catch (err) {
+                this.notify(`JSON 解析失败: ${err.message}`, 'error');
+                return;
+            }
+            const name = prompt('Save name', `network-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, '')}`);
+            if (!name) return;
+            const list = await this.loadSavedList();
+            list.unshift({
+                name,
+                createdAt: Date.now(),
+                json: JSON.stringify(parsed)
+            });
+            const trimmed = list.slice(0, 50);
+            await this.persistSavedList(trimmed);
+            this.renderSavedSelect(trimmed);
+            this.notify('Network JSON saved', 'success');
+        }
+
+        async restoreNetworkJson() {
+            const list = await this.loadSavedList();
+            if (!list.length) {
+                this.notify('No saved items', 'info');
+                return;
+            }
+            const select = this.getEl(this.ids.savedSelect);
+            const idx = select ? Number.parseInt(select.value, 10) : 0;
+            const item = list[idx] || list[0];
+            if (!item || !item.json) {
+                this.notify('Invalid selection', 'error');
+                return;
+            }
+            this.visInputText = item.json;
+            this.lastRenderedJson = item.json;
+            const textarea = this.getEl(this.ids.inputTextarea);
+            if (textarea) textarea.value = item.json;
+            this.renderFromJson(item.json);
+            this.notify('Network JSON restored', 'success');
+        }
+
+        async deleteNetworkJson() {
+            const list = await this.loadSavedList();
+            if (!list.length) {
+                this.notify('No saved items', 'info');
+                return;
+            }
+            const select = this.getEl(this.ids.savedSelect);
+            const idx = select ? Number.parseInt(select.value, 10) : 0;
+            const item = list[idx] || list[0];
+            if (!item) {
+                this.notify('Invalid selection', 'error');
+                return;
+            }
+            const ok = confirm(`Delete: ${item.name || 'Untitled'}?`);
+            if (!ok) return;
+            list.splice(idx, 1);
+            await this.persistSavedList(list);
+            this.renderSavedSelect(list);
+            this.notify('Deleted', 'success');
+        }
+    }
+
     global.WosVisNetwork = {
         buildVisNetworkDataFromWos,
         renderVisNetworkFromJson,
         debugNodeSize
     };
+    global.WosVisManager = WosVisManager;
 })(window);
