@@ -20,7 +20,8 @@ class ProjectStorageManager {
             'prompt-config': 'prompt-config.json',
             'ui-preferences': 'ui-preferences.json',
             'file-filter-history': 'file-filter-history.json',
-            'md-chat-fields': 'md-chat-fields.json'
+            'md-chat-fields': 'md-chat-fields.json',
+            'vis-network-saved': 'vis-network-saved.json'
         };
     }
     

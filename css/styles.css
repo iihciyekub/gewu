@@ -2145,6 +2145,56 @@ body.theme-vscode .nested-index-cell {
     overflow: hidden;
 }
 
+.vis-network-canvas {
+    flex: 1 1 auto;
+    min-height: 0;
+}
+
+.vis-network-view .empty-state {
+    position: absolute;
+    inset: 0;
+    z-index: 2;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    pointer-events: none;
+    background: transparent;
+}
+
+.vis-network-label-layer {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    z-index: 2;
+}
+
+.vis-node-label {
+    position: absolute;
+    transform: translate(-50%, 0);
+    padding: 2px 6px;
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.9);
+    border: 1px solid #111;
+    font-size: 11px;
+    color: #111;
+    white-space: nowrap;
+    opacity: 1;
+    transition: opacity 120ms ease;
+}
+
+.vis-node-label.is-hover {
+    opacity: 0;
+}
+
+.vis-node-label.is-hover.is-visible {
+    opacity: 1;
+}
+
+.vis-network-view.has-network .empty-state {
+    display: none;
+}
+
 .vis-network-toolbar {
     position: absolute;
     right: 16px;
@@ -2189,6 +2239,38 @@ body.theme-vscode .nested-index-cell {
     flex: 1 1 auto;
     min-height: 0;
     display: flex;
+}
+
+
+.vis-input-restore {
+    padding: 10px 14px;
+    border-top: 1px solid #e5e7eb;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.vis-input-restore label {
+    font-size: 11px;
+    color: #374151;
+}
+
+.vis-input-restore-row {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+
+.vis-input-restore-row select {
+    flex: 1;
+    padding: 6px 8px;
+    font-size: 12px;
+    border: 1px solid #d7dce3;
+    border-radius: 8px;
+}
+
+.vis-input-restore-row .btn {
+    white-space: nowrap;
 }
 
 #visInputTextarea {
