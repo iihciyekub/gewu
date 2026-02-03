@@ -30,7 +30,7 @@
             if (!rootId) return;
             const rootCitations = payload && payload.citations_count != null ? parseNumber(payload.citations_count) : 0;
             addNode(rootId, rootId, {
-                shape: 'circle',
+                shape: 'dot',
                 size: 16,
                 font: { size: 14, color: '#111', align: 'bottom', vadjust: 12 },
                 citationsValue: rootCitations
@@ -48,7 +48,7 @@
                 const citationsValue = parseNumber(citations);
                 addNode(childId, label, {
                     title,
-                    shape: 'circle',
+                    shape: 'dot',
                     size: 12,
                     font: { size: 11, color: '#111', align: 'bottom', vadjust: 12 },
                     citationsValue
@@ -61,19 +61,34 @@
                 });
             });
         });
-        const minSize = 1;
-        const maxSize = 80;
+        const minSize = 6;
+        const maxSize = 60;
+        let minCitation = Infinity;
+        let maxCitation = -Infinity;
+        let minNodeSize = Infinity;
+        let maxNodeSize = -Infinity;
         nodes.forEach((node) => {
             const citations = Number.isFinite(node.citationsValue) ? node.citationsValue : 0;
-            const size = Math.min(maxSize, minSize + citations * 0.8);
+            minCitation = Math.min(minCitation, citations);
+            maxCitation = Math.max(maxCitation, citations);
+            const rawSize = citations > 0 ? citations : minSize;
+            const size = Math.min(maxSize, minSize + Math.sqrt(rawSize));
             node.size = size;
+            minNodeSize = Math.min(minNodeSize, size);
+            maxNodeSize = Math.max(maxNodeSize, size);
         });
         edges.forEach((edge) => {
             const base = 1;
             const width = Math.min(8, base + (edge.relatedValue || 0) * 0.08);
             edge.width = Number.isFinite(width) ? width : base;
         });
-        return { nodes, edges };
+        const meta = {
+            minCitation: Number.isFinite(minCitation) ? minCitation : 0,
+            maxCitation: Number.isFinite(maxCitation) ? maxCitation : 0,
+            minNodeSize: Number.isFinite(minNodeSize) ? minNodeSize : minSize,
+            maxNodeSize: Number.isFinite(maxNodeSize) ? maxNodeSize : minSize
+        };
+        return { nodes, edges, meta };
     }
 
     function renderVisNetworkFromJson(raw, options = {}) {
@@ -112,6 +127,7 @@
                 stabilization: { iterations: 200 }
             },
             nodes: {
+                scaling: { enabled: false },
                 color: {
                     background: '#ffffff',
                     border: '#111111',
@@ -136,12 +152,23 @@
         if (options.labelToggleButton) {
             bindLabelToggleButton(network, dataset, visData, options.labelToggleButton, view);
         }
+        if (options.onDebug && visData.meta) {
+            options.onDebug(visData.meta);
+        }
         return { network, data: visData };
     }
 
     function debugNodeSize(raw, nodeId) {
         if (!nodeId) return null;
-        const visData = buildVisNetworkDataFromWos(raw);
+        let data = raw;
+        if (typeof raw === 'string') {
+            try {
+                data = JSON.parse(raw);
+            } catch (_e) {
+                return null;
+            }
+        }
+        const visData = buildVisNetworkDataFromWos(data);
         const node = visData.nodes.find((n) => n.id === nodeId);
         if (!node) return null;
         return {
@@ -149,6 +176,19 @@
             citationsValue: node.citationsValue || 0,
             size: node.size
         };
+    }
+
+    function getSizeStats(raw) {
+        let data = raw;
+        if (typeof raw === 'string') {
+            try {
+                data = JSON.parse(raw);
+            } catch (_e) {
+                return null;
+            }
+        }
+        const visData = buildVisNetworkDataFromWos(data);
+        return visData.meta || null;
     }
 
     function setupHoverLabels(network, dataset, visData, options, view) {
@@ -296,7 +336,6 @@
                 inputDrawer: options.inputDrawerId || 'visInputDrawer',
                 inputTextarea: options.inputTextareaId || 'visInputTextarea',
                 inputToggleBtn: options.inputToggleBtnId || 'visInputToggleBtn',
-                inputCloseBtn: options.inputCloseBtnId || 'visInputCloseBtn',
                 inputCancelBtn: options.inputCancelBtnId || 'visInputCancelBtn',
                 inputApplyBtn: options.inputApplyBtnId || 'visInputApplyBtn',
                 inputAppendBtn: options.inputAppendBtnId || 'visInputAppendBtn',
@@ -317,7 +356,6 @@
 
         bind() {
             const inputToggleBtn = this.getEl(this.ids.inputToggleBtn);
-            const inputCloseBtn = this.getEl(this.ids.inputCloseBtn);
             const inputCancelBtn = this.getEl(this.ids.inputCancelBtn);
             const inputApplyBtn = this.getEl(this.ids.inputApplyBtn);
             const inputAppendBtn = this.getEl(this.ids.inputAppendBtn);
@@ -331,12 +369,6 @@
                 inputToggleBtn.addEventListener('click', (e) => {
                     e.preventDefault();
                     this.toggleInputDrawer(true);
-                });
-            }
-            if (inputCloseBtn) {
-                inputCloseBtn.addEventListener('click', (e) => {
-                    e.preventDefault();
-                    this.toggleInputDrawer(false);
                 });
             }
             if (inputCancelBtn) {
@@ -406,7 +438,10 @@
                 network: this.visNetwork,
                 labelToggleButton: this.getEl(this.ids.labelToggleBtn),
                 onError: (msg) => this.notify(msg, 'error'),
-                onInfo: (msg) => this.notify(msg, 'info')
+                onInfo: (msg) => this.notify(msg, 'info'),
+                onDebug: (meta) => {
+                    this.debugMeta = meta;
+                }
             });
             if (network) this.visNetwork = network;
             if (data) this.visNetworkData = data;
@@ -645,12 +680,35 @@
             this.renderSavedSelect(list);
             this.notify('Deleted', 'success');
         }
+
+        debugNode(nodeId) {
+            const raw = this.lastRenderedJson || this.visInputText || (this.app ? this.app.currentData : null);
+            if (!raw) {
+                this.notify('No data to debug', 'info');
+                return null;
+            }
+            const info = global.WosVisNetwork.debugNodeSize(raw, nodeId);
+            console.log('[WosVisManager] node size', info);
+            return info;
+        }
+
+        debugStats() {
+            const raw = this.lastRenderedJson || this.visInputText || (this.app ? this.app.currentData : null);
+            if (!raw) {
+                this.notify('No data to debug', 'info');
+                return null;
+            }
+            const stats = global.WosVisNetwork.getSizeStats(raw);
+            console.log('[WosVisManager] size stats', stats);
+            return stats;
+        }
     }
 
     global.WosVisNetwork = {
         buildVisNetworkDataFromWos,
         renderVisNetworkFromJson,
-        debugNodeSize
+        debugNodeSize,
+        getSizeStats
     };
     global.WosVisManager = WosVisManager;
 })(window);

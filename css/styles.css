@@ -2224,16 +2224,6 @@ body.theme-vscode .nested-index-cell {
     transform: translateX(0%);
 }
 
-.vis-input-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 12px 14px;
-    border-bottom: 1px solid #e5e7eb;
-    font-size: 13px;
-    font-weight: 600;
-}
-
 .vis-input-body {
     padding: 12px 14px;
     flex: 1 1 auto;
