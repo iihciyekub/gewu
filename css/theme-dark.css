@@ -1122,6 +1122,24 @@ body.theme-dark .md-chat-shell {
     border-color: #2b3445;
 }
 
+body.theme-dark .md-chat-settings-nav {
+    background: #1a1d21;
+    border-right-color: #2b3445;
+}
+
+body.theme-dark .md-chat-settings-title {
+    color: #9aa3ad;
+}
+
+body.theme-dark .md-chat-settings-btn {
+    color: #e3e7ee;
+}
+
+body.theme-dark .md-chat-settings-btn:hover {
+    background: #262b33;
+    color: #ffffff;
+}
+
 body.theme-dark .md-chat-body {
     background: #1e1f20;
 }

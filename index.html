@@ -441,7 +441,20 @@
                     </div>
                 </div>
                 <div class="settings-view" id="settingsView">
-                    <div class="settings-content is-empty" id="settingsContent">
+                    <div class="settings-layout">
+                        <div class="md-chat-settings-nav" aria-label="Settings panels">
+                            <!-- <div class="md-chat-settings-title">Settings</div> -->
+                            <button class="md-chat-settings-btn" type="button" data-target="projectInfo">Project Info</button>
+                            <button class="md-chat-settings-btn" type="button" data-target="fileFilter">File Filter</button>
+                            <button class="md-chat-settings-btn" type="button" data-target="createGroup">Create Group</button>
+                            <button class="md-chat-settings-btn" type="button" data-target="autoSave">Auto Save</button>
+                            <button class="md-chat-settings-btn" type="button" data-target="queryExport">Query & Export</button>
+                            <button class="md-chat-settings-btn" type="button" data-target="apiSettings">API Settings</button>
+                            <button class="md-chat-settings-btn" type="button" data-target="shortcuts">Shortcuts</button>
+                            <button class="md-chat-settings-btn" type="button" data-target="thirdParty">Third-party JS</button>
+                            <button class="md-chat-settings-btn" type="button" data-target="about">About</button>
+                        </div>
+                        <div class="settings-content is-empty" id="settingsContent">
                         <div class="settings-section settings-panel file-filter-settings-panel"
                             id="fileFilterSettingsPanel">
                             <div class="settings-panel-header">
@@ -651,43 +664,46 @@
                                 <button class="btn btn-primary" id="queryExportRunBtn">Export</button>
                             </div>
                         </div>
+                        </div>
                     </div>
                 </div>
                 <div class="md-chat-panel" id="mdChatPanel">
                     <div class="md-chat-resizer" id="mdChatResizer" title="Drag to resize"></div>
                     <div class="md-chat-shell">
-                        <div class="md-chat-top">
-                            <div class="md-chat-font-size-control">
-                                <label for="mdChatFontSizeSlider" title="Font Size">
-                                    <i class="fas fa-text-height"></i>
-                                </label>
-                                <input type="range" id="mdChatFontSizeSlider" min="12" max="24" step="0.1" value="16">
-                                <span id="mdChatFontSizeValue" hidden>16px</span>
+                        <div class="md-chat-main">
+                            <div class="md-chat-top">
+                                <div class="md-chat-font-size-control">
+                                    <label for="mdChatFontSizeSlider" title="Font Size">
+                                        <i class="fas fa-text-height"></i>
+                                    </label>
+                                    <input type="range" id="mdChatFontSizeSlider" min="12" max="24" step="0.1" value="16">
+                                    <span id="mdChatFontSizeValue" hidden>16px</span>
+                                </div>
+                                <div class="md-chat-actions">
+                                    <button class="md-chat-btn" type="button" title="Close"><i
+                                            class="fa-regular fa-eye-slash"></i></button>
+                                    <button class="md-chat-btn" type="button" title="Dock position"
+                                        id="mdChatDockSideBtn"><i
+                                            class="fa-solid fa-arrow-right-from-bracket fa-flip-horizontal"></i></button>
+                                </div>
                             </div>
-                            <div class="md-chat-actions">
-                                <button class="md-chat-btn" type="button" title="Close"><i
-                                        class="fa-regular fa-eye-slash"></i></button>
-                                <button class="md-chat-btn" type="button" title="Dock position"
-                                    id="mdChatDockSideBtn"><i
-                                        class="fa-solid fa-arrow-right-from-bracket fa-flip-horizontal"></i></button>
-                            </div>
-                        </div>
-                        <div class="md-chat-body"></div>
-                        <div class="md-chat-input">
-                            <textarea class="md-chat-input-text" rows="1" placeholder="Input field"
-                                aria-label="Input field"></textarea>
-                            <div class="md-chat-input-actions">
-                                <button class="md-chat-btn md-chat-slot-btn" type="button"
-                                    title="Save/Apply fields (Slot 1)" data-slot="0" id="mdChatSlotBtn1"><i
-                                        class="fa-regular fa-square"></i></button>
-                                <button class="md-chat-btn md-chat-slot-btn" type="button"
-                                    title="Save/Apply fields (Slot 2)" data-slot="1" id="mdChatSlotBtn2"><i
-                                        class="fa-regular fa-square"></i></button>
-                                <button class="md-chat-btn md-chat-slot-btn" type="button"
-                                    title="Save/Apply fields (Slot 3)" data-slot="2" id="mdChatSlotBtn3"><i
-                                        class="fa-regular fa-square"></i></button>
-                                <button class="md-chat-btn md-chat-clear-btn" type="button"
-                                    title="Clear fields"><i class="fa-regular fa-trash-can"></i></button>
+                            <div class="md-chat-body"></div>
+                            <div class="md-chat-input">
+                                <textarea class="md-chat-input-text" rows="1" placeholder="Input field"
+                                    aria-label="Input field"></textarea>
+                                <div class="md-chat-input-actions">
+                                    <button class="md-chat-btn md-chat-slot-btn" type="button"
+                                        title="Save/Apply fields (Slot 1)" data-slot="0" id="mdChatSlotBtn1"><i
+                                            class="fa-regular fa-square"></i></button>
+                                    <button class="md-chat-btn md-chat-slot-btn" type="button"
+                                        title="Save/Apply fields (Slot 2)" data-slot="1" id="mdChatSlotBtn2"><i
+                                            class="fa-regular fa-square"></i></button>
+                                    <button class="md-chat-btn md-chat-slot-btn" type="button"
+                                        title="Save/Apply fields (Slot 3)" data-slot="2" id="mdChatSlotBtn3"><i
+                                            class="fa-regular fa-square"></i></button>
+                                    <button class="md-chat-btn md-chat-clear-btn" type="button"
+                                        title="Clear fields"><i class="fa-regular fa-trash-can"></i></button>
+                                </div>
                             </div>
                         </div>
                     </div>

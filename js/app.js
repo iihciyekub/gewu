@@ -125,6 +125,7 @@ class PaperStatsApp {
         this.mdChatSavedSlots = [[], [], []];
         this.mdChatSavedSlotsLoaded = false;
         this._mdChatSlotButtons = null;
+        this._settingsNavBound = false;
 
         // 项目管理
         this.currentProject = null; // { name, path }
@@ -1857,6 +1858,7 @@ class PaperStatsApp {
             statusToggleSourceBtn.addEventListener('click', () => this.toggleJsonMdSource());
         }
         this.initMarkdownChatPanel();
+        this.initSettingsNav();
         // 快捷键：Cmd/Ctrl + E 正向切换（JSON/MD/Draft），Cmd/Ctrl + Shift + E 反向切换
         document.addEventListener('keydown', (e) => {
             const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
@@ -9630,6 +9632,35 @@ class PaperStatsApp {
         }
     }
 
+    getSettingsPanelsOrder() {
+        const settingsContent = document.getElementById('settingsContent');
+        if (!settingsContent) return [];
+        return Array.from(settingsContent.querySelectorAll('.settings-panel'))
+            .map((panel) => panel.id)
+            .filter((id) => !!id);
+    }
+
+    applySettingsPanelsOrder(order = []) {
+        const settingsContent = document.getElementById('settingsContent');
+        if (!settingsContent || !Array.isArray(order) || order.length === 0) return;
+        const panels = new Map(
+            Array.from(settingsContent.querySelectorAll('.settings-panel'))
+                .filter((panel) => panel.id)
+                .map((panel) => [panel.id, panel])
+        );
+        const seen = new Set();
+        order.forEach((id) => {
+            const panel = panels.get(id);
+            if (!panel) return;
+            settingsContent.appendChild(panel);
+            seen.add(id);
+        });
+        panels.forEach((panel, id) => {
+            if (seen.has(id)) return;
+            settingsContent.appendChild(panel);
+        });
+    }
+
     handleSettingsPanelEscape() {
         if ((this.currentView || '') !== 'settings') return false;
         const candidates = [
@@ -9760,7 +9791,8 @@ class PaperStatsApp {
             shortcutsVisible: !!this.shortcutsVisible,
             queryExportVisible: !!this.queryExportVisible,
             apiSettingsVisible: !!this.apiSettingsVisible,
-            autoSaveConfigVisible: !!this.autoSaveConfigVisible
+            autoSaveConfigVisible: !!this.autoSaveConfigVisible,
+            panelOrder: this.getSettingsPanelsOrder()
         };
         try {
             localStorage.setItem(key, JSON.stringify(payload));
@@ -9779,6 +9811,7 @@ class PaperStatsApp {
         this.queryExportVisible = !!state.queryExportVisible;
         this.apiSettingsVisible = !!state.apiSettingsVisible;
         this.autoSaveConfigVisible = !!state.autoSaveConfigVisible;
+        this.applySettingsPanelsOrder(state.panelOrder);
 
         const fileFilterPanel = document.getElementById('fileFilterSettingsPanel');
         const createGroupPanel = document.getElementById('createGroupSettingsPanel');
@@ -11235,6 +11268,54 @@ class PaperStatsApp {
         if (textarea) {
             setTimeout(() => textarea.focus(), 0);
         }
+    }
+
+    openSettingsPanelFromChat(target) {
+        switch (target) {
+            case 'fileFilter':
+                this.toggleFileFilter(true);
+                break;
+            case 'apiSettings':
+                this.toggleApiSettingsPanel(true);
+                break;
+            case 'createGroup':
+                this.toggleCreateGroupPanel(true);
+                break;
+            case 'projectInfo':
+                this.toggleProjectInfoPanel(true);
+                break;
+            case 'thirdParty':
+                this.toggleThirdPartyInfoPanel(true);
+                break;
+            case 'shortcuts':
+                this.toggleShortcutsPanel(true);
+                break;
+            case 'autoSave':
+                this.toggleAutoSavePanel(true);
+                break;
+            case 'about':
+                this.toggleAboutPanel(true);
+                break;
+            case 'queryExport':
+                this.toggleQueryExportPanel(true);
+                break;
+            default:
+                break;
+        }
+    }
+
+    initSettingsNav() {
+        if (this._settingsNavBound) return;
+        const nav = document.querySelector('#settingsView .md-chat-settings-nav');
+        if (!nav) return;
+        this._settingsNavBound = true;
+        nav.addEventListener('click', (e) => {
+            const btn = e.target.closest('.md-chat-settings-btn');
+            if (!btn) return;
+            e.preventDefault();
+            const target = btn.getAttribute('data-target') || '';
+            this.openSettingsPanelFromChat(target);
+        });
     }
 
     async loadMdChatSavedSlots() {
