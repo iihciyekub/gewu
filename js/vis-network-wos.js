@@ -560,10 +560,10 @@
             this._settingsLoaded = false;
             this.networkStateKey = 'vis-network-last';
             this._networkSaveTimer = null;
-            this.pendingLabelShowAll = null;
-            this.labelShowAllState = false;
             this.isLocked = false;
             this.isPanOnly = false;
+            this._labelRetryTimer = null;
+            this._labelRetryCount = 0;
         }
 
         bind() {
@@ -858,10 +858,13 @@
                             const btn = labelSuggest.children[this.labelSuggestIndex];
                             if (btn?.dataset?.value) {
                                 applyFieldSelection(btn.dataset.value);
+                                this.applyLabelField(btn.dataset.value);
                                 return;
                             }
                         }
-                        applyFieldSelection(labelFieldInput.value);
+                        const value = labelFieldInput.value;
+                        applyFieldSelection(value);
+                        this.applyLabelField(value);
                         return;
                     }
                     if (e.key === 'Tab') {
@@ -1339,10 +1342,6 @@
             this.applyEdgeFade();
             this.applyEdgeWidthRange();
             this.queuePersistNetworkState();
-            if (this.pendingLabelShowAll !== null) {
-                this.applyLabelShowAll(this.pendingLabelShowAll);
-                this.queuePersistNetworkState();
-            }
         }
 
         wrapLabelToggleButton() {
@@ -1350,6 +1349,7 @@
             if (!btn || btn.dataset.visWrapped) return;
             const original = btn.onclick;
             btn.onclick = async (e) => {
+                await this.ensureLabelDataReady();
                 const input = this.getEl(this.ids.labelFieldInput);
                 const currentField = input && input.value ? input.value.trim() : this.labelField;
                 await this.applyLabelField(currentField);
@@ -1364,11 +1364,23 @@
                 if (typeof original === 'function') {
                     original.call(btn, e);
                 }
-                const showAll = !!(this.visNetwork?._wosLabelState?.showAll);
-                this.labelShowAllState = showAll;
-                this.queuePersistNetworkState();
             };
             btn.dataset.visWrapped = '1';
+        }
+
+        async ensureLabelDataReady() {
+            await this.ensureCurrentViewDataLoaded();
+            const app = this.app;
+            if (app && (!app.fileMetaByBase || !Object.keys(app.fileMetaByBase).length)) {
+                if (typeof app.loadFileList === 'function') {
+                    await app.loadFileList(true);
+                }
+            }
+            const freshIndex = await this.buildWosDataIndexForCurrentView();
+            if (freshIndex && freshIndex.size) {
+                this.wosDataIndex = freshIndex;
+                this.wosDataIndexSource = this.getCurrentViewData();
+            }
         }
 
         renderFromCurrentData() {
@@ -1714,6 +1726,7 @@
             this.labelField = this.labelFieldsSelected.join(', ');
             this.queuePersistNetworkState();
             this.renderLabelFieldChips();
+            this.applyLabelField(this.labelField);
         }
 
         renderLabelFieldChips() {
@@ -1805,12 +1818,13 @@
         }
 
         async applyLabelField(field) {
+            const ensuredData = await this.ensureCurrentViewDataLoaded();
             const fields = this.labelFieldsSelected.length
                 ? Array.from(this.labelFieldsSelected)
                 : this.parseLabelFields(field);
             const nextField = fields.join(', ');
             this.labelField = nextField;
-            const data = this.getCurrentViewData();
+            const data = ensuredData || this.getCurrentViewData();
             let nodeMap = this.ensureWosDataIndex(data);
             if (!nodeMap.size) {
                 const hasWosInView = !!(data && typeof data === 'object' && Object.values(data).some((payload) => {
@@ -1824,6 +1838,15 @@
                 }
                 nodeMap = await this.buildWosDataIndexForCurrentView();
             }
+            if (!nodeMap.size) {
+                console.warn('[WosVisManager] label index still empty after scan.', {
+                    field: nextField,
+                    currentFile: this.app?.currentFile,
+                    currentView: this.app?.currentJsonView,
+                    currentBase: this.app?.currentFileBase
+                });
+                this.scheduleLabelFieldRetry(nextField);
+            }
             this.labelValueMap = new Map();
             const dataset = this.getNetworkNodesDataSet();
             if (!dataset) return;
@@ -1835,15 +1858,6 @@
                 const labelText = values.join(' | ');
                 const hasValue = labelText.trim() !== '';
                 this.labelValueMap.set(node.id, hasValue ? labelText : '');
-                if (idx < 5) {
-                    console.log('[WosVisManager] label debug', {
-                        nodeId: node.id,
-                        nodeKey,
-                        hasRecord: !!nodeData,
-                        field: nextField,
-                        value: hasValue ? labelText : null
-                    });
-                }
                 return {
                     id: node.id,
                     labelValue: hasValue ? labelText : '',
@@ -1855,6 +1869,67 @@
             dataset.update(updates);
             this.applyLabelThreshold();
             this.updateLabelLayer();
+        }
+
+        async ensureCurrentViewDataLoaded() {
+            const app = this.app;
+            if (!app) return null;
+            if (app.currentData && typeof app.currentData === 'object') return app.currentData;
+            if (typeof app.readProjectFile !== 'function') return null;
+            const view = app.currentJsonView || 'view1';
+            let base = app.currentFileBase;
+            let currentFile = app.currentFile;
+            if (!base && typeof app.getLastSelectedFile === 'function') {
+                const last = app.getLastSelectedFile();
+                if (last) {
+                    if (last.endsWith('.json')) {
+                        const filename = last.split('/').pop() || last;
+                        base = filename.replace(/\.json$/i, '');
+                        currentFile = last;
+                    } else {
+                        base = last.replace(/\.json$/i, '');
+                    }
+                }
+            }
+            const candidates = [];
+            if (currentFile) candidates.push(currentFile);
+            if (base) candidates.push(`json/${view}/${base}.json`);
+            try {
+                for (const path of candidates) {
+                    const data = await app.readProjectFile(path);
+                    if (data && typeof data === 'object') {
+                        app.currentData = data;
+                        if (!app.currentFile) app.currentFile = path;
+                        if (!app.currentFileBase) {
+                            const filename = path.split('/').pop() || path;
+                            app.currentFileBase = filename.replace(/\.json$/i, '');
+                        }
+                        return data;
+                    }
+                }
+            } catch (_err) { }
+            return null;
+        }
+
+        scheduleLabelFieldRetry(field) {
+            if (this._labelRetryTimer || this._labelRetryCount >= 5) return;
+            const app = this.app;
+            if (!app) return;
+            this._labelRetryCount += 1;
+            this._labelRetryTimer = setTimeout(async () => {
+                this._labelRetryTimer = null;
+                await this.applyLabelField(field || this.labelField);
+            }, 400 * this._labelRetryCount);
+        }
+
+        hasResolvedLabelValues() {
+            const dataset = this.getNetworkNodesDataSet();
+            if (!dataset) return false;
+            const nodes = dataset.get();
+            return nodes.some((node) => {
+                const text = typeof node.hiddenLabel === 'string' ? node.hiddenLabel.trim() : '';
+                return !!text && !node.labelMissingField;
+            });
         }
 
         applyLabelSizeScale() {
@@ -2046,28 +2121,27 @@
 
         applyLabelShowAll(showAll) {
             if (!this.visNetwork) {
-                this.pendingLabelShowAll = showAll;
                 return;
             }
             const state = this.visNetwork._wosLabelState || { showAll: false };
             if (state.showAll === showAll) {
-                this.labelShowAllState = showAll;
-                this.pendingLabelShowAll = null;
-                this.queuePersistNetworkState();
+                if (showAll) {
+                    const dataset = this.visNetwork?.body?.data;
+                    const view = this.getEl(this.ids.view);
+                    if (dataset && view) {
+                        applyLabelVisibility(dataset, true, this.visNetwork, ensureLabelLayer(view));
+                    }
+                }
                 return;
             }
             const btn = this.getEl(this.ids.labelToggleBtn);
             if (btn) {
                 btn.click();
-                this.pendingLabelShowAll = null;
                 return;
             }
             // fallback: mark state and refresh labels on next toggle
             state.showAll = showAll;
             this.visNetwork._wosLabelState = state;
-            this.labelShowAllState = showAll;
-            this.pendingLabelShowAll = null;
-            this.queuePersistNetworkState();
         }
 
         applyPhysicsSettings() {
@@ -2214,10 +2288,7 @@
             const payload = {
                 json: this.lastRenderedJson || this.visInputText || '',
                 labelFieldsSelected: Array.from(this.labelFieldsSelected || []),
-                labelField: this.labelField || 'wosid',
-                labelShowAll: typeof this.labelShowAllState === 'boolean'
-                    ? this.labelShowAllState
-                    : !!(this.visNetwork?._wosLabelState?.showAll)
+                labelField: this.labelField || 'wosid'
             };
             if (this.app && this.app.projectStorage && this.app.currentProject) {
                 this.app.projectStorage.update(this.networkStateKey, payload);
@@ -2240,10 +2311,6 @@
                 }
                 if (!this.labelFieldsSelected.length && this.labelField) {
                     this.labelFieldsSelected = this.parseLabelFields(this.labelField);
-                }
-                if (typeof payload.labelShowAll === 'boolean') {
-                    this.pendingLabelShowAll = payload.labelShowAll;
-                    this.labelShowAllState = payload.labelShowAll;
                 }
                 if (payload.json && typeof payload.json === 'string') {
                     this.visInputText = payload.json;

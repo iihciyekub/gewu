@@ -65,6 +65,8 @@ class PaperStatsApp {
                 if (storedView === 'draft') {
                     this.currentView = 'markdown';
                     this.isDraftViewActive = true;
+                } else if (storedView === 'vis-network') {
+                    this.currentView = 'structured';
                 } else {
                     this.currentView = storedView;
                 }
@@ -7193,6 +7195,9 @@ class PaperStatsApp {
             this.renderFlatView();
             this.updateMdChatFieldOptionsFromCurrentData();
             this.runMdChatFieldQuery();
+            if (this.visManager) {
+                this.visManager.applyLabelField(this.visManager.labelField);
+            }
             // 再次确认未切换文件
             if (loadId !== this.currentLoadToken) return;
             if (!this.isDraftViewActive) {
