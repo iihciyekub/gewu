@@ -503,6 +503,79 @@
         label.style.opacity = String(opacity);
     }
 
+    function parseColorToRgba(input) {
+        const text = String(input || '').trim();
+        if (!text) return null;
+        if (text.startsWith('#')) {
+            const raw = text.slice(1);
+            const expand = (c) => parseInt(c + c, 16);
+            if (raw.length === 3) {
+                const r = expand(raw[0]);
+                const g = expand(raw[1]);
+                const b = expand(raw[2]);
+                return { r, g, b, a: 1 };
+            }
+            if (raw.length === 4) {
+                const r = expand(raw[0]);
+                const g = expand(raw[1]);
+                const b = expand(raw[2]);
+                const a = expand(raw[3]) / 255;
+                return { r, g, b, a };
+            }
+            if (raw.length === 6 || raw.length === 8) {
+                const r = parseInt(raw.slice(0, 2), 16);
+                const g = parseInt(raw.slice(2, 4), 16);
+                const b = parseInt(raw.slice(4, 6), 16);
+                const a = raw.length === 8 ? parseInt(raw.slice(6, 8), 16) / 255 : 1;
+                if ([r, g, b].some((v) => Number.isNaN(v))) return null;
+                return { r, g, b, a };
+            }
+        }
+        const rgba = text.match(/^rgba?\(([^)]+)\)$/i);
+        if (rgba) {
+            const parts = rgba[1].split(/[, ]+/).filter((p) => p.length);
+            if (parts.length >= 3) {
+                const r = parseFloat(parts[0]);
+                const g = parseFloat(parts[1]);
+                const b = parseFloat(parts[2]);
+                const a = parts[3] != null ? parseFloat(parts[3]) : 1;
+                if ([r, g, b].some((v) => Number.isNaN(v))) return null;
+                const alpha = Number.isFinite(a) ? Math.max(0, Math.min(1, a)) : 1;
+                return { r, g, b, a: alpha };
+            }
+        }
+        return null;
+    }
+
+    function rgbaToString(color) {
+        if (!color) return null;
+        const r = Math.round(color.r);
+        const g = Math.round(color.g);
+        const b = Math.round(color.b);
+        const a = Number.isFinite(color.a) ? Math.max(0, Math.min(1, color.a)) : 1;
+        return `rgba(${r}, ${g}, ${b}, ${a})`;
+    }
+
+    function normalizeVisColor(input) {
+        const rgba = parseColorToRgba(input);
+        return rgba ? rgbaToString(rgba) : input;
+    }
+
+    function adjustColorAlpha(input, delta) {
+        const rgba = parseColorToRgba(input);
+        if (!rgba) return input;
+        const next = Math.max(0, Math.min(1, rgba.a + delta));
+        return rgbaToString({ ...rgba, a: next });
+    }
+
+    function applyAlphaToColor(input, alpha) {
+        const rgba = parseColorToRgba(input);
+        if (!rgba) return input;
+        const base = Math.max(0, Math.min(1, rgba.a));
+        const next = Math.max(0, Math.min(1, base * alpha));
+        return rgbaToString({ ...rgba, a: next });
+    }
+
     class WosVisManager {
         constructor(options = {}) {
             this.app = options.app || null;
@@ -531,12 +604,17 @@
                 labelSuggest: options.labelSuggestId || 'visLabelSuggest',
                 labelFields: options.labelFieldsId || 'visLabelFields',
                 labelFadeSlider: options.labelFadeSliderId || 'visLabelFadeSlider',
+                labelColorInput: options.labelColorInputId || 'visLabelColorInput',
                 labelSizeSlider: options.labelSizeSliderId || 'visLabelSizeSlider',
                 labelMinSlider: options.labelMinSliderId || 'visLabelMinSlider',
                 nodeSizeMinSlider: options.nodeSizeMinSliderId || 'visNodeSizeMinSlider',
                 nodeSizeMaxSlider: options.nodeSizeMaxSliderId || 'visNodeSizeMaxSlider',
                 nodeSizeGammaSlider: options.nodeSizeGammaSliderId || 'visNodeSizeGammaSlider',
+                nodeColorInput: options.nodeColorInputId || 'visNodeColorInput',
                 nodeBorderSlider: options.nodeBorderSliderId || 'visNodeBorderSlider',
+                nodeOuterBorderWidthInput: options.nodeOuterBorderWidthInputId || 'visNodeOuterBorderWidth',
+                nodeOuterBorderColorInput: options.nodeOuterBorderColorInputId || 'visNodeOuterBorderColor',
+                edgeColorInput: options.edgeColorInputId || 'visEdgeColorInput',
                 labelWeightSlider: options.labelWeightSliderId || 'visLabelWeightSlider',
                 labelFontMinInput: options.labelFontMinInputId || 'visLabelFontMinInput',
                 labelFontMaxInput: options.labelFontMaxInputId || 'visLabelFontMaxInput',
@@ -572,6 +650,7 @@
             this.exportScale = 2;
             this.labelField = 'wosid';
             this.labelFade = 0;
+            this.labelColor = '#000000';
             this.labelSizeScale = 1;
             this.labelMinCitations = 0;
             this.labelFieldOptions = [];
@@ -586,13 +665,17 @@
             this.nodeSizeMin = 6;
             this.nodeSizeMax = 60;
             this.nodeSizeGamma = 1;
+            this.nodeColor = '#ffffff';
             this.nodeBorderWidth = 1.5;
+            this.nodeOuterBorderWidth = 2;
+            this.nodeOuterBorderColor = '#ffffff';
             this.physicsSpringLength = 120;
             this.physicsSpringConstant = 0.05;
             this.physicsGravity = -9000;
             this.edgeFade = 100;
             this.edgeMinWidth = 1;
             this.edgeMaxWidth = 6;
+            this.edgeColor = '#111111';
             this.wosNodeIndex = null;
             this.wosNodeIndexSource = null;
             this.labelFieldHistory = [];
@@ -636,12 +719,16 @@
             const labelSuggest = this.getEl(this.ids.labelSuggest);
             const labelFields = this.getEl(this.ids.labelFields);
             const labelFadeSlider = this.getEl(this.ids.labelFadeSlider);
+            const labelColorInput = this.getEl(this.ids.labelColorInput);
             const labelSizeSlider = this.getEl(this.ids.labelSizeSlider);
             const labelMinSlider = this.getEl(this.ids.labelMinSlider);
             const nodeSizeMinSlider = this.getEl(this.ids.nodeSizeMinSlider);
             const nodeSizeMaxSlider = this.getEl(this.ids.nodeSizeMaxSlider);
             const nodeSizeGammaSlider = this.getEl(this.ids.nodeSizeGammaSlider);
+            const nodeColorInput = this.getEl(this.ids.nodeColorInput);
             const nodeBorderSlider = this.getEl(this.ids.nodeBorderSlider);
+            const nodeOuterBorderWidthInput = this.getEl(this.ids.nodeOuterBorderWidthInput);
+            const nodeOuterBorderColorInput = this.getEl(this.ids.nodeOuterBorderColorInput);
             const labelWeightSlider = this.getEl(this.ids.labelWeightSlider);
             const labelFontMinInput = this.getEl(this.ids.labelFontMinInput);
             const labelFontMaxInput = this.getEl(this.ids.labelFontMaxInput);
@@ -651,6 +738,7 @@
             const edgeFadeSlider = this.getEl(this.ids.edgeFadeSlider);
             const edgeMinWidthSlider = this.getEl(this.ids.edgeMinWidthSlider);
             const edgeMaxWidthSlider = this.getEl(this.ids.edgeMaxWidthSlider);
+            const edgeColorInput = this.getEl(this.ids.edgeColorInput);
             const zoomInBtn = this.getEl(this.ids.zoomInBtn);
             const zoomOutBtn = this.getEl(this.ids.zoomOutBtn);
             const zoomFitBtn = this.getEl(this.ids.zoomFitBtn);
@@ -1039,6 +1127,14 @@
                 this.applyLabelFade();
                 this.queuePersistSettings();
             });
+            if (labelColorInput && !labelColorInput.dataset.visBound) {
+                labelColorInput.dataset.visBound = '1';
+                labelColorInput.addEventListener('input', () => {
+                    this.labelColor = labelColorInput.value || '#000000';
+                    this.applyLabelColor();
+                    this.queuePersistSettings();
+                });
+            }
             bindNumberInput(labelMinSlider, (next) => {
                 this.labelMinCitations = next;
                 this.applyLabelThreshold();
@@ -1109,6 +1205,70 @@
                 this.applyNodeBorderWidth();
                 this.queuePersistSettings();
             });
+            if (global.Coloris && !this._colorisInit) {
+                this._colorisInit = true;
+                try {
+                    global.Coloris({
+                        el: '#visNodeOuterBorderColor',
+                        alpha: true,
+                        format: 'hex',
+                        formatToggle: false,
+                        forceAlpha: true
+                    });
+                    global.Coloris({
+                        el: '#visNodeColorInput',
+                        alpha: true,
+                        format: 'hex',
+                        formatToggle: false,
+                        forceAlpha: true
+                    });
+                    global.Coloris({
+                        el: '#visEdgeColorInput',
+                        alpha: true,
+                        format: 'hex',
+                        formatToggle: false,
+                        forceAlpha: true
+                    });
+                    global.Coloris({
+                        el: '#visLabelColorInput',
+                        alpha: true,
+                        format: 'hex',
+                        formatToggle: false,
+                        forceAlpha: true
+                    });
+                } catch (_e) {
+                    // ignore color picker init issues
+                }
+            }
+            bindNumberInput(nodeOuterBorderWidthInput, (next) => {
+                this.nodeOuterBorderWidth = next;
+                if (this.visNetwork) this.visNetwork.redraw();
+                this.queuePersistSettings();
+            });
+            if (nodeOuterBorderColorInput && !nodeOuterBorderColorInput.dataset.visBound) {
+                nodeOuterBorderColorInput.dataset.visBound = '1';
+                nodeOuterBorderColorInput.addEventListener('input', () => {
+                    this.nodeOuterBorderColor = nodeOuterBorderColorInput.value || '#ffffff';
+                    if (this.visNetwork) this.visNetwork.redraw();
+                    this.queuePersistSettings();
+                });
+            }
+            if (nodeColorInput && !nodeColorInput.dataset.visBound) {
+                nodeColorInput.dataset.visBound = '1';
+                nodeColorInput.addEventListener('input', () => {
+                    this.nodeColor = nodeColorInput.value || '#ffffff';
+                    this.applyNodeColor();
+                    this.queuePersistSettings();
+                });
+            }
+            if (edgeColorInput && !edgeColorInput.dataset.visBound) {
+                edgeColorInput.dataset.visBound = '1';
+                edgeColorInput.addEventListener('input', () => {
+                    this.edgeColor = edgeColorInput.value || '#111111';
+                    this.applyEdgeFade();
+                    this.queuePersistSettings();
+                });
+            }
             bindNumberInput(labelSizeSlider, (next) => {
                 const scale = Number.isFinite(next) ? next / 100 : 1;
                 this.labelSizeScale = Math.max(0.6, Math.min(2.2, scale));
@@ -1740,6 +1900,7 @@
             this.applyLabelThreshold();
             this.applyNodeSizeScale();
             this.applyNodeBorderWidth();
+            this.applyNodeColor();
             this.applyPhysicsSettings();
             this.applyEdgeFade();
             this.applyEdgeWidthRange();
@@ -1757,12 +1918,13 @@
                 const input = this.getEl(this.ids.labelFieldInput);
                 const currentField = input && input.value ? input.value.trim() : this.labelField;
                 await this.applyLabelField(currentField);
-                this.applyLabelFade();
-                this.applyLabelSizeScale();
-                this.applyLabelWeight();
-                this.applyLabelThreshold();
-                this.applyPhysicsSettings();
-                this.applyEdgeFade();
+            this.applyLabelFade();
+            this.applyLabelSizeScale();
+            this.applyLabelWeight();
+            this.applyLabelColor();
+            this.applyLabelThreshold();
+            this.applyPhysicsSettings();
+            this.applyEdgeFade();
                 this.applyEdgeWidthRange();
                 this.queuePersistNetworkState();
                 if (typeof original === 'function') {
@@ -1895,12 +2057,33 @@
                 if (sizeSlider) sizeSlider.value = String(Math.round((this.labelSizeScale || 1) * 100));
                 const labelFontMinInput = this.getEl(this.ids.labelFontMinInput);
                 const labelFontMaxInput = this.getEl(this.ids.labelFontMaxInput);
+                const nodeSizeMinSlider = this.getEl(this.ids.nodeSizeMinSlider);
+                const nodeSizeMaxSlider = this.getEl(this.ids.nodeSizeMaxSlider);
+                const nodeSizeGammaSlider = this.getEl(this.ids.nodeSizeGammaSlider);
+                const nodeColorInput = this.getEl(this.ids.nodeColorInput);
+                const nodeBorderSlider = this.getEl(this.ids.nodeBorderSlider);
+                const nodeOuterBorderWidthInput = this.getEl(this.ids.nodeOuterBorderWidthInput);
+                const nodeOuterBorderColorInput = this.getEl(this.ids.nodeOuterBorderColorInput);
+                const labelColorInput = this.getEl(this.ids.labelColorInput);
+                const edgeColorInput = this.getEl(this.ids.edgeColorInput);
+                const labelWeightSlider = this.getEl(this.ids.labelWeightSlider);
+                const physicsSpringSlider = this.getEl(this.ids.physicsSpringSlider);
+                const physicsStrengthSlider = this.getEl(this.ids.physicsStrengthSlider);
+                const physicsGravitySlider = this.getEl(this.ids.physicsGravitySlider);
+                const edgeFadeSlider = this.getEl(this.ids.edgeFadeSlider);
+                const edgeMinWidthSlider = this.getEl(this.ids.edgeMinWidthSlider);
+                const edgeMaxWidthSlider = this.getEl(this.ids.edgeMaxWidthSlider);
                 if (labelFontMinInput) labelFontMinInput.value = String(this.labelFontMin ?? 9);
                 if (labelFontMaxInput) labelFontMaxInput.value = String(this.labelFontMax ?? 30);
                 if (nodeSizeMinSlider) nodeSizeMinSlider.value = String(this.nodeSizeMin || 1);
                 if (nodeSizeMaxSlider) nodeSizeMaxSlider.value = String(this.nodeSizeMax || 60);
                 if (nodeSizeGammaSlider) nodeSizeGammaSlider.value = String(this.nodeSizeGamma || 1);
+                if (nodeColorInput) nodeColorInput.value = this.nodeColor || '#ffffff';
                 if (nodeBorderSlider) nodeBorderSlider.value = String(this.nodeBorderWidth || 1.5);
+                if (nodeOuterBorderWidthInput) nodeOuterBorderWidthInput.value = String(this.nodeOuterBorderWidth ?? 2);
+                if (nodeOuterBorderColorInput) nodeOuterBorderColorInput.value = this.nodeOuterBorderColor || '#ffffff';
+                if (labelColorInput) labelColorInput.value = this.labelColor || '#000000';
+                if (edgeColorInput) edgeColorInput.value = this.edgeColor || '#111111';
                 if (labelWeightSlider) labelWeightSlider.value = String(this.labelWeight || 500);
                 if (physicsSpringSlider) physicsSpringSlider.value = String(this.physicsSpringLength || 120);
                 if (physicsStrengthSlider) physicsStrengthSlider.value = String(this.physicsSpringConstant || 0.05);
@@ -2408,6 +2591,18 @@
             this.updateLabelLayer();
         }
 
+        applyLabelColor() {
+            const dataset = this.getNetworkNodesDataSet();
+            if (!dataset) return;
+            const color = normalizeVisColor(this.labelColor || '#000000');
+            const updates = dataset.get().map((node) => ({
+                id: node.id,
+                labelStyle: { ...(node.labelStyle || {}), textColor: color }
+            }));
+            dataset.update(updates);
+            this.updateLabelLayer();
+        }
+
         applyLabelWeight() {
             const dataset = this.getNetworkNodesDataSet();
             if (!dataset) return;
@@ -2516,6 +2711,24 @@
             dataset.update(updates);
         }
 
+        applyNodeColor() {
+            const dataset = this.getNetworkNodesDataSet();
+            if (!dataset) return;
+            const base = normalizeVisColor(this.nodeColor || '#ffffff');
+            const highlight = adjustColorAlpha(base, 0.12);
+            const hover = adjustColorAlpha(base, 0.2);
+            const updates = dataset.get().map((node) => ({
+                id: node.id,
+                color: {
+                    background: base,
+                    border: base,
+                    highlight: { background: highlight, border: highlight },
+                    hover: { background: hover, border: hover }
+                }
+            }));
+            dataset.update(updates);
+        }
+
         applyEdgeFade() {
             if (!this.visNetwork) return;
             const dataset = this.visNetwork?.body?.data?.edges;
@@ -2526,12 +2739,23 @@
             const contrast = (Number(this.edgeFade) || 0) / 100;
             const minAlpha = 0.15 + (1 - contrast) * 0.2;
             const maxAlpha = 0.85 - (1 - contrast) * 0.2;
+            const baseColor = normalizeVisColor(this.edgeColor);
             const darkMode = isDarkTheme();
             const updates = dataset.get().map((edge) => {
                 const related = Number.isFinite(edge.relatedValue) ? edge.relatedValue : 0;
                 const t = maxRelated > minRelated ? (related - minRelated) / (maxRelated - minRelated) : 0;
                 const alphaRaw = minAlpha + Math.max(0, Math.min(1, t)) * (maxAlpha - minAlpha);
                 const alpha = Math.max(0, Math.min(1, alphaRaw));
+                if (baseColor) {
+                    return {
+                        id: edge.id,
+                        color: {
+                            color: applyAlphaToColor(baseColor, alpha),
+                            highlight: applyAlphaToColor(baseColor, Math.min(1, alpha + 0.1)),
+                            hover: applyAlphaToColor(baseColor, Math.min(1, alpha + 0.15))
+                        }
+                    };
+                }
                 return {
                     id: edge.id,
                     color: {
@@ -2610,16 +2834,21 @@
 
         restoreLabelDefaults() {
             this.labelFade = 51.5;
+            this.labelColor = '#000000';
             this.nodeSizeMin = 4.0;
             this.nodeSizeMax = 69;
             this.nodeSizeGamma = 0.46;
+            this.nodeColor = '#ffffff';
             this.nodeBorderWidth = 1.5;
+            this.nodeOuterBorderWidth = 2;
+            this.nodeOuterBorderColor = '#ffffff';
             this.physicsSpringLength = 188;
             this.physicsSpringConstant = 0.15;
             this.physicsGravity = -10139;
             this.edgeMinWidth = 3.0;
             this.edgeMaxWidth = 14.5;
             this.edgeFade = 39;
+            this.edgeColor = '#111111';
             this.labelFontMin = 15;
             this.labelFontMax = 60;
             this.labelSizeScale = 1.24;
@@ -2635,6 +2864,7 @@
             this.applyPhysicsSettings();
             this.applyEdgeFade();
             this.applyEdgeWidthRange();
+            if (this.visNetwork) this.visNetwork.redraw();
             this.syncSettingsSliders();
             this.queuePersistSettings();
         }
@@ -2690,7 +2920,10 @@
             const nodeSizeMinSlider = this.getEl(this.ids.nodeSizeMinSlider);
             const nodeSizeMaxSlider = this.getEl(this.ids.nodeSizeMaxSlider);
             const nodeSizeGammaSlider = this.getEl(this.ids.nodeSizeGammaSlider);
+            const nodeColorInput = this.getEl(this.ids.nodeColorInput);
             const nodeBorderSlider = this.getEl(this.ids.nodeBorderSlider);
+            const nodeOuterBorderWidthInput = this.getEl(this.ids.nodeOuterBorderWidthInput);
+            const nodeOuterBorderColorInput = this.getEl(this.ids.nodeOuterBorderColorInput);
             const labelSizeSlider = this.getEl(this.ids.labelSizeSlider);
             const labelFadeSlider = this.getEl(this.ids.labelFadeSlider);
             const labelMinSlider = this.getEl(this.ids.labelMinSlider);
@@ -2701,13 +2934,18 @@
             const edgeFadeSlider = this.getEl(this.ids.edgeFadeSlider);
             const edgeMinWidthSlider = this.getEl(this.ids.edgeMinWidthSlider);
             const edgeMaxWidthSlider = this.getEl(this.ids.edgeMaxWidthSlider);
+            const edgeColorInput = this.getEl(this.ids.edgeColorInput);
 
             if (nodeSizeMinSlider) nodeSizeMinSlider.value = String(sizeMin);
             if (nodeSizeMaxSlider) nodeSizeMaxSlider.value = String(sizeMax);
             if (nodeSizeGammaSlider) nodeSizeGammaSlider.value = String(gamma);
+            if (nodeColorInput) nodeColorInput.value = this.nodeColor || '#ffffff';
             if (nodeBorderSlider) nodeBorderSlider.value = String(border);
+            if (nodeOuterBorderWidthInput) nodeOuterBorderWidthInput.value = String(this.nodeOuterBorderWidth ?? 2);
+            if (nodeOuterBorderColorInput) nodeOuterBorderColorInput.value = this.nodeOuterBorderColor || '#ffffff';
             if (labelSizeSlider) labelSizeSlider.value = String(Math.round(labelScale * 100));
             if (labelFadeSlider) labelFadeSlider.value = String(fade);
+            if (labelColorInput) labelColorInput.value = this.labelColor || '#000000';
             if (labelMinSlider) labelMinSlider.value = String(minCite);
             if (labelWeightSlider) labelWeightSlider.value = String(this.labelWeight || 500);
             if (physicsSpringSlider) physicsSpringSlider.value = String(this.physicsSpringLength);
@@ -2716,22 +2954,27 @@
             if (edgeFadeSlider) edgeFadeSlider.value = String(this.edgeFade);
             if (edgeMinWidthSlider) edgeMinWidthSlider.value = String(this.edgeMinWidth);
             if (edgeMaxWidthSlider) edgeMaxWidthSlider.value = String(this.edgeMaxWidth);
+            if (edgeColorInput) edgeColorInput.value = this.edgeColor || '#111111';
 
             this.applyNodeSizeScale();
             this.applyNodeBorderWidth();
+            this.applyNodeColor();
             this.applyLabelSizeScale();
             this.applyLabelFade();
+            this.applyLabelColor();
             this.applyLabelThreshold();
             this.applyLabelWeight();
             this.applyPhysicsSettings();
             this.applyEdgeFade();
             this.applyEdgeWidthRange();
+            if (this.visNetwork) this.visNetwork.redraw();
             this.queuePersistSettings();
         }
 
         getPersistedSettingsPayload() {
             return {
                 labelFade: this.labelFade,
+                labelColor: this.labelColor,
                 labelSizeScale: this.labelSizeScale,
                 labelMinCitations: this.labelMinCitations,
                 labelWeight: this.labelWeight,
@@ -2741,13 +2984,17 @@
                 nodeSizeMin: this.nodeSizeMin,
                 nodeSizeMax: this.nodeSizeMax,
                 nodeSizeGamma: this.nodeSizeGamma,
+                nodeColor: this.nodeColor,
                 nodeBorderWidth: this.nodeBorderWidth,
+                nodeOuterBorderWidth: this.nodeOuterBorderWidth,
+                nodeOuterBorderColor: this.nodeOuterBorderColor,
                 physicsSpringLength: this.physicsSpringLength,
                 physicsSpringConstant: this.physicsSpringConstant,
                 physicsGravity: this.physicsGravity,
                 edgeFade: this.edgeFade,
                 edgeMinWidth: this.edgeMinWidth,
-                edgeMaxWidth: this.edgeMaxWidth
+                edgeMaxWidth: this.edgeMaxWidth,
+                edgeColor: this.edgeColor
             };
         }
 
@@ -2846,6 +3093,7 @@
             const apply = (payload) => {
                 if (!payload || typeof payload !== 'object') return;
                 if (Number.isFinite(payload.labelFade)) this.labelFade = payload.labelFade;
+                if (typeof payload.labelColor === 'string') this.labelColor = payload.labelColor;
                 if (Number.isFinite(payload.labelSizeScale)) this.labelSizeScale = payload.labelSizeScale;
                 if (Number.isFinite(payload.labelMinCitations)) this.labelMinCitations = payload.labelMinCitations;
                 if (Number.isFinite(payload.labelWeight)) this.labelWeight = payload.labelWeight;
@@ -2854,13 +3102,17 @@
                 if (Number.isFinite(payload.nodeSizeMin)) this.nodeSizeMin = payload.nodeSizeMin;
                 if (Number.isFinite(payload.nodeSizeMax)) this.nodeSizeMax = payload.nodeSizeMax;
                 if (Number.isFinite(payload.nodeSizeGamma)) this.nodeSizeGamma = payload.nodeSizeGamma;
+                if (typeof payload.nodeColor === 'string') this.nodeColor = payload.nodeColor;
                 if (Number.isFinite(payload.nodeBorderWidth)) this.nodeBorderWidth = payload.nodeBorderWidth;
+                if (Number.isFinite(payload.nodeOuterBorderWidth)) this.nodeOuterBorderWidth = payload.nodeOuterBorderWidth;
+                if (typeof payload.nodeOuterBorderColor === 'string') this.nodeOuterBorderColor = payload.nodeOuterBorderColor;
                 if (Number.isFinite(payload.physicsSpringLength)) this.physicsSpringLength = payload.physicsSpringLength;
                 if (Number.isFinite(payload.physicsSpringConstant)) this.physicsSpringConstant = payload.physicsSpringConstant;
                 if (Number.isFinite(payload.physicsGravity)) this.physicsGravity = payload.physicsGravity;
                 if (Number.isFinite(payload.edgeFade)) this.edgeFade = payload.edgeFade;
                 if (Number.isFinite(payload.edgeMinWidth)) this.edgeMinWidth = payload.edgeMinWidth;
                 if (Number.isFinite(payload.edgeMaxWidth)) this.edgeMaxWidth = payload.edgeMaxWidth;
+                if (typeof payload.edgeColor === 'string') this.edgeColor = payload.edgeColor;
                 if (typeof payload.depthMode === 'boolean') this.depthMode = payload.depthMode;
             };
 
@@ -2898,6 +3150,7 @@
 
         syncSettingsSliders() {
             const labelFadeSlider = this.getEl(this.ids.labelFadeSlider);
+            const labelColorInput = this.getEl(this.ids.labelColorInput);
             const labelSizeSlider = this.getEl(this.ids.labelSizeSlider);
             const labelMinSlider = this.getEl(this.ids.labelMinSlider);
             const labelWeightSlider = this.getEl(this.ids.labelWeightSlider);
@@ -2906,15 +3159,20 @@
             const nodeSizeMinSlider = this.getEl(this.ids.nodeSizeMinSlider);
             const nodeSizeMaxSlider = this.getEl(this.ids.nodeSizeMaxSlider);
             const nodeSizeGammaSlider = this.getEl(this.ids.nodeSizeGammaSlider);
+            const nodeColorInput = this.getEl(this.ids.nodeColorInput);
             const nodeBorderSlider = this.getEl(this.ids.nodeBorderSlider);
+            const nodeOuterBorderWidthInput = this.getEl(this.ids.nodeOuterBorderWidthInput);
+            const nodeOuterBorderColorInput = this.getEl(this.ids.nodeOuterBorderColorInput);
             const physicsSpringSlider = this.getEl(this.ids.physicsSpringSlider);
             const physicsStrengthSlider = this.getEl(this.ids.physicsStrengthSlider);
             const physicsGravitySlider = this.getEl(this.ids.physicsGravitySlider);
             const edgeFadeSlider = this.getEl(this.ids.edgeFadeSlider);
             const edgeMinWidthSlider = this.getEl(this.ids.edgeMinWidthSlider);
             const edgeMaxWidthSlider = this.getEl(this.ids.edgeMaxWidthSlider);
+            const edgeColorInput = this.getEl(this.ids.edgeColorInput);
 
             if (labelFadeSlider) labelFadeSlider.value = String(this.labelFade || 0);
+            if (labelColorInput) labelColorInput.value = this.labelColor || '#000000';
             if (labelSizeSlider) labelSizeSlider.value = String(Math.round((this.labelSizeScale || 1) * 100));
             if (labelMinSlider) labelMinSlider.value = String(this.labelMinCitations || 0);
             if (labelWeightSlider) labelWeightSlider.value = String(this.labelWeight || 500);
@@ -2923,13 +3181,17 @@
             if (nodeSizeMinSlider) nodeSizeMinSlider.value = String(this.nodeSizeMin || 1);
             if (nodeSizeMaxSlider) nodeSizeMaxSlider.value = String(this.nodeSizeMax || 60);
             if (nodeSizeGammaSlider) nodeSizeGammaSlider.value = String(this.nodeSizeGamma || 1);
+            if (nodeColorInput) nodeColorInput.value = this.nodeColor || '#ffffff';
             if (nodeBorderSlider) nodeBorderSlider.value = String(this.nodeBorderWidth || 1.5);
+            if (nodeOuterBorderWidthInput) nodeOuterBorderWidthInput.value = String(this.nodeOuterBorderWidth ?? 2);
+            if (nodeOuterBorderColorInput) nodeOuterBorderColorInput.value = this.nodeOuterBorderColor || '#ffffff';
             if (physicsSpringSlider) physicsSpringSlider.value = String(this.physicsSpringLength || 120);
             if (physicsStrengthSlider) physicsStrengthSlider.value = String(this.physicsSpringConstant || 0.05);
             if (physicsGravitySlider) physicsGravitySlider.value = String(this.physicsGravity || -9000);
             if (edgeFadeSlider) edgeFadeSlider.value = String(this.edgeFade || 100);
             if (edgeMinWidthSlider) edgeMinWidthSlider.value = String(this.edgeMinWidth || 1);
             if (edgeMaxWidthSlider) edgeMaxWidthSlider.value = String(this.edgeMaxWidth || 6);
+            if (edgeColorInput) edgeColorInput.value = this.edgeColor || '#111111';
         }
 
         updateLabelLayer() {
@@ -3167,8 +3429,8 @@
             if (this._boundNetwork === network) return;
             if (this._boundNetwork) {
                 this._boundNetwork.off('click', this._onNetworkClick);
-                if (this._onNetworkBeforeDraw) {
-                    this._boundNetwork.off('beforeDrawing', this._onNetworkBeforeDraw);
+                if (this._onNetworkAfterDraw) {
+                    this._boundNetwork.off('afterDrawing', this._onNetworkAfterDraw);
                 }
             }
             this._onNetworkClick = (params) => {
@@ -3190,30 +3452,49 @@
                 this.openFileByWosId(nodeId);
             };
             network.on('click', this._onNetworkClick);
-            this._onNetworkBeforeDraw = (ctx) => {
+            this._onNetworkAfterDraw = (ctx) => {
                 const dataset = network?.body?.data?.nodes;
                 if (!dataset) return;
                 const nodes = dataset.get();
                 if (!nodes.length) return;
+                const outlineWidth = Number.isFinite(Number(this.nodeOuterBorderWidth))
+                    ? Number(this.nodeOuterBorderWidth)
+                    : 2;
+                if (outlineWidth <= 0) return;
+                const outlineColor = this.nodeOuterBorderColor || '#ffffff';
                 const scale = Number(network.getScale()) || 1;
-                const lineWidth = 2 / scale;
+                const ratio = Number(network.canvas?.pixelRatio) || 1;
                 ctx.save();
-                ctx.lineWidth = lineWidth;
-                ctx.strokeStyle = '#ffffff';
-                ctx.beginPath();
+                ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
                 nodes.forEach((node) => {
                     const pos = network.getPositions([node.id])[node.id];
                     if (!pos) return;
-                    const radius = Number(node.size) || 6;
-                    const borderWidth = Number(node.borderWidth) || 1;
-                    const r = radius + borderWidth / 2 + lineWidth / 2;
-                    ctx.moveTo(pos.x + r, pos.y);
-                    ctx.arc(pos.x, pos.y, r, 0, Math.PI * 2);
+                    const dom = typeof network.canvasToDOM === 'function'
+                        ? network.canvasToDOM(pos)
+                        : pos;
+                    const radius = (Number(node.size) || 6) * scale;
+                    const borderWidth = (Number(node.borderWidth) || 1) * scale;
+                    const outerRadius = radius + borderWidth / 2 + outlineWidth;
+                    ctx.fillStyle = outlineColor;
+                    ctx.beginPath();
+                    ctx.arc(dom.x, dom.y, outerRadius, 0, Math.PI * 2);
+                    ctx.fill();
+
+                    const fill = node.color?.background || '#ffffff';
+                    const stroke = node.color?.border || '#111111';
+                    ctx.fillStyle = fill;
+                    ctx.beginPath();
+                    ctx.arc(dom.x, dom.y, radius, 0, Math.PI * 2);
+                    ctx.fill();
+                    if (borderWidth > 0) {
+                        ctx.lineWidth = borderWidth;
+                        ctx.strokeStyle = stroke;
+                        ctx.stroke();
+                    }
                 });
-                ctx.stroke();
                 ctx.restore();
             };
-            network.on('beforeDrawing', this._onNetworkBeforeDraw);
+            network.on('afterDrawing', this._onNetworkAfterDraw);
             this._boundNetwork = network;
         }
 
