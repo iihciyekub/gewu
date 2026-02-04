@@ -1428,6 +1428,9 @@
             this.bindHoldHotkeys();
             // outside click to close disabled
             this.loadLabelSlots();
+            this.loadSavedList().then((list) => {
+                this.renderSavedSelect(Array.isArray(list) ? list : []);
+            });
         }
 
         applyInteractionMode() {
