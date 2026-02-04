@@ -264,7 +264,7 @@
         const darkMode = isDarkTheme();
         const visOptions = options.visOptions || {
             layout: { hierarchical: false },
-            interaction: { hover: true, dragNodes: true, dragView: true },
+            interaction: { hover: true, dragNodes: true, dragView: true, zoomSpeed: 0.4 },
             physics: {
                 enabled: true,
                 stabilization: { iterations: 200 }
@@ -568,7 +568,7 @@
             this.visNetworkSavedKey = options.visNetworkSavedKey || 'vis-network-saved';
             this.zoomMin = 0.1;
             this.zoomMax = 2.0;
-            this.zoomStep = 0.1;
+            this.zoomStep = 0.06;
             this.zoomAnimDuration = 520;
             this.zoomAnimEasing = 'easeInOutCubic';
             this.exportScale = 2;
@@ -1173,6 +1173,27 @@
                 return !!(view && view.classList.contains('active'));
             };
             document.addEventListener('keydown', (e) => {
+                if (e.key === 'Tab') {
+                    if (!isVisActive()) return;
+                    if (isTypingTarget()) return;
+                    if (e.metaKey || e.ctrlKey || e.altKey) return;
+                    e.preventDefault();
+                    const panel = this.getEl(this.ids.settingsPanel);
+                    const inputPanel = this.getEl(this.ids.inputPanel);
+                    const labelPanel = this.getEl(this.ids.labelPanel);
+                    const isOpen = panel ? panel.classList.contains('is-open') : false;
+                    const inputActive = inputPanel ? inputPanel.classList.contains('is-active') : false;
+                    if (!isOpen) {
+                        this.toggleInputDrawer(true, { focus: false });
+                    } else if (inputActive) {
+                        this.toggleLabelDrawer(true, { focus: false });
+                    } else {
+                        this.toggleInputDrawer(true, { focus: false });
+                    }
+                    const active = document.activeElement;
+                    if (active && active !== document.body) active.blur();
+                    return;
+                }
                 if (e.code === 'Space') {
                     if (!isVisActive()) return;
                     if (isTypingTarget()) return;
@@ -1699,7 +1720,7 @@
             }
         }
 
-        toggleInputDrawer(forceOpen) {
+        toggleInputDrawer(forceOpen, options = {}) {
             const panel = this.getEl(this.ids.settingsPanel);
             const inputPanel = this.getEl(this.ids.inputPanel);
             const labelPanel = this.getEl(this.ids.labelPanel);
@@ -1707,6 +1728,7 @@
             const isOpen = panel.classList.contains('is-open');
             const isActive = inputPanel.classList.contains('is-active');
             const next = typeof forceOpen === 'boolean' ? forceOpen : !(isOpen && isActive);
+            const shouldFocus = options.focus !== false;
             if (!next) {
                 const active = document.activeElement;
                 if (active && panel.contains(active)) {
@@ -1721,7 +1743,7 @@
                 if (labelPanel) labelPanel.classList.remove('is-active');
             }
             this.updateDrawerLayout();
-            if (next) {
+            if (next && shouldFocus) {
                 const textarea = this.getEl(this.ids.inputTextarea);
                 if (textarea) {
                     if (this.visInputText && !textarea.value) {
@@ -1736,7 +1758,7 @@
             }
         }
 
-        toggleLabelDrawer(forceOpen) {
+        toggleLabelDrawer(forceOpen, options = {}) {
             const panel = this.getEl(this.ids.settingsPanel);
             const labelPanel = this.getEl(this.ids.labelPanel);
             const inputPanel = this.getEl(this.ids.inputPanel);
@@ -1744,6 +1766,7 @@
             const isOpen = panel.classList.contains('is-open');
             const isActive = labelPanel.classList.contains('is-active');
             const next = typeof forceOpen === 'boolean' ? forceOpen : !(isOpen && isActive);
+            const shouldFocus = options.focus !== false;
             if (!next) {
                 const active = document.activeElement;
                 if (active && panel.contains(active)) {
@@ -1760,11 +1783,13 @@
             this.updateDrawerLayout();
             if (next) {
                 this.refreshLabelFieldOptions();
-                const input = this.getEl(this.ids.labelFieldInput);
-                if (input) {
-                    input.value = '';
-                    input.focus();
-                    input.setSelectionRange(input.value.length, input.value.length);
+                if (shouldFocus) {
+                    const input = this.getEl(this.ids.labelFieldInput);
+                    if (input) {
+                        input.value = '';
+                        input.focus();
+                        input.setSelectionRange(input.value.length, input.value.length);
+                    }
                 }
                 this.renderLabelFieldChips();
                 const slider = this.getEl(this.ids.labelFadeSlider);
@@ -3109,8 +3134,8 @@
         getZoomAnimDuration(delta, source) {
             const normalized = Math.min(1, Math.max(0, delta / 0.6));
             const eased = 0.5 - 0.5 * Math.cos(Math.PI * normalized);
-            const base = source === 'slider' ? 420 : 560;
-            const span = source === 'slider' ? 760 : 1080;
+            const base = source === 'slider' ? 520 : 680;
+            const span = source === 'slider' ? 980 : 1320;
             return Math.round(base + span * eased);
         }
 
