@@ -612,6 +612,7 @@
                 nodeSizeGammaSlider: options.nodeSizeGammaSliderId || 'visNodeSizeGammaSlider',
                 nodeColorInput: options.nodeColorInputId || 'visNodeColorInput',
                 nodeBorderSlider: options.nodeBorderSliderId || 'visNodeBorderSlider',
+                nodeBorderColorInput: options.nodeBorderColorInputId || 'visNodeBorderColorInput',
                 nodeOuterBorderWidthInput: options.nodeOuterBorderWidthInputId || 'visNodeOuterBorderWidth',
                 nodeOuterBorderColorInput: options.nodeOuterBorderColorInputId || 'visNodeOuterBorderColor',
                 edgeColorInput: options.edgeColorInputId || 'visEdgeColorInput',
@@ -667,6 +668,7 @@
             this.nodeSizeGamma = 1;
             this.nodeColor = '#ffffff';
             this.nodeBorderWidth = 1.5;
+            this.nodeBorderColor = '#111111';
             this.nodeOuterBorderWidth = 2;
             this.nodeOuterBorderColor = '#ffffff';
             this.physicsSpringLength = 120;
@@ -727,6 +729,7 @@
             const nodeSizeGammaSlider = this.getEl(this.ids.nodeSizeGammaSlider);
             const nodeColorInput = this.getEl(this.ids.nodeColorInput);
             const nodeBorderSlider = this.getEl(this.ids.nodeBorderSlider);
+            const nodeBorderColorInput = this.getEl(this.ids.nodeBorderColorInput);
             const nodeOuterBorderWidthInput = this.getEl(this.ids.nodeOuterBorderWidthInput);
             const nodeOuterBorderColorInput = this.getEl(this.ids.nodeOuterBorderColorInput);
             const labelWeightSlider = this.getEl(this.ids.labelWeightSlider);
@@ -1223,6 +1226,13 @@
                         forceAlpha: true
                     });
                     global.Coloris({
+                        el: '#visNodeBorderColorInput',
+                        alpha: true,
+                        format: 'hex',
+                        formatToggle: false,
+                        forceAlpha: true
+                    });
+                    global.Coloris({
                         el: '#visEdgeColorInput',
                         alpha: true,
                         format: 'hex',
@@ -1258,6 +1268,14 @@
                 nodeColorInput.addEventListener('input', () => {
                     this.nodeColor = nodeColorInput.value || '#ffffff';
                     this.applyNodeColor();
+                    this.queuePersistSettings();
+                });
+            }
+            if (nodeBorderColorInput && !nodeBorderColorInput.dataset.visBound) {
+                nodeBorderColorInput.dataset.visBound = '1';
+                nodeBorderColorInput.addEventListener('input', () => {
+                    this.nodeBorderColor = nodeBorderColorInput.value || '#111111';
+                    this.applyNodeBorderColor();
                     this.queuePersistSettings();
                 });
             }
@@ -2062,6 +2080,7 @@
                 const nodeSizeGammaSlider = this.getEl(this.ids.nodeSizeGammaSlider);
                 const nodeColorInput = this.getEl(this.ids.nodeColorInput);
                 const nodeBorderSlider = this.getEl(this.ids.nodeBorderSlider);
+                const nodeBorderColorInput = this.getEl(this.ids.nodeBorderColorInput);
                 const nodeOuterBorderWidthInput = this.getEl(this.ids.nodeOuterBorderWidthInput);
                 const nodeOuterBorderColorInput = this.getEl(this.ids.nodeOuterBorderColorInput);
                 const labelColorInput = this.getEl(this.ids.labelColorInput);
@@ -2080,6 +2099,7 @@
                 if (nodeSizeGammaSlider) nodeSizeGammaSlider.value = String(this.nodeSizeGamma || 1);
                 if (nodeColorInput) nodeColorInput.value = this.nodeColor || '#ffffff';
                 if (nodeBorderSlider) nodeBorderSlider.value = String(this.nodeBorderWidth || 1.5);
+                if (nodeBorderColorInput) nodeBorderColorInput.value = this.nodeBorderColor || '#111111';
                 if (nodeOuterBorderWidthInput) nodeOuterBorderWidthInput.value = String(this.nodeOuterBorderWidth ?? 2);
                 if (nodeOuterBorderColorInput) nodeOuterBorderColorInput.value = this.nodeOuterBorderColor || '#ffffff';
                 if (labelColorInput) labelColorInput.value = this.labelColor || '#000000';
@@ -2715,16 +2735,28 @@
             const dataset = this.getNetworkNodesDataSet();
             if (!dataset) return;
             const base = normalizeVisColor(this.nodeColor || '#ffffff');
+            const border = normalizeVisColor(this.nodeBorderColor || base);
             const highlight = adjustColorAlpha(base, 0.12);
             const hover = adjustColorAlpha(base, 0.2);
             const updates = dataset.get().map((node) => ({
                 id: node.id,
                 color: {
                     background: base,
-                    border: base,
-                    highlight: { background: highlight, border: highlight },
-                    hover: { background: hover, border: hover }
+                    border,
+                    highlight: { background: highlight, border },
+                    hover: { background: hover, border }
                 }
+            }));
+            dataset.update(updates);
+        }
+
+        applyNodeBorderColor() {
+            const dataset = this.getNetworkNodesDataSet();
+            if (!dataset) return;
+            const border = normalizeVisColor(this.nodeBorderColor || '#111111');
+            const updates = dataset.get().map((node) => ({
+                id: node.id,
+                color: { ...(node.color || {}), border }
             }));
             dataset.update(updates);
         }
@@ -2840,6 +2872,7 @@
             this.nodeSizeGamma = 0.46;
             this.nodeColor = '#ffffff';
             this.nodeBorderWidth = 1.5;
+            this.nodeBorderColor = '#111111';
             this.nodeOuterBorderWidth = 2;
             this.nodeOuterBorderColor = '#ffffff';
             this.physicsSpringLength = 188;
@@ -2922,6 +2955,7 @@
             const nodeSizeGammaSlider = this.getEl(this.ids.nodeSizeGammaSlider);
             const nodeColorInput = this.getEl(this.ids.nodeColorInput);
             const nodeBorderSlider = this.getEl(this.ids.nodeBorderSlider);
+            const nodeBorderColorInput = this.getEl(this.ids.nodeBorderColorInput);
             const nodeOuterBorderWidthInput = this.getEl(this.ids.nodeOuterBorderWidthInput);
             const nodeOuterBorderColorInput = this.getEl(this.ids.nodeOuterBorderColorInput);
             const labelSizeSlider = this.getEl(this.ids.labelSizeSlider);
@@ -2941,6 +2975,7 @@
             if (nodeSizeGammaSlider) nodeSizeGammaSlider.value = String(gamma);
             if (nodeColorInput) nodeColorInput.value = this.nodeColor || '#ffffff';
             if (nodeBorderSlider) nodeBorderSlider.value = String(border);
+            if (nodeBorderColorInput) nodeBorderColorInput.value = this.nodeBorderColor || '#111111';
             if (nodeOuterBorderWidthInput) nodeOuterBorderWidthInput.value = String(this.nodeOuterBorderWidth ?? 2);
             if (nodeOuterBorderColorInput) nodeOuterBorderColorInput.value = this.nodeOuterBorderColor || '#ffffff';
             if (labelSizeSlider) labelSizeSlider.value = String(Math.round(labelScale * 100));
@@ -2959,6 +2994,7 @@
             this.applyNodeSizeScale();
             this.applyNodeBorderWidth();
             this.applyNodeColor();
+            this.applyNodeBorderColor();
             this.applyLabelSizeScale();
             this.applyLabelFade();
             this.applyLabelColor();
@@ -2986,6 +3022,7 @@
                 nodeSizeGamma: this.nodeSizeGamma,
                 nodeColor: this.nodeColor,
                 nodeBorderWidth: this.nodeBorderWidth,
+                nodeBorderColor: this.nodeBorderColor,
                 nodeOuterBorderWidth: this.nodeOuterBorderWidth,
                 nodeOuterBorderColor: this.nodeOuterBorderColor,
                 physicsSpringLength: this.physicsSpringLength,
@@ -3104,6 +3141,7 @@
                 if (Number.isFinite(payload.nodeSizeGamma)) this.nodeSizeGamma = payload.nodeSizeGamma;
                 if (typeof payload.nodeColor === 'string') this.nodeColor = payload.nodeColor;
                 if (Number.isFinite(payload.nodeBorderWidth)) this.nodeBorderWidth = payload.nodeBorderWidth;
+                if (typeof payload.nodeBorderColor === 'string') this.nodeBorderColor = payload.nodeBorderColor;
                 if (Number.isFinite(payload.nodeOuterBorderWidth)) this.nodeOuterBorderWidth = payload.nodeOuterBorderWidth;
                 if (typeof payload.nodeOuterBorderColor === 'string') this.nodeOuterBorderColor = payload.nodeOuterBorderColor;
                 if (Number.isFinite(payload.physicsSpringLength)) this.physicsSpringLength = payload.physicsSpringLength;
@@ -3161,6 +3199,7 @@
             const nodeSizeGammaSlider = this.getEl(this.ids.nodeSizeGammaSlider);
             const nodeColorInput = this.getEl(this.ids.nodeColorInput);
             const nodeBorderSlider = this.getEl(this.ids.nodeBorderSlider);
+            const nodeBorderColorInput = this.getEl(this.ids.nodeBorderColorInput);
             const nodeOuterBorderWidthInput = this.getEl(this.ids.nodeOuterBorderWidthInput);
             const nodeOuterBorderColorInput = this.getEl(this.ids.nodeOuterBorderColorInput);
             const physicsSpringSlider = this.getEl(this.ids.physicsSpringSlider);
@@ -3183,6 +3222,7 @@
             if (nodeSizeGammaSlider) nodeSizeGammaSlider.value = String(this.nodeSizeGamma || 1);
             if (nodeColorInput) nodeColorInput.value = this.nodeColor || '#ffffff';
             if (nodeBorderSlider) nodeBorderSlider.value = String(this.nodeBorderWidth || 1.5);
+            if (nodeBorderColorInput) nodeBorderColorInput.value = this.nodeBorderColor || '#111111';
             if (nodeOuterBorderWidthInput) nodeOuterBorderWidthInput.value = String(this.nodeOuterBorderWidth ?? 2);
             if (nodeOuterBorderColorInput) nodeOuterBorderColorInput.value = this.nodeOuterBorderColor || '#ffffff';
             if (physicsSpringSlider) physicsSpringSlider.value = String(this.physicsSpringLength || 120);

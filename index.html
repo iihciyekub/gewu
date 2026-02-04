@@ -539,6 +539,7 @@
                                                         inputmode="decimal">
                                                 </div>
                                                 <!-- node settings -->
+                                                <div class="context-menu-divider"></div>
                                                 <div class="vis-node-size">
                                                     <label for="visNodeSizeMinSlider">Node size min</label>
                                                     <input id="visNodeSizeMinSlider" type="number" step="0.1" value="6"
@@ -549,16 +550,20 @@
                                                     <label for="visNodeSizeGammaSlider">Node size curve</label>
                                                     <input id="visNodeSizeGammaSlider" type="number" step="0.05" value="1"
                                                         inputmode="decimal">
-                                                </div>
-                                                <div class="vis-node-color">
                                                     <label for="visNodeColorInput">Node color</label>
                                                     <input id="visNodeColorInput" type="text" value="#ffffff" data-coloris
                                                         inputmode="text">
                                                 </div>
+
+                                                <!-- node border -->
+                                                <div class="context-menu-divider"></div>
                                                 <div class="vis-node-border">
                                                     <label for="visNodeBorderSlider">Node border width</label>
                                                     <input id="visNodeBorderSlider" type="number" step="0.1" value="1.5"
                                                         inputmode="decimal">
+                                                    <label for="visNodeBorderColorInput">Node border color</label>
+                                                    <input id="visNodeBorderColorInput" type="text" value="#111111" data-coloris
+                                                        inputmode="text">
                                                     <label for="visNodeOuterBorderWidth">Outer border width</label>
                                                     <input id="visNodeOuterBorderWidth" type="number" step="0.1" value="2"
                                                         inputmode="decimal">
@@ -567,7 +572,8 @@
                                                         inputmode="text">
                                                 </div>
 
-
+                                                <!-- edge settings -->
+                                                <div class="context-menu-divider"></div>
                                                 <div class="vis-edge-width">
                                                     <label for="visEdgeMinWidthSlider">Link min width</label>
                                                     <input id="visEdgeMinWidthSlider" type="number" step="0.1" value="1"
@@ -575,48 +581,38 @@
                                                     <label for="visEdgeMaxWidthSlider">Link max width</label>
                                                     <input id="visEdgeMaxWidthSlider" type="number" step="0.1" value="6"
                                                         inputmode="decimal">
-                                                </div>
-                                                <div class="vis-edge-fade">
                                                     <label for="visEdgeFadeSlider">Link curve</label>
                                                     <input id="visEdgeFadeSlider" type="number" step="5" value="100"
                                                         inputmode="decimal">
-                                                </div>
-                                                <div class="vis-edge-color">
                                                     <label for="visEdgeColorInput">Edge color</label>
                                                     <input id="visEdgeColorInput" type="text" value="#111111" data-coloris
                                                         inputmode="text">
                                                 </div>
 
+                                                <!-- label settings -->
+                                                <div class="context-menu-divider"></div>
                                                 <div class="vis-label-weight">
                                                     <label for="visLabelFontMinInput">Label min size</label>
                                                     <input id="visLabelFontMinInput" type="number" step="1" value="9"
                                                         inputmode="decimal">
-                                                </div>
-                                                <div class="vis-label-weight">
                                                     <label for="visLabelFontMaxInput">Label max size</label>
                                                     <input id="visLabelFontMaxInput" type="number" step="1" value="30"
                                                         inputmode="decimal">
-                                                </div>
-                                                <div class="vis-label-size">
                                                     <label for="visLabelSizeSlider">Label size</label>
                                                     <input id="visLabelSizeSlider" type="number" step="1" value="100"
                                                         inputmode="decimal">
-                                                </div>
-                                                <div class="vis-label-weight">
                                                     <label for="visLabelWeightSlider">Label weight</label>
                                                     <input id="visLabelWeightSlider" type="number" step="50" value="500"
                                                         inputmode="decimal">
-                                                </div>
-                                                <div class="vis-label-fade">
-                                                    <label for="visLabelFadeSlider">Label fade by citations</label>
+                                                    <label for="visLabelFadeSlider">Label fade</label>
                                                     <input id="visLabelFadeSlider" type="number" step="0.1" value="0"
                                                         inputmode="decimal">
-                                                </div>
-                                                <div class="vis-label-color">
                                                     <label for="visLabelColorInput">Label color</label>
                                                     <input id="visLabelColorInput" type="text" value="#000000" data-coloris
                                                         inputmode="text">
                                                 </div>
+
+                                                <div class="context-menu-divider"></div>
                                                 <div class="vis-label-threshold">
                                                     <label for="visLabelMinSlider"># of Citations</label>
                                                     <div class="vis-label-threshold-row">
