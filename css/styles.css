@@ -2355,8 +2355,8 @@ body.theme-dark .vis-network-zoom input[type="range"] {
     text-align: left;
     padding: 1px 6px;
     border-radius: 8px;
+    border: 1px dashed var(--vis-label-border, #00000021);
     background: var(--vis-label-bg);
-    border: 1px dashed #00000021 !important;
     font-size: 11px;
     font-family: Georgia, "Times New Roman", "Times", serif;
     color: var(--vis-label-color, #000000);
@@ -2366,11 +2366,13 @@ body.theme-dark .vis-network-zoom input[type="range"] {
 .vis-network-view {
     --vis-label-bg: #f2f2f2f1;
     --vis-label-color: #000000;
+    --vis-label-border: #00000021;
 }
 
 body.theme-dark .vis-network-view {
     --vis-label-bg: rgba(38, 38, 38, 0.749);
     --vis-label-color: #e2e8f0;
+    --vis-label-border: rgba(255, 255, 255, 0.18);
 }
 
 .vis-node-label.is-hover {

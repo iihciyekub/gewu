@@ -610,6 +610,7 @@
                 labelFadeSlider: options.labelFadeSliderId || 'visLabelFadeSlider',
                 labelColorInput: options.labelColorInputId || 'visLabelColorInput',
                 labelBgColorInput: options.labelBgColorInputId || 'visLabelBgColorInput',
+                labelBorderColorInput: options.labelBorderColorInputId || 'visLabelBorderColorInput',
                 labelSizeSlider: options.labelSizeSliderId || 'visLabelSizeSlider',
                 labelMinSlider: options.labelMinSliderId || 'visLabelMinSlider',
                 nodeSizeMinSlider: options.nodeSizeMinSliderId || 'visNodeSizeMinSlider',
@@ -658,6 +659,7 @@
             this.labelFade = 0;
             this.labelColor = '#000000';
             this.labelBgColor = '#f2f2f2f1';
+            this.labelBorderColor = '#00000021';
             this.labelSizeScale = 1;
             this.labelMinCitations = 0;
             this.labelFieldOptions = [];
@@ -729,6 +731,7 @@
             const labelFadeSlider = this.getEl(this.ids.labelFadeSlider);
             const labelColorInput = this.getEl(this.ids.labelColorInput);
             const labelBgColorInput = this.getEl(this.ids.labelBgColorInput);
+            const labelBorderColorInput = this.getEl(this.ids.labelBorderColorInput);
             const labelSizeSlider = this.getEl(this.ids.labelSizeSlider);
             const labelMinSlider = this.getEl(this.ids.labelMinSlider);
             const nodeSizeMinSlider = this.getEl(this.ids.nodeSizeMinSlider);
@@ -1153,6 +1156,14 @@
                     this.queuePersistSettings();
                 });
             }
+            if (labelBorderColorInput && !labelBorderColorInput.dataset.visBound) {
+                labelBorderColorInput.dataset.visBound = '1';
+                labelBorderColorInput.addEventListener('input', () => {
+                    this.labelBorderColor = labelBorderColorInput.value || '#00000021';
+                    this.applyLabelBorderColor();
+                    this.queuePersistSettings();
+                });
+            }
             bindNumberInput(labelMinSlider, (next) => {
                 this.labelMinCitations = next;
                 this.applyLabelThreshold();
@@ -1263,6 +1274,13 @@
                     });
                     global.Coloris({
                         el: '#visLabelBgColorInput',
+                        alpha: true,
+                        format: 'hex',
+                        formatToggle: false,
+                        forceAlpha: true
+                    });
+                    global.Coloris({
+                        el: '#visLabelBorderColorInput',
                         alpha: true,
                         format: 'hex',
                         formatToggle: false,
@@ -1938,6 +1956,7 @@
             this.applyLabelSizeScale();
             this.applyLabelWeight();
             this.applyLabelBgColor();
+            this.applyLabelBorderColor();
             this.applyLabelThreshold();
             this.applyNodeSizeScale();
             this.applyNodeBorderWidth();
@@ -1964,6 +1983,7 @@
                 this.applyLabelWeight();
                 this.applyLabelColor();
                 this.applyLabelBgColor();
+                this.applyLabelBorderColor();
                 this.applyLabelThreshold();
                 this.applyPhysicsSettings();
                 this.applyEdgeFade();
@@ -2659,6 +2679,18 @@
             this.updateLabelLayer();
         }
 
+        applyLabelBorderColor() {
+            const dataset = this.getNetworkNodesDataSet();
+            if (!dataset) return;
+            const color = normalizeVisColor(this.labelBorderColor || '#00000021');
+            const updates = dataset.get().map((node) => ({
+                id: node.id,
+                labelStyle: { ...(node.labelStyle || {}), borderColor: color }
+            }));
+            dataset.update(updates);
+            this.updateLabelLayer();
+        }
+
         applyLabelWeight() {
             const dataset = this.getNetworkNodesDataSet();
             if (!dataset) return;
@@ -2904,6 +2936,7 @@
             this.labelFade = 51.5;
             this.labelColor = '#000000';
             this.labelBgColor = '#f2f2f2f1';
+            this.labelBorderColor = '#00000021';
             this.nodeSizeMin = 4.0;
             this.nodeSizeMax = 69;
             this.nodeSizeGamma = 0.46;
@@ -2929,6 +2962,7 @@
             this.applyLabelSizeScale();
             this.applyLabelWeight();
             this.applyLabelBgColor();
+            this.applyLabelBorderColor();
             this.applyLabelThreshold();
             this.applyNodeSizeScale();
             this.applyNodeBorderWidth();
@@ -3001,6 +3035,7 @@
             const labelMinSlider = this.getEl(this.ids.labelMinSlider);
             const labelWeightSlider = this.getEl(this.ids.labelWeightSlider);
             const labelBgColorInput = this.getEl(this.ids.labelBgColorInput);
+            const labelBorderColorInput = this.getEl(this.ids.labelBorderColorInput);
             const physicsSpringSlider = this.getEl(this.ids.physicsSpringSlider);
             const physicsStrengthSlider = this.getEl(this.ids.physicsStrengthSlider);
             const physicsGravitySlider = this.getEl(this.ids.physicsGravitySlider);
@@ -3021,6 +3056,7 @@
             if (labelFadeSlider) labelFadeSlider.value = String(fade);
             if (labelColorInput) labelColorInput.value = this.labelColor || '#000000';
             if (labelBgColorInput) labelBgColorInput.value = this.labelBgColor || '#f2f2f2f1';
+            if (labelBorderColorInput) labelBorderColorInput.value = this.labelBorderColor || '#00000021';
             if (labelMinSlider) labelMinSlider.value = String(minCite);
             if (labelWeightSlider) labelWeightSlider.value = String(this.labelWeight || 500);
             if (physicsSpringSlider) physicsSpringSlider.value = String(this.physicsSpringLength);
@@ -3053,6 +3089,7 @@
                 labelFade: this.labelFade,
                 labelColor: this.labelColor,
                 labelBgColor: this.labelBgColor,
+                labelBorderColor: this.labelBorderColor,
                 labelSizeScale: this.labelSizeScale,
                 labelMinCitations: this.labelMinCitations,
                 labelWeight: this.labelWeight,
@@ -3174,6 +3211,7 @@
                 if (Number.isFinite(payload.labelFade)) this.labelFade = payload.labelFade;
                 if (typeof payload.labelColor === 'string') this.labelColor = payload.labelColor;
                 if (typeof payload.labelBgColor === 'string') this.labelBgColor = payload.labelBgColor;
+                if (typeof payload.labelBorderColor === 'string') this.labelBorderColor = payload.labelBorderColor;
                 if (Number.isFinite(payload.labelSizeScale)) this.labelSizeScale = payload.labelSizeScale;
                 if (Number.isFinite(payload.labelMinCitations)) this.labelMinCitations = payload.labelMinCitations;
                 if (Number.isFinite(payload.labelWeight)) this.labelWeight = payload.labelWeight;
@@ -3233,6 +3271,7 @@
             const labelFadeSlider = this.getEl(this.ids.labelFadeSlider);
             const labelColorInput = this.getEl(this.ids.labelColorInput);
             const labelBgColorInput = this.getEl(this.ids.labelBgColorInput);
+            const labelBorderColorInput = this.getEl(this.ids.labelBorderColorInput);
             const labelSizeSlider = this.getEl(this.ids.labelSizeSlider);
             const labelMinSlider = this.getEl(this.ids.labelMinSlider);
             const labelWeightSlider = this.getEl(this.ids.labelWeightSlider);
@@ -3257,6 +3296,7 @@
             if (labelFadeSlider) labelFadeSlider.value = String(this.labelFade || 0);
             if (labelColorInput) labelColorInput.value = this.labelColor || '#000000';
             if (labelBgColorInput) labelBgColorInput.value = this.labelBgColor || '#f2f2f2f1';
+            if (labelBorderColorInput) labelBorderColorInput.value = this.labelBorderColor || '#00000021';
             if (labelSizeSlider) labelSizeSlider.value = String(Math.round((this.labelSizeScale || 1) * 100));
             if (labelMinSlider) labelMinSlider.value = String(this.labelMinCitations || 0);
             if (labelWeightSlider) labelWeightSlider.value = String(this.labelWeight || 500);
