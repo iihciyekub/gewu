@@ -16,6 +16,7 @@
     --wos-hover: #EBF5FF;
     --wos-active: #dee0e1;
     --wos-tag: #E5E7EB;
+    --wos-tag-text: #5e184b;
 
     /* 学术灰色系 */
     --gray-50: #F9FAFB;
@@ -108,7 +109,7 @@ body {
 }
 
 .btn i {
-    font-size: 10px;
+    font-size: 12px;
 }
 
 .btn-primary {
@@ -2715,6 +2716,28 @@ body.theme-dark .vis-label-suggest .vis-label-suggest-item.active {
     border-top: 1px solid #e5e7eb;
 }
 
+.vis-label-input-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.vis-label-input-row .vis-label-input-full {
+    flex: 1 1 auto;
+}
+
+.vis-label-toggle-inline {
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    box-shadow: none;
+    font-size: 16px;
+}
+
 .vis-label-field-group .vis-label-input-full {
     width: 100%;
     padding: 8px 10px;
@@ -2881,6 +2904,64 @@ body.theme-dark .vis-label-suggest .vis-label-suggest-item.active {
     margin-top: 4px;
 }
 
+.vis-label-slots {
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px dashed var(--gray-200);
+}
+
+.vis-label-slots-title {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    color: var(--gray-600, #4b5563);
+}
+
+.vis-label-slots-grid {
+    display: flex;
+    gap: 6px;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    padding-bottom: 2px;
+}
+
+.vis-label-slots-grid .btn {
+    min-width: 28px;
+    height: 28px;
+    padding: 0;
+    font-size: 16px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: none;
+    box-shadow: none;
+    margin: 0;
+}
+
+.vis-label-slot-action {
+    min-width: 28px;
+    height: 28px;
+    font-size: 14px;
+    color: #6b7280;
+}
+
+.vis-label-slots-grid .btn.is-filled {
+    border-color: var(--wos-blue, #2563eb);
+    color: var(--wos-blue, #2563eb);
+}
+
+.vis-label-slots-grid .btn.is-active {
+    color: var(--wos-tag-text, #111111);
+    border-color: var(--wos-tag, #E5E7EB);
+}
+
+.vis-label-slots-actions {
+    margin-top: 8px;
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
 .vis-label-threshold {
     display: grid;
     grid-template-columns: 140px 1fr;
@@ -2924,7 +3005,6 @@ body.theme-dark .vis-label-suggest .vis-label-suggest-item.active {
 
 .vis-input-restore {
     padding: 10px 14px;
-    border-top: 1px solid #e5e7eb;
     display: flex;
     flex-direction: column;
     gap: 6px;
@@ -2968,8 +3048,7 @@ body.theme-dark .vis-label-suggest .vis-label-suggest-item.active {
 }
 
 .vis-input-actions {
-    padding: 12px 14px;
-    border-top: 1px solid #e5e7eb;
+    padding: 2px 8px;
     display: flex;
     gap: 8px;
     justify-content: flex-end;

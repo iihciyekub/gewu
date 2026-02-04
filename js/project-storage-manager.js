@@ -23,7 +23,8 @@ class ProjectStorageManager {
             'md-chat-fields': 'md-chat-fields.json',
             'vis-network-saved': 'vis-network-saved.json',
             'vis-network-last': 'vis-network-last.json',
-            'vis-network-settings': 'vis-network-settings.json'
+            'vis-network-settings': 'vis-network-settings.json',
+            'vis-network-label-slots': 'vis-network-label-slots.json'
         };
     }
     
@@ -86,8 +87,27 @@ class ProjectStorageManager {
         }
         
         const filePath = `${storagePath}/${filename}`;
+        const projectPath = this.app?.currentProject?.path;
         
         try {
+            // Avoid 404s by checking existence before read.
+            if (projectPath) {
+                const existsResp = await fetch('/file-exists', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        projectPath,
+                        filePath: `${this.storageDir}/${filename}`
+                    })
+                });
+                if (existsResp.ok) {
+                    const existsData = await existsResp.json();
+                    if (!existsData?.exists) {
+                        this.cache[key] = null;
+                        return null;
+                    }
+                }
+            }
             const response = await fetch(`/read-json?file=${encodeURIComponent(filePath)}`);
             
             if (!response.ok) {

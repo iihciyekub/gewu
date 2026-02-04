@@ -383,14 +383,14 @@
 
     function bindLabelToggleButton(network, dataset, visData, buttonEl, view) {
         if (!buttonEl) return;
-        const labelSpan = buttonEl.querySelector('span');
+        const icon = buttonEl.querySelector('i');
         const updateButtonText = (showAll) => {
-            const text = showAll ? 'Hide Labels' : 'Show Labels';
-            if (labelSpan) {
-                labelSpan.textContent = text;
-            } else {
-                buttonEl.textContent = text;
+            const label = showAll ? 'Hide labels' : 'Show labels';
+            if (icon) {
+                icon.className = showAll ? 'fa-solid fa-eye-slash' : 'fa-solid fa-eye';
             }
+            buttonEl.setAttribute('aria-label', label);
+            buttonEl.setAttribute('title', label);
         };
         updateButtonText(getLabelState(network).showAll);
         buttonEl.onclick = () => {
@@ -607,6 +607,8 @@
                 labelFieldInput: options.labelFieldInputId || 'visLabelFieldInput',
                 labelSuggest: options.labelSuggestId || 'visLabelSuggest',
                 labelFields: options.labelFieldsId || 'visLabelFields',
+                labelSlots: options.labelSlotsId || 'visLabelSlots',
+                labelSlotsSaveBtn: options.labelSlotsSaveBtnId || 'visLabelSlotsSaveBtn',
                 labelFadeSlider: options.labelFadeSliderId || 'visLabelFadeSlider',
                 labelColorInput: options.labelColorInputId || 'visLabelColorInput',
                 labelBgColorInput: options.labelBgColorInputId || 'visLabelBgColorInput',
@@ -686,11 +688,16 @@
             this.edgeMinWidth = 1;
             this.edgeMaxWidth = 6;
             this.edgeColor = '#111111';
+            this.edgeStyle = 'curve-dynamic';
             this.wosNodeIndex = null;
             this.wosNodeIndexSource = null;
             this.labelFieldHistory = [];
             this.labelFieldHistoryIndex = -1;
             this.settingsKey = 'vis-network-settings';
+            this.labelSlotsKey = 'vis-network-label-slots';
+            this.labelSlots = Array.from({ length: 10 }, () => null);
+            this.activeLabelSlot = -1;
+            this._labelSlotsLoaded = false;
             this._settingsSaveTimer = null;
             this._settingsLoaded = false;
             this.networkStateKey = 'vis-network-last';
@@ -728,6 +735,8 @@
             const labelFieldInput = this.getEl(this.ids.labelFieldInput);
             const labelSuggest = this.getEl(this.ids.labelSuggest);
             const labelFields = this.getEl(this.ids.labelFields);
+            const labelSlots = this.getEl(this.ids.labelSlots);
+            const labelSlotsSaveBtn = this.getEl(this.ids.labelSlotsSaveBtn);
             const labelFadeSlider = this.getEl(this.ids.labelFadeSlider);
             const labelColorInput = this.getEl(this.ids.labelColorInput);
             const labelBgColorInput = this.getEl(this.ids.labelBgColorInput);
@@ -1343,6 +1352,35 @@
                     this.removeLabelField(field);
                 });
             }
+            if (labelSlots && !labelSlots.dataset.visBound) {
+                labelSlots.dataset.visBound = '1';
+                labelSlots.addEventListener('click', (e) => {
+                    const btn = e.target.closest('[data-slot]');
+                    if (!btn) return;
+                    const idx = Number(btn.dataset.slot) - 1;
+                    if (!Number.isFinite(idx) || idx < 0) return;
+                    this.activeLabelSlot = idx;
+                    this.applyLabelSlot(idx);
+                    this.updateLabelSlotButtons();
+                    this.persistLabelSlots();
+                });
+                labelSlots.addEventListener('contextmenu', (e) => {
+                    const btn = e.target.closest('[data-slot]');
+                    if (!btn) return;
+                    e.preventDefault();
+                    const idx = Number(btn.dataset.slot) - 1;
+                    if (!Number.isFinite(idx) || idx < 0) return;
+                    const ok = window.confirm(`Clear Slot ${idx + 1} saved settings?`);
+                    if (!ok) return;
+                    this.clearLabelSlot(idx);
+                });
+            }
+            if (labelSlotsSaveBtn && !labelSlotsSaveBtn.dataset.visBound) {
+                labelSlotsSaveBtn.dataset.visBound = '1';
+                labelSlotsSaveBtn.addEventListener('click', () => {
+                    this.saveLabelSlot();
+                });
+            }
             if (!this._escBound) {
                 this._escBound = true;
                 document.addEventListener('keydown', (e) => {
@@ -1357,6 +1395,7 @@
             }
             this.bindHoldHotkeys();
             // outside click to close disabled
+            this.loadLabelSlots();
         }
 
         applyInteractionMode() {
@@ -1540,7 +1579,11 @@
             if (!view || !canvas) return null;
             const viewRect = view.getBoundingClientRect();
             if (!viewRect || viewRect.width <= 0 || viewRect.height <= 0) return null;
-            const exportScale = Number.isFinite(scale) && scale > 0 ? scale : 1;
+            const pixelRatio = Number.isFinite(canvas.width) && viewRect.width > 0
+                ? canvas.width / viewRect.width
+                : 1;
+            const baseScale = Number.isFinite(scale) && scale > 0 ? scale : 1;
+            const exportScale = baseScale * pixelRatio;
             const width = Math.max(1, Math.round(viewRect.width * exportScale));
             const height = Math.max(1, Math.round(viewRect.height * exportScale));
             const bg = this.getCanvasBackground();
@@ -2128,6 +2171,8 @@
                 const nodeOuterBorderWidthInput = this.getEl(this.ids.nodeOuterBorderWidthInput);
                 const nodeOuterBorderColorInput = this.getEl(this.ids.nodeOuterBorderColorInput);
                 const labelColorInput = this.getEl(this.ids.labelColorInput);
+                const labelBgColorInput = this.getEl(this.ids.labelBgColorInput);
+                const labelBorderColorInput = this.getEl(this.ids.labelBorderColorInput);
                 const edgeColorInput = this.getEl(this.ids.edgeColorInput);
                 const labelWeightSlider = this.getEl(this.ids.labelWeightSlider);
                 const physicsSpringSlider = this.getEl(this.ids.physicsSpringSlider);
@@ -2141,13 +2186,15 @@
                 if (nodeSizeMinSlider) nodeSizeMinSlider.value = String(this.nodeSizeMin || 1);
                 if (nodeSizeMaxSlider) nodeSizeMaxSlider.value = String(this.nodeSizeMax || 60);
                 if (nodeSizeGammaSlider) nodeSizeGammaSlider.value = String(this.nodeSizeGamma || 1);
-                if (nodeColorInput) nodeColorInput.value = this.nodeColor || '#ffffff';
+                this.setColorInputValue(nodeColorInput, this.nodeColor || '#ffffff');
                 if (nodeBorderSlider) nodeBorderSlider.value = String(this.nodeBorderWidth || 1.5);
-                if (nodeBorderColorInput) nodeBorderColorInput.value = this.nodeBorderColor || '#111111';
+                this.setColorInputValue(nodeBorderColorInput, this.nodeBorderColor || '#111111');
                 if (nodeOuterBorderWidthInput) nodeOuterBorderWidthInput.value = String(this.nodeOuterBorderWidth ?? 2);
-                if (nodeOuterBorderColorInput) nodeOuterBorderColorInput.value = this.nodeOuterBorderColor || '#ffffff';
-                if (labelColorInput) labelColorInput.value = this.labelColor || '#000000';
-                if (edgeColorInput) edgeColorInput.value = this.edgeColor || '#111111';
+                this.setColorInputValue(nodeOuterBorderColorInput, this.nodeOuterBorderColor || '#ffffff');
+                this.setColorInputValue(labelColorInput, this.labelColor || '#000000');
+                this.setColorInputValue(labelBgColorInput, this.labelBgColor || '#f2f2f2f1');
+                this.setColorInputValue(labelBorderColorInput, this.labelBorderColor || '#00000021');
+                this.setColorInputValue(edgeColorInput, this.edgeColor || '#111111');
                 if (labelWeightSlider) labelWeightSlider.value = String(this.labelWeight || 500);
                 if (physicsSpringSlider) physicsSpringSlider.value = String(this.physicsSpringLength || 120);
                 if (physicsStrengthSlider) physicsStrengthSlider.value = String(this.physicsSpringConstant || 0.05);
@@ -2892,6 +2939,53 @@
             dataset.update(updates);
         }
 
+        applyEdgeStyle() {
+            if (!this.visNetwork) return;
+            const dataset = this.visNetwork?.body?.data?.edges;
+            if (!dataset) return;
+            const style = this.edgeStyle || 'curve-dynamic';
+            const isArrow = style === 'arrow';
+            const isDashed = style === 'dashed';
+            const isStraight = style === 'straight';
+            const isCurve = style.startsWith('curve-');
+            const updates = dataset.get().map((edge) => {
+                const next = { id: edge.id };
+                next.arrows = isArrow ? 'to' : null;
+                next.dashes = isDashed ? [6, 6] : false;
+                if (isStraight) {
+                    next.smooth = false;
+                } else if (isCurve) {
+                    const curve = style.replace('curve-', '');
+                    if (curve === 'dynamic') {
+                        next.smooth = { type: 'dynamic', roundness: 0.25 };
+                    } else if (curve === 'cw') {
+                        next.smooth = { type: 'curvedCW', roundness: 0.25 };
+                    } else if (curve === 'ccw') {
+                        next.smooth = { type: 'curvedCCW', roundness: 0.25 };
+                    } else if (curve === 'bezier') {
+                        next.smooth = { type: 'continuous', roundness: 0.35 };
+                    } else {
+                        next.smooth = { type: 'dynamic', roundness: 0.25 };
+                    }
+                } else {
+                    next.smooth = { type: 'dynamic', roundness: 0.25 };
+                }
+                return next;
+            });
+            dataset.update(updates);
+            const edgesOptions = {
+                smooth: isStraight
+                    ? false
+                    : isCurve
+                        ? updates[0]?.smooth || { type: 'dynamic', roundness: 0.25 }
+                        : { type: 'dynamic', roundness: 0.25 }
+            };
+            if (isArrow) {
+                edgesOptions.arrows = 'to';
+            }
+            this.visNetwork.setOptions({ edges: edgesOptions });
+        }
+
         applyLabelShowAll(showAll) {
             if (!this.visNetwork) {
                 return;
@@ -2933,29 +3027,29 @@
         }
 
         restoreLabelDefaults() {
-            this.labelFade = 51.5;
-            this.labelColor = '#000000';
-            this.labelBgColor = '#f2f2f2f1';
-            this.labelBorderColor = '#00000021';
-            this.nodeSizeMin = 4.0;
-            this.nodeSizeMax = 69;
-            this.nodeSizeGamma = 0.46;
-            this.nodeColor = '#ffffff';
-            this.nodeBorderWidth = 1.5;
-            this.nodeBorderColor = '#111111';
-            this.nodeOuterBorderWidth = 2;
-            this.nodeOuterBorderColor = '#ffffff';
-            this.physicsSpringLength = 188;
+            this.physicsSpringLength = 198;
             this.physicsSpringConstant = 0.15;
-            this.physicsGravity = -10139;
+            this.physicsGravity = -1100;
+            this.nodeSizeMin = 4.5;
+            this.nodeSizeMax = 40;
+            this.nodeSizeGamma = 0.35;
+            this.nodeColor = '#f7f7f7ff';
+            this.nodeBorderWidth = 1.8;
+            this.nodeBorderColor = '#303030ff';
+            this.nodeOuterBorderWidth = 4.9;
+            this.nodeOuterBorderColor = '#ffffffb2';
             this.edgeMinWidth = 3.0;
             this.edgeMaxWidth = 14.5;
             this.edgeFade = 39;
-            this.edgeColor = '#111111';
-            this.labelFontMin = 15;
-            this.labelFontMax = 60;
-            this.labelSizeScale = 1.24;
-            this.labelWeight = 900;
+            this.edgeColor = '#1a1a1aff';
+            this.labelFontMin = 5;
+            this.labelFontMax = 23;
+            this.labelSizeScale = 1.37;
+            this.labelWeight = 1300;
+            this.labelFade = 0;
+            this.labelColor = '#000000ff';
+            this.labelBgColor = '#fafafaff';
+            this.labelBorderColor = '#dbdbdbff';
             this.labelMinCitations = 0;
 
             this.applyLabelFade();
@@ -3110,8 +3204,170 @@
                 edgeFade: this.edgeFade,
                 edgeMinWidth: this.edgeMinWidth,
                 edgeMaxWidth: this.edgeMaxWidth,
-                edgeColor: this.edgeColor
+                edgeColor: this.edgeColor,
+                edgeStyle: this.edgeStyle
             };
+        }
+
+        getLabelPanelSettingsPayload() {
+            return this.getPersistedSettingsPayload();
+        }
+
+        applyLabelPanelSettingsPayload(payload) {
+            if (!payload || typeof payload !== 'object') return;
+            if (Number.isFinite(payload.labelFade)) this.labelFade = payload.labelFade;
+            if (typeof payload.labelColor === 'string') this.labelColor = payload.labelColor;
+            if (typeof payload.labelBgColor === 'string') this.labelBgColor = payload.labelBgColor;
+            if (typeof payload.labelBorderColor === 'string') this.labelBorderColor = payload.labelBorderColor;
+            if (Number.isFinite(payload.labelSizeScale)) this.labelSizeScale = payload.labelSizeScale;
+            if (Number.isFinite(payload.labelMinCitations)) this.labelMinCitations = payload.labelMinCitations;
+            if (Number.isFinite(payload.labelWeight)) this.labelWeight = payload.labelWeight;
+            if (Number.isFinite(payload.labelFontMin)) this.labelFontMin = payload.labelFontMin;
+            if (Number.isFinite(payload.labelFontMax)) this.labelFontMax = payload.labelFontMax;
+            if (Number.isFinite(payload.nodeSizeMin)) this.nodeSizeMin = payload.nodeSizeMin;
+            if (Number.isFinite(payload.nodeSizeMax)) this.nodeSizeMax = payload.nodeSizeMax;
+            if (Number.isFinite(payload.nodeSizeGamma)) this.nodeSizeGamma = payload.nodeSizeGamma;
+            if (typeof payload.nodeColor === 'string') this.nodeColor = payload.nodeColor;
+            if (Number.isFinite(payload.nodeBorderWidth)) this.nodeBorderWidth = payload.nodeBorderWidth;
+            if (typeof payload.nodeBorderColor === 'string') this.nodeBorderColor = payload.nodeBorderColor;
+            if (Number.isFinite(payload.nodeOuterBorderWidth)) this.nodeOuterBorderWidth = payload.nodeOuterBorderWidth;
+            if (typeof payload.nodeOuterBorderColor === 'string') this.nodeOuterBorderColor = payload.nodeOuterBorderColor;
+            if (Number.isFinite(payload.physicsSpringLength)) this.physicsSpringLength = payload.physicsSpringLength;
+            if (Number.isFinite(payload.physicsSpringConstant)) this.physicsSpringConstant = payload.physicsSpringConstant;
+            if (Number.isFinite(payload.physicsGravity)) this.physicsGravity = payload.physicsGravity;
+            if (Number.isFinite(payload.edgeFade)) this.edgeFade = payload.edgeFade;
+            if (Number.isFinite(payload.edgeMinWidth)) this.edgeMinWidth = payload.edgeMinWidth;
+            if (Number.isFinite(payload.edgeMaxWidth)) this.edgeMaxWidth = payload.edgeMaxWidth;
+            if (typeof payload.edgeColor === 'string') this.edgeColor = payload.edgeColor;
+            if (typeof payload.edgeStyle === 'string') this.edgeStyle = payload.edgeStyle;
+            if (typeof payload.depthMode === 'boolean') this.depthMode = payload.depthMode;
+
+            this.applyLabelFade();
+            this.applyLabelSizeScale();
+            this.applyLabelWeight();
+            this.applyLabelColor();
+            this.applyLabelBgColor();
+            this.applyLabelBorderColor();
+            this.applyLabelThreshold();
+            this.applyNodeSizeScale();
+            this.applyNodeBorderWidth();
+            this.applyNodeColor();
+            this.applyNodeBorderColor();
+            this.applyPhysicsSettings();
+            this.applyEdgeFade();
+            this.applyEdgeWidthRange();
+            this.applyEdgeStyle();
+            this.applyDepthMode(this.depthMode);
+            if (this.visNetwork) this.visNetwork.redraw();
+            this.syncSettingsSliders();
+            this.queuePersistSettings();
+        }
+
+        loadLabelSlots() {
+            if (this._labelSlotsLoaded) return;
+            this._labelSlotsLoaded = true;
+            const apply = (payload) => {
+                if (!payload || typeof payload !== 'object') return;
+                if (Array.isArray(payload.slots)) {
+                    this.labelSlots = payload.slots
+                        .slice(0, 10)
+                        .map((item) => (item && typeof item === 'object' ? item : null));
+                    while (this.labelSlots.length < 10) {
+                        this.labelSlots.push(null);
+                    }
+                }
+                if (Number.isFinite(payload.activeSlot)) {
+                    const idx = payload.activeSlot;
+                    this.activeLabelSlot = idx >= 0 && idx < 10 ? idx : -1;
+                }
+                this.updateLabelSlotButtons();
+            };
+            try {
+                const raw = localStorage.getItem(this.labelSlotsKey);
+                if (raw) apply(JSON.parse(raw));
+            } catch (_e) {
+                // ignore
+            }
+            if (this.app && this.app.projectStorage && this.app.currentProject) {
+                this.app.projectStorage.load(this.labelSlotsKey).then((data) => {
+                    apply(data);
+                }).catch(() => {
+                    // ignore
+                });
+            }
+        }
+
+        persistLabelSlots() {
+            const payload = {
+                slots: this.labelSlots,
+                activeSlot: this.activeLabelSlot
+            };
+            if (this.app && this.app.projectStorage && this.app.currentProject) {
+                this.app.projectStorage.update(this.labelSlotsKey, payload);
+            }
+            try {
+                localStorage.setItem(this.labelSlotsKey, JSON.stringify(payload));
+            } catch (_e) {
+                // ignore
+            }
+            this.updateLabelSlotButtons();
+        }
+
+        updateLabelSlotButtons() {
+            const wrap = this.getEl(this.ids.labelSlots);
+            const saveBtn = this.getEl(this.ids.labelSlotsSaveBtn);
+            if (!wrap) return;
+            const buttons = Array.from(wrap.querySelectorAll('[data-slot]'));
+            buttons.forEach((btn) => {
+                const idx = Number(btn.dataset.slot) - 1;
+                const filled = !!this.labelSlots[idx];
+                const icon = btn.querySelector('i');
+                if (icon) {
+                    icon.className = filled
+                        ? 'fa-solid fa-circle-check'
+                        : 'fa-regular fa-circle';
+                }
+                btn.classList.toggle('is-filled', filled);
+                btn.classList.toggle('is-active', idx === this.activeLabelSlot);
+                btn.title = filled ? `Slot ${idx + 1} (saved)` : `Slot ${idx + 1} (empty)`;
+            });
+            if (saveBtn) {
+                const hasEmpty = this.labelSlots.some((slot) => !slot);
+                saveBtn.disabled = !hasEmpty;
+                saveBtn.title = hasEmpty ? 'Save to next empty slot' : 'All slots are full';
+            }
+        }
+
+        saveLabelSlot() {
+            const payload = this.getLabelPanelSettingsPayload();
+            let idx = this.labelSlots.findIndex((slot) => !slot);
+            if (idx === -1) {
+                this.notify('All slots are full', 'info');
+                return;
+            }
+            this.labelSlots[idx] = payload;
+            this.activeLabelSlot = idx;
+            this.persistLabelSlots();
+            this.notify(`Saved settings to Slot ${idx + 1}`, 'success');
+        }
+
+        applyLabelSlot(idx) {
+            const payload = this.labelSlots[idx];
+            if (!payload) {
+                this.notify(`Slot ${idx + 1} is empty`, 'info');
+                return;
+            }
+            this.applyLabelPanelSettingsPayload(payload);
+            this.notify(`Applied settings from Slot ${idx + 1}`, 'success');
+        }
+
+        clearLabelSlot(idx) {
+            this.labelSlots[idx] = null;
+            if (this.activeLabelSlot === idx) {
+                this.activeLabelSlot = -1;
+            }
+            this.persistLabelSlots();
+            this.notify(`Cleared Slot ${idx + 1}`, 'info');
         }
 
         queuePersistSettings() {
@@ -3294,9 +3550,9 @@
             const edgeColorInput = this.getEl(this.ids.edgeColorInput);
 
             if (labelFadeSlider) labelFadeSlider.value = String(this.labelFade || 0);
-            if (labelColorInput) labelColorInput.value = this.labelColor || '#000000';
-            if (labelBgColorInput) labelBgColorInput.value = this.labelBgColor || '#f2f2f2f1';
-            if (labelBorderColorInput) labelBorderColorInput.value = this.labelBorderColor || '#00000021';
+            this.setColorInputValue(labelColorInput, this.labelColor || '#000000');
+            this.setColorInputValue(labelBgColorInput, this.labelBgColor || '#f2f2f2f1');
+            this.setColorInputValue(labelBorderColorInput, this.labelBorderColor || '#00000021');
             if (labelSizeSlider) labelSizeSlider.value = String(Math.round((this.labelSizeScale || 1) * 100));
             if (labelMinSlider) labelMinSlider.value = String(this.labelMinCitations || 0);
             if (labelWeightSlider) labelWeightSlider.value = String(this.labelWeight || 500);
@@ -3305,18 +3561,30 @@
             if (nodeSizeMinSlider) nodeSizeMinSlider.value = String(this.nodeSizeMin || 1);
             if (nodeSizeMaxSlider) nodeSizeMaxSlider.value = String(this.nodeSizeMax || 60);
             if (nodeSizeGammaSlider) nodeSizeGammaSlider.value = String(this.nodeSizeGamma || 1);
-            if (nodeColorInput) nodeColorInput.value = this.nodeColor || '#ffffff';
+            this.setColorInputValue(nodeColorInput, this.nodeColor || '#ffffff');
             if (nodeBorderSlider) nodeBorderSlider.value = String(this.nodeBorderWidth || 1.5);
-            if (nodeBorderColorInput) nodeBorderColorInput.value = this.nodeBorderColor || '#111111';
+            this.setColorInputValue(nodeBorderColorInput, this.nodeBorderColor || '#111111');
             if (nodeOuterBorderWidthInput) nodeOuterBorderWidthInput.value = String(this.nodeOuterBorderWidth ?? 2);
-            if (nodeOuterBorderColorInput) nodeOuterBorderColorInput.value = this.nodeOuterBorderColor || '#ffffff';
+            this.setColorInputValue(nodeOuterBorderColorInput, this.nodeOuterBorderColor || '#ffffff');
             if (physicsSpringSlider) physicsSpringSlider.value = String(this.physicsSpringLength || 120);
             if (physicsStrengthSlider) physicsStrengthSlider.value = String(this.physicsSpringConstant || 0.05);
             if (physicsGravitySlider) physicsGravitySlider.value = String(this.physicsGravity || -9000);
             if (edgeFadeSlider) edgeFadeSlider.value = String(this.edgeFade || 100);
             if (edgeMinWidthSlider) edgeMinWidthSlider.value = String(this.edgeMinWidth || 1);
             if (edgeMaxWidthSlider) edgeMaxWidthSlider.value = String(this.edgeMaxWidth || 6);
-            if (edgeColorInput) edgeColorInput.value = this.edgeColor || '#111111';
+            this.setColorInputValue(edgeColorInput, this.edgeColor || '#111111');
+        }
+
+        setColorInputValue(input, value) {
+            if (!input) return;
+            const next = value || '';
+            input.value = next;
+            const wrapper = input.closest('.clr-field');
+            if (wrapper) {
+                wrapper.style.setProperty('--clr-color', next);
+            }
+            input.dispatchEvent(new Event('input', { bubbles: true }));
+            input.dispatchEvent(new Event('change', { bubbles: true }));
         }
 
         updateLabelLayer() {
@@ -3509,11 +3777,11 @@
 
         async restoreNetworkJson() {
             const list = await this.loadSavedList();
-            if (!list.length) {
+            const select = this.getEl(this.ids.savedSelect);
+            if (!list.length || (select && select.disabled)) {
                 this.notify('No saved items', 'info');
                 return;
             }
-            const select = this.getEl(this.ids.savedSelect);
             const idx = select ? Number.parseInt(select.value, 10) : 0;
             const item = list[idx] || list[0];
             if (!item || !item.json) {
@@ -3531,7 +3799,8 @@
         async deleteNetworkJson() {
             const list = await this.loadSavedList();
             if (!list.length) {
-                this.notify('No saved items', 'info');
+                this.clearNetworkView();
+                this.notify('Cleared current network', 'success');
                 return;
             }
             const select = this.getEl(this.ids.savedSelect);
@@ -3547,6 +3816,24 @@
             await this.persistSavedList(list);
             this.renderSavedSelect(list);
             this.notify('Deleted', 'success');
+        }
+
+        clearNetworkView() {
+            this.visInputText = '';
+            this.lastRenderedJson = '';
+            this.visNetworkData = null;
+            const textarea = this.getEl(this.ids.inputTextarea);
+            if (textarea) textarea.value = '';
+            if (this.visNetwork && global.vis && global.vis.DataSet) {
+                const dataset = {
+                    nodes: new global.vis.DataSet([]),
+                    edges: new global.vis.DataSet([])
+                };
+                this.visNetwork.setData(dataset);
+            }
+            const view = this.getEl(this.ids.view);
+            if (view) view.classList.remove('has-network');
+            this.queuePersistNetworkState();
         }
 
         bindNetworkEvents(network) {

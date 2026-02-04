@@ -496,32 +496,38 @@
                                 <div class="md-chat-body vis-settings-body">
                                     <div class="vis-settings-section is-active" id="visSettingsInputPanel">
                                         <div class="vis-input-body">
-                                            <textarea id="visInputTextarea" spellcheck="false"
-                                                placeholder="在这里输入内容..."></textarea>
+                                            <textarea id="visInputTextarea" spellcheck="false" placeholder="Enter content here, e.g.,&#10;{&#10;  &quot;WOS: 000333220900011&quot;: {&#10;    &quot;page_wosids&quot;: [&#10;      {&#10;        &quot;wosid&quot;: &quot;WOS:001473846100001&quot;,&#10;        &quot;citations_count&quot;: &quot;90&quot;,&#10;        &quot;related_count&quot;: &quot;20&quot;,&#10;        &quot;ref_count&quot;: &quot;40&quot;&#10;      }&#10;    ]&#10;  }&#10;}&#10;Obtain JSON data from WOS through the Chrome extension GEWU AIDE."></textarea>
                                         </div>
+
+                                        <div class="vis-input-actions">
+                                            <button class="btn btn-secondary" id="visInputAppendBtn"
+                                                type="button">Add more node</button>
+                                            <button class="btn btn-secondary" id="visUpdateNodeBtn"
+                                                type="button">Update</button>
+                                            <button class="btn btn-secondary" id="visImportJsonBtn"
+                                                type="button">Import JSON</button>
+                                            <button class="btn btn-primary" id="visInputApplyBtn"
+                                                type="button">Run</button>
+                                        </div>
+
                                         <div class="vis-input-restore">
                                             <div class="vis-input-restore-row">
                                                 <select id="visSavedSelect"></select>
                                                 <button class="btn btn-secondary" id="visRestoreNetworkBtn"
-                                                    type="button">Restore</button>
+                                                    type="button" title="Restore" aria-label="Restore">
+                                                    <i class="fas fa-rotate-left"></i>
+                                                </button>
+                                                <button class="btn btn-secondary" id="visSaveNetworkBtn"
+                                                    type="button" title="Save" aria-label="Save">
+                                                    <i class="fas fa-floppy-disk"></i>
+                                                </button>
                                                 <button class="btn btn-secondary" id="visDeleteNetworkBtn"
-                                                    type="button">Delete</button>
+                                                    type="button" title="Delete" aria-label="Delete">
+                                                    <i class="fas fa-trash"></i>
+                                                </button>
                                             </div>
                                         </div>
-                                        <div class="vis-input-actions">
-                                            <button class="btn btn-secondary" id="visInputCancelBtn"
-                                                type="button">Close</button>
-                                            <button class="btn btn-secondary" id="visInputAppendBtn"
-                                                type="button">Add</button>
-                                            <button class="btn btn-secondary" id="visUpdateNodeBtn"
-                                                type="button">Update Node</button>
-                                            <button class="btn btn-secondary" id="visImportJsonBtn"
-                                                type="button">Import JSON</button>
-                                            <button class="btn btn-secondary" id="visSaveNetworkBtn"
-                                                type="button">Save</button>
-                                            <button class="btn btn-primary" id="visInputApplyBtn"
-                                                type="button">Run</button>
-                                        </div>
+                                        
                                     </div>
                                     <div class="vis-settings-section" id="visSettingsLabelPanel">
                                         <div class="vis-input-body">
@@ -628,20 +634,54 @@
                                                 </div>
                                             </div>
                                         </div>
+                                        <div class="vis-label-slots">
+                                            <div class="vis-label-slots-title">Slots: left click-load; right click-clear;</div>
+                                            <div class="vis-label-slots-grid" id="visLabelSlots">
+                                                <button class="btn btn-secondary" type="button" data-slot="1" aria-label="Slot 1">
+                                                    <i class="fa-regular fa-circle"></i>
+                                                </button>
+                                                <button class="btn btn-secondary" type="button" data-slot="2" aria-label="Slot 2">
+                                                    <i class="fa-regular fa-circle"></i>
+                                                </button>
+                                                <button class="btn btn-secondary" type="button" data-slot="3" aria-label="Slot 3">
+                                                    <i class="fa-regular fa-circle"></i>
+                                                </button>
+                                                <button class="btn btn-secondary" type="button" data-slot="4" aria-label="Slot 4">
+                                                    <i class="fa-regular fa-circle"></i>
+                                                </button>
+                                                <button class="btn btn-secondary" type="button" data-slot="5" aria-label="Slot 5">
+                                                    <i class="fa-regular fa-circle"></i>
+                                                </button>
+                                                <button class="btn btn-secondary" type="button" data-slot="6" aria-label="Slot 6">
+                                                    <i class="fa-regular fa-circle"></i>
+                                                </button>
+                                                <button class="btn btn-secondary" type="button" data-slot="7" aria-label="Slot 7">
+                                                    <i class="fa-regular fa-circle"></i>
+                                                </button>
+                                                <button class="btn btn-secondary" type="button" data-slot="8" aria-label="Slot 8">
+                                                    <i class="fa-regular fa-circle"></i>
+                                                </button>
+                                                <button class="btn btn-secondary vis-label-slot-action" id="visLabelAutoBtn" type="button"
+                                                    aria-label="Restore defaults" title="Restore defaults">
+                                                    <i class="fas fa-rotate-left"></i>
+                                                </button>
+                                                <button class="btn btn-primary vis-label-slot-action" id="visLabelSlotsSaveBtn" type="button"
+                                                    aria-label="Save slot" title="Save slot">
+                                                    <i class="fas fa-floppy-disk"></i>
+                                                </button>
+                                            </div>
+                                        </div>
                                         <div class="vis-label-field-group">
                                             <div class="vis-label-fields" id="visLabelFields"></div>
                                             <div class="vis-label-suggest" id="visLabelSuggest"></div>
-                                            <input id="visLabelFieldInput" class="vis-label-input-full" type="text"
-                                                placeholder="Label field (default: wosid)" autocomplete="off">
-                                        </div>
-                                        <div class="vis-input-actions">
-                                            <button class="btn btn-secondary" id="visLabelCloseBtn" type="button">Close</button>
-                                            <button class="btn btn-secondary" id="visLabelAutoBtn" type="button">
-                                                <i class="fas fa-rotate-left"></i><span>Restore Defaults</span>
-                                            </button>
-                                            <button class="btn btn-secondary" id="visLabelToggleAllBtn" type="button">
-                                                <i class="fas fa-tags"></i><span>Show Labels</span>
-                                            </button>
+                                            <div class="vis-label-input-row">
+                                                <input id="visLabelFieldInput" class="vis-label-input-full" type="text"
+                                                    placeholder="Label field (default: wosid)" autocomplete="off">
+                                                <button class="btn btn-secondary vis-label-toggle-inline" id="visLabelToggleAllBtn" type="button"
+                                                    aria-label="Show labels" title="Show labels">
+                                                    <i class="fa-solid fa-eye"></i>
+                                                </button>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
