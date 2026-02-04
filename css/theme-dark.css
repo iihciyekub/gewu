@@ -1176,6 +1176,14 @@ body.theme-dark .md-chat-input-text::placeholder {
     color: #94a3b8;
 }
 
+body.theme-dark .vis-settings-shell.md-chat-shell,
+body.theme-dark .vis-settings-shell .md-chat-body,
+body.theme-dark .vis-settings-shell .md-chat-top,
+body.theme-dark .vis-settings-shell .md-chat-input {
+    background: #252526;
+    border-top-color: #2b3445;
+}
+
 body.theme-dark .md-chat-btn {
     color: #e5e7eb;
 }
