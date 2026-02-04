@@ -509,16 +509,6 @@
                     <div class="vis-input-drawer vis-label-drawer" id="visLabelDrawer" aria-hidden="true">
                         <div class="vis-input-body">
                             <div class="vis-label-panel">
-                                <label for="visLabelFieldInput">Label field</label>
-                                <input id="visLabelFieldInput" type="text" placeholder="Search field (default: wosid)"
-                                    autocomplete="off">
-                                <div class="vis-label-fields" id="visLabelFields"></div>
-                                <div class="vis-label-suggest" id="visLabelSuggest"></div>
-                                <div class="vis-label-hint">Example: wosid, title, wos_data.title</div>
-                                <div class="vis-label-fade">
-                                    <label for="visLabelFadeSlider">Label fade by citations</label>
-                                    <input id="visLabelFadeSlider" type="number" step="0.1" value="0" inputmode="decimal">
-                                </div>
                                 <div class="vis-node-size">
                                     <label for="visNodeSizeMinSlider">Node size min</label>
                                     <input id="visNodeSizeMinSlider" type="number" step="0.1" value="6" inputmode="decimal">
@@ -539,44 +529,55 @@
                                     <label for="visPhysicsGravitySlider">Gravity</label>
                                     <input id="visPhysicsGravitySlider" type="number" step="100" value="-9000" inputmode="decimal">
                                 </div>
-                                <div class="vis-edge-fade">
-                                    <label for="visEdgeFadeSlider">Link contrast</label>
-                                    <input id="visEdgeFadeSlider" type="number" step="5" value="100" inputmode="decimal">
-                                </div>
                                 <div class="vis-edge-width">
                                     <label for="visEdgeMinWidthSlider">Link min width</label>
                                     <input id="visEdgeMinWidthSlider" type="number" step="0.1" value="1" inputmode="decimal">
                                     <label for="visEdgeMaxWidthSlider">Link max width</label>
                                     <input id="visEdgeMaxWidthSlider" type="number" step="0.1" value="6" inputmode="decimal">
                                 </div>
-                                <div class="vis-label-threshold">
-                                    <label for="visLabelMinSlider">Min citations to show</label>
-                                    <div class="vis-label-threshold-row">
-                                        <input id="visLabelMinSlider" type="number" step="1" value="0" inputmode="decimal">
-                                    </div>
+                                <div class="vis-edge-fade">
+                                    <label for="visEdgeFadeSlider">Link curve</label>
+                                    <input id="visEdgeFadeSlider" type="number" step="5" value="100" inputmode="decimal">
+                                </div>
+                                
+                                <div class="vis-label-weight">
+                                    <label for="visLabelFontMinInput">Label min size</label>
+                                    <input id="visLabelFontMinInput" type="number" step="1" value="9" inputmode="decimal">
+                                </div>
+                                <div class="vis-label-weight">
+                                    <label for="visLabelFontMaxInput">Label max size</label>
+                                    <input id="visLabelFontMaxInput" type="number" step="1" value="30" inputmode="decimal">
                                 </div>
                                 <div class="vis-label-size">
                                     <label for="visLabelSizeSlider">Label size</label>
-                                    <input id="visLabelSizeSlider" type="number" step="5" value="100" inputmode="decimal">
+                                    <input id="visLabelSizeSlider" type="number" step="1" value="100" inputmode="decimal">
                                 </div>
                                 <div class="vis-label-weight">
                                     <label for="visLabelWeightSlider">Label weight</label>
                                     <input id="visLabelWeightSlider" type="number" step="50" value="500" inputmode="decimal">
                                 </div>
-                                <div class="vis-label-weight">
-                                    <label for="visLabelFontMinInput">Label font min</label>
-                                    <input id="visLabelFontMinInput" type="number" step="1" value="9" inputmode="decimal">
+                                <div class="vis-label-fade">
+                                    <label for="visLabelFadeSlider">Label fade by citations</label>
+                                    <input id="visLabelFadeSlider" type="number" step="0.1" value="0" inputmode="decimal">
                                 </div>
-                                <div class="vis-label-weight">
-                                    <label for="visLabelFontMaxInput">Label font max</label>
-                                    <input id="visLabelFontMaxInput" type="number" step="1" value="30" inputmode="decimal">
+                                <div class="vis-label-threshold">
+                                    <label for="visLabelMinSlider"># of Citations</label>
+                                    <div class="vis-label-threshold-row">
+                                        <input id="visLabelMinSlider" type="number" step="1" value="0" inputmode="decimal">
+                                    </div>
                                 </div>
                             </div>
+                        </div>
+                        <div class="vis-label-field-group">
+                            <div class="vis-label-fields" id="visLabelFields"></div>
+                            <div class="vis-label-suggest" id="visLabelSuggest"></div>
+                            <input id="visLabelFieldInput" class="vis-label-input-full" type="text"
+                                placeholder="Label field (default: wosid)" autocomplete="off">
                         </div>
                         <div class="vis-input-actions">
                             <button class="btn btn-secondary" id="visLabelCloseBtn" type="button">Close</button>
                             <button class="btn btn-secondary" id="visLabelAutoBtn" type="button">
-                                <i class="fas fa-wand-magic-sparkles"></i><span>Auto Tune</span>
+                                <i class="fas fa-rotate-left"></i><span>Restore Defaults</span>
                             </button>
                             <button class="btn btn-secondary" id="visLabelToggleAllBtn" type="button">
                                 <i class="fas fa-tags"></i><span>Show Labels</span>

@@ -570,6 +570,8 @@
             this._labelRetryTimer = null;
             this._labelRetryCount = 0;
             this.depthMode = true;
+            this._modReleaseAt = 0;
+            this._hotkeysBound = false;
         }
 
         bind() {
@@ -656,7 +658,7 @@
             if (labelAutoBtn) {
                 labelAutoBtn.addEventListener('click', (e) => {
                     e.preventDefault();
-                    this.applyAutoLabelTuning();
+                    this.restoreLabelDefaults();
                 });
             }
             if (inputApplyBtn) {
@@ -673,6 +675,30 @@
                     if (updated) {
                         e.preventDefault();
                     }
+                });
+                inputTextarea.addEventListener('blur', () => {
+                    const raw = inputTextarea.value || '';
+                    if (!raw.trim()) return;
+                    const tryParse = (text) => {
+                        try {
+                            return JSON.parse(text);
+                        } catch (_e) {
+                            return null;
+                        }
+                    };
+                    let parsed = tryParse(raw);
+                    if (!parsed && global.JSONRepair && typeof global.JSONRepair.jsonrepair === 'function') {
+                        try {
+                            const repaired = global.JSONRepair.jsonrepair(raw);
+                            parsed = tryParse(repaired);
+                        } catch (_e) {
+                            parsed = null;
+                        }
+                    }
+                    if (!parsed) return;
+                    const formatted = JSON.stringify(parsed, null, 2);
+                    inputTextarea.value = formatted;
+                    this.visInputText = formatted;
                 });
             }
             if (updateNodeBtn) {
@@ -1061,6 +1087,7 @@
                     }
                 });
             }
+            this.bindHoldHotkeys();
             // outside click to close disabled
         }
 
@@ -1068,6 +1095,8 @@
             if (!this.visNetwork) return;
             const lock = this.isLocked;
             const panOnly = this.isPanOnly;
+            const view = this.getEl(this.ids.view);
+            if (view) view.classList.toggle('pan-mode', panOnly);
             this.visNetwork.setOptions({
                 interaction: {
                     dragNodes: !lock && !panOnly,
@@ -1076,6 +1105,84 @@
                 }
             });
             this.updateZoomControlsDisabled(lock, panOnly);
+        }
+
+        bindHoldHotkeys() {
+            if (this._hotkeysBound) return;
+            this._hotkeysBound = true;
+            const isTypingTarget = () => {
+                const el = document.activeElement;
+                if (!el) return false;
+                const tag = el.tagName ? el.tagName.toLowerCase() : '';
+                return tag === 'input' || tag === 'textarea' || tag === 'select' || el.isContentEditable;
+            };
+            const isVisActive = () => {
+                const view = this.getEl(this.ids.view);
+                return !!(view && view.classList.contains('active'));
+            };
+            document.addEventListener('keydown', (e) => {
+                if (e.code === 'Space') {
+                    if (!isVisActive()) return;
+                    if (isTypingTarget()) return;
+                    if (e.repeat) return;
+                    const btn = this.getEl(this.ids.zoomPanBtn);
+                    if (!btn) return;
+                    e.preventDefault();
+                    this.isPanOnly = true;
+                    this.isLocked = false;
+                    this.applyInteractionMode();
+                    btn.classList.toggle('is-active', this.isPanOnly);
+                    const lockBtn = this.getEl(this.ids.zoomLockBtn);
+                    if (lockBtn) lockBtn.classList.toggle('is-active', this.isLocked);
+                    return;
+                }
+                if (e.key === 'Meta' || e.key === 'Control') return;
+                if (isTypingTarget()) return;
+                if (!isVisActive()) return;
+                if (!this._modReleaseAt) return;
+                if (Date.now() - this._modReleaseAt > 1500) return;
+                const key = String(e.key || '').toLowerCase();
+                if (key === 'f') {
+                    e.preventDefault();
+                    this.fitToView();
+                    return;
+                }
+                if (key === 'l') {
+                    e.preventDefault();
+                    const btn = this.getEl(this.ids.labelToggleBtn);
+                    if (btn) btn.click();
+                    return;
+                }
+                if (key === 'g') {
+                    e.preventDefault();
+                    const btn = this.getEl(this.ids.gridToggleBtn);
+                    if (btn) btn.click();
+                }
+            });
+            document.addEventListener('keyup', (e) => {
+                if (e.code === 'Space') {
+                    if (!isVisActive()) return;
+                    const btn = this.getEl(this.ids.zoomPanBtn);
+                    if (!btn) return;
+                    e.preventDefault();
+                    this.isPanOnly = false;
+                    this.applyInteractionMode();
+                    btn.classList.toggle('is-active', this.isPanOnly);
+                    return;
+                }
+                if (e.key === 'Meta' || e.key === 'Control') {
+                    this._modReleaseAt = Date.now();
+                }
+            });
+            window.addEventListener('blur', () => {
+                this._modReleaseAt = 0;
+            });
+        }
+
+        fitToView() {
+            if (!this.visNetwork) return;
+            this.visNetwork.fit({ animation: { duration: 250 } });
+            this.syncZoomSlider();
         }
 
         applyDepthMode(enable) {
@@ -1492,6 +1599,7 @@
             drawer.classList.toggle('is-open', next);
             drawer.setAttribute('aria-hidden', next ? 'false' : 'true');
             drawer.toggleAttribute('inert', !next);
+            this.updateDrawerLayout();
             if (next) {
                 const textarea = this.getEl(this.ids.inputTextarea);
                 if (textarea) {
@@ -1520,6 +1628,7 @@
             drawer.classList.toggle('is-open', next);
             drawer.setAttribute('aria-hidden', next ? 'false' : 'true');
             drawer.toggleAttribute('inert', !next);
+            this.updateDrawerLayout();
             if (next) {
                 this.refreshLabelFieldOptions();
                 const input = this.getEl(this.ids.labelFieldInput);
@@ -1551,6 +1660,16 @@
                 if (edgeMinWidthSlider) edgeMinWidthSlider.value = String(this.edgeMinWidth || 1);
                 if (edgeMaxWidthSlider) edgeMaxWidthSlider.value = String(this.edgeMaxWidth || 6);
             }
+        }
+
+        updateDrawerLayout() {
+            const view = this.getEl(this.ids.view);
+            if (!view) return;
+            const inputDrawer = this.getEl(this.ids.inputDrawer);
+            const labelDrawer = this.getEl(this.ids.labelDrawer);
+            const hasOpen = !!(inputDrawer && inputDrawer.classList.contains('is-open'))
+                || !!(labelDrawer && labelDrawer.classList.contains('is-open'));
+            view.classList.toggle('drawer-open', hasOpen);
         }
 
         getNetworkNodesDataSet() {
@@ -2240,6 +2359,37 @@
                     }
                 }
             });
+        }
+
+        restoreLabelDefaults() {
+            this.labelFade = 51.5;
+            this.nodeSizeMin = 4.0;
+            this.nodeSizeMax = 69;
+            this.nodeSizeGamma = 0.46;
+            this.nodeBorderWidth = 1.5;
+            this.physicsSpringLength = 188;
+            this.physicsSpringConstant = 0.15;
+            this.physicsGravity = -10139;
+            this.edgeMinWidth = 3.0;
+            this.edgeMaxWidth = 14.5;
+            this.edgeFade = 39;
+            this.labelFontMin = 15;
+            this.labelFontMax = 60;
+            this.labelSizeScale = 1.24;
+            this.labelWeight = 900;
+            this.labelMinCitations = 0;
+
+            this.applyLabelFade();
+            this.applyLabelSizeScale();
+            this.applyLabelWeight();
+            this.applyLabelThreshold();
+            this.applyNodeSizeScale();
+            this.applyNodeBorderWidth();
+            this.applyPhysicsSettings();
+            this.applyEdgeFade();
+            this.applyEdgeWidthRange();
+            this.syncSettingsSliders();
+            this.queuePersistSettings();
         }
 
         applyAutoLabelTuning() {
