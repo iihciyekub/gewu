@@ -2724,6 +2724,13 @@ class PaperStatsApp {
         this.ensureFileFilterConditions();
         this.renderFileFilterConditions();
         this.renderFileFilterHistory();
+        const statusBarVisibilityToggleBtn = document.getElementById('statusBarVisibilityToggleBtn');
+        if (statusBarVisibilityToggleBtn) {
+            statusBarVisibilityToggleBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                this.toggleStatusBarVisibility();
+            });
+        }
         const fileFilterToggleBtn = document.getElementById('fileFilterToggleBtn');
         if (fileFilterToggleBtn) {
             fileFilterToggleBtn.addEventListener('click', (e) => {
