@@ -268,7 +268,7 @@
                 stabilization: { iterations: 200 }
             },
             nodes: {
-                scaling: { enabled: false },
+                scaling: { min: 1, max: 1 },
                 color: {
                     background: darkMode ? '#f8fafc' : '#ffffff',
                     border: darkMode ? 'rgba(255,255,255,0.7)' : '#111111',
