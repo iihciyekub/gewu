@@ -1124,6 +1124,7 @@
                 if (e.code === 'Space') {
                     if (!isVisActive()) return;
                     if (isTypingTarget()) return;
+                    if (e.metaKey || e.ctrlKey) return;
                     if (e.repeat) return;
                     const btn = this.getEl(this.ids.zoomPanBtn);
                     if (!btn) return;
@@ -1162,6 +1163,7 @@
             document.addEventListener('keyup', (e) => {
                 if (e.code === 'Space') {
                     if (!isVisActive()) return;
+                    if (e.metaKey || e.ctrlKey) return;
                     const btn = this.getEl(this.ids.zoomPanBtn);
                     if (!btn) return;
                     e.preventDefault();
