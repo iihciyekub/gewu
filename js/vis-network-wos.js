@@ -569,6 +569,7 @@
             this.isPanOnly = false;
             this._labelRetryTimer = null;
             this._labelRetryCount = 0;
+            this.depthMode = true;
         }
 
         bind() {
@@ -769,11 +770,8 @@
             if (gridToggleBtn) {
                 gridToggleBtn.addEventListener('click', (e) => {
                     e.preventDefault();
-                    const view = this.getEl(this.ids.view);
-                    if (!view) return;
-                    const next = !view.classList.contains('no-grid');
-                    view.classList.toggle('no-grid', next);
-                    gridToggleBtn.classList.toggle('is-active', next);
+                    this.applyDepthMode(!this.depthMode);
+                    this.queuePersistSettings();
                 });
             }
             if (zoomCollapseBtn && zoomWrap) {
@@ -1080,6 +1078,37 @@
             this.updateZoomControlsDisabled(lock, panOnly);
         }
 
+        applyDepthMode(enable) {
+            this.depthMode = !!enable;
+            const view = this.getEl(this.ids.view);
+            if (view) {
+                view.classList.toggle('no-grid', !this.depthMode);
+            }
+            const btn = this.getEl(this.ids.gridToggleBtn);
+            if (btn) btn.classList.toggle('is-active', this.depthMode);
+            if (!this.visNetwork) return;
+            this.visNetwork.setOptions({
+                nodes: {
+                    shadow: this.depthMode ? {
+                        enabled: true,
+                        color: isDarkTheme() ? 'rgba(0, 0, 0, 0.55)' : 'rgba(17, 24, 39, 0.22)',
+                        size: 14,
+                        x: 0,
+                        y: 6
+                    } : { enabled: false }
+                },
+                edges: {
+                    shadow: this.depthMode ? {
+                        enabled: true,
+                        color: isDarkTheme() ? 'rgba(0, 0, 0, 0.45)' : 'rgba(15, 23, 42, 0.18)',
+                        size: 8,
+                        x: 0,
+                        y: 4
+                    } : { enabled: false }
+                }
+            });
+        }
+
         updateZoomControlsDisabled(isLocked, isPanOnly) {
             const zoomInBtn = this.getEl(this.ids.zoomInBtn);
             const zoomOutBtn = this.getEl(this.ids.zoomOutBtn);
@@ -1378,6 +1407,7 @@
             this.applyPhysicsSettings();
             this.applyEdgeFade();
             this.applyEdgeWidthRange();
+            this.applyDepthMode(this.depthMode);
             this.applyLabelShowAll(true);
             this.queuePersistNetworkState();
         }
@@ -2310,6 +2340,7 @@
                 labelWeight: this.labelWeight,
                 labelFontMin: this.labelFontMin,
                 labelFontMax: this.labelFontMax,
+                depthMode: this.depthMode,
                 nodeSizeMin: this.nodeSizeMin,
                 nodeSizeMax: this.nodeSizeMax,
                 nodeSizeGamma: this.nodeSizeGamma,
@@ -2433,6 +2464,7 @@
                 if (Number.isFinite(payload.edgeFade)) this.edgeFade = payload.edgeFade;
                 if (Number.isFinite(payload.edgeMinWidth)) this.edgeMinWidth = payload.edgeMinWidth;
                 if (Number.isFinite(payload.edgeMaxWidth)) this.edgeMaxWidth = payload.edgeMaxWidth;
+                if (typeof payload.depthMode === 'boolean') this.depthMode = payload.depthMode;
             };
 
             try {
@@ -2442,11 +2474,13 @@
                 // ignore
             }
             this.syncSettingsSliders();
+            this.applyDepthMode(this.depthMode);
 
             if (this.app && this.app.projectStorage && this.app.currentProject) {
                 this.app.projectStorage.load(this.settingsKey).then((data) => {
                     apply(data);
                     this.syncSettingsSliders();
+                    this.applyDepthMode(this.depthMode);
                 }).catch(() => {
                     // ignore
                 });
@@ -2456,6 +2490,7 @@
                         this.app.projectStorage.load(this.settingsKey).then((data) => {
                             apply(data);
                             this.syncSettingsSliders();
+                            this.applyDepthMode(this.depthMode);
                         }).catch(() => {
                             // ignore
                         });
