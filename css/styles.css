@@ -2366,6 +2366,82 @@ body.theme-dark .vis-network-zoom input[type="range"] {
     display: none;
 }
 
+.vis-settings-panel {
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: var(--drawer-width, min(380px, 92%));
+    padding: 10px;
+    box-sizing: border-box;
+    display: none;
+    z-index: 6;
+}
+
+.vis-settings-panel.is-open {
+    display: flex;
+}
+
+.vis-settings-shell.md-chat-shell {
+    height: 100%;
+    width: 100%;
+}
+
+.vis-settings-shell .md-chat-main {
+    height: 100%;
+}
+
+.vis-settings-shell .md-chat-top,
+.vis-settings-shell .md-chat-input {
+    position: static;
+    opacity: 1;
+    max-height: none;
+}
+
+.vis-settings-shell .md-chat-body {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: hidden;
+}
+
+.vis-settings-body {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 8px 8px 0;
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: hidden;
+}
+
+.vis-settings-title {
+    font-size: 12px;
+    font-weight: 600;
+    color: #2f3640;
+}
+
+.vis-settings-actions {
+    display: inline-flex;
+    gap: 4px;
+    margin-left: auto;
+}
+
+.vis-settings-section {
+    display: none;
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: hidden;
+    flex-direction: column;
+}
+
+.vis-settings-section.is-active {
+    display: flex;
+}
+
+.vis-settings-input {
+    padding: 8px 12px 12px;
+}
+
 
 .vis-input-drawer {
     position: absolute;
@@ -6511,4 +6587,18 @@ body.theme-vscode .group-preview-item {
     font-family: monospace;
     font-size: 12px;
     text-align: left;
+}
+
+.vis-settings-shell .md-chat-top,
+.vis-settings-shell .md-chat-input {
+    position: static !important;
+    opacity: 1 !important;
+    max-height: none;
+}
+
+.vis-settings-shell:hover .md-chat-top,
+.vis-settings-shell:hover .md-chat-input,
+.vis-settings-shell:has(.md-chat-body:hover) .md-chat-top,
+.vis-settings-shell:has(.md-chat-body:hover) .md-chat-input {
+    opacity: 1 !important;
 }

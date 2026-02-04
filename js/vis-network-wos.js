@@ -475,7 +475,9 @@
             this.ids = {
                 view: options.viewId || 'visNetworkView',
                 canvas: options.canvasId || 'visNetworkCanvas',
-                inputDrawer: options.inputDrawerId || 'visInputDrawer',
+                settingsPanel: options.settingsPanelId || 'visSettingsPanel',
+                settingsCloseBtn: options.settingsCloseBtnId || 'visSettingsCloseBtn',
+                inputPanel: options.inputPanelId || 'visSettingsInputPanel',
                 inputTextarea: options.inputTextareaId || 'visInputTextarea',
                 inputToggleBtn: options.inputToggleBtnId || 'visInputToggleBtn',
                 inputCancelBtn: options.inputCancelBtnId || 'visInputCancelBtn',
@@ -487,7 +489,7 @@
                 deleteBtn: options.deleteBtnId || 'visDeleteNetworkBtn',
                 savedSelect: options.savedSelectId || 'visSavedSelect',
                 labelPanelBtn: options.labelPanelBtnId || 'visToggleLabelsBtn',
-                labelDrawer: options.labelDrawerId || 'visLabelDrawer',
+                labelPanel: options.labelPanelId || 'visSettingsLabelPanel',
                 labelToggleBtn: options.labelToggleBtnId || 'visLabelToggleAllBtn',
                 labelAutoBtn: options.labelAutoBtnId || 'visLabelAutoBtn',
                 labelCloseBtn: options.labelCloseBtnId || 'visLabelCloseBtn',
@@ -594,6 +596,7 @@
             const labelPanelBtn = this.getEl(this.ids.labelPanelBtn);
             const labelCloseBtn = this.getEl(this.ids.labelCloseBtn);
             const labelAutoBtn = this.getEl(this.ids.labelAutoBtn);
+            const settingsCloseBtn = this.getEl(this.ids.settingsCloseBtn);
             const labelFieldInput = this.getEl(this.ids.labelFieldInput);
             const labelSuggest = this.getEl(this.ids.labelSuggest);
             const labelFields = this.getEl(this.ids.labelFields);
@@ -628,10 +631,12 @@
             if (inputToggleBtn) {
                 inputToggleBtn.addEventListener('click', (e) => {
                     e.preventDefault();
-                    const inputDrawer = this.getEl(this.ids.inputDrawer);
-                    const isOpen = inputDrawer ? inputDrawer.classList.contains('is-open') : false;
+                    const settingsPanel = this.getEl(this.ids.settingsPanel);
+                    const inputPanel = this.getEl(this.ids.inputPanel);
+                    const isOpen = settingsPanel ? settingsPanel.classList.contains('is-open') : false;
+                    const isActive = inputPanel ? inputPanel.classList.contains('is-active') : false;
                     this.toggleLabelDrawer(false);
-                    this.toggleInputDrawer(!isOpen);
+                    this.toggleInputDrawer(!(isOpen && isActive));
                 });
             }
             if (inputCancelBtn) {
@@ -643,15 +648,24 @@
             if (labelPanelBtn) {
                 labelPanelBtn.addEventListener('click', (e) => {
                     e.preventDefault();
-                    const labelDrawer = this.getEl(this.ids.labelDrawer);
-                    const isOpen = labelDrawer ? labelDrawer.classList.contains('is-open') : false;
+                    const settingsPanel = this.getEl(this.ids.settingsPanel);
+                    const labelPanel = this.getEl(this.ids.labelPanel);
+                    const isOpen = settingsPanel ? settingsPanel.classList.contains('is-open') : false;
+                    const isActive = labelPanel ? labelPanel.classList.contains('is-active') : false;
                     this.toggleInputDrawer(false);
-                    this.toggleLabelDrawer(!isOpen);
+                    this.toggleLabelDrawer(!(isOpen && isActive));
                 });
             }
             if (labelCloseBtn) {
                 labelCloseBtn.addEventListener('click', (e) => {
                     e.preventDefault();
+                    this.toggleLabelDrawer(false);
+                });
+            }
+            if (settingsCloseBtn) {
+                settingsCloseBtn.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    this.toggleInputDrawer(false);
                     this.toggleLabelDrawer(false);
                 });
             }
@@ -1075,14 +1089,10 @@
                 this._escBound = true;
                 document.addEventListener('keydown', (e) => {
                     if (e.key !== 'Escape') return;
-                    const drawer = this.getEl(this.ids.inputDrawer);
-                    if (drawer && drawer.classList.contains('is-open')) {
+                    const panel = this.getEl(this.ids.settingsPanel);
+                    if (panel && panel.classList.contains('is-open')) {
                         e.preventDefault();
                         this.toggleInputDrawer(false);
-                    }
-                    const labelDrawer = this.getEl(this.ids.labelDrawer);
-                    if (labelDrawer && labelDrawer.classList.contains('is-open')) {
-                        e.preventDefault();
                         this.toggleLabelDrawer(false);
                     }
                 });
@@ -1404,23 +1414,15 @@
         }
 
         mountDrawer() {
-            const drawer = this.getEl(this.ids.inputDrawer);
-            if (!drawer || drawer.dataset.mounted) return;
-            drawer.dataset.mounted = '1';
-            drawer.classList.add('vis-input-drawer-float');
-            if (drawer.parentElement !== document.body) {
-                document.body.appendChild(drawer);
-            }
+            const panel = this.getEl(this.ids.settingsPanel);
+            if (!panel || panel.dataset.mounted) return;
+            panel.dataset.mounted = '1';
         }
 
         mountLabelDrawer() {
-            const drawer = this.getEl(this.ids.labelDrawer);
-            if (!drawer || drawer.dataset.mounted) return;
-            drawer.dataset.mounted = '1';
-            drawer.classList.add('vis-input-drawer-float');
-            if (drawer.parentElement !== document.body) {
-                document.body.appendChild(drawer);
-            }
+            const panel = this.getEl(this.ids.settingsPanel);
+            if (!panel || panel.dataset.labelMounted) return;
+            panel.dataset.labelMounted = '1';
         }
 
         getEl(id) {
@@ -1589,18 +1591,26 @@
         }
 
         toggleInputDrawer(forceOpen) {
-            const drawer = this.getEl(this.ids.inputDrawer);
-            if (!drawer) return;
-            const next = typeof forceOpen === 'boolean' ? forceOpen : !drawer.classList.contains('is-open');
+            const panel = this.getEl(this.ids.settingsPanel);
+            const inputPanel = this.getEl(this.ids.inputPanel);
+            const labelPanel = this.getEl(this.ids.labelPanel);
+            if (!panel || !inputPanel) return;
+            const isOpen = panel.classList.contains('is-open');
+            const isActive = inputPanel.classList.contains('is-active');
+            const next = typeof forceOpen === 'boolean' ? forceOpen : !(isOpen && isActive);
             if (!next) {
                 const active = document.activeElement;
-                if (active && drawer.contains(active)) {
+                if (active && panel.contains(active)) {
                     active.blur();
                 }
             }
-            drawer.classList.toggle('is-open', next);
-            drawer.setAttribute('aria-hidden', next ? 'false' : 'true');
-            drawer.toggleAttribute('inert', !next);
+            panel.classList.toggle('is-open', next);
+            panel.setAttribute('aria-hidden', next ? 'false' : 'true');
+            panel.toggleAttribute('inert', !next);
+            if (next) {
+                inputPanel.classList.add('is-active');
+                if (labelPanel) labelPanel.classList.remove('is-active');
+            }
             this.updateDrawerLayout();
             if (next) {
                 const textarea = this.getEl(this.ids.inputTextarea);
@@ -1618,18 +1628,26 @@
         }
 
         toggleLabelDrawer(forceOpen) {
-            const drawer = this.getEl(this.ids.labelDrawer);
-            if (!drawer) return;
-            const next = typeof forceOpen === 'boolean' ? forceOpen : !drawer.classList.contains('is-open');
+            const panel = this.getEl(this.ids.settingsPanel);
+            const labelPanel = this.getEl(this.ids.labelPanel);
+            const inputPanel = this.getEl(this.ids.inputPanel);
+            if (!panel || !labelPanel) return;
+            const isOpen = panel.classList.contains('is-open');
+            const isActive = labelPanel.classList.contains('is-active');
+            const next = typeof forceOpen === 'boolean' ? forceOpen : !(isOpen && isActive);
             if (!next) {
                 const active = document.activeElement;
-                if (active && drawer.contains(active)) {
+                if (active && panel.contains(active)) {
                     active.blur();
                 }
             }
-            drawer.classList.toggle('is-open', next);
-            drawer.setAttribute('aria-hidden', next ? 'false' : 'true');
-            drawer.toggleAttribute('inert', !next);
+            panel.classList.toggle('is-open', next);
+            panel.setAttribute('aria-hidden', next ? 'false' : 'true');
+            panel.toggleAttribute('inert', !next);
+            if (next) {
+                labelPanel.classList.add('is-active');
+                if (inputPanel) inputPanel.classList.remove('is-active');
+            }
             this.updateDrawerLayout();
             if (next) {
                 this.refreshLabelFieldOptions();
@@ -1667,10 +1685,8 @@
         updateDrawerLayout() {
             const view = this.getEl(this.ids.view);
             if (!view) return;
-            const inputDrawer = this.getEl(this.ids.inputDrawer);
-            const labelDrawer = this.getEl(this.ids.labelDrawer);
-            const hasOpen = !!(inputDrawer && inputDrawer.classList.contains('is-open'))
-                || !!(labelDrawer && labelDrawer.classList.contains('is-open'));
+            const settingsPanel = this.getEl(this.ids.settingsPanel);
+            const hasOpen = !!(settingsPanel && settingsPanel.classList.contains('is-open'));
             view.classList.toggle('drawer-open', hasOpen);
         }
 

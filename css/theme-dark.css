@@ -1159,6 +1159,10 @@ body.theme-dark .md-chat-suggest-item.active {
     background: #2a2f36;
 }
 
+body.theme-dark .vis-settings-title {
+    color: #e2e8f0;
+}
+
 body.theme-dark .md-chat-input, body.theme-dark .md-chat-top {
     border-top-color: #2b3445;
     background: #1f1f1f;
