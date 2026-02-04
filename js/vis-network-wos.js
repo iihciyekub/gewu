@@ -570,13 +570,8 @@
             this.zoomMax = 2.0;
             this.zoomStep = 0.1;
             this.zoomAnimDuration = 520;
-            this.zoomAnimEasing = (t) => {
-                if (t <= 0) return 0;
-                if (t >= 1) return 1;
-                return t < 0.5
-                    ? 16 * t * t * t * t * t
-                    : 1 - Math.pow(-2 * t + 2, 5) / 2;
-            };
+            this.zoomAnimEasing = 'easeInOutCubic';
+            this.exportScale = 2;
             this.labelField = 'wosid';
             this.labelFade = 0;
             this.labelSizeScale = 1;
@@ -1158,7 +1153,7 @@
                 interaction: {
                     dragNodes: !lock && !panOnly,
                     dragView: !lock,
-                    zoomView: !lock && !panOnly
+                    zoomView: !lock
                 }
             });
             this.updateZoomControlsDisabled(lock, panOnly);
@@ -1280,7 +1275,7 @@
             const zoomOutBtn = this.getEl(this.ids.zoomOutBtn);
             const zoomFitBtn = this.getEl(this.ids.zoomFitBtn);
             const zoomSlider = this.getEl(this.ids.zoomSlider);
-            const disableZoom = isLocked || isPanOnly;
+            const disableZoom = isLocked;
             [zoomInBtn, zoomOutBtn, zoomFitBtn].forEach((btn) => {
                 if (btn) btn.disabled = disableZoom;
             });
@@ -1289,7 +1284,8 @@
 
         exportNetworkVector(type) {
             if (!this.visNetwork) return;
-            const result = this.buildNetworkSvg(this.mmToPx(6));
+            const scale = type === 'svg' ? this.exportScale : 1;
+            const result = this.buildNetworkSvg(this.mmToPx(6), scale);
             if (!result) return;
             if (type === 'svg') {
                 this.downloadSvg(result.svg);
@@ -1298,7 +1294,7 @@
             }
         }
 
-        buildNetworkSvg(marginPx) {
+        buildNetworkSvg(marginPx, scale = 1) {
             if (!this.visNetwork) return null;
             const dataset = this.visNetwork?.body?.data;
             if (!dataset) return null;
@@ -1388,11 +1384,21 @@
                 .replace(/</g, '&lt;')
                 .replace(/>/g, '&gt;')
                 .replace(/"/g, '&quot;');
+            const escapeAttr = (text) => String(text)
+                .replace(/[\u0000-\u001F\u007F]/g, '')
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+            const exportScale = Number.isFinite(scale) && scale > 0 ? scale : 1;
+            const widthPx = Math.max(1, Math.round(width * exportScale));
+            const heightPx = Math.max(1, Math.round(height * exportScale));
             const edgeSvg = edges.map((edge) => {
                 const fromPos = this.visNetwork.getPositions([edge.from])[edge.from];
                 const toPos = this.visNetwork.getPositions([edge.to])[edge.to];
                 if (!fromPos || !toPos) return '';
-                const stroke = edge.color?.color || '#111111';
+                const stroke = escapeAttr(edge.color?.color || '#111111');
                 const widthVal = Number(edge.width) || 1;
                 return `<line x1="${fromPos.x}" y1="${fromPos.y}" x2="${toPos.x}" y2="${toPos.y}" stroke="${stroke}" stroke-width="${widthVal}" stroke-linecap="round" />`;
             }).join('');
@@ -1400,25 +1406,25 @@
                 const pos = this.visNetwork.getPositions([node.id])[node.id];
                 if (!pos) return '';
                 const radius = Number(node.size) || 6;
-                const fill = node.color?.background || '#ffffff';
-                const stroke = node.color?.border || '#111111';
+                const fill = escapeAttr(node.color?.background || '#ffffff');
+                const stroke = escapeAttr(node.color?.border || '#111111');
                 const strokeWidth = Number(node.borderWidth) || 1;
                 return `<circle cx="${pos.x}" cy="${pos.y}" r="${radius}" fill="${fill}" stroke="${stroke}" stroke-width="${strokeWidth}" />`;
             }).join('');
             const labelSvg = labelItems.map((label) => {
                 const rx = Number.isFinite(label.radius) ? Math.min(label.radius, label.height / 2) : 0;
                 const border = label.borderWidth > 0 && label.borderColor !== 'transparent'
-                    ? `stroke="${label.borderColor}" stroke-width="${label.borderWidth}"`
+                    ? `stroke="${escapeAttr(label.borderColor)}" stroke-width="${label.borderWidth}"`
                     : '';
                 const fill = label.background && label.background !== 'rgba(0, 0, 0, 0)'
-                    ? `fill="${label.background}"`
+                    ? `fill="${escapeAttr(label.background)}"`
                     : 'fill="transparent"';
                 const rect = `<rect x="${label.x}" y="${label.y}" width="${label.width}" height="${label.height}" rx="${rx}" ry="${rx}" ${fill} ${border} />`;
-                const text = `<text x="${label.textX}" y="${label.textY}" font-size="${label.fontSize}" font-weight="${label.fontWeight}" fill="${label.color}" font-family="${label.fontFamily}" dominant-baseline="hanging">${escape(label.text)}</text>`;
+                const text = `<text x="${label.textX}" y="${label.textY}" font-size="${label.fontSize}" font-weight="${escapeAttr(label.fontWeight)}" fill="${escapeAttr(label.color)}" font-family="${escapeAttr(label.fontFamily)}" dominant-baseline="hanging">${escape(label.text)}</text>`;
                 return `${rect}${text}`;
             }).join('');
             const svg = `
-<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="${viewLeft} ${viewTop} ${width} ${height}">
+<svg xmlns="http://www.w3.org/2000/svg" width="${widthPx}" height="${heightPx}" viewBox="${viewLeft} ${viewTop} ${width} ${height}">
   <rect x="${viewLeft}" y="${viewTop}" width="${width}" height="${height}" fill="${bg}" />
   <g>
     ${edgeSvg}
@@ -1430,7 +1436,7 @@
     ${labelSvg}
   </g>
 </svg>`;
-            return { svg, width, height };
+            return { svg, width, height, widthPx, heightPx };
         }
 
         getNetworkBounds() {
