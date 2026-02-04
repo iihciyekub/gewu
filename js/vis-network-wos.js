@@ -569,8 +569,14 @@
             this.zoomMin = 0.1;
             this.zoomMax = 2.0;
             this.zoomStep = 0.1;
-            this.zoomAnimDuration = 320;
-            this.zoomAnimEasing = 'easeInOutCubic';
+            this.zoomAnimDuration = 520;
+            this.zoomAnimEasing = (t) => {
+                if (t <= 0) return 0;
+                if (t >= 1) return 1;
+                return t < 0.5
+                    ? 16 * t * t * t * t * t
+                    : 1 - Math.pow(-2 * t + 2, 5) / 2;
+            };
             this.labelField = 'wosid';
             this.labelFade = 0;
             this.labelSizeScale = 1;
@@ -832,7 +838,12 @@
                 zoomFitBtn.addEventListener('click', (e) => {
                     e.preventDefault();
                     if (this.visNetwork) {
-                        this.visNetwork.fit({ animation: { duration: 250 } });
+                        this.visNetwork.fit({
+                            animation: {
+                                duration: 420,
+                                easingFunction: this.zoomAnimEasing
+                            }
+                        });
                         this.syncZoomSlider();
                     }
                 });
@@ -3090,10 +3101,11 @@
         }
 
         getZoomAnimDuration(delta, source) {
-            const magnitude = Math.min(1, Math.max(0, delta));
-            const base = source === 'slider' ? 260 : 340;
-            const span = source === 'slider' ? 420 : 620;
-            return Math.round(base + span * magnitude);
+            const normalized = Math.min(1, Math.max(0, delta / 0.6));
+            const eased = 0.5 - 0.5 * Math.cos(Math.PI * normalized);
+            const base = source === 'slider' ? 420 : 560;
+            const span = source === 'slider' ? 760 : 1080;
+            return Math.round(base + span * eased);
         }
 
         moveZoomTo(scale, source = 'button') {
