@@ -19230,6 +19230,22 @@ document.addEventListener('DOMContentLoaded', () => {
         console.log('✅ DOI cache cleared');
     };
 
+    const disableButtonTabFocus = () => {
+        const nodes = document.querySelectorAll(
+            'button, [role="button"], input[type="button"], input[type="submit"], input[type="reset"], .btn'
+        );
+        nodes.forEach((el) => {
+            if (el.getAttribute('tabindex') !== '-1') {
+                el.setAttribute('tabindex', '-1');
+            }
+        });
+    };
+    disableButtonTabFocus();
+    const buttonTabObserver = new MutationObserver(() => {
+        disableButtonTabFocus();
+    });
+    buttonTabObserver.observe(document.body, { childList: true, subtree: true });
+
     // 全局 DOI -> APA 测试方法：在控制台调用 citeDoiToApa('10.xxxx/yyy')
     const loadCiteLib = async () => {
         const pickCite = () => {

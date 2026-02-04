@@ -29,7 +29,6 @@
                 node.labelStyle = {
                     ...node.labelStyle,
                     textColor: 'rgb(226, 232, 240)',
-                    backgroundColor: 'rgba(15, 23, 42, 0.92)',
                     borderColor: 'rgba(255,255,255,0.18)'
                 };
             }
@@ -217,8 +216,7 @@
             node.labelStyle = {
                 fontSize: Math.max(10, Math.min(16, 8 + Math.sqrt(Math.max(1, node.size)))),
                 textColor: `rgb(${labelGray}, ${labelGray}, ${labelGray})`,
-                borderColor: `rgba(0,0,0,${Math.min(1, alpha + 0.15).toFixed(3)})`,
-                backgroundColor: '#ffffff'
+                borderColor: `rgba(0,0,0,${Math.min(1, alpha + 0.15).toFixed(3)})`
             };
         });
         const meta = {
@@ -453,8 +451,7 @@
         const position = network.getPositions([nodeId])[nodeId];
         if (!position) return;
         const domPos = network.canvasToDOM(position);
-        const offsetY = 8;
-        labelEl.style.transform = `translate(${domPos.x}px, ${domPos.y + offsetY}px)`;
+        labelEl.style.transform = `translate(${domPos.x}px, ${domPos.y}px)`;
     }
 
     function renderAllLabels(network, dataset, layer) {
@@ -499,7 +496,8 @@
         if (style.fontWeight) label.style.fontWeight = String(style.fontWeight);
         if (style.textColor) label.style.color = style.textColor;
         if (style.borderColor) label.style.borderColor = style.borderColor;
-        if (style.backgroundColor) label.style.backgroundColor = style.backgroundColor;
+        // Keep background color controlled by CSS theme variables.
+        label.style.backgroundColor = '';
         let opacity = typeof style.opacity === 'number' ? style.opacity : 1;
         if (node.labelHidden) opacity = 0;
         label.style.opacity = String(opacity);
@@ -1306,13 +1304,108 @@
         exportNetworkVector(type) {
             if (!this.visNetwork) return;
             const scale = type === 'svg' ? this.exportScale : 1;
-            const result = this.buildNetworkSvg(this.mmToPx(6), scale);
+            const result = type === 'svg'
+                ? this.buildNetworkSvgSnapshot(scale)
+                : this.buildNetworkSvg(this.mmToPx(6), scale);
             if (!result) return;
             if (type === 'svg') {
                 this.downloadSvg(result.svg);
             } else {
                 this.openPdfPrintWindowWithSvg(result.svg, result.width, result.height);
             }
+        }
+
+        buildNetworkSvgSnapshot(scale = 1) {
+            if (!this.visNetwork) return null;
+            const view = this.getEl(this.ids.view);
+            const canvas = this.visNetwork?.canvas?.frame?.canvas;
+            if (!view || !canvas) return null;
+            const viewRect = view.getBoundingClientRect();
+            if (!viewRect || viewRect.width <= 0 || viewRect.height <= 0) return null;
+            const exportScale = Number.isFinite(scale) && scale > 0 ? scale : 1;
+            const width = Math.max(1, Math.round(viewRect.width * exportScale));
+            const height = Math.max(1, Math.round(viewRect.height * exportScale));
+            const bg = this.getCanvasBackground();
+            const imageHref = canvas.toDataURL('image/png');
+            const escape = (text) => String(text)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;');
+            const escapeAttr = (text) => String(text)
+                .replace(/[\u0000-\u001F\u007F]/g, '')
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+            const labelItems = [];
+            const layer = view.querySelector('.vis-network-label-layer');
+            if (layer) {
+                const showAll = getLabelState(this.visNetwork).showAll;
+                const labels = Array.from(layer.querySelectorAll('.vis-node-label'));
+                labels.forEach((labelEl) => {
+                    if (labelEl.classList.contains('is-hover')) {
+                        if (showAll) return;
+                        if (!labelEl.classList.contains('is-visible')) return;
+                    }
+                    const rect = labelEl.getBoundingClientRect();
+                    if (!rect || rect.width <= 0 || rect.height <= 0) return;
+                    const style = window.getComputedStyle(labelEl);
+                    if (style.visibility === 'hidden' || Number(style.opacity) === 0) return;
+                    const parsePx = (val) => {
+                        const num = Number.parseFloat(val || '0');
+                        return Number.isFinite(num) ? num : 0;
+                    };
+                    const paddingLeft = parsePx(style.paddingLeft);
+                    const paddingTop = parsePx(style.paddingTop);
+                    const fontSize = parsePx(style.fontSize) || 11;
+                    const borderWidth = parsePx(style.borderWidth);
+                    const radius = parsePx(style.borderRadius);
+                    const x = (rect.left - viewRect.left) * exportScale;
+                    const y = (rect.top - viewRect.top) * exportScale;
+                    const w = rect.width * exportScale;
+                    const h = rect.height * exportScale;
+                    labelItems.push({
+                        x,
+                        y,
+                        width: w,
+                        height: h,
+                        textX: x + paddingLeft * exportScale,
+                        textY: y + paddingTop * exportScale,
+                        text: labelEl.textContent || '',
+                        fontSize: fontSize * exportScale,
+                        fontWeight: style.fontWeight || 500,
+                        fontFamily: style.fontFamily || 'Georgia, Times, serif',
+                        color: style.color || '#111111',
+                        background: style.backgroundColor || 'transparent',
+                        borderColor: style.borderColor || 'transparent',
+                        borderWidth: borderWidth * exportScale,
+                        radius: radius * exportScale
+                    });
+                });
+            }
+            const labelSvg = labelItems.map((label) => {
+                const rx = Number.isFinite(label.radius) ? Math.min(label.radius, label.height / 2) : 0;
+                const border = label.borderWidth > 0 && label.borderColor !== 'transparent'
+                    ? `stroke="${escapeAttr(label.borderColor)}" stroke-width="${label.borderWidth}"`
+                    : '';
+                const fill = label.background && label.background !== 'rgba(0, 0, 0, 0)'
+                    ? `fill="${escapeAttr(label.background)}"`
+                    : 'fill="transparent"';
+                const rect = `<rect x="${label.x}" y="${label.y}" width="${label.width}" height="${label.height}" rx="${rx}" ry="${rx}" ${fill} ${border} />`;
+                const text = `<text x="${label.textX}" y="${label.textY}" font-size="${label.fontSize}" font-weight="${escapeAttr(label.fontWeight)}" fill="${escapeAttr(label.color)}" font-family="${escapeAttr(label.fontFamily)}" dominant-baseline="hanging">${escape(label.text)}</text>`;
+                return `${rect}${text}`;
+            }).join('');
+            const svg = `
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">
+  <rect x="0" y="0" width="${width}" height="${height}" fill="${bg}" />
+  <image x="0" y="0" width="${width}" height="${height}" href="${imageHref}" xlink:href="${imageHref}" preserveAspectRatio="none" />
+  <g>
+    ${labelSvg}
+  </g>
+</svg>`;
+            return { svg, width, height, widthPx: width, heightPx: height };
         }
 
         buildNetworkSvg(marginPx, scale = 1) {
@@ -1343,10 +1436,12 @@
                 const layer = view.querySelector('.vis-network-label-layer');
                 const viewRect = view.getBoundingClientRect();
                 if (layer && viewRect) {
+                    const showAll = getLabelState(this.visNetwork).showAll;
                     const labels = Array.from(layer.querySelectorAll('.vis-node-label'));
                     labels.forEach((labelEl) => {
-                        if (labelEl.classList.contains('is-hover') && !labelEl.classList.contains('is-visible')) {
-                            return;
+                        if (labelEl.classList.contains('is-hover')) {
+                            if (showAll) return;
+                            if (!labelEl.classList.contains('is-visible')) return;
                         }
                         const rect = labelEl.getBoundingClientRect();
                         if (!rect || rect.width <= 0 || rect.height <= 0) return;
@@ -1649,7 +1744,7 @@
             this.applyEdgeFade();
             this.applyEdgeWidthRange();
             this.applyDepthMode(this.depthMode);
-            this.applyLabelShowAll(true);
+            // Skip auto-restoring label rendering on reload.
             this.queuePersistNetworkState();
         }
 
@@ -3072,6 +3167,9 @@
             if (this._boundNetwork === network) return;
             if (this._boundNetwork) {
                 this._boundNetwork.off('click', this._onNetworkClick);
+                if (this._onNetworkBeforeDraw) {
+                    this._boundNetwork.off('beforeDrawing', this._onNetworkBeforeDraw);
+                }
             }
             this._onNetworkClick = (params) => {
                 const evt = params?.event?.event || params?.event?.srcEvent;
@@ -3092,6 +3190,30 @@
                 this.openFileByWosId(nodeId);
             };
             network.on('click', this._onNetworkClick);
+            this._onNetworkBeforeDraw = (ctx) => {
+                const dataset = network?.body?.data?.nodes;
+                if (!dataset) return;
+                const nodes = dataset.get();
+                if (!nodes.length) return;
+                const scale = Number(network.getScale()) || 1;
+                const lineWidth = 2 / scale;
+                ctx.save();
+                ctx.lineWidth = lineWidth;
+                ctx.strokeStyle = '#ffffff';
+                ctx.beginPath();
+                nodes.forEach((node) => {
+                    const pos = network.getPositions([node.id])[node.id];
+                    if (!pos) return;
+                    const radius = Number(node.size) || 6;
+                    const borderWidth = Number(node.borderWidth) || 1;
+                    const r = radius + borderWidth / 2 + lineWidth / 2;
+                    ctx.moveTo(pos.x + r, pos.y);
+                    ctx.arc(pos.x, pos.y, r, 0, Math.PI * 2);
+                });
+                ctx.stroke();
+                ctx.restore();
+            };
+            network.on('beforeDrawing', this._onNetworkBeforeDraw);
             this._boundNetwork = network;
         }
 

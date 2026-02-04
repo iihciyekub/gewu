@@ -15,7 +15,6 @@
     --wos-text-light: #6B7280;
     --wos-hover: #EBF5FF;
     --wos-active: #dee0e1;
-
     /* 学术灰色系 */
     --gray-50: #F9FAFB;
     --gray-100: #F3F4F6;
@@ -2230,7 +2229,7 @@ body.theme-dark .vis-network-view.active.no-grid {
     padding: 6px 8px;
 }
 
-.vis-network-zoom.is-collapsed > :not(.vis-zoom-collapse) {
+.vis-network-zoom.is-collapsed> :not(.vis-zoom-collapse) {
     display: none;
 }
 
@@ -2347,15 +2346,29 @@ body.theme-dark .vis-network-zoom input[type="range"] {
 
 .vis-node-label {
     position: absolute;
-    transform: translate(-50%, 0);
-    padding: 2px 3px;
-    border-radius: 10px;
-    background: #000000;
-    border: none;
+    transform: translate(-50%, -50%);
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    text-align: left;
+    padding: 1px 6px;
+    border-radius: 8px;
+    background: var(--vis-label-bg);
+    border: 1px dashed #00000021 !important;
     font-size: 11px;
     font-family: Georgia, "Times New Roman", "Times", serif;
-    color: #ffffff;
+    color: var(--vis-label-color, #000000);
     white-space: nowrap;
+}
+
+.vis-network-view {
+    --vis-label-bg: #f2f2f2f1;
+    --vis-label-color: #000000;
+}
+
+body.theme-dark .vis-network-view {
+    --vis-label-bg: rgba(38, 38, 38, 0.749);
+    --vis-label-color: #e2e8f0;
 }
 
 .vis-node-label.is-hover {
@@ -2676,7 +2689,7 @@ body.theme-dark .vis-label-suggest .vis-label-suggest-item.active {
     overflow: auto;
 }
 
-.vis-label-panel > div {
+.vis-label-panel>div {
     grid-column: 1 / -1;
 }
 
@@ -2820,7 +2833,7 @@ body.theme-dark .vis-label-suggest .vis-label-suggest-item.active {
     margin: 0;
 }
 
-.vis-input-drawer .vis-label-panel > div {
+.vis-input-drawer .vis-label-panel>div {
     margin-top: 4px;
 }
 
