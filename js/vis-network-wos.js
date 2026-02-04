@@ -531,6 +531,8 @@
             this.zoomMin = 0.1;
             this.zoomMax = 2.0;
             this.zoomStep = 0.1;
+            this.zoomAnimDuration = 320;
+            this.zoomAnimEasing = 'easeInOutCubic';
             this.labelField = 'wosid';
             this.labelFade = 0;
             this.labelSizeScale = 1;
@@ -740,13 +742,13 @@
             if (zoomInBtn) {
                 zoomInBtn.addEventListener('click', (e) => {
                     e.preventDefault();
-                    this.adjustZoom(this.zoomStep);
+                    this.adjustZoom(this.zoomStep, 'button');
                 });
             }
             if (zoomOutBtn) {
                 zoomOutBtn.addEventListener('click', (e) => {
                     e.preventDefault();
-                    this.adjustZoom(-this.zoomStep);
+                    this.adjustZoom(-this.zoomStep, 'button');
                 });
             }
             if (zoomFitBtn) {
@@ -761,9 +763,7 @@
             if (zoomSlider) {
                 zoomSlider.addEventListener('input', () => {
                     const value = Number(zoomSlider.value) / 100;
-                    if (this.visNetwork) {
-                        this.visNetwork.moveTo({ scale: this.clampZoom(value) });
-                    }
+                    this.moveZoomTo(this.clampZoom(value), 'slider');
                 });
             }
             if (gridToggleBtn) {
@@ -2786,12 +2786,33 @@
             return Math.max(this.zoomMin, Math.min(this.zoomMax, value));
         }
 
-        adjustZoom(delta) {
+        adjustZoom(delta, source = 'button') {
             if (!this.visNetwork) return;
             const current = this.visNetwork.getScale();
             const next = this.clampZoom(current + delta);
-            this.visNetwork.moveTo({ scale: next });
+            this.moveZoomTo(next, source);
             this.syncZoomSlider();
+        }
+
+        getZoomAnimDuration(delta, source) {
+            const magnitude = Math.min(1, Math.max(0, delta));
+            const base = source === 'slider' ? 260 : 340;
+            const span = source === 'slider' ? 420 : 620;
+            return Math.round(base + span * magnitude);
+        }
+
+        moveZoomTo(scale, source = 'button') {
+            if (!this.visNetwork) return;
+            const current = this.visNetwork.getScale();
+            const delta = Math.abs(scale - current);
+            const duration = this.getZoomAnimDuration(delta, source);
+            this.visNetwork.moveTo({
+                scale,
+                animation: {
+                    duration,
+                    easingFunction: this.zoomAnimEasing
+                }
+            });
         }
 
         normalizeWosId(value) {
