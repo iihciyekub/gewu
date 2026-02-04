@@ -2660,6 +2660,10 @@ body.theme-dark .vis-label-suggest .vis-label-suggest-item.active {
     font-weight: bold;
 }
 
+body.theme-dark .vis-settings-panel.is-open .vis-label-panel label {
+    color: #cbd5e1;
+}
+
 .vis-label-panel input[type="text"] {
     width: 100%;
     height: 20px;

@@ -633,6 +633,9 @@
                 edgeFadeSlider: options.edgeFadeSliderId || 'visEdgeFadeSlider',
                 edgeMinWidthSlider: options.edgeMinWidthSliderId || 'visEdgeMinWidthSlider',
                 edgeMaxWidthSlider: options.edgeMaxWidthSliderId || 'visEdgeMaxWidthSlider',
+                exportSvgScaleInput: options.exportSvgScaleInputId || 'visSvgScaleInput',
+                exportSvgMarginInput: options.exportSvgMarginInputId || 'visSvgMarginInput',
+                exportSvgIncludeLabelsInput: options.exportSvgIncludeLabelsInputId || 'visSvgIncludeLabels',
                 importBtn: options.importBtnId || 'visImportJsonBtn',
                 importJsonFileInput: options.importJsonFileInputId || 'importJsonFileInput',
                 zoomInBtn: options.zoomInBtnId || 'visZoomInBtn',
@@ -689,6 +692,9 @@
             this.edgeMaxWidth = 6;
             this.edgeColor = '#111111';
             this.edgeStyle = 'curve-dynamic';
+            this.exportSvgScale = 1;
+            this.exportSvgMargin = 6;
+            this.exportSvgIncludeLabels = true;
             this.wosNodeIndex = null;
             this.wosNodeIndexSource = null;
             this.labelFieldHistory = [];
@@ -761,6 +767,9 @@
             const edgeMinWidthSlider = this.getEl(this.ids.edgeMinWidthSlider);
             const edgeMaxWidthSlider = this.getEl(this.ids.edgeMaxWidthSlider);
             const edgeColorInput = this.getEl(this.ids.edgeColorInput);
+            const exportSvgScaleInput = this.getEl(this.ids.exportSvgScaleInput);
+            const exportSvgMarginInput = this.getEl(this.ids.exportSvgMarginInput);
+            const exportSvgIncludeLabelsInput = this.getEl(this.ids.exportSvgIncludeLabelsInput);
             const zoomInBtn = this.getEl(this.ids.zoomInBtn);
             const zoomOutBtn = this.getEl(this.ids.zoomOutBtn);
             const zoomFitBtn = this.getEl(this.ids.zoomFitBtn);
@@ -1381,6 +1390,29 @@
                     this.saveLabelSlot();
                 });
             }
+            if (exportSvgScaleInput && !exportSvgScaleInput.dataset.visBound) {
+                exportSvgScaleInput.dataset.visBound = '1';
+                exportSvgScaleInput.addEventListener('input', () => {
+                    const next = Number(exportSvgScaleInput.value);
+                    this.exportSvgScale = Number.isFinite(next) && next > 0 ? next : 1;
+                    this.queuePersistSettings();
+                });
+            }
+            if (exportSvgMarginInput && !exportSvgMarginInput.dataset.visBound) {
+                exportSvgMarginInput.dataset.visBound = '1';
+                exportSvgMarginInput.addEventListener('input', () => {
+                    const next = Number(exportSvgMarginInput.value);
+                    this.exportSvgMargin = Number.isFinite(next) && next >= 0 ? next : 0;
+                    this.queuePersistSettings();
+                });
+            }
+            if (exportSvgIncludeLabelsInput && !exportSvgIncludeLabelsInput.dataset.visBound) {
+                exportSvgIncludeLabelsInput.dataset.visBound = '1';
+                exportSvgIncludeLabelsInput.addEventListener('change', () => {
+                    this.exportSvgIncludeLabels = !!exportSvgIncludeLabelsInput.checked;
+                    this.queuePersistSettings();
+                });
+            }
             if (!this._escBound) {
                 this._escBound = true;
                 document.addEventListener('keydown', (e) => {
@@ -1560,9 +1592,13 @@
 
         exportNetworkVector(type) {
             if (!this.visNetwork) return;
-            const scale = type === 'svg' ? this.exportScale : 1;
+            const scale = type === 'svg' ? this.exportSvgScale : 1;
+            const margin = Number.isFinite(Number(this.exportSvgMargin))
+                ? Number(this.exportSvgMargin)
+                : this.mmToPx(6);
+            const includeLabels = this.exportSvgIncludeLabels !== false;
             const result = type === 'svg'
-                ? this.buildNetworkSvgSnapshot(scale)
+                ? this.buildNetworkSvg(margin, scale, includeLabels)
                 : this.buildNetworkSvg(this.mmToPx(6), scale);
             if (!result) return;
             if (type === 'svg') {
@@ -1669,7 +1705,7 @@
             return { svg, width, height, widthPx: width, heightPx: height };
         }
 
-        buildNetworkSvg(marginPx, scale = 1) {
+        buildNetworkSvg(marginPx, scale = 1, includeLabels = true) {
             if (!this.visNetwork) return null;
             const dataset = this.visNetwork?.body?.data;
             if (!dataset) return null;
@@ -1693,7 +1729,7 @@
                 return null;
             }
             const labelItems = [];
-            if (view) {
+            if (includeLabels && view) {
                 const layer = view.querySelector('.vis-network-label-layer');
                 const viewRect = view.getBoundingClientRect();
                 if (layer && viewRect) {
@@ -1721,17 +1757,19 @@
                             return Number.isFinite(num) ? num : 0;
                         };
                         const paddingLeft = parsePx(style.paddingLeft);
-                        const paddingTop = parsePx(style.paddingTop);
                         const fontSize = parsePx(style.fontSize) || 11;
                         const borderWidth = parsePx(style.borderWidth);
+                        const borderStyle = style.borderStyle || 'solid';
                         const radius = parsePx(style.borderRadius);
+                        const centerY = canvasTopLeft.y + h / 2;
+                        const textX = canvasTopLeft.x + paddingLeft;
                         labelItems.push({
                             x: canvasTopLeft.x,
                             y: canvasTopLeft.y,
                             width: w,
                             height: h,
-                            textX: canvasTopLeft.x + paddingLeft,
-                            textY: canvasTopLeft.y + paddingTop,
+                            centerY,
+                            textX,
                             text: labelEl.textContent || '',
                             fontSize,
                             fontWeight: style.fontWeight || 500,
@@ -1740,6 +1778,7 @@
                             background: style.backgroundColor || 'transparent',
                             borderColor: style.borderColor || 'transparent',
                             borderWidth,
+                            borderStyle,
                             radius
                         });
                         left = Math.min(left, canvasTopLeft.x);
@@ -1790,14 +1829,15 @@
             }).join('');
             const labelSvg = labelItems.map((label) => {
                 const rx = Number.isFinite(label.radius) ? Math.min(label.radius, label.height / 2) : 0;
+                const dash = label.borderStyle === 'dashed' ? 'stroke-dasharray="3 2"' : '';
                 const border = label.borderWidth > 0 && label.borderColor !== 'transparent'
-                    ? `stroke="${escapeAttr(label.borderColor)}" stroke-width="${label.borderWidth}"`
+                    ? `stroke="${escapeAttr(label.borderColor)}" stroke-width="${label.borderWidth}" ${dash}`
                     : '';
                 const fill = label.background && label.background !== 'rgba(0, 0, 0, 0)'
                     ? `fill="${escapeAttr(label.background)}"`
                     : 'fill="transparent"';
                 const rect = `<rect x="${label.x}" y="${label.y}" width="${label.width}" height="${label.height}" rx="${rx}" ry="${rx}" ${fill} ${border} />`;
-                const text = `<text x="${label.textX}" y="${label.textY}" font-size="${label.fontSize}" font-weight="${escapeAttr(label.fontWeight)}" fill="${escapeAttr(label.color)}" font-family="${escapeAttr(label.fontFamily)}" dominant-baseline="hanging">${escape(label.text)}</text>`;
+                const text = `<text x="${label.textX}" y="${label.centerY}" font-size="${label.fontSize}" font-weight="${escapeAttr(label.fontWeight)}" fill="${escapeAttr(label.color)}" font-family="${escapeAttr(label.fontFamily)}" text-anchor="start" dominant-baseline="middle">${escape(label.text)}</text>`;
                 return `${rect}${text}`;
             }).join('');
             const svg = `
@@ -3205,7 +3245,10 @@
                 edgeMinWidth: this.edgeMinWidth,
                 edgeMaxWidth: this.edgeMaxWidth,
                 edgeColor: this.edgeColor,
-                edgeStyle: this.edgeStyle
+                edgeStyle: this.edgeStyle,
+                exportSvgScale: this.exportSvgScale,
+                exportSvgMargin: this.exportSvgMargin,
+                exportSvgIncludeLabels: this.exportSvgIncludeLabels
             };
         }
 
@@ -3241,6 +3284,11 @@
             if (typeof payload.edgeColor === 'string') this.edgeColor = payload.edgeColor;
             if (typeof payload.edgeStyle === 'string') this.edgeStyle = payload.edgeStyle;
             if (typeof payload.depthMode === 'boolean') this.depthMode = payload.depthMode;
+            if (Number.isFinite(payload.exportSvgScale)) this.exportSvgScale = payload.exportSvgScale;
+            if (Number.isFinite(payload.exportSvgMargin)) this.exportSvgMargin = payload.exportSvgMargin;
+            if (typeof payload.exportSvgIncludeLabels === 'boolean') {
+                this.exportSvgIncludeLabels = payload.exportSvgIncludeLabels;
+            }
 
             this.applyLabelFade();
             this.applyLabelSizeScale();
@@ -3573,6 +3621,18 @@
             if (edgeMinWidthSlider) edgeMinWidthSlider.value = String(this.edgeMinWidth || 1);
             if (edgeMaxWidthSlider) edgeMaxWidthSlider.value = String(this.edgeMaxWidth || 6);
             this.setColorInputValue(edgeColorInput, this.edgeColor || '#111111');
+            this.syncExportSettingsInputs();
+        }
+
+        syncExportSettingsInputs() {
+            const exportSvgScaleInput = this.getEl(this.ids.exportSvgScaleInput);
+            const exportSvgMarginInput = this.getEl(this.ids.exportSvgMarginInput);
+            const exportSvgIncludeLabelsInput = this.getEl(this.ids.exportSvgIncludeLabelsInput);
+            if (exportSvgScaleInput) exportSvgScaleInput.value = String(this.exportSvgScale || 1);
+            if (exportSvgMarginInput) exportSvgMarginInput.value = String(this.exportSvgMargin ?? 6);
+            if (exportSvgIncludeLabelsInput) {
+                exportSvgIncludeLabelsInput.checked = this.exportSvgIncludeLabels !== false;
+            }
         }
 
         setColorInputValue(input, value) {

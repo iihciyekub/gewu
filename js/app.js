@@ -9729,6 +9729,36 @@ class PaperStatsApp {
         }
     }
 
+    toggleVisExportPanel(forceVisible) {
+        const panel = document.getElementById('visExportSettingsPanel');
+        if (this.visExportVisible && forceVisible !== false) {
+            if (panel) this.moveSettingsPanelToEnd(panel);
+            this.updateSettingsPanelsVisibility();
+            this.saveSettingsPanelsState();
+            this.switchToView('settings');
+            if (this.visManager && typeof this.visManager.syncExportSettingsInputs === 'function') {
+                this.visManager.syncExportSettingsInputs();
+            }
+            const input = document.getElementById('visSvgScaleInput');
+            if (input) setTimeout(() => input.focus({ preventScroll: true }), 0);
+            return;
+        }
+        const next = typeof forceVisible === 'boolean' ? forceVisible : !this.visExportVisible;
+        this.visExportVisible = next;
+        if (panel) panel.classList.toggle('is-visible', next);
+        if (next) this.moveSettingsPanelToEnd(panel);
+        this.updateSettingsPanelsVisibility();
+        this.saveSettingsPanelsState();
+        if (next) {
+            this.switchToView('settings');
+            if (this.visManager && typeof this.visManager.syncExportSettingsInputs === 'function') {
+                this.visManager.syncExportSettingsInputs();
+            }
+            const input = document.getElementById('visSvgScaleInput');
+            if (input) setTimeout(() => input.focus({ preventScroll: true }), 0);
+        }
+    }
+
     // 添加别名方法以兼容 HTML 中的 onclick
     toggleAutoSaveConfigPanel(forceVisible) {
         this.toggleAutoSavePanel(forceVisible);
@@ -9736,7 +9766,7 @@ class PaperStatsApp {
 
     updateSettingsPanelsVisibility() {
         const settingsContent = document.getElementById('settingsContent');
-        const hasAny = !!(this.fileFilterVisible || this.createGroupVisible || this.projectInfoVisible || this.thirdPartyInfoVisible || this.shortcutsVisible || this.queryExportVisible || this.apiSettingsVisible || this.autoSaveConfigVisible || this.aboutVisible);
+        const hasAny = !!(this.fileFilterVisible || this.createGroupVisible || this.projectInfoVisible || this.thirdPartyInfoVisible || this.shortcutsVisible || this.queryExportVisible || this.visExportVisible || this.apiSettingsVisible || this.autoSaveConfigVisible || this.aboutVisible);
         if (settingsContent) settingsContent.classList.toggle('is-empty', !hasAny);
     }
 
@@ -9909,6 +9939,7 @@ class PaperStatsApp {
             thirdPartyInfoVisible: !!this.thirdPartyInfoVisible,
             shortcutsVisible: !!this.shortcutsVisible,
             queryExportVisible: !!this.queryExportVisible,
+            visExportVisible: !!this.visExportVisible,
             apiSettingsVisible: !!this.apiSettingsVisible,
             autoSaveConfigVisible: !!this.autoSaveConfigVisible,
             panelOrder: this.getSettingsPanelsOrder()
@@ -9928,6 +9959,7 @@ class PaperStatsApp {
         this.thirdPartyInfoVisible = !!state.thirdPartyInfoVisible;
         this.shortcutsVisible = !!state.shortcutsVisible;
         this.queryExportVisible = !!state.queryExportVisible;
+        this.visExportVisible = !!state.visExportVisible;
         this.apiSettingsVisible = !!state.apiSettingsVisible;
         this.autoSaveConfigVisible = !!state.autoSaveConfigVisible;
         this.applySettingsPanelsOrder(state.panelOrder);
@@ -9938,6 +9970,7 @@ class PaperStatsApp {
         const thirdPartyPanel = document.getElementById('thirdPartyInfoPanel');
         const shortcutsPanel = document.getElementById('shortcutsInfoPanel');
         const queryExportPanel = document.getElementById('queryExportPanel');
+        const visExportPanel = document.getElementById('visExportSettingsPanel');
         const apiSettingsPanel = document.getElementById('apiSettingsPanel');
         const autoSaveConfigPanel = document.getElementById('autoSaveConfigPanel');
         const fileFilterBtn = document.getElementById('fileFilterToggleBtn');
@@ -9950,6 +9983,7 @@ class PaperStatsApp {
         if (thirdPartyPanel) thirdPartyPanel.classList.toggle('is-visible', this.thirdPartyInfoVisible);
         if (shortcutsPanel) shortcutsPanel.classList.toggle('is-visible', this.shortcutsVisible);
         if (queryExportPanel) queryExportPanel.classList.toggle('is-visible', this.queryExportVisible);
+        if (visExportPanel) visExportPanel.classList.toggle('is-visible', this.visExportVisible);
         if (apiSettingsPanel) apiSettingsPanel.classList.toggle('is-visible', this.apiSettingsVisible);
         if (autoSaveConfigPanel) autoSaveConfigPanel.classList.toggle('is-visible', this.autoSaveConfigVisible);
         if (fileFilterBtn) fileFilterBtn.classList.toggle('active', this.fileFilterVisible);
@@ -11437,6 +11471,9 @@ class PaperStatsApp {
                 break;
             case 'queryExport':
                 this.toggleQueryExportPanel(true);
+                break;
+            case 'visExport':
+                this.toggleVisExportPanel(true);
                 break;
             default:
                 break;
