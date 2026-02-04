@@ -19445,10 +19445,10 @@ document.addEventListener('DOMContentLoaded', () => {
         const slider = document.getElementById('mdChatFontSizeSlider');
         const valueDisplay = document.getElementById('mdChatFontSizeValue');
         const control = document.querySelector('.md-chat-font-size-control');
-        const chatBody = document.querySelector('.md-chat-body');
+        const chatBodies = Array.from(document.querySelectorAll('.md-chat-body'));
         const storageKey = 'mdChatFontSize';
 
-        if (!slider || !valueDisplay || !chatBody || !control) return;
+        if (!slider || !valueDisplay || !chatBodies.length || !control) return;
         let hideTimer = null;
         const showSlider = () => {
             control.classList.add('is-slider-visible');
@@ -19471,7 +19471,9 @@ document.addEventListener('DOMContentLoaded', () => {
             if (Number.isFinite(fontSize)) {
                 slider.value = String(fontSize);
                 valueDisplay.textContent = `${fontSize.toFixed(1)}px`;
-                chatBody.style.fontSize = `${fontSize}px`;
+                chatBodies.forEach((body) => {
+                    body.style.fontSize = `${fontSize}px`;
+                });
             }
         }
 
@@ -19489,7 +19491,9 @@ document.addEventListener('DOMContentLoaded', () => {
             const fontSize = Number.parseFloat(e.target.value);
             if (!Number.isFinite(fontSize)) return;
             valueDisplay.textContent = `${fontSize.toFixed(1)}px`;
-            chatBody.style.fontSize = `${fontSize}px`;
+            chatBodies.forEach((body) => {
+                body.style.fontSize = `${fontSize}px`;
+            });
 
             // 保存到本地存储
             try {

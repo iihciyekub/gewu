@@ -49,20 +49,29 @@
     function buildVisNetworkDataFromWos(raw) {
         const nodes = [];
         const edges = [];
-        const nodeIds = new Set();
+        const nodeMap = new Map();
         if (!raw || typeof raw !== 'object') return { nodes, edges };
+        const normalizeId = (value) => {
+            if (value == null) return '';
+            return String(value).trim();
+        };
         const addNode = (id, label, extra = {}) => {
-            if (!id || nodeIds.has(id)) return;
-            nodeIds.add(id);
-            const hiddenLabel = label != null ? String(label) : '';
+            const normalizedId = normalizeId(id);
+            if (!normalizedId) return '';
+            const hiddenLabel = label != null ? String(label) : normalizedId;
             const labelFontSize = extra?.font?.size || 12;
-            nodes.push({
-                id,
+            const node = {
+                id: normalizedId,
                 label: '',
                 hiddenLabel,
                 labelFontSize,
                 ...extra
-            });
+            };
+            if (nodeMap.has(normalizedId)) {
+                nodeMap.delete(normalizedId);
+            }
+            nodeMap.set(normalizedId, node);
+            return normalizedId;
         };
         const parseNumber = (value) => {
             if (value == null) return 0;
@@ -71,41 +80,68 @@
             if (!digits) return 0;
             return Number.parseInt(digits, 10);
         };
+        const ensureField = (value) => {
+            if (value == null) return 'undef';
+            const text = String(value).trim();
+            return text ? text : 'undef';
+        };
+        const formatFieldForTitle = (value) => ensureField(value);
         Object.entries(raw).forEach(([rootId, payload]) => {
-            if (!rootId) return;
-            const rootCitations = payload && payload.citations_count != null ? parseNumber(payload.citations_count) : 0;
-            addNode(rootId, rootId, {
+            const rootKey = normalizeId(rootId);
+            if (!rootKey) return;
+            const rootCitationsRaw = payload?.citations_count;
+            const rootRelatedRaw = payload?.related_count;
+            const rootRefRaw = payload?.ref_count;
+            const rootCitations = rootCitationsRaw != null ? parseNumber(rootCitationsRaw) : 0;
+            const rootTitle = `${rootKey}\nC:${formatFieldForTitle(rootCitationsRaw)} ` +
+                `R:${formatFieldForTitle(rootRelatedRaw)} Ref:${formatFieldForTitle(rootRefRaw)}`;
+            const rootNodeId = addNode(rootKey, rootKey, {
+                title: rootTitle,
                 shape: 'dot',
                 size: 16,
                 font: { size: 14, color: '#111', align: 'bottom', vadjust: 12 },
-                citationsValue: rootCitations
+                citationsValue: rootCitations,
+                citations_count: ensureField(rootCitationsRaw),
+                related_count: ensureField(rootRelatedRaw),
+                ref_count: ensureField(rootRefRaw)
             });
             const children = payload && payload.page_wosids;
             if (!Array.isArray(children)) return;
             children.forEach((item) => {
                 const childId = item && item.wosid;
-                if (!childId) return;
-                const citations = item && item.citations_count != null ? item.citations_count : '';
-                const related = item && item.related_count != null ? item.related_count : '';
-                const ref = item && item.ref_count != null ? item.ref_count : '';
-                const label = childId;
-                const title = `${childId}\nC:${citations} R:${related} Ref:${ref}`;
-                const citationsValue = parseNumber(citations);
-                addNode(childId, label, {
+                const childKey = normalizeId(childId);
+                if (!childKey) return;
+                if (childKey === rootKey) return;
+                const citationsRaw = item?.citations_count;
+                const relatedRaw = item?.related_count;
+                const refRaw = item?.ref_count;
+                const citations = citationsRaw != null ? citationsRaw : 'undef';
+                const related = relatedRaw != null ? relatedRaw : 'undef';
+                const ref = refRaw != null ? refRaw : 'undef';
+                const label = childKey;
+                const title = `${childKey}\nC:${formatFieldForTitle(citationsRaw)} ` +
+                    `R:${formatFieldForTitle(relatedRaw)} Ref:${formatFieldForTitle(refRaw)}`;
+                const citationsValue = parseNumber(citationsRaw);
+                const childNodeId = addNode(childKey, label, {
                     title,
                     shape: 'dot',
                     size: 12,
                     font: { size: 11, color: '#111', align: 'bottom', vadjust: 12 },
-                    citationsValue
+                    citationsValue,
+                    citations_count: ensureField(citationsRaw),
+                    related_count: ensureField(relatedRaw),
+                    ref_count: ensureField(refRaw)
                 });
-                const relatedValue = parseNumber(related);
+                const relatedValue = parseNumber(relatedRaw);
                 edges.push({
-                    from: rootId,
-                    to: childId,
+                    from: rootNodeId || rootKey,
+                    to: childNodeId || childKey,
                     relatedValue
                 });
             });
         });
+        nodes.length = 0;
+        nodes.push(...nodeMap.values());
         const minSize = 6;
         const maxSize = 60;
         let minCitation = Infinity;
@@ -1258,6 +1294,7 @@
             const nodes = dataset.nodes?.get() || [];
             const edges = dataset.edges?.get() || [];
             if (!nodes.length) return null;
+            const view = this.getEl(this.ids.view);
             let left = Infinity;
             let right = -Infinity;
             let top = Infinity;
@@ -1272,6 +1309,61 @@
             });
             if (!isFinite(left) || !isFinite(right) || !isFinite(top) || !isFinite(bottom)) {
                 return null;
+            }
+            const labelItems = [];
+            if (view) {
+                const layer = view.querySelector('.vis-network-label-layer');
+                const viewRect = view.getBoundingClientRect();
+                if (layer && viewRect) {
+                    const labels = Array.from(layer.querySelectorAll('.vis-node-label'));
+                    labels.forEach((labelEl) => {
+                        if (labelEl.classList.contains('is-hover') && !labelEl.classList.contains('is-visible')) {
+                            return;
+                        }
+                        const rect = labelEl.getBoundingClientRect();
+                        if (!rect || rect.width <= 0 || rect.height <= 0) return;
+                        const style = window.getComputedStyle(labelEl);
+                        if (style.visibility === 'hidden' || Number(style.opacity) === 0) return;
+                        const domTopLeft = { x: rect.left - viewRect.left, y: rect.top - viewRect.top };
+                        const domBottomRight = { x: rect.right - viewRect.left, y: rect.bottom - viewRect.top };
+                        const canvasTopLeft = this.visNetwork.DOMtoCanvas(domTopLeft);
+                        const canvasBottomRight = this.visNetwork.DOMtoCanvas(domBottomRight);
+                        if (!canvasTopLeft || !canvasBottomRight) return;
+                        const w = canvasBottomRight.x - canvasTopLeft.x;
+                        const h = canvasBottomRight.y - canvasTopLeft.y;
+                        if (!Number.isFinite(w) || !Number.isFinite(h) || w <= 0 || h <= 0) return;
+                        const parsePx = (val) => {
+                            const num = Number.parseFloat(val || '0');
+                            return Number.isFinite(num) ? num : 0;
+                        };
+                        const paddingLeft = parsePx(style.paddingLeft);
+                        const paddingTop = parsePx(style.paddingTop);
+                        const fontSize = parsePx(style.fontSize) || 11;
+                        const borderWidth = parsePx(style.borderWidth);
+                        const radius = parsePx(style.borderRadius);
+                        labelItems.push({
+                            x: canvasTopLeft.x,
+                            y: canvasTopLeft.y,
+                            width: w,
+                            height: h,
+                            textX: canvasTopLeft.x + paddingLeft,
+                            textY: canvasTopLeft.y + paddingTop,
+                            text: labelEl.textContent || '',
+                            fontSize,
+                            fontWeight: style.fontWeight || 500,
+                            fontFamily: style.fontFamily || 'Georgia, Times, serif',
+                            color: style.color || '#111111',
+                            background: style.backgroundColor || 'transparent',
+                            borderColor: style.borderColor || 'transparent',
+                            borderWidth,
+                            radius
+                        });
+                        left = Math.min(left, canvasTopLeft.x);
+                        right = Math.max(right, canvasBottomRight.x);
+                        top = Math.min(top, canvasTopLeft.y);
+                        bottom = Math.max(bottom, canvasBottomRight.y);
+                    });
+                }
             }
             const margin = Number.isFinite(marginPx) ? marginPx : 0;
             const width = Math.max(1, right - left + margin * 2);
@@ -1302,17 +1394,17 @@
                 const strokeWidth = Number(node.borderWidth) || 1;
                 return `<circle cx="${pos.x}" cy="${pos.y}" r="${radius}" fill="${fill}" stroke="${stroke}" stroke-width="${strokeWidth}" />`;
             }).join('');
-            const labelSvg = nodes.map((node) => {
-                const text = typeof node.hiddenLabel === 'string' ? node.hiddenLabel.trim() : '';
-                if (!text || node.labelHidden) return '';
-                const pos = this.visNetwork.getPositions([node.id])[node.id];
-                if (!pos) return '';
-                const style = node.labelStyle || {};
-                const fontSize = style.fontSize || 11;
-                const fontWeight = style.fontWeight || 500;
-                const color = style.textColor || '#111111';
-                const offsetY = (Number(node.size) || 6) + 10;
-                return `<text x="${pos.x}" y="${pos.y + offsetY}" font-size="${fontSize}" font-weight="${fontWeight}" fill="${color}" text-anchor="middle" font-family="Georgia, Times, serif">${escape(text)}</text>`;
+            const labelSvg = labelItems.map((label) => {
+                const rx = Number.isFinite(label.radius) ? Math.min(label.radius, label.height / 2) : 0;
+                const border = label.borderWidth > 0 && label.borderColor !== 'transparent'
+                    ? `stroke="${label.borderColor}" stroke-width="${label.borderWidth}"`
+                    : '';
+                const fill = label.background && label.background !== 'rgba(0, 0, 0, 0)'
+                    ? `fill="${label.background}"`
+                    : 'fill="transparent"';
+                const rect = `<rect x="${label.x}" y="${label.y}" width="${label.width}" height="${label.height}" rx="${rx}" ry="${rx}" ${fill} ${border} />`;
+                const text = `<text x="${label.textX}" y="${label.textY}" font-size="${label.fontSize}" font-weight="${label.fontWeight}" fill="${label.color}" font-family="${label.fontFamily}" dominant-baseline="hanging">${escape(label.text)}</text>`;
+                return `${rect}${text}`;
             }).join('');
             const svg = `
 <svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="${viewLeft} ${viewTop} ${width} ${height}">

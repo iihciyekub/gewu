@@ -2344,6 +2344,11 @@ body.theme-dark .vis-network-zoom input[type="range"] {
     z-index: 2;
 }
 
+.vis-undef {
+    color: #ef4444;
+    font-weight: 600;
+}
+
 .vis-node-label {
     position: absolute;
     transform: translate(-50%, 0);
