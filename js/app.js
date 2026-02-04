@@ -1654,6 +1654,7 @@ class PaperStatsApp {
             const name = String(data?.name || 'GEWU').trim();
             const version = String(data?.version || '').trim();
             const dockerHub = String(data?.dockerHub || '').trim();
+            this.isDockerMode = Boolean(data?.isDocker);
             if (!version) return;
             const label = `${name} ${version}`;
             labelEl.textContent = label;
@@ -5518,10 +5519,14 @@ class PaperStatsApp {
             <div class="context-menu-item" data-action="deleteAll">
             <i class="fas fa-trash-alt"></i> Delete All Files
             </div>
+        `;
+        if (!this.isDockerMode) {
+            menuHtml += `
             <div class="context-menu-item" data-action="copyPdfFile">
             <i class="fas fa-copy"></i> Copy PDF File
             </div>
-        `;
+            `;
+        }
 
         // Add copy DOI menu item when at least one file is selected
         if (selectedCount > 0) {
@@ -6000,6 +6005,10 @@ class PaperStatsApp {
 
     async copyPdfFileToClipboard(jsonFilename) {
         try {
+            if (this.isDockerMode) {
+                this.showNotification('Copy PDF not available in Docker mode', 'warning');
+                return;
+            }
             const pdfFile = await this.getPdfFilenameForJson(jsonFilename);
             if (!pdfFile) {
                 throw new Error('PDF filename not found');
@@ -7488,6 +7497,36 @@ class PaperStatsApp {
             const keyDisplay = `<span class="editable-key" data-path="${basePath.join('.')}" data-key="${key}"${keyTitle}>${displayKey}</span>`;
 
             keyCell.innerHTML = keyDisplay;
+            const keySpan = keyCell.querySelector('.editable-key');
+            if (keySpan) {
+                keySpan.addEventListener('click', async (e) => {
+                    const isMod = e.metaKey || e.ctrlKey;
+                    const keyPath = [...basePath, key].filter(Boolean).join('.');
+                    let text = '';
+                    if (isMod) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        text = keyPath;
+                    } else if (value === null || value === undefined) {
+                        text = '';
+                    } else if (typeof value === 'string') {
+                        text = value;
+                    } else {
+                        try {
+                            text = JSON.stringify(value);
+                        } catch (_err) {
+                            text = String(value);
+                        }
+                    }
+                    try {
+                        await this.writeTextToClipboard(text);
+                        this.showNotification(isMod ? 'Key copied' : 'Value copied', 'success');
+                    } catch (err) {
+                        console.error('Failed to copy field value:', err);
+                        this.showNotification('Copy failed', 'error');
+                    }
+                });
+            }
             const currentPath = [...basePath, key];
 
             // Click left column: Only toggle selection state (no longer triggers movement)

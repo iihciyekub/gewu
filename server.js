@@ -9,6 +9,7 @@ const fs = require('fs');
 const path = require('path');
 const url = require('url');
 const os = require('os');
+const { execFileSync } = require('child_process');
 const { handleBibDownload } = require('./server/api/bib-download');
 const { handleGroupByFields } = require('./server/api/groupby-fields');
 const { handleJsonQuery } = require('./server/api/json-query');
@@ -152,10 +153,17 @@ function ensurePromptManifest() {
 
     // 写出简化的 manifest.json 仅用于版本信息，不包含 groups
     try {
+        const isDocker = Boolean(
+            process.env.DOCKER ||
+            process.env.IS_DOCKER ||
+            process.env.CONTAINER ||
+            fs.existsSync('/.dockerenv')
+        );
         const payload = JSON.stringify({
             name: 'GEWU',
             version: '0.0.1',
-            dockerHub: 'https://hub.docker.com/repository/docker/iihciyekub/gewu/general'
+            dockerHub: 'https://hub.docker.com/repository/docker/iihciyekub/gewu/general',
+            isDocker
         }, null, 2);
         fs.writeFileSync(CUSTOM_MANIFEST_PATH, payload, 'utf8');
     } catch (err) {

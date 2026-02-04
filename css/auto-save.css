@@ -427,6 +427,7 @@
     margin: 0;
     width: auto;
     padding: 0;
+    accent-color: rgba(57, 57, 57, 0.85);
 }
 
 .auto-save-config-content .checkbox-wrapper label {
@@ -469,28 +470,28 @@
 
 .auto-save-config-content .auto-save-config-buttons button {
     padding: 6px 12px;
-    border: 1px solid #d0d0d0;
+    border: 1px solid #c4c8cc;
     border-radius: 4px;
     font-size: 12px;
     font-weight: 500;
     cursor: pointer;
     transition: all 0.2s;
-    background: white;
-    color: #333;
+    background: #f2f3f5;
+    color: #3f464d;
 }
 
 .auto-save-config-content .auto-save-config-buttons button:hover {
-    background: #f5f5f5;
-    border-color: #999;
+    background: #e6e8eb;
+    border-color: #9ea4aa;
 }
 
 .auto-save-config-content .auto-save-config-buttons button.primary {
-    background: #007acc;
-    color: white;
-    border-color: #007acc;
+    background: #6b737b;
+    color: #f7f8f9;
+    border-color: #6b737b;
 }
 
 .auto-save-config-content .auto-save-config-buttons button.primary:hover {
-    background: #005a9e;
-    border-color: #005a9e;
+    background: #596168;
+    border-color: #596168;
 }

@@ -230,6 +230,9 @@
         proto.runMdChatFieldQuery = function () {
             const body = this._mdChatBody || document.querySelector('#mdChatPanel .md-chat-body');
             if (!body) return;
+            if (typeof this.bindMdChatQueryCopy === 'function') {
+                this.bindMdChatQueryCopy();
+            }
             const fields = Array.from(this.mdChatQueryFields || []);
             if (!fields.length) {
                 body.innerHTML = '<div class="md-chat-query-empty">No query fields yet.</div>';
@@ -251,6 +254,33 @@
             `;
             }).join('');
             body.innerHTML = blocks;
+        };
+
+        proto.bindMdChatQueryCopy = function () {
+            const body = this._mdChatBody || document.querySelector('#mdChatPanel .md-chat-body');
+            if (!body || body.dataset.mdChatCopyBound) return;
+            body.dataset.mdChatCopyBound = '1';
+            body.addEventListener('click', async (e) => {
+                const valueEl = e.target.closest('.md-chat-query-value');
+                if (!valueEl) return;
+                const text = (valueEl.textContent || '').trim();
+                if (!text) return;
+                try {
+                    if (typeof this.writeTextToClipboard === 'function') {
+                        await this.writeTextToClipboard(text);
+                    } else if (navigator.clipboard && navigator.clipboard.writeText) {
+                        await navigator.clipboard.writeText(text);
+                    }
+                    if (typeof this.showNotification === 'function') {
+                        this.showNotification('Copied', 'success');
+                    }
+                } catch (err) {
+                    console.error('Failed to copy md-chat value:', err);
+                    if (typeof this.showNotification === 'function') {
+                        this.showNotification('Copy failed', 'error');
+                    }
+                }
+            });
         };
     };
 
