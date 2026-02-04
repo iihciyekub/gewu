@@ -2603,7 +2603,7 @@ body.theme-dark .vis-label-suggest .vis-label-suggest-item.active {
 }
 
 .vis-input-body {
-    padding: 12px 14px;
+    padding: 2px 4px;
     flex: 1 1 auto;
     display: flex;
     overflow-y: auto;
@@ -2616,23 +2616,43 @@ body.theme-dark .vis-label-suggest .vis-label-suggest-item.active {
 .vis-label-panel {
     display: grid;
     grid-template-columns: 140px 1fr;
-    gap: 8px 10px;
     width: 100%;
     position: relative;
+}
+
+
+/* 禁止聚焦高亮 */
+.vis-network:focus,
+.vis-network:focus-visible {
+    outline: none;
+    box-shadow: none;
 }
 
 .vis-label-panel label {
     font-size: 12px;
     color: #374151;
     align-self: center;
+    text-align: right;
+    height: 28px;
+    line-height: 28px;
 }
 
 .vis-label-panel input[type="text"] {
     width: 100%;
+    height: 28px;
     padding: 8px 10px;
     border: 1px solid #d7dce3;
     border-radius: 8px;
     font-size: 13px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+}
+
+.vis-label-panel input[type="number"] {
+    height: 28px;
+    padding: 4px 10px;
+    border: 1px solid #d7dce3;
+    border-radius: 8px;
+    font-size: 12px;
     font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
 }
 
@@ -2666,7 +2686,7 @@ body.theme-dark .vis-label-suggest .vis-label-suggest-item.active {
 }
 
 .vis-label-field-group {
-    padding: 10px 14px 0;
+    padding: 10px 2px;
     display: flex;
     flex-direction: column;
     gap: 6px;
@@ -2678,7 +2698,8 @@ body.theme-dark .vis-label-suggest .vis-label-suggest-item.active {
     padding: 8px 10px;
     border: 1px solid #d7dce3;
     border-radius: 8px;
-    font-size: 13px;
+    font-size: 11px;
+    outline: none;
     font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
 }
 
@@ -2705,7 +2726,7 @@ body.theme-dark .vis-label-suggest .vis-label-suggest-item.active {
     display: inline-flex;
     align-items: center;
     gap: 6px;
-    padding: 4px 8px;
+    padding: 2px 8px;
     border-radius: 999px;
     border: 1px solid #d1d5db;
     background: #f9fafb;
