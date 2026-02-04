@@ -496,8 +496,12 @@
         if (style.fontWeight) label.style.fontWeight = String(style.fontWeight);
         if (style.textColor) label.style.color = style.textColor;
         if (style.borderColor) label.style.borderColor = style.borderColor;
-        // Keep background color controlled by CSS theme variables.
-        label.style.backgroundColor = '';
+        if (style.backgroundColor) {
+            label.style.backgroundColor = style.backgroundColor;
+        } else {
+            // Keep background color controlled by CSS theme variables.
+            label.style.backgroundColor = '';
+        }
         let opacity = typeof style.opacity === 'number' ? style.opacity : 1;
         if (node.labelHidden) opacity = 0;
         label.style.opacity = String(opacity);
@@ -605,6 +609,7 @@
                 labelFields: options.labelFieldsId || 'visLabelFields',
                 labelFadeSlider: options.labelFadeSliderId || 'visLabelFadeSlider',
                 labelColorInput: options.labelColorInputId || 'visLabelColorInput',
+                labelBgColorInput: options.labelBgColorInputId || 'visLabelBgColorInput',
                 labelSizeSlider: options.labelSizeSliderId || 'visLabelSizeSlider',
                 labelMinSlider: options.labelMinSliderId || 'visLabelMinSlider',
                 nodeSizeMinSlider: options.nodeSizeMinSliderId || 'visNodeSizeMinSlider',
@@ -652,6 +657,7 @@
             this.labelField = 'wosid';
             this.labelFade = 0;
             this.labelColor = '#000000';
+            this.labelBgColor = '#f2f2f2f1';
             this.labelSizeScale = 1;
             this.labelMinCitations = 0;
             this.labelFieldOptions = [];
@@ -722,6 +728,7 @@
             const labelFields = this.getEl(this.ids.labelFields);
             const labelFadeSlider = this.getEl(this.ids.labelFadeSlider);
             const labelColorInput = this.getEl(this.ids.labelColorInput);
+            const labelBgColorInput = this.getEl(this.ids.labelBgColorInput);
             const labelSizeSlider = this.getEl(this.ids.labelSizeSlider);
             const labelMinSlider = this.getEl(this.ids.labelMinSlider);
             const nodeSizeMinSlider = this.getEl(this.ids.nodeSizeMinSlider);
@@ -1138,6 +1145,14 @@
                     this.queuePersistSettings();
                 });
             }
+            if (labelBgColorInput && !labelBgColorInput.dataset.visBound) {
+                labelBgColorInput.dataset.visBound = '1';
+                labelBgColorInput.addEventListener('input', () => {
+                    this.labelBgColor = labelBgColorInput.value || '#f2f2f2f1';
+                    this.applyLabelBgColor();
+                    this.queuePersistSettings();
+                });
+            }
             bindNumberInput(labelMinSlider, (next) => {
                 this.labelMinCitations = next;
                 this.applyLabelThreshold();
@@ -1241,6 +1256,13 @@
                     });
                     global.Coloris({
                         el: '#visLabelColorInput',
+                        alpha: true,
+                        format: 'hex',
+                        formatToggle: false,
+                        forceAlpha: true
+                    });
+                    global.Coloris({
+                        el: '#visLabelBgColorInput',
                         alpha: true,
                         format: 'hex',
                         formatToggle: false,
@@ -1915,6 +1937,7 @@
             this.applyLabelFade();
             this.applyLabelSizeScale();
             this.applyLabelWeight();
+            this.applyLabelBgColor();
             this.applyLabelThreshold();
             this.applyNodeSizeScale();
             this.applyNodeBorderWidth();
@@ -1936,13 +1959,14 @@
                 const input = this.getEl(this.ids.labelFieldInput);
                 const currentField = input && input.value ? input.value.trim() : this.labelField;
                 await this.applyLabelField(currentField);
-            this.applyLabelFade();
-            this.applyLabelSizeScale();
-            this.applyLabelWeight();
-            this.applyLabelColor();
-            this.applyLabelThreshold();
-            this.applyPhysicsSettings();
-            this.applyEdgeFade();
+                this.applyLabelFade();
+                this.applyLabelSizeScale();
+                this.applyLabelWeight();
+                this.applyLabelColor();
+                this.applyLabelBgColor();
+                this.applyLabelThreshold();
+                this.applyPhysicsSettings();
+                this.applyEdgeFade();
                 this.applyEdgeWidthRange();
                 this.queuePersistNetworkState();
                 if (typeof original === 'function') {
@@ -2623,6 +2647,18 @@
             this.updateLabelLayer();
         }
 
+        applyLabelBgColor() {
+            const dataset = this.getNetworkNodesDataSet();
+            if (!dataset) return;
+            const color = normalizeVisColor(this.labelBgColor || '#f2f2f2f1');
+            const updates = dataset.get().map((node) => ({
+                id: node.id,
+                labelStyle: { ...(node.labelStyle || {}), backgroundColor: color }
+            }));
+            dataset.update(updates);
+            this.updateLabelLayer();
+        }
+
         applyLabelWeight() {
             const dataset = this.getNetworkNodesDataSet();
             if (!dataset) return;
@@ -2867,6 +2903,7 @@
         restoreLabelDefaults() {
             this.labelFade = 51.5;
             this.labelColor = '#000000';
+            this.labelBgColor = '#f2f2f2f1';
             this.nodeSizeMin = 4.0;
             this.nodeSizeMax = 69;
             this.nodeSizeGamma = 0.46;
@@ -2891,6 +2928,7 @@
             this.applyLabelFade();
             this.applyLabelSizeScale();
             this.applyLabelWeight();
+            this.applyLabelBgColor();
             this.applyLabelThreshold();
             this.applyNodeSizeScale();
             this.applyNodeBorderWidth();
@@ -2962,6 +3000,7 @@
             const labelFadeSlider = this.getEl(this.ids.labelFadeSlider);
             const labelMinSlider = this.getEl(this.ids.labelMinSlider);
             const labelWeightSlider = this.getEl(this.ids.labelWeightSlider);
+            const labelBgColorInput = this.getEl(this.ids.labelBgColorInput);
             const physicsSpringSlider = this.getEl(this.ids.physicsSpringSlider);
             const physicsStrengthSlider = this.getEl(this.ids.physicsStrengthSlider);
             const physicsGravitySlider = this.getEl(this.ids.physicsGravitySlider);
@@ -2981,6 +3020,7 @@
             if (labelSizeSlider) labelSizeSlider.value = String(Math.round(labelScale * 100));
             if (labelFadeSlider) labelFadeSlider.value = String(fade);
             if (labelColorInput) labelColorInput.value = this.labelColor || '#000000';
+            if (labelBgColorInput) labelBgColorInput.value = this.labelBgColor || '#f2f2f2f1';
             if (labelMinSlider) labelMinSlider.value = String(minCite);
             if (labelWeightSlider) labelWeightSlider.value = String(this.labelWeight || 500);
             if (physicsSpringSlider) physicsSpringSlider.value = String(this.physicsSpringLength);
@@ -2998,6 +3038,7 @@
             this.applyLabelSizeScale();
             this.applyLabelFade();
             this.applyLabelColor();
+            this.applyLabelBgColor();
             this.applyLabelThreshold();
             this.applyLabelWeight();
             this.applyPhysicsSettings();
@@ -3011,6 +3052,7 @@
             return {
                 labelFade: this.labelFade,
                 labelColor: this.labelColor,
+                labelBgColor: this.labelBgColor,
                 labelSizeScale: this.labelSizeScale,
                 labelMinCitations: this.labelMinCitations,
                 labelWeight: this.labelWeight,
@@ -3131,6 +3173,7 @@
                 if (!payload || typeof payload !== 'object') return;
                 if (Number.isFinite(payload.labelFade)) this.labelFade = payload.labelFade;
                 if (typeof payload.labelColor === 'string') this.labelColor = payload.labelColor;
+                if (typeof payload.labelBgColor === 'string') this.labelBgColor = payload.labelBgColor;
                 if (Number.isFinite(payload.labelSizeScale)) this.labelSizeScale = payload.labelSizeScale;
                 if (Number.isFinite(payload.labelMinCitations)) this.labelMinCitations = payload.labelMinCitations;
                 if (Number.isFinite(payload.labelWeight)) this.labelWeight = payload.labelWeight;
@@ -3189,6 +3232,7 @@
         syncSettingsSliders() {
             const labelFadeSlider = this.getEl(this.ids.labelFadeSlider);
             const labelColorInput = this.getEl(this.ids.labelColorInput);
+            const labelBgColorInput = this.getEl(this.ids.labelBgColorInput);
             const labelSizeSlider = this.getEl(this.ids.labelSizeSlider);
             const labelMinSlider = this.getEl(this.ids.labelMinSlider);
             const labelWeightSlider = this.getEl(this.ids.labelWeightSlider);
@@ -3212,6 +3256,7 @@
 
             if (labelFadeSlider) labelFadeSlider.value = String(this.labelFade || 0);
             if (labelColorInput) labelColorInput.value = this.labelColor || '#000000';
+            if (labelBgColorInput) labelBgColorInput.value = this.labelBgColor || '#f2f2f2f1';
             if (labelSizeSlider) labelSizeSlider.value = String(Math.round((this.labelSizeScale || 1) * 100));
             if (labelMinSlider) labelMinSlider.value = String(this.labelMinCitations || 0);
             if (labelWeightSlider) labelWeightSlider.value = String(this.labelWeight || 500);
