@@ -597,6 +597,67 @@
         return rgbaToString({ ...rgba, a: next });
     }
 
+    function setColorAlpha(input, alpha) {
+        const rgba = parseColorToRgba(input);
+        if (!rgba) return input;
+        const next = Math.max(0, Math.min(1, alpha));
+        return rgbaToString({ ...rgba, a: next });
+    }
+
+    function cloneVisColor(input) {
+        if (!input || typeof input !== 'object') return input;
+        return JSON.parse(JSON.stringify(input));
+    }
+
+    function fadeEdgeColor(baseColor, alpha) {
+        if (!baseColor) return baseColor;
+        if (typeof baseColor === 'string') return setColorAlpha(baseColor, alpha);
+        return {
+            ...baseColor,
+            color: setColorAlpha(baseColor.color, alpha),
+            highlight: setColorAlpha(baseColor.highlight, alpha),
+            hover: setColorAlpha(baseColor.hover, alpha)
+        };
+    }
+
+    function fadeNodeColor(baseColor, alpha) {
+        if (!baseColor) return baseColor;
+        if (typeof baseColor === 'string') return setColorAlpha(baseColor, alpha);
+        const highlight = baseColor.highlight || {};
+        const hover = baseColor.hover || {};
+        return {
+            ...baseColor,
+            background: setColorAlpha(baseColor.background, alpha),
+            border: setColorAlpha(baseColor.border, alpha),
+            highlight: {
+                ...highlight,
+                background: setColorAlpha(highlight.background || baseColor.background, alpha),
+                border: setColorAlpha(highlight.border || baseColor.border, alpha)
+            },
+            hover: {
+                ...hover,
+                background: setColorAlpha(hover.background || baseColor.background, alpha),
+                border: setColorAlpha(hover.border || baseColor.border, alpha)
+            }
+        };
+    }
+
+    function applyEdgeHoverLabelStyle(label, node) {
+        if (!label || !node || !node.labelStyle) return;
+        const style = node.labelStyle;
+        if (style.fontSize) label.style.fontSize = `${style.fontSize}px`;
+        if (style.fontWeight) label.style.fontWeight = String(style.fontWeight);
+        if (style.textColor) label.style.color = style.textColor;
+        if (style.borderColor) label.style.borderColor = style.borderColor;
+        if (style.backgroundColor) {
+            label.style.backgroundColor = style.backgroundColor;
+        } else {
+            label.style.backgroundColor = '';
+        }
+        const opacity = typeof style.opacity === 'number' ? style.opacity : 1;
+        label.style.opacity = String(opacity);
+    }
+
     class WosVisManager {
         constructor(options = {}) {
             this.app = options.app || null;
@@ -716,6 +777,7 @@
             this.exportSvgScale = 1;
             this.exportSvgMargin = 6;
             this.exportSvgIncludeLabels = true;
+            this.edgeFocusFadeAlpha = 0.15;
             this.wosNodeIndex = null;
             this.wosNodeIndexSource = null;
             this.labelFieldHistory = [];
@@ -749,6 +811,9 @@
             this._inputHistoryLoaded = false;
             this._inputDraftSaveTimer = null;
             this._inputDraftText = '';
+            this._edgeFocusState = null;
+            this._edgeHoverLabelState = null;
+            this._edgeContextMenu = null;
         }
 
         bind() {
@@ -2192,6 +2257,7 @@
             });
             if (network) this.visNetwork = network;
             if (data) this.visNetworkData = data;
+            this.resetEdgeFocusState();
             const sourceJson = typeof options.sourceJson === 'string' ? options.sourceJson : '';
             this.lastRenderedJson = sourceJson;
             this.visInputText = sourceJson;
@@ -3133,6 +3199,7 @@
         applyNodeColor() {
             const dataset = this.getNetworkNodesDataSet();
             if (!dataset) return;
+            this.restoreEdgeFocusBaseColors();
             const base = normalizeVisColor(this.nodeColor || '#ffffff');
             const border = normalizeVisColor(this.nodeBorderColor || base);
             const highlight = adjustColorAlpha(base, 0.12);
@@ -3147,23 +3214,29 @@
                 }
             }));
             dataset.update(updates);
+            this.markEdgeFocusDirty();
+            this.applyEdgeFocusDisplay();
         }
 
         applyNodeBorderColor() {
             const dataset = this.getNetworkNodesDataSet();
             if (!dataset) return;
+            this.restoreEdgeFocusBaseColors();
             const border = normalizeVisColor(this.nodeBorderColor || '#111111');
             const updates = dataset.get().map((node) => ({
                 id: node.id,
                 color: { ...(node.color || {}), border }
             }));
             dataset.update(updates);
+            this.markEdgeFocusDirty();
+            this.applyEdgeFocusDisplay();
         }
 
         applyEdgeFade() {
             if (!this.visNetwork) return;
             const dataset = this.visNetwork?.body?.data?.edges;
             if (!dataset) return;
+            this.restoreEdgeFocusBaseColors();
             const meta = this.visNetworkData?.meta || {};
             const minRelated = Number.isFinite(meta.minRelated) ? meta.minRelated : 0;
             const maxRelated = Number.isFinite(meta.maxRelated) ? meta.maxRelated : minRelated;
@@ -3203,6 +3276,8 @@
                 };
             });
             dataset.update(updates);
+            this.markEdgeFocusDirty();
+            this.applyEdgeFocusDisplay();
         }
 
         applyEdgeWidthRange() {
@@ -3268,6 +3343,363 @@
                 edgesOptions.arrows = 'to';
             }
             this.visNetwork.setOptions({ edges: edgesOptions });
+        }
+
+        getEdgeFocusState() {
+            if (!this._edgeFocusState) {
+                this._edgeFocusState = {
+                    hoverEdgeId: null,
+                    lockedEdgeIds: new Set(),
+                    baseNodeColors: new Map(),
+                    baseEdgeColors: new Map(),
+                    dirty: true
+                };
+            }
+            return this._edgeFocusState;
+        }
+
+        markEdgeFocusDirty() {
+            const state = this.getEdgeFocusState();
+            state.dirty = true;
+        }
+
+        resetEdgeFocusState({ keepLocks = false } = {}) {
+            const state = this.getEdgeFocusState();
+            state.hoverEdgeId = null;
+            if (!keepLocks) state.lockedEdgeIds.clear();
+            state.baseNodeColors.clear();
+            state.baseEdgeColors.clear();
+            state.dirty = true;
+            this.hideEdgeHoverLabels();
+            this.closeEdgeContextMenu();
+        }
+
+        ensureEdgeHoverLabels(layer) {
+            if (!layer) return null;
+            let fromLabel = layer.querySelector('.vis-node-label.is-edge-hover[data-role="from"]');
+            if (!fromLabel) {
+                fromLabel = document.createElement('div');
+                fromLabel.className = 'vis-node-label is-edge-hover';
+                fromLabel.dataset.role = 'from';
+                layer.appendChild(fromLabel);
+            }
+            let toLabel = layer.querySelector('.vis-node-label.is-edge-hover[data-role="to"]');
+            if (!toLabel) {
+                toLabel = document.createElement('div');
+                toLabel.className = 'vis-node-label is-edge-hover';
+                toLabel.dataset.role = 'to';
+                layer.appendChild(toLabel);
+            }
+            return { fromLabel, toLabel };
+        }
+
+        showEdgeHoverLabels(edgeId) {
+            if (!this.visNetwork) return;
+            const dataset = this.visNetwork?.body?.data;
+            if (!dataset?.edges || !dataset?.nodes) return;
+            const edge = dataset.edges.get(edgeId);
+            if (!edge) return;
+            const fromNode = dataset.nodes.get(edge.from);
+            const toNode = dataset.nodes.get(edge.to);
+            if (!fromNode || !toNode) return;
+            const view = this.getEl(this.ids.view);
+            const layer = ensureLabelLayer(view);
+            if (!layer) return;
+            const labels = this.ensureEdgeHoverLabels(layer);
+            if (!labels) return;
+            const fromLabel = labels.fromLabel;
+            const toLabel = labels.toLabel;
+            fromLabel.textContent = fromNode.hiddenLabel || fromNode.label || fromNode.id || '';
+            toLabel.textContent = toNode.hiddenLabel || toNode.label || toNode.id || '';
+            applyEdgeHoverLabelStyle(fromLabel, fromNode);
+            applyEdgeHoverLabelStyle(toLabel, toNode);
+            fromLabel.dataset.nodeId = fromNode.id;
+            toLabel.dataset.nodeId = toNode.id;
+            positionLabel(this.visNetwork, fromLabel, fromNode.id);
+            positionLabel(this.visNetwork, toLabel, toNode.id);
+            fromLabel.classList.add('is-visible');
+            toLabel.classList.add('is-visible');
+            this._edgeHoverLabelState = { from: fromNode.id, to: toNode.id };
+            this.bindEdgeHoverLabelUpdates();
+        }
+
+        hideEdgeHoverLabels() {
+            const view = this.getEl(this.ids.view);
+            const layer = ensureLabelLayer(view);
+            if (!layer) return;
+            const labels = layer.querySelectorAll('.vis-node-label.is-edge-hover');
+            labels.forEach((label) => {
+                label.classList.remove('is-visible');
+            });
+            this._edgeHoverLabelState = null;
+        }
+
+        updateEdgeHoverLabelPositions() {
+            if (!this.visNetwork || !this._edgeHoverLabelState) return;
+            const view = this.getEl(this.ids.view);
+            const layer = ensureLabelLayer(view);
+            if (!layer) return;
+            const { from, to } = this._edgeHoverLabelState;
+            const fromLabel = layer.querySelector('.vis-node-label.is-edge-hover[data-role="from"]');
+            const toLabel = layer.querySelector('.vis-node-label.is-edge-hover[data-role="to"]');
+            if (fromLabel && from) positionLabel(this.visNetwork, fromLabel, from);
+            if (toLabel && to) positionLabel(this.visNetwork, toLabel, to);
+        }
+
+        bindEdgeHoverLabelUpdates() {
+            if (!this.visNetwork) return;
+            if (this._edgeHoverAfterDraw) return;
+            this._edgeHoverAfterDraw = () => {
+                this.updateEdgeHoverLabelPositions();
+            };
+            this.visNetwork.on('afterDrawing', this._edgeHoverAfterDraw);
+        }
+
+        restoreEdgeFocusBaseColors() {
+            if (!this.visNetwork) return;
+            const dataset = this.visNetwork?.body?.data;
+            if (!dataset?.nodes || !dataset?.edges) return;
+            const state = this.getEdgeFocusState();
+            if (!state.baseNodeColors.size && !state.baseEdgeColors.size) return;
+            const nodes = dataset.nodes.get();
+            const edges = dataset.edges.get();
+            const nodeUpdates = nodes.map((node) => ({
+                id: node.id,
+                color: state.baseNodeColors.get(node.id) || node.color
+            }));
+            const edgeUpdates = edges.map((edge) => ({
+                id: edge.id,
+                color: state.baseEdgeColors.get(edge.id) || edge.color
+            }));
+            dataset.nodes.update(nodeUpdates);
+            dataset.edges.update(edgeUpdates);
+        }
+
+        applyEdgeFocusDisplay() {
+            if (!this.visNetwork) return;
+            const dataset = this.visNetwork?.body?.data;
+            if (!dataset?.nodes || !dataset?.edges) return;
+            const nodes = dataset.nodes.get();
+            const edges = dataset.edges.get();
+            const state = this.getEdgeFocusState();
+            const activeEdges = new Set(state.lockedEdgeIds);
+            if (state.hoverEdgeId) activeEdges.add(state.hoverEdgeId);
+            if (state.dirty) {
+                if (activeEdges.size && (state.baseNodeColors.size || state.baseEdgeColors.size)) {
+                    const nodeUpdates = nodes.map((node) => ({
+                        id: node.id,
+                        color: state.baseNodeColors.get(node.id) || node.color
+                    }));
+                    const edgeUpdates = edges.map((edge) => ({
+                        id: edge.id,
+                        color: state.baseEdgeColors.get(edge.id) || edge.color
+                    }));
+                    dataset.nodes.update(nodeUpdates);
+                    dataset.edges.update(edgeUpdates);
+                }
+                state.baseNodeColors.clear();
+                state.baseEdgeColors.clear();
+                nodes.forEach((node) => {
+                    state.baseNodeColors.set(node.id, cloneVisColor(node.color));
+                });
+                edges.forEach((edge) => {
+                    state.baseEdgeColors.set(edge.id, cloneVisColor(edge.color));
+                });
+                state.dirty = false;
+            }
+            if (!activeEdges.size) {
+                const nodeUpdates = nodes.map((node) => ({
+                    id: node.id,
+                    color: state.baseNodeColors.get(node.id) || node.color
+                }));
+                const edgeUpdates = edges.map((edge) => ({
+                    id: edge.id,
+                    color: state.baseEdgeColors.get(edge.id) || edge.color
+                }));
+                dataset.nodes.update(nodeUpdates);
+                dataset.edges.update(edgeUpdates);
+                this.applyEdgeFocusLabelDisplay(null);
+                return;
+            }
+            const activeNodes = new Set();
+            edges.forEach((edge) => {
+                if (!activeEdges.has(edge.id)) return;
+                if (edge.from != null) activeNodes.add(edge.from);
+                if (edge.to != null) activeNodes.add(edge.to);
+            });
+            const alpha = this.edgeFocusFadeAlpha;
+            const nodeUpdates = nodes.map((node) => {
+                const baseColor = state.baseNodeColors.get(node.id) || node.color;
+                const color = activeNodes.has(node.id)
+                    ? fadeNodeColor(baseColor, 1)
+                    : fadeNodeColor(baseColor, alpha);
+                return { id: node.id, color };
+            });
+            const edgeUpdates = edges.map((edge) => {
+                const baseColor = state.baseEdgeColors.get(edge.id) || edge.color;
+                const color = activeEdges.has(edge.id)
+                    ? fadeEdgeColor(baseColor, 1)
+                    : fadeEdgeColor(baseColor, alpha);
+                return { id: edge.id, color };
+            });
+            dataset.nodes.update(nodeUpdates);
+            dataset.edges.update(edgeUpdates);
+            this.applyEdgeFocusLabelDisplay(activeNodes);
+        }
+
+        applyEdgeFocusLabelDisplay(activeNodes) {
+            const view = this.getEl(this.ids.view);
+            const layer = ensureLabelLayer(view);
+            if (!layer) return;
+            const labels = Array.from(layer.querySelectorAll('.vis-node-label'));
+            const dimAlpha = this.edgeFocusFadeAlpha;
+            labels.forEach((label) => {
+                if (!label) return;
+                if (label.classList.contains('is-edge-hover')) {
+                    label.style.opacity = '1';
+                    return;
+                }
+                if (label.classList.contains('is-hover')) {
+                    if (!activeNodes) {
+                        if (label.dataset.baseOpacity != null) {
+                            label.style.opacity = label.dataset.baseOpacity;
+                            delete label.dataset.baseOpacity;
+                        }
+                    } else {
+                        label.style.opacity = '1';
+                    }
+                    return;
+                }
+                const nodeId = label.dataset.nodeId;
+                if (!nodeId) return;
+                if (!activeNodes) {
+                    if (label.dataset.baseOpacity != null) {
+                        label.style.opacity = label.dataset.baseOpacity;
+                        delete label.dataset.baseOpacity;
+                    }
+                    return;
+                }
+                if (label.dataset.baseOpacity == null) {
+                    label.dataset.baseOpacity = label.style.opacity || '1';
+                }
+                if (activeNodes.has(nodeId)) {
+                    label.style.opacity = label.dataset.baseOpacity || '1';
+                } else {
+                    label.style.opacity = String(dimAlpha);
+                }
+            });
+        }
+
+        setEdgeHover(edgeId) {
+            const state = this.getEdgeFocusState();
+            state.hoverEdgeId = edgeId || null;
+            if (edgeId) {
+                this.showEdgeHoverLabels(edgeId);
+            } else {
+                this.hideEdgeHoverLabels();
+            }
+            this.applyEdgeFocusDisplay();
+        }
+
+        clearEdgeHover() {
+            this.setEdgeHover(null);
+        }
+
+        isEdgeLocked(edgeId) {
+            const state = this.getEdgeFocusState();
+            return state.lockedEdgeIds.has(edgeId);
+        }
+
+        toggleEdgeLock(edgeId) {
+            if (!edgeId) return;
+            const state = this.getEdgeFocusState();
+            if (state.lockedEdgeIds.has(edgeId)) {
+                state.lockedEdgeIds.delete(edgeId);
+            } else {
+                state.lockedEdgeIds.add(edgeId);
+            }
+            this.applyEdgeFocusDisplay();
+        }
+
+        closeEdgeContextMenu() {
+            const menu = this._edgeContextMenu?.menuEl || document.querySelector('.context-menu');
+            if (menu) {
+                if (menu._edgeClickHandler) document.removeEventListener('mousedown', menu._edgeClickHandler);
+                if (menu._edgeKeyHandler) document.removeEventListener('keydown', menu._edgeKeyHandler);
+                menu.remove();
+            }
+            this._edgeContextMenu = null;
+        }
+
+        showEdgeContextMenu(e, edgeId) {
+            if (!edgeId || !e) return;
+            this.closeEdgeContextMenu();
+            const menu = document.createElement('div');
+            menu.className = 'context-menu';
+            menu.style.left = `${e.pageX}px`;
+            menu.style.top = `${e.pageY}px`;
+            const isLocked = this.isEdgeLocked(edgeId);
+            const fadePercent = Math.round((Number(this.edgeFocusFadeAlpha) || 0.15) * 100);
+            menu.innerHTML = `
+                <div class="context-menu-item" data-action="toggleEdgeLock">
+                    <i class="fas ${isLocked ? 'fa-unlock' : 'fa-lock'}"></i>
+                    ${isLocked ? '解锁' : '锁定'}
+                </div>
+                <div class="context-menu-divider"></div>
+                <div class="context-menu-item context-menu-slider" data-action="edgeFadeAlpha">
+                    <span>透明度</span>
+                    <input type="range" min="5" max="100" step="1" value="${fadePercent}" />
+                    <span class="context-menu-value">${fadePercent}%</span>
+                </div>
+            `;
+            document.body.appendChild(menu);
+            const rect = menu.getBoundingClientRect();
+            const margin = 8;
+            let nextLeft = rect.left;
+            let nextTop = rect.top;
+            if (rect.right > window.innerWidth - margin) {
+                nextLeft = window.innerWidth - rect.width - margin;
+            }
+            if (rect.bottom > window.innerHeight - margin) {
+                nextTop = window.innerHeight - rect.height - margin;
+            }
+            menu.style.left = `${Math.max(margin, nextLeft)}px`;
+            menu.style.top = `${Math.max(margin, nextTop)}px`;
+            menu.querySelectorAll('.context-menu-item').forEach((item) => {
+                item.addEventListener('click', () => {
+                    const action = item.dataset.action;
+                    if (action === 'toggleEdgeLock') {
+                        this.toggleEdgeLock(edgeId);
+                    }
+                    if (action !== 'edgeFadeAlpha') {
+                        this.closeEdgeContextMenu();
+                    }
+                });
+            });
+            const sliderWrap = menu.querySelector('.context-menu-item.context-menu-slider');
+            const slider = sliderWrap ? sliderWrap.querySelector('input[type="range"]') : null;
+            const sliderValue = sliderWrap ? sliderWrap.querySelector('.context-menu-value') : null;
+            if (slider) {
+                slider.addEventListener('input', (ev) => {
+                    const value = Number(ev.target.value) || 15;
+                    if (sliderValue) sliderValue.textContent = `${value}%`;
+                    this.edgeFocusFadeAlpha = Math.max(0.05, Math.min(1, value / 100));
+                    this.applyEdgeFocusDisplay();
+                });
+                slider.addEventListener('mousedown', (ev) => ev.stopPropagation());
+                slider.addEventListener('click', (ev) => ev.stopPropagation());
+            }
+            const clickOutside = (ev) => {
+                if (!menu.contains(ev.target)) this.closeEdgeContextMenu();
+            };
+            const keyHandler = (ev) => {
+                if (ev.key === 'Escape') this.closeEdgeContextMenu();
+            };
+            menu._edgeClickHandler = clickOutside;
+            menu._edgeKeyHandler = keyHandler;
+            document.addEventListener('mousedown', clickOutside);
+            document.addEventListener('keydown', keyHandler);
+            this._edgeContextMenu = { menuEl: menu, edgeId };
         }
 
         applyLabelShowAll(showAll) {
@@ -4471,6 +4903,7 @@
             this.visInputText = '';
             this.lastRenderedJson = '';
             this.visNetworkData = null;
+            this.resetEdgeFocusState();
             const textarea = this.getEl(this.ids.inputTextarea);
             if (textarea) textarea.value = '';
             if (this.visNetwork && global.vis && global.vis.DataSet) {
@@ -4490,8 +4923,23 @@
             if (this._boundNetwork === network) return;
             if (this._boundNetwork) {
                 this._boundNetwork.off('click', this._onNetworkClick);
+                if (this._onNetworkDoubleClick) {
+                    this._boundNetwork.off('doubleClick', this._onNetworkDoubleClick);
+                }
                 if (this._onNetworkAfterDraw) {
                     this._boundNetwork.off('afterDrawing', this._onNetworkAfterDraw);
+                }
+                if (this._edgeHoverAfterDraw) {
+                    this._boundNetwork.off('afterDrawing', this._edgeHoverAfterDraw);
+                }
+                if (this._onEdgeHover) {
+                    this._boundNetwork.off('hoverEdge', this._onEdgeHover);
+                }
+                if (this._onEdgeBlur) {
+                    this._boundNetwork.off('blurEdge', this._onEdgeBlur);
+                }
+                if (this._onEdgeContext) {
+                    this._boundNetwork.off('oncontext', this._onEdgeContext);
                 }
             }
             this._onNetworkClick = (params) => {
@@ -4505,21 +4953,23 @@
                             const url = `https://www.webofscience.com/wos/woscc/full-record/${encodeURIComponent(wosId)}`;
                             window.open(url, '_blank', 'noopener');
                         }
-                    }
-                    return;
                 }
-                const textarea = this.getEl(this.ids.inputTextarea);
-                const writeToTextarea = (payload) => {
-                    if (!textarea || payload == null) return;
-                    textarea.value = JSON.stringify(payload, null, 2);
-                };
-                const nodeId = params?.nodes?.[0];
-                if (nodeId) {
+                return;
+            }
+            const inputPanel = this.getEl(this.ids.inputPanel);
+            const inputVisible = inputPanel ? inputPanel.classList.contains('is-active') : false;
+            const textarea = this.getEl(this.ids.inputTextarea);
+            const writeToTextarea = (payload) => {
+                if (!inputVisible) return;
+                if (!textarea || payload == null) return;
+                textarea.value = JSON.stringify(payload, null, 2);
+            };
+            const nodeId = params?.nodes?.[0];
+            if (nodeId) {
                     const dataset = network?.body?.data?.nodes;
                     if (dataset && typeof dataset.get === 'function') {
                         const node = dataset.get(nodeId);
                         if (node) {
-                            console.log('[vis node json]', JSON.stringify(node, null, 2));
                             writeToTextarea(node);
                         }
                     }
@@ -4530,7 +4980,6 @@
                         if (edgeDataset && typeof edgeDataset.get === 'function') {
                             const edge = edgeDataset.get(edgeId);
                             if (edge) {
-                                console.log('[vis edge json]', JSON.stringify(edge, null, 2));
                                 writeToTextarea(edge);
                             }
                         }
@@ -4540,6 +4989,13 @@
                 this.openFileByWosId(nodeId);
             };
             network.on('click', this._onNetworkClick);
+            this._onNetworkDoubleClick = (params) => {
+                const edgeId = params?.edges?.[0];
+                if (edgeId) {
+                    this.toggleEdgeLock(edgeId);
+                }
+            };
+            network.on('doubleClick', this._onNetworkDoubleClick);
             this._onNetworkAfterDraw = (ctx) => {
                 const dataset = network?.body?.data?.nodes;
                 if (!dataset) return;
@@ -4583,6 +5039,29 @@
                 ctx.restore();
             };
             network.on('afterDrawing', this._onNetworkAfterDraw);
+            this._onEdgeHover = (params) => {
+                const edgeId = params?.edge;
+                if (edgeId) {
+                    this.setEdgeHover(edgeId);
+                }
+            };
+            this._onEdgeBlur = () => {
+                this.clearEdgeHover();
+            };
+            this._onEdgeContext = (params) => {
+                const evt = params?.event?.event || params?.event?.srcEvent || params?.event;
+                if (evt && typeof evt.preventDefault === 'function') {
+                    evt.preventDefault();
+                }
+                const pointer = params?.pointer?.DOM;
+                if (!pointer) return;
+                const edgeId = network.getEdgeAt(pointer);
+                if (!edgeId) return;
+                this.showEdgeContextMenu(evt, edgeId);
+            };
+            network.on('hoverEdge', this._onEdgeHover);
+            network.on('blurEdge', this._onEdgeBlur);
+            network.on('oncontext', this._onEdgeContext);
             this._boundNetwork = network;
         }
 

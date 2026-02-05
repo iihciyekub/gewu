@@ -2404,7 +2404,9 @@ class PaperStatsApp {
                 }
                 this.closeQueryExportModal();
                 this.closeImportModeDialog();
-                this.closeSyncModeDialog();
+                if (typeof this.closeSyncModeDialog === 'function') {
+                    this.closeSyncModeDialog();
+                }
                 this.closeJsonTargetDialog();
                 this.closeCreateGroupDialog();
             }
@@ -2528,7 +2530,9 @@ class PaperStatsApp {
                 this.closeGotoEditModal(false);
                 this.closeProjectSelector();
                 this.clearPdfHighlights();
-                this.togglePromptPanel(false);
+                if (typeof this.togglePromptPanel === 'function') {
+                    this.togglePromptPanel(false);
+                }
                 this.toggleProjectInfoPanel(false, { skipClose: true });
                 this.toggleShortcutsPanel(false, { skipClose: true });
             }

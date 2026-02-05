@@ -2384,6 +2384,14 @@ body.theme-dark .vis-network-view {
     opacity: 1;
 }
 
+.vis-node-label.is-edge-hover {
+    opacity: 0;
+}
+
+.vis-node-label.is-edge-hover.is-visible {
+    opacity: 1;
+}
+
 .vis-network-view.has-network .empty-state {
     display: none;
 }
@@ -2625,7 +2633,7 @@ body.theme-dark .vis-label-suggest .vis-label-suggest-item.active {
 }
 
 .vis-input-body {
-    padding: 2px 4px;
+    padding: 2px 12px;
     flex: 1 1 auto;
     display: flex;
     overflow-y: auto;
@@ -2713,7 +2721,7 @@ body.theme-dark .vis-settings-panel.is-open .vis-label-panel label {
 }
 
 .vis-label-field-group {
-    padding: 10px 2px;
+    padding: 10px 12px;
     display: flex;
     flex-direction: column;
     gap: 6px;
@@ -2909,8 +2917,7 @@ body.theme-dark .vis-settings-panel.is-open .vis-label-panel label {
 }
 
 .vis-label-slots {
-    margin-top: 10px;
-    padding-top: 10px;
+    padding: 2px 10px;
     border-top: 1px dashed var(--gray-200);
 }
 
@@ -2923,7 +2930,7 @@ body.theme-dark .vis-settings-panel.is-open .vis-label-panel label {
 
 .vis-label-slots-grid {
     display: flex;
-    gap: 6px;
+    gap: 2px;
     flex-wrap: nowrap;
     overflow-x: auto;
     padding-bottom: 2px;
