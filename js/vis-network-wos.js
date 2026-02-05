@@ -660,6 +660,8 @@
             this.zoomAnimDuration = 520;
             this.zoomAnimEasing = 'easeInOutCubic';
             this.exportScale = 2;
+            this.zoomCollapsed = false;
+            this.zoomWrap = null;
             this.labelField = 'wosid';
             this.labelFade = 0;
             this.labelColor = '#000000';
@@ -791,6 +793,7 @@
             const zoomSlider = this.getEl(this.ids.zoomSlider);
             const zoomCollapseBtn = this.getEl(this.ids.zoomCollapseBtn);
             const zoomWrap = document.querySelector('.vis-network-zoom');
+            this.zoomWrap = zoomWrap || null;
             const zoomLockBtn = this.getEl(this.ids.zoomLockBtn);
             const zoomPanBtn = this.getEl(this.ids.zoomPanBtn);
             const gridToggleBtn = this.getEl(this.ids.gridToggleBtn);
@@ -1018,7 +1021,7 @@
             }
             if (zoomCollapseBtn && zoomWrap) {
                 zoomCollapseBtn.addEventListener('click', () => {
-                    zoomWrap.classList.toggle('is-collapsed');
+                    this.setZoomCollapsed(!this.zoomCollapsed);
                 });
             }
             if (zoomLockBtn) {
@@ -1049,6 +1052,7 @@
                     this.exportNetworkVector('pdf');
                 });
             }
+            this.applyZoomCollapseState();
             if (labelFieldInput && labelSuggest && !labelFieldInput.dataset.visBound) {
                 labelFieldInput.dataset.visBound = '1';
                 const renderSuggestions = (value = '', showAll = false) => {
@@ -3299,6 +3303,7 @@
                 edgeMaxWidth: this.edgeMaxWidth,
                 edgeColor: this.edgeColor,
                 edgeStyle: this.edgeStyle,
+                zoomCollapsed: this.zoomCollapsed,
                 exportSvgScale: this.exportSvgScale,
                 exportSvgMargin: this.exportSvgMargin,
                 exportSvgIncludeLabels: this.exportSvgIncludeLabels
@@ -3777,6 +3782,7 @@
                 if (Number.isFinite(payload.edgeMaxWidth)) this.edgeMaxWidth = payload.edgeMaxWidth;
                 if (typeof payload.edgeColor === 'string') this.edgeColor = payload.edgeColor;
                 if (typeof payload.depthMode === 'boolean') this.depthMode = payload.depthMode;
+                if (typeof payload.zoomCollapsed === 'boolean') this.zoomCollapsed = payload.zoomCollapsed;
             };
 
             try {
@@ -3787,12 +3793,14 @@
             }
             this.syncSettingsSliders();
             this.applyDepthMode(this.depthMode);
+            this.applyZoomCollapseState();
 
             if (this.app && this.app.projectStorage && this.app.currentProject) {
                 this.app.projectStorage.load(this.settingsKey).then((data) => {
                     apply(data);
                     this.syncSettingsSliders();
                     this.applyDepthMode(this.depthMode);
+                    this.applyZoomCollapseState();
                 }).catch(() => {
                     // ignore
                 });
@@ -3803,12 +3811,25 @@
                             apply(data);
                             this.syncSettingsSliders();
                             this.applyDepthMode(this.depthMode);
+                            this.applyZoomCollapseState();
                         }).catch(() => {
                             // ignore
                         });
                     }
                 }, 600);
             }
+        }
+
+        applyZoomCollapseState() {
+            const zoomWrap = this.zoomWrap || document.querySelector('.vis-network-zoom');
+            if (!zoomWrap) return;
+            zoomWrap.classList.toggle('is-collapsed', !!this.zoomCollapsed);
+        }
+
+        setZoomCollapsed(collapsed) {
+            this.zoomCollapsed = !!collapsed;
+            this.applyZoomCollapseState();
+            this.queuePersistSettings();
         }
 
         syncSettingsSliders() {

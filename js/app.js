@@ -2380,6 +2380,12 @@ class PaperStatsApp {
                     this.togglePdfPopup().catch(err => console.error('Toggle PDF popup failed:', err));
                     return;
                 }
+                const projectModal = document.getElementById('projectSelectorModal');
+                if (projectModal && projectModal.classList.contains('active')) {
+                    e.preventDefault();
+                    this.closeProjectSelector();
+                    return;
+                }
                 if (this.handleSettingsPanelEscape()) {
                     e.preventDefault();
                     return;
