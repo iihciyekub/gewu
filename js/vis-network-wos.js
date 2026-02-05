@@ -715,6 +715,7 @@
             this.depthMode = true;
             this._modReleaseAt = 0;
             this._hotkeysBound = false;
+            this.pendingSavedIndex = null;
         }
 
         bind() {
@@ -896,12 +897,11 @@
                 });
             }
             if (savedSelect) {
-                const runRestore = () => {
+                savedSelect.addEventListener('change', () => {
                     if (savedSelect.disabled) return;
-                    this.restoreNetworkJson();
-                };
-                savedSelect.addEventListener('change', runRestore);
-                savedSelect.addEventListener('click', runRestore);
+                    const next = Number.parseInt(savedSelect.value, 10);
+                    this.pendingSavedIndex = Number.isFinite(next) ? next : null;
+                });
             }
             if (deleteBtn) {
                 deleteBtn.addEventListener('click', (e) => {
@@ -2041,15 +2041,18 @@
             this.applyLabelFade();
             this.applyLabelSizeScale();
             this.applyLabelWeight();
+            this.applyLabelColor();
             this.applyLabelBgColor();
             this.applyLabelBorderColor();
             this.applyLabelThreshold();
             this.applyNodeSizeScale();
             this.applyNodeBorderWidth();
             this.applyNodeColor();
+            this.applyNodeBorderColor();
             this.applyPhysicsSettings();
             this.applyEdgeFade();
             this.applyEdgeWidthRange();
+            this.applyEdgeStyle();
             this.applyDepthMode(this.depthMode);
             // Skip auto-restoring label rendering on reload.
             this.queuePersistNetworkState();
@@ -3845,7 +3848,8 @@
                 this.notify('No saved items', 'info');
                 return;
             }
-            const idx = select ? Number.parseInt(select.value, 10) : 0;
+            const fallbackIdx = select ? Number.parseInt(select.value, 10) : 0;
+            const idx = Number.isFinite(this.pendingSavedIndex) ? this.pendingSavedIndex : fallbackIdx;
             const item = list[idx] || list[0];
             if (!item || !item.json) {
                 this.notify('Invalid selection', 'error');
