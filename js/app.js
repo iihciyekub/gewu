@@ -11786,8 +11786,38 @@ class PaperStatsApp {
             if (!btn) return;
             e.preventDefault();
             const target = btn.getAttribute('data-target') || '';
+            if (e.metaKey || e.ctrlKey) {
+                this.hideAllSettingsPanels();
+            }
             this.openSettingsPanelFromChat(target);
         });
+    }
+
+    hideAllSettingsPanels() {
+        const items = [
+            { id: 'fileFilterSettingsPanel', flag: 'fileFilterVisible', btn: 'fileFilterToggleBtn' },
+            { id: 'createGroupSettingsPanel', flag: 'createGroupVisible', btn: 'addGroupBtn' },
+            { id: 'projectInfoPanel', flag: 'projectInfoVisible' },
+            { id: 'thirdPartyInfoPanel', flag: 'thirdPartyInfoVisible' },
+            { id: 'shortcutsInfoPanel', flag: 'shortcutsVisible' },
+            { id: 'queryExportPanel', flag: 'queryExportVisible', btn: 'queryExportBtn' },
+            { id: 'visExportSettingsPanel', flag: 'visExportVisible' },
+            { id: 'apiSettingsPanel', flag: 'apiSettingsVisible' },
+            { id: 'autoSaveConfigPanel', flag: 'autoSaveConfigVisible' },
+            { id: 'aboutPanel', flag: 'aboutVisible' },
+            { id: 'doiIndexPanel', flag: 'doiIndexVisible' }
+        ];
+        items.forEach((item) => {
+            if (this[item.flag]) this[item.flag] = false;
+            const panel = document.getElementById(item.id);
+            if (panel) panel.classList.remove('is-visible');
+            if (item.btn) {
+                const btn = document.getElementById(item.btn);
+                if (btn) btn.classList.remove('active');
+            }
+        });
+        this.updateSettingsPanelsVisibility();
+        this.saveSettingsPanelsState();
     }
 
     async loadMdChatSavedSlots() {

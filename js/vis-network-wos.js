@@ -34,7 +34,7 @@
             }
         });
         visData.edges.forEach((edge) => {
-            const related = Number.isFinite(edge.relatedValue) ? edge.relatedValue : 0;
+            const related = getRelatedCount(edge);
             const t = normalize(related, minRelated, maxRelated);
             const alpha = 0.2 + t * 0.7;
             edge.color = {
@@ -51,6 +51,13 @@
         const digits = rawText.replace(/\D+/g, '');
         if (!digits) return 0;
         return Number.parseInt(digits, 10);
+    }
+
+    function getRelatedCount(entry) {
+        if (!entry || typeof entry !== 'object') return 0;
+        if (Number.isFinite(entry.related_count)) return entry.related_count;
+        if (Number.isFinite(entry.relatedValue)) return entry.relatedValue;
+        return parseNumber(entry.related_count ?? entry.relatedValue);
     }
 
     function buildVisNetworkDataFromWos(raw) {
@@ -86,23 +93,25 @@
             return text ? text : 'undef';
         };
         const formatFieldForTitle = (value) => ensureField(value);
+        const buildTitle = (id, citationsRaw, refRaw) => (
+            `${id}\nC:${formatFieldForTitle(citationsRaw)} Ref:${formatFieldForTitle(refRaw)}`
+        );
+        const buildNodeCounts = (citationsRaw, refRaw) => ({
+            citations_count: parseNumber(citationsRaw),
+            ref_count: parseNumber(refRaw)
+        });
         Object.entries(raw).forEach(([rootId, payload]) => {
             const rootKey = normalizeId(rootId);
             if (!rootKey) return;
             const rootCitationsRaw = payload?.citations_count;
-            const rootRelatedRaw = payload?.related_count;
             const rootRefRaw = payload?.ref_count;
-            const rootCitations = rootCitationsRaw != null ? parseNumber(rootCitationsRaw) : 0;
-            const rootTitle = `${rootKey}\nC:${formatFieldForTitle(rootCitationsRaw)} ` +
-                `R:${formatFieldForTitle(rootRelatedRaw)} Ref:${formatFieldForTitle(rootRefRaw)}`;
+            const rootTitle = buildTitle(rootKey, rootCitationsRaw, rootRefRaw);
             const rootNodeId = addNode(rootKey, rootKey, {
                 title: rootTitle,
                 shape: 'dot',
                 size: 16,
                 font: { size: 14, color: '#111', align: 'bottom', vadjust: 12 },
-                citations_count: rootCitations,
-                related_count: ensureField(rootRelatedRaw),
-                ref_count: ensureField(rootRefRaw)
+                ...buildNodeCounts(rootCitationsRaw, rootRefRaw)
             });
             const children = payload && payload.page_wosids;
             if (!Array.isArray(children)) return;
@@ -114,27 +123,19 @@
                 const citationsRaw = item?.citations_count;
                 const relatedRaw = item?.related_count;
                 const refRaw = item?.ref_count;
-                const citations = citationsRaw != null ? citationsRaw : 'undef';
-                const related = relatedRaw != null ? relatedRaw : 'undef';
-                const ref = refRaw != null ? refRaw : 'undef';
                 const label = childKey;
-                const title = `${childKey}\nC:${formatFieldForTitle(citationsRaw)} ` +
-                    `R:${formatFieldForTitle(relatedRaw)} Ref:${formatFieldForTitle(refRaw)}`;
-                const citationsValue = parseNumber(citationsRaw);
+                const title = buildTitle(childKey, citationsRaw, refRaw);
                 const childNodeId = addNode(childKey, label, {
                     title,
                     shape: 'dot',
                     size: 12,
                     font: { size: 11, color: '#111', align: 'bottom', vadjust: 12 },
-                    citations_count: citationsValue,
-                    related_count: ensureField(relatedRaw),
-                    ref_count: ensureField(refRaw)
+                    ...buildNodeCounts(citationsRaw, refRaw)
                 });
-                const relatedValue = parseNumber(relatedRaw);
                 edges.push({
                     from: rootNodeId || rootKey,
                     to: childNodeId || childKey,
-                    relatedValue
+                    related_count: parseNumber(relatedRaw)
                 });
             });
         });
@@ -165,7 +166,7 @@
         let minRelated = Infinity;
         let maxRelated = -Infinity;
         edges.forEach((edge) => {
-            const related = Number.isFinite(edge.relatedValue) ? edge.relatedValue : 0;
+            const related = getRelatedCount(edge);
             minRelated = Math.min(minRelated, related);
             maxRelated = Math.max(maxRelated, related);
             const base = 1;
@@ -179,14 +180,14 @@
         };
         const nodeRelatedMax = new Map();
         edges.forEach((edge) => {
-            const related = Number.isFinite(edge.relatedValue) ? edge.relatedValue : 0;
+            const related = getRelatedCount(edge);
             const currentFrom = nodeRelatedMax.get(edge.from) || 0;
             const currentTo = nodeRelatedMax.get(edge.to) || 0;
             nodeRelatedMax.set(edge.from, Math.max(currentFrom, related));
             nodeRelatedMax.set(edge.to, Math.max(currentTo, related));
         });
         edges.forEach((edge) => {
-            const related = Number.isFinite(edge.relatedValue) ? edge.relatedValue : 0;
+            const related = getRelatedCount(edge);
             const t = normalize(related, minRelated, maxRelated);
             const alpha = 0.15 + t * 0.7;
             edge.color = {
@@ -195,13 +196,11 @@
                 hover: `rgba(0,0,0,${Math.min(1, alpha + 0.15).toFixed(3)})`
             };
         });
-            nodes.forEach((node) => {
-                const relatedRaw = parseNumber(node.related_count);
-                const related = Number.isFinite(relatedRaw) ? relatedRaw : 0;
-                const t = normalize(related, minRelated, maxRelated);
-                const alpha = 0.35 + t * 0.55;
-                node.relatedValue = related;
-                node.color = {
+        nodes.forEach((node) => {
+            const related = getRelatedCount(node);
+            const t = normalize(related, minRelated, maxRelated);
+            const alpha = 0.35 + t * 0.55;
+            node.color = {
                 background: '#ffffff',
                 border: `rgba(0,0,0,${Math.min(1, alpha + 0.15).toFixed(3)})`,
                 highlight: {
@@ -3285,11 +3284,9 @@
                 if (citations < min) lowNodes.add(node.id);
             });
             nodes.forEach((node) => {
-                const relatedRaw = Number.isFinite(node.relatedValue)
-                    ? node.relatedValue
-                    : parseNumber(node.related_count);
-                if (!Number.isFinite(relatedRaw)) return;
-                if (relatedRaw < relatedMin) lowRelatedNodes.add(node.id);
+                const related = getRelatedCount(node);
+                if (!Number.isFinite(related)) return;
+                if (related < relatedMin) lowRelatedNodes.add(node.id);
             });
             const nodeUpdates = nodes.map((node) => {
                 const baseColor = state.baseNodeColors.get(node.id) || node.color;
@@ -3312,7 +3309,7 @@
                 if (hasRelatedRule && (lowRelatedNodes.has(edge.from) || lowRelatedNodes.has(edge.to))) {
                     alpha = Math.min(alpha, relatedDimAlpha);
                 }
-                if (hasRelatedRule && Number.isFinite(edge.relatedValue) && edge.relatedValue < relatedMin) {
+                if (hasRelatedRule && getRelatedCount(edge) < relatedMin) {
                     alpha = Math.min(alpha, relatedDimAlpha);
                 }
                 const color = alpha < 1 ? fadeEdgeColor(baseColor, alpha) : baseColor;
@@ -3422,7 +3419,7 @@
             const baseColor = normalizeVisColor(this.edgeColor);
             const darkMode = isDarkTheme();
             const updates = dataset.get().map((edge) => {
-                const related = Number.isFinite(edge.relatedValue) ? edge.relatedValue : 0;
+                const related = getRelatedCount(edge);
                 const t = maxRelated > minRelated ? (related - minRelated) / (maxRelated - minRelated) : 0;
                 const alphaRaw = minAlpha + Math.max(0, Math.min(1, t)) * (maxAlpha - minAlpha);
                 const alpha = Math.max(0, Math.min(1, alphaRaw));
@@ -3468,7 +3465,7 @@
             const minW = Number.isFinite(Number(this.edgeMinWidth)) ? Number(this.edgeMinWidth) : 1;
             const maxW = Number.isFinite(Number(this.edgeMaxWidth)) ? Number(this.edgeMaxWidth) : 6;
             const updates = dataset.get().map((edge) => {
-                const related = Number.isFinite(edge.relatedValue) ? edge.relatedValue : 0;
+                const related = getRelatedCount(edge);
                 const t = maxRelated > minRelated ? (related - minRelated) / (maxRelated - minRelated) : 0;
                 const width = minW + Math.max(0, Math.min(1, t)) * (maxW - minW);
                 return { id: edge.id, width: Number(width.toFixed(2)) };
