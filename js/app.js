@@ -209,6 +209,7 @@ class PaperStatsApp {
         this._lastClickTimer = null;
         this._currentSearchAbortController = null;
         this._cmdShortcutTimestamp = 0;
+        this._modKeyDown = false;
 
         // PDF标注数据缓存
         this._pdfAnnotationsCache = {};
@@ -1874,18 +1875,19 @@ class PaperStatsApp {
         // 快捷键：Cmd/Ctrl + E 正向切换（JSON/MD/Draft），Cmd/Ctrl + Shift + E 反向切换
         document.addEventListener('keydown', (e) => {
             const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
-            const mod = isMac ? e.metaKey : e.ctrlKey;
             const now = Date.now();
             if (e.key === 'Meta' || e.key === 'Control') {
+                this._modKeyDown = true;
                 this._cmdShortcutTimestamp = now;
                 return;
             }
+            const mod = this._modKeyDown;
             if (mod) {
                 // allow specific mod shortcuts below (e.g., Cmd/Ctrl + /)
             } else {
                 if (this._cmdShortcutTimestamp && now - this._cmdShortcutTimestamp <= 1500) {
                     const key = e.key.toLowerCase();
-                    if (['j', 'm', 'd', 'v', 's', 'o'].includes(key)) {
+                    if (['j', 'm', 'd', 'v', 's', 'o', 'z', 'x'].includes(key)) {
                         e.preventDefault();
                         if (key === 'j') this.switchToView('structured');
                         if (key === 'm') this.switchToView('markdown');
@@ -1896,6 +1898,8 @@ class PaperStatsApp {
                             this.switchToView('settings');
                             this.showProjectDetailsPanel();
                         }
+                        if (key === 'z') this.toggleStatusBarPosition();
+                        if (key === 'x') this.toggleStatusBarVisibility();
                         this._cmdShortcutTimestamp = 0;
                         return;
                     }
@@ -1931,6 +1935,11 @@ class PaperStatsApp {
                     return;
                 }
                 this.toggleJsonMdSource();
+            }
+        });
+        document.addEventListener('keyup', (e) => {
+            if (e.key === 'Meta' || e.key === 'Control') {
+                this._modKeyDown = false;
             }
         });
         // JSON 菜单：表格视图 / JSON 代码 / JSON 保存
