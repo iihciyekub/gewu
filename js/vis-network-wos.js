@@ -498,6 +498,21 @@
         });
     }
 
+    function buildLabelStrokeShadow(width, color) {
+        const w = Number(width);
+        if (!Number.isFinite(w) || w <= 0) return '';
+        const c = color || '#ffffff';
+        const steps = Math.max(8, Math.round(w * 8));
+        const shadows = [];
+        for (let i = 0; i < steps; i += 1) {
+            const angle = (i / steps) * Math.PI * 2;
+            const x = Math.cos(angle) * w;
+            const y = Math.sin(angle) * w;
+            shadows.push(`${x.toFixed(2)}px ${y.toFixed(2)}px 0 ${c}`);
+        }
+        return shadows.join(', ');
+    }
+
     function applyLabelStyle(label, node) {
         if (!label || !node) return;
         const style = node.labelStyle || {};
@@ -505,6 +520,13 @@
         if (style.fontWeight) label.style.fontWeight = String(style.fontWeight);
         if (style.textColor) label.style.color = style.textColor;
         if (style.borderColor) label.style.borderColor = style.borderColor;
+        const strokeWidth = Number(style.strokeWidth);
+        if (Number.isFinite(strokeWidth) && strokeWidth > 0 && style.strokeColor) {
+            label.style.textShadow = buildLabelStrokeShadow(strokeWidth, style.strokeColor);
+        } else {
+            label.style.textShadow = '';
+        }
+        label.style.webkitTextStroke = '';
         if (style.backgroundColor) {
             label.style.backgroundColor = style.backgroundColor;
         } else {
@@ -741,6 +763,8 @@
                 labelColorInput: options.labelColorInputId || 'visLabelColorInput',
                 labelBgColorInput: options.labelBgColorInputId || 'visLabelBgColorInput',
                 labelBorderColorInput: options.labelBorderColorInputId || 'visLabelBorderColorInput',
+                labelStrokeWidthInput: options.labelStrokeWidthInputId || 'visLabelStrokeWidthInput',
+                labelStrokeColorInput: options.labelStrokeColorInputId || 'visLabelStrokeColorInput',
                 labelSizeSlider: options.labelSizeSliderId || 'visLabelSizeSlider',
                 labelMinSlider: options.labelMinSliderId || 'visLabelMinSlider',
                 labelMinDimSlider: options.labelMinDimSliderId || 'visLabelMinDimSlider',
@@ -804,6 +828,8 @@
             this.labelColor = '#000000';
             this.labelBgColor = '#f2f2f2f1';
             this.labelBorderColor = '#00000021';
+            this.labelStrokeWidth = 0;
+            this.labelStrokeColor = '#ffffff';
             this.labelSizeScale = 1;
             this.labelMinCitations = 0;
             this.labelFieldOptions = [];
@@ -921,6 +947,8 @@
             const labelColorInput = this.getEl(this.ids.labelColorInput);
             const labelBgColorInput = this.getEl(this.ids.labelBgColorInput);
             const labelBorderColorInput = this.getEl(this.ids.labelBorderColorInput);
+            const labelStrokeWidthInput = this.getEl(this.ids.labelStrokeWidthInput);
+            const labelStrokeColorInput = this.getEl(this.ids.labelStrokeColorInput);
             const labelSizeSlider = this.getEl(this.ids.labelSizeSlider);
             const labelMinSlider = this.getEl(this.ids.labelMinSlider);
             const labelMinDimSlider = this.getEl(this.ids.labelMinDimSlider);
@@ -1408,6 +1436,19 @@
                     this.queuePersistSettings();
                 });
             }
+            bindNumberInput(labelStrokeWidthInput, (next) => {
+                this.labelStrokeWidth = Math.max(0, Number.isFinite(next) ? next : 0);
+                this.applyLabelStrokeWidth();
+                this.queuePersistSettings();
+            });
+            if (labelStrokeColorInput && !labelStrokeColorInput.dataset.visBound) {
+                labelStrokeColorInput.dataset.visBound = '1';
+                labelStrokeColorInput.addEventListener('input', () => {
+                    this.labelStrokeColor = labelStrokeColorInput.value || '#ffffff';
+                    this.applyLabelStrokeColor();
+                    this.queuePersistSettings();
+                });
+            }
             bindNumberInput(labelMinSlider, (next) => {
                 this.labelMinCitations = next;
                 this.applyLabelThreshold();
@@ -1573,6 +1614,13 @@
                     });
                     global.Coloris({
                         el: '#visLabelBorderColorInput',
+                        alpha: true,
+                        format: 'hex',
+                        formatToggle: false,
+                        forceAlpha: true
+                    });
+                    global.Coloris({
+                        el: '#visLabelStrokeColorInput',
                         alpha: true,
                         format: 'hex',
                         formatToggle: false,
@@ -2395,6 +2443,8 @@
             this.applyLabelColor();
             this.applyLabelBgColor();
             this.applyLabelBorderColor();
+            this.applyLabelStrokeWidth();
+            this.applyLabelStrokeColor();
             this.applyLabelThreshold();
             this.applyNodeSizeScale();
             this.applyNodeBorderWidth();
@@ -2677,6 +2727,8 @@
                 const labelColorInput = this.getEl(this.ids.labelColorInput);
                 const labelBgColorInput = this.getEl(this.ids.labelBgColorInput);
                 const labelBorderColorInput = this.getEl(this.ids.labelBorderColorInput);
+                const labelStrokeWidthInput = this.getEl(this.ids.labelStrokeWidthInput);
+                const labelStrokeColorInput = this.getEl(this.ids.labelStrokeColorInput);
                 const edgeColorInput = this.getEl(this.ids.edgeColorInput);
                 const edgeLabelFontSizeInput = this.getEl(this.ids.edgeLabelFontSizeInput);
                 const edgeLabelColorInput = this.getEl(this.ids.edgeLabelColorInput);
@@ -2703,6 +2755,8 @@
                 this.setColorInputValue(labelColorInput, this.labelColor || '#000000');
                 this.setColorInputValue(labelBgColorInput, this.labelBgColor || '#f2f2f2f1');
                 this.setColorInputValue(labelBorderColorInput, this.labelBorderColor || '#00000021');
+                if (labelStrokeWidthInput) labelStrokeWidthInput.value = String(this.labelStrokeWidth ?? 0);
+                this.setColorInputValue(labelStrokeColorInput, this.labelStrokeColor || '#ffffff');
                 this.setColorInputValue(edgeColorInput, this.edgeColor || '#111111');
                 if (edgeLabelFontSizeInput) edgeLabelFontSizeInput.value = String(this.edgeLabelFontSize ?? 12);
                 this.setColorInputValue(edgeLabelColorInput, this.edgeLabelFontColor || '#111111');
@@ -3297,6 +3351,30 @@
             const updates = dataset.get().map((node) => ({
                 id: node.id,
                 labelStyle: { ...(node.labelStyle || {}), borderColor: color }
+            }));
+            dataset.update(updates);
+            this.updateLabelLayer();
+        }
+
+        applyLabelStrokeWidth() {
+            const dataset = this.getNetworkNodesDataSet();
+            if (!dataset) return;
+            const width = Math.max(0, Number(this.labelStrokeWidth) || 0);
+            const updates = dataset.get().map((node) => ({
+                id: node.id,
+                labelStyle: { ...(node.labelStyle || {}), strokeWidth: width }
+            }));
+            dataset.update(updates);
+            this.updateLabelLayer();
+        }
+
+        applyLabelStrokeColor() {
+            const dataset = this.getNetworkNodesDataSet();
+            if (!dataset) return;
+            const color = normalizeVisColor(this.labelStrokeColor || '#ffffff');
+            const updates = dataset.get().map((node) => ({
+                id: node.id,
+                labelStyle: { ...(node.labelStyle || {}), strokeColor: color }
             }));
             dataset.update(updates);
             this.updateLabelLayer();
@@ -4215,6 +4293,8 @@
             this.labelColor = '#000000ff';
             this.labelBgColor = '#fafafaff';
             this.labelBorderColor = '#dbdbdbff';
+            this.labelStrokeWidth = 0;
+            this.labelStrokeColor = '#ffffff';
             this.labelMinCitations = 0;
             this.labelMinDimAlpha = 0.2;
             this.relatedMinValue = 0;
@@ -4346,6 +4426,8 @@
             this.applyLabelBgColor();
             this.applyLabelThreshold();
             this.applyLabelThresholdDimming();
+            this.applyLabelStrokeWidth();
+            this.applyLabelStrokeColor();
             this.applyLabelWeight();
             this.applyPhysicsSettings();
             this.applyEdgeFade();
@@ -4360,6 +4442,8 @@
                 labelColor: this.labelColor,
                 labelBgColor: this.labelBgColor,
                 labelBorderColor: this.labelBorderColor,
+                labelStrokeWidth: this.labelStrokeWidth,
+                labelStrokeColor: this.labelStrokeColor,
                 labelSizeScale: this.labelSizeScale,
                 labelMinCitations: this.labelMinCitations,
                 labelMinDimAlpha: this.labelMinDimAlpha,
@@ -4409,6 +4493,8 @@
             if (typeof payload.labelColor === 'string') this.labelColor = payload.labelColor;
             if (typeof payload.labelBgColor === 'string') this.labelBgColor = payload.labelBgColor;
             if (typeof payload.labelBorderColor === 'string') this.labelBorderColor = payload.labelBorderColor;
+            if (Number.isFinite(payload.labelStrokeWidth)) this.labelStrokeWidth = payload.labelStrokeWidth;
+            if (typeof payload.labelStrokeColor === 'string') this.labelStrokeColor = payload.labelStrokeColor;
             if (Number.isFinite(payload.labelSizeScale)) this.labelSizeScale = payload.labelSizeScale;
             if (Number.isFinite(payload.labelMinCitations)) this.labelMinCitations = payload.labelMinCitations;
             if (Number.isFinite(payload.labelMinDimAlpha)) this.labelMinDimAlpha = payload.labelMinDimAlpha;
@@ -4946,6 +5032,8 @@
             const labelColorInput = this.getEl(this.ids.labelColorInput);
             const labelBgColorInput = this.getEl(this.ids.labelBgColorInput);
             const labelBorderColorInput = this.getEl(this.ids.labelBorderColorInput);
+            const labelStrokeWidthInput = this.getEl(this.ids.labelStrokeWidthInput);
+            const labelStrokeColorInput = this.getEl(this.ids.labelStrokeColorInput);
             const labelSizeSlider = this.getEl(this.ids.labelSizeSlider);
             const labelMinSlider = this.getEl(this.ids.labelMinSlider);
             const labelMinDimSlider = this.getEl(this.ids.labelMinDimSlider);
@@ -4979,6 +5067,8 @@
             this.setColorInputValue(labelColorInput, this.labelColor || '#000000');
             this.setColorInputValue(labelBgColorInput, this.labelBgColor || '#f2f2f2f1');
             this.setColorInputValue(labelBorderColorInput, this.labelBorderColor || '#00000021');
+            if (labelStrokeWidthInput) labelStrokeWidthInput.value = String(this.labelStrokeWidth ?? 0);
+            this.setColorInputValue(labelStrokeColorInput, this.labelStrokeColor || '#ffffff');
             if (labelSizeSlider) labelSizeSlider.value = String(Math.round((this.labelSizeScale || 1) * 100));
             if (labelMinSlider) labelMinSlider.value = String(this.labelMinCitations || 0);
             if (labelMinDimSlider) labelMinDimSlider.value = String(this.labelMinDimAlpha ?? 0.2);
@@ -5549,6 +5639,14 @@
             network.on('afterDrawing', this._onNetworkAfterDraw);
             this._onEdgeHover = (params) => {
                 const edgeId = params?.edge;
+                const evt = params?.event?.event || params?.event?.srcEvent || params?.event;
+                const hasMod = !!(evt && (evt.metaKey || evt.ctrlKey));
+                if (!hasMod) {
+                    if (this.getEdgeFocusState().hoverEdgeId) {
+                        this.clearEdgeHover();
+                    }
+                    return;
+                }
                 if (edgeId) {
                     this.setEdgeHover(edgeId);
                 }
