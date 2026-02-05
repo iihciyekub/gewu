@@ -671,6 +671,7 @@
             this.visNetworkData = null;
             this.visInputText = '';
             this.lastRenderedJson = '';
+            this.graphModel = global.WosGraphModel ? new global.WosGraphModel({ source: null }) : null;
             this.visNetworkSavedKey = options.visNetworkSavedKey || 'vis-network-saved';
             this.zoomMin = 0.1;
             this.zoomMax = 2.0;
@@ -2094,6 +2095,25 @@
             if (network) this.visNetwork = network;
             if (data) this.visNetworkData = data;
             this.lastRenderedJson = typeof raw === 'string' ? raw : JSON.stringify(raw, null, 2);
+            if (!this.graphModel && global.WosGraphModel) {
+                this.graphModel = new global.WosGraphModel({ source: null });
+            }
+            if (this.graphModel) {
+                let parsed = null;
+                if (typeof raw === 'string') {
+                    try {
+                        parsed = JSON.parse(raw);
+                    } catch (_e) {
+                        parsed = null;
+                    }
+                } else if (raw && typeof raw === 'object') {
+                    parsed = raw;
+                }
+                if (parsed && this.isWosGraphData(parsed)) {
+                    this.graphModel.setSource(parsed);
+                    this.graphModel.visData = data || this.graphModel.visData;
+                }
+            }
             this.wosDataIndex = null;
             this.wosDataIndexSource = null;
             this._wosDataIndex = null;
@@ -2178,6 +2198,20 @@
             const textarea = this.getEl(this.ids.inputTextarea);
             if (textarea && sourceJson) {
                 textarea.value = sourceJson;
+            }
+            if (!this.graphModel && global.WosGraphModel) {
+                this.graphModel = new global.WosGraphModel({ source: null });
+            }
+            if (this.graphModel && sourceJson) {
+                try {
+                    const parsed = JSON.parse(sourceJson);
+                    if (this.isWosGraphData(parsed)) {
+                        this.graphModel.setSource(parsed);
+                        this.graphModel.visData = data || this.graphModel.visData;
+                    }
+                } catch (_e) {
+                    // ignore
+                }
             }
             this.wosDataIndex = null;
             this.wosDataIndexSource = null;
@@ -2732,8 +2766,8 @@
         tryApplySingleNodeFromTextarea(textarea) {
             if (!textarea) return false;
             const raw = (textarea.value || '').trim();
-            if (!raw || !raw.startsWith('{') || !raw.endsWith('}')) {
-                console.warn('[WosVisManager] Update node skipped: textarea not a single JSON object.');
+            if (!raw || (!raw.startsWith('{') && !raw.startsWith('['))) {
+                console.warn('[WosVisManager] Update node skipped: textarea not JSON.');
                 return false;
             }
             let parsed = null;
@@ -2743,16 +2777,53 @@
                 this.notify('Invalid JSON for update', 'error');
                 return false;
             }
-            if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return false;
-            if (!parsed.wosid) {
-                this.notify('Missing wosid for update', 'info');
+            let items = null;
+            if (Array.isArray(parsed)) {
+                items = parsed;
+            } else if (parsed && typeof parsed === 'object') {
+                if (!parsed.wosid) {
+                    this.notify('Missing wosid for update', 'info');
+                    return false;
+                }
+                if (Object.prototype.hasOwnProperty.call(parsed, 'page_wosids')) return false;
+                items = [parsed];
+            } else {
                 return false;
             }
-            if (Object.prototype.hasOwnProperty.call(parsed, 'page_wosids')) return false;
+            if (!this.graphModel && global.WosGraphModel) {
+                this.graphModel = new global.WosGraphModel({ source: null });
+            }
+            let base = this.graphModel?.source || null;
+            if (!base) {
+                let parsedLast = null;
+                if (this.lastRenderedJson) {
+                    try {
+                        parsedLast = JSON.parse(this.lastRenderedJson);
+                    } catch (_e) {
+                        parsedLast = null;
+                    }
+                }
+                base = parsedLast || this.getVisInputData() || this.getCurrentViewData();
+                if (base && this.graphModel) {
+                    this.graphModel.setSource(base);
+                }
+            }
+            if (!base || !this.isWosGraphData(base) || !this.graphModel) {
+                this.notify('No WOS data loaded', 'info');
+                return false;
+            }
             console.log('[WosVisManager] Update node input', parsed);
-            const ok = this.applySingleNodeUpdate(parsed);
+            const ok = this.graphModel.applyNodeUpdates(items);
             if (ok) {
-                textarea.value = '';
+                const visData = this.graphModel.buildVisData();
+                const sourceJson = JSON.stringify(this.graphModel.source, null, 2);
+                this.visInputText = sourceJson;
+                this.lastRenderedJson = sourceJson;
+                const inputTextarea = this.getEl(this.ids.inputTextarea);
+                if (inputTextarea) {
+                    inputTextarea.value = sourceJson;
+                }
+                this.renderFromVisData(visData, { sourceJson });
                 this.notify('Node updated from input', 'success');
                 return true;
             }
@@ -4064,18 +4135,31 @@
         applyInput() {
             const textarea = this.getEl(this.ids.inputTextarea);
             if (!textarea) return;
-            this.visInputText = textarea.value || '';
+            const raw = textarea.value || '';
+            if (!raw.trim()) return;
+            let parsed = null;
             try {
-                const parsed = JSON.parse(this.visInputText);
-                this.visInputText = JSON.stringify(parsed, null, 2);
-                textarea.value = this.visInputText;
-            } catch (_e) { }
-            this.recordInputHistory(textarea.value || '');
-            this.persistInputDraft(textarea.value || '');
-            this.notify('Rendered', 'success');
-            if (this.visInputText) {
-                this.renderFromJson(this.visInputText);
+                parsed = JSON.parse(raw);
+            } catch (err) {
+                this.notify(`JSON 解析失败: ${err.message}`, 'error');
+                return;
             }
+            const formatted = JSON.stringify(parsed, null, 2);
+            this.visInputText = formatted;
+            textarea.value = formatted;
+            this.recordInputHistory(formatted);
+            this.persistInputDraft(formatted);
+            if (!this.graphModel && global.WosGraphModel) {
+                this.graphModel = new global.WosGraphModel({ source: null });
+            }
+            if (this.graphModel) {
+                this.graphModel.setSource(parsed);
+                const visData = this.graphModel.buildVisData();
+                this.renderFromVisData(visData, { sourceJson: formatted });
+            } else {
+                this.renderFromJson(formatted);
+            }
+            this.notify('Rendered', 'success');
         }
 
         appendInput() {
@@ -4088,21 +4172,39 @@
                 this.notify(`JSON 解析失败: ${err.message}`, 'error');
                 return;
             }
-            let base = null;
-            if (this.visInputText) {
+            let base = this.graphModel?.source || null;
+            if (!base && this.visInputText) {
                 try {
                     base = JSON.parse(this.visInputText);
                 } catch (_e) {
                     base = null;
                 }
-            } else if (this.lastRenderedJson) {
+            } else if (!base && this.lastRenderedJson) {
                 try {
                     base = JSON.parse(this.lastRenderedJson);
                 } catch (_e) {
                     base = null;
                 }
-            } else if (this.app && this.app.currentData && typeof this.app.currentData === 'object') {
+            } else if (!base && this.app && this.app.currentData && typeof this.app.currentData === 'object') {
                 base = this.app.currentData;
+            }
+            if (!this.graphModel && global.WosGraphModel) {
+                this.graphModel = new global.WosGraphModel({ source: base || {} });
+            }
+            if (this.graphModel) {
+                if (base && this.graphModel.source !== base) {
+                    this.graphModel.setSource(base);
+                }
+                this.graphModel.appendSource(incoming);
+                const visData = this.graphModel.buildVisData();
+                const sourceJson = JSON.stringify(this.graphModel.source, null, 2);
+                this.visInputText = sourceJson;
+                textarea.value = sourceJson;
+                this.recordInputHistory(sourceJson);
+                this.persistInputDraft(sourceJson);
+                this.renderFromVisData(visData, { sourceJson });
+                this.notify('Merged and rendered', 'success');
+                return;
             }
             const merged = this.mergeWosJson(base || {}, incoming);
             this.visInputText = JSON.stringify(merged, null, 2);
@@ -4195,16 +4297,40 @@
                 this.notify('No vis data to save', 'info');
                 return;
             }
-            const sourceJson = this.lastRenderedJson || this.visInputText || '';
+            if (!this.graphModel && global.WosGraphModel) {
+                this.graphModel = new global.WosGraphModel({ source: null });
+            }
+            if (this.graphModel) {
+                const base = this.graphModel.source || this.getVisInputData() || this.getCurrentViewData();
+                if (base && this.isWosGraphData(base)) {
+                    this.graphModel.setSource(base);
+                }
+                this.graphModel.visData = visData;
+            }
             const name = prompt('Save name', `network-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, '')}`);
             if (!name) return;
             const list = await this.loadSavedList();
+            const showAll = !!this.visNetwork?._wosLabelState?.showAll;
+            const state = this.visNetwork
+                ? {
+                    zoom: this.visNetwork.getScale(),
+                    pan: this.visNetwork.getViewPosition(),
+                    labelMode: showAll ? 'all' : 'hover'
+                }
+                : null;
+            const payload = this.graphModel
+                ? this.graphModel.getSavedPayload({ name, state })
+                : {
+                    version: 1,
+                    name,
+                    source: {},
+                    visData,
+                    state
+                };
             list.unshift({
-                name,
+                ...payload,
                 createdAt: Date.now(),
-                type: 'vis-data',
-                visData: visData,
-                sourceJson
+                type: 'wos-graph'
             });
             const trimmed = list.slice(0, 50);
             await this.persistSavedList(trimmed);
@@ -4240,13 +4366,35 @@
             if (!options.skipPersist) {
                 this.persistSavedSelect(idx);
             }
-            if (item.type === 'vis-data' || item.visData) {
-                const sourceJson = typeof item.sourceJson === 'string' ? item.sourceJson : '';
-                this.renderFromVisData(item.visData || {}, { sourceJson });
-            } else if (item.json) {
-                this.visInputText = item.json;
-                this.lastRenderedJson = item.json;
-                this.renderFromJson(item.json);
+            if (item.version === 1 && (item.source || item.visData)) {
+                const model = global.WosGraphModel ? global.WosGraphModel.fromSaved(item) : null;
+                if (model) {
+                    this.graphModel = model;
+                    if (!model.visData || !Array.isArray(model.visData.nodes)) {
+                        model.buildVisData();
+                    }
+                    const sourceJson = JSON.stringify(model.source || {}, null, 2);
+                    this.renderFromVisData(model.visData || {}, { sourceJson });
+                    if (item.state && this.visNetwork) {
+                        const zoom = Number.isFinite(item.state.zoom) ? item.state.zoom : null;
+                        const pan = item.state.pan && Number.isFinite(item.state.pan.x) && Number.isFinite(item.state.pan.y)
+                            ? item.state.pan
+                            : null;
+                        if (zoom != null || pan) {
+                            this.visNetwork.moveTo({
+                                position: pan || undefined,
+                                scale: zoom != null ? zoom : undefined,
+                                animation: { duration: 420, easingFunction: this.zoomAnimEasing }
+                            });
+                        }
+                        if (item.state.labelMode) {
+                            this.applyLabelShowAll(item.state.labelMode === 'all');
+                        }
+                    }
+                } else {
+                    this.notify('Saved payload missing model support', 'error');
+                    return;
+                }
             } else {
                 if (!options.silent) {
                     this.notify('Invalid selection', 'error');
