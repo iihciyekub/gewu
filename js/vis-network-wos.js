@@ -707,6 +707,9 @@
             this._settingsSaveTimer = null;
             this._settingsLoaded = false;
             this.networkStateKey = 'vis-network-last';
+            this.savedSelectKey = options.savedSelectKey || 'vis-network-saved-select';
+            this._savedSelectLoaded = false;
+            this._savedSelectValue = null;
             this._networkSaveTimer = null;
             this.isLocked = false;
             this.isPanOnly = false;
@@ -716,12 +719,23 @@
             this._modReleaseAt = 0;
             this._hotkeysBound = false;
             this.pendingSavedIndex = null;
+            this.inputDraftKey = 'vis-network-input-draft';
+            this.inputHistoryKey = 'vis-network-input-history';
+            this.inputHistory = [];
+            this.inputHistoryIndex = -1;
+            this.inputHistoryMax = 20;
+            this._inputDraftLoaded = false;
+            this._inputHistoryLoaded = false;
+            this._inputDraftSaveTimer = null;
+            this._inputDraftText = '';
         }
 
         bind() {
             this.mountDrawer();
             this.mountLabelDrawer();
             this.loadPersistedSettings();
+            this.loadInputDraft();
+            this.loadInputHistory();
             this.loadNetworkState();
             const inputToggleBtn = this.getEl(this.ids.inputToggleBtn);
             const inputCancelBtn = this.getEl(this.ids.inputCancelBtn);
@@ -845,6 +859,28 @@
                         e.preventDefault();
                     }
                 });
+                inputTextarea.addEventListener('keydown', (e) => {
+                    if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
+                    if (e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
+                    const start = inputTextarea.selectionStart ?? 0;
+                    const end = inputTextarea.selectionEnd ?? 0;
+                    const atStart = start === 0 && end === 0;
+                    const atEnd = start === inputTextarea.value.length && end === inputTextarea.value.length;
+                    if (e.key === 'ArrowUp' && !atStart) return;
+                    if (e.key === 'ArrowDown' && !atEnd) return;
+                    const next = this.stepInputHistory(e.key === 'ArrowUp' ? -1 : 1);
+                    if (next == null) return;
+                    e.preventDefault();
+                    inputTextarea.value = next;
+                    this.persistInputDraft(next);
+                    setTimeout(() => {
+                        const pos = e.key === 'ArrowUp' ? 0 : inputTextarea.value.length;
+                        inputTextarea.setSelectionRange(pos, pos);
+                    }, 0);
+                });
+                inputTextarea.addEventListener('input', () => {
+                    this.persistInputDraft(inputTextarea.value || '');
+                });
                 inputTextarea.addEventListener('blur', () => {
                     const raw = inputTextarea.value || '';
                     if (!raw.trim()) return;
@@ -868,7 +904,10 @@
                     const formatted = JSON.stringify(parsed, null, 2);
                     inputTextarea.value = formatted;
                     this.visInputText = formatted;
+                    this.recordInputHistory(formatted);
+                    this.persistInputDraft(formatted);
                 });
+                this.applyInputDraftToTextarea();
             }
             if (updateNodeBtn) {
                 updateNodeBtn.addEventListener('click', (e) => {
@@ -900,7 +939,11 @@
                 savedSelect.addEventListener('change', () => {
                     if (savedSelect.disabled) return;
                     const next = Number.parseInt(savedSelect.value, 10);
-                    this.pendingSavedIndex = Number.isFinite(next) ? next : null;
+                    const idx = Number.isFinite(next) ? next : null;
+                    this.pendingSavedIndex = idx;
+                    if (idx != null) {
+                        this.persistSavedSelect(idx);
+                    }
                 });
             }
             if (deleteBtn) {
@@ -1429,7 +1472,13 @@
             // outside click to close disabled
             this.loadLabelSlots();
             this.loadSavedList().then((list) => {
-                this.renderSavedSelect(Array.isArray(list) ? list : []);
+                const safeList = Array.isArray(list) ? list : [];
+                this.renderSavedSelect(safeList);
+                this.loadSavedSelect().then((savedIdx) => {
+                    const idx = this.getValidSavedIndex(safeList, savedIdx);
+                    if (idx == null) return;
+                    this.setSavedSelectValue(idx, { persist: false, list: safeList });
+                });
             });
         }
 
@@ -2154,9 +2203,7 @@
             if (next && shouldFocus) {
                 const textarea = this.getEl(this.ids.inputTextarea);
                 if (textarea) {
-                    if (this.visInputText && !textarea.value) {
-                        textarea.value = this.visInputText;
-                    }
+                    this.applyInputDraftToTextarea();
                     textarea.focus();
                     textarea.setSelectionRange(textarea.value.length, textarea.value.length);
                 }
@@ -3440,7 +3487,6 @@
 
         persistNetworkState() {
             const payload = {
-                json: this.lastRenderedJson || this.visInputText || '',
                 labelFieldsSelected: Array.from(this.labelFieldsSelected || []),
                 labelField: this.labelField || 'wosid'
             };
@@ -3466,13 +3512,7 @@
                 if (!this.labelFieldsSelected.length && this.labelField) {
                     this.labelFieldsSelected = this.parseLabelFields(this.labelField);
                 }
-                if (payload.json && typeof payload.json === 'string') {
-                    this.visInputText = payload.json;
-                    this.lastRenderedJson = payload.json;
-                    this.renderFromJson(payload.json);
-                } else {
-                    this.renderLabelFieldChips();
-                }
+                this.renderLabelFieldChips();
             };
 
             try {
@@ -3499,6 +3539,200 @@
                     }
                 }, 600);
             }
+        }
+
+        async loadSavedSelect() {
+            if (this._savedSelectLoaded) return this._savedSelectValue;
+            this._savedSelectLoaded = true;
+            const apply = (value) => {
+                const idx = Number.parseInt(value, 10);
+                this._savedSelectValue = Number.isFinite(idx) ? idx : null;
+                return this._savedSelectValue;
+            };
+            try {
+                const raw = localStorage.getItem(this.savedSelectKey);
+                if (raw != null) apply(raw);
+            } catch (_e) {
+                // ignore
+            }
+            if (this.app && this.app.projectStorage && this.app.currentProject) {
+                try {
+                    const data = await this.app.projectStorage.load(this.savedSelectKey);
+                    if (data != null) apply(data);
+                } catch (_e) {
+                    // ignore
+                }
+            } else {
+                setTimeout(() => {
+                    if (this.app && this.app.projectStorage && this.app.currentProject) {
+                        this.app.projectStorage.load(this.savedSelectKey).then((data) => {
+                            if (data != null) apply(data);
+                        }).catch(() => {
+                            // ignore
+                        });
+                    }
+                }, 600);
+            }
+            return this._savedSelectValue;
+        }
+
+        persistSavedSelect(value) {
+            const idx = Number.parseInt(value, 10);
+            this._savedSelectValue = Number.isFinite(idx) ? idx : null;
+            if (this.app && this.app.projectStorage && this.app.currentProject) {
+                this.app.projectStorage.update(this.savedSelectKey, this._savedSelectValue);
+            }
+            try {
+                if (this._savedSelectValue == null) {
+                    localStorage.removeItem(this.savedSelectKey);
+                } else {
+                    localStorage.setItem(this.savedSelectKey, String(this._savedSelectValue));
+                }
+            } catch (_e) {
+                // ignore
+            }
+        }
+
+        getValidSavedIndex(list, value) {
+            if (!Array.isArray(list) || list.length === 0) return null;
+            const idx = Number.parseInt(value, 10);
+            if (!Number.isFinite(idx)) return null;
+            if (idx < 0 || idx >= list.length) return null;
+            return idx;
+        }
+
+        setSavedSelectValue(idx, options = {}) {
+            const list = options.list || null;
+            const select = this.getEl(this.ids.savedSelect);
+            if (select) {
+                select.value = String(idx);
+            }
+            this.pendingSavedIndex = idx;
+            if (list && Array.isArray(list) && idx >= 0 && idx < list.length) {
+                this.renderSavedSelect(list, idx);
+            }
+            if (!options.persist) return;
+            this.persistSavedSelect(idx);
+        }
+
+        loadInputDraft() {
+            if (this._inputDraftLoaded) return;
+            this._inputDraftLoaded = true;
+            const apply = (value) => {
+                if (typeof value !== 'string') return;
+                this._inputDraftText = value;
+                this.applyInputDraftToTextarea();
+            };
+            try {
+                const raw = localStorage.getItem(this.inputDraftKey);
+                if (raw != null) apply(raw);
+            } catch (_e) {
+                // ignore
+            }
+            if (this.app && this.app.projectStorage && this.app.currentProject) {
+                this.app.projectStorage.load(this.inputDraftKey).then((data) => {
+                    apply(typeof data === 'string' ? data : '');
+                }).catch(() => {
+                    // ignore
+                });
+            }
+        }
+
+        applyInputDraftToTextarea() {
+            const textarea = this.getEl(this.ids.inputTextarea);
+            if (!textarea) return;
+            if (textarea.value) return;
+            if (this._inputDraftText) {
+                textarea.value = this._inputDraftText;
+            } else if (this.visInputText) {
+                textarea.value = this.visInputText;
+            }
+        }
+
+        persistInputDraft(value) {
+            if (this._inputDraftSaveTimer) clearTimeout(this._inputDraftSaveTimer);
+            const text = typeof value === 'string' ? value : '';
+            this._inputDraftText = text;
+            this._inputDraftSaveTimer = setTimeout(() => {
+                if (this.app && this.app.projectStorage && this.app.currentProject) {
+                    this.app.projectStorage.update(this.inputDraftKey, text);
+                }
+                try {
+                    localStorage.setItem(this.inputDraftKey, text);
+                } catch (_e) {
+                    // ignore
+                }
+            }, 160);
+        }
+
+        loadInputHistory() {
+            if (this._inputHistoryLoaded) return;
+            this._inputHistoryLoaded = true;
+            const apply = (payload) => {
+                if (!Array.isArray(payload)) return;
+                this.inputHistory = payload.filter((item) => typeof item === 'string' && item.trim().length);
+                if (this.inputHistory.length > this.inputHistoryMax) {
+                    this.inputHistory = this.inputHistory.slice(-this.inputHistoryMax);
+                }
+                this.inputHistoryIndex = this.inputHistory.length;
+            };
+            try {
+                const raw = localStorage.getItem(this.inputHistoryKey);
+                if (raw) apply(JSON.parse(raw));
+            } catch (_e) {
+                // ignore
+            }
+            if (this.app && this.app.projectStorage && this.app.currentProject) {
+                this.app.projectStorage.load(this.inputHistoryKey).then((data) => {
+                    apply(data);
+                }).catch(() => {
+                    // ignore
+                });
+            }
+        }
+
+        persistInputHistory() {
+            const payload = this.inputHistory.slice(-this.inputHistoryMax);
+            if (this.app && this.app.projectStorage && this.app.currentProject) {
+                this.app.projectStorage.update(this.inputHistoryKey, payload);
+            }
+            try {
+                localStorage.setItem(this.inputHistoryKey, JSON.stringify(payload));
+            } catch (_e) {
+                // ignore
+            }
+        }
+
+        recordInputHistory(value) {
+            const text = typeof value === 'string' ? value : '';
+            if (!text.trim()) return;
+            const existingIdx = this.inputHistory.findIndex((item) => item === text);
+            if (existingIdx >= 0) {
+                this.inputHistory.splice(existingIdx, 1);
+            }
+            this.inputHistory.push(text);
+            if (this.inputHistory.length > this.inputHistoryMax) {
+                this.inputHistory = this.inputHistory.slice(-this.inputHistoryMax);
+            }
+            this.inputHistoryIndex = this.inputHistory.length;
+            this.persistInputHistory();
+        }
+
+        stepInputHistory(delta) {
+            if (!this.inputHistory.length) return null;
+            const max = this.inputHistory.length;
+            if (!Number.isFinite(this.inputHistoryIndex) || this.inputHistoryIndex < 0 || this.inputHistoryIndex > max) {
+                this.inputHistoryIndex = max;
+            }
+            let next = this.inputHistoryIndex + delta;
+            if (next < 0) next = 0;
+            if (next > max) next = max;
+            if (next === max) {
+                this.inputHistoryIndex = next;
+                return this._inputDraftText || '';
+            }
+            this.inputHistoryIndex = next;
+            return this.inputHistory[next];
         }
 
         persistSettings() {
@@ -3699,6 +3933,8 @@
                 this.visInputText = JSON.stringify(parsed, null, 2);
                 textarea.value = this.visInputText;
             } catch (_e) { }
+            this.recordInputHistory(textarea.value || '');
+            this.persistInputDraft(textarea.value || '');
             this.notify('Rendered', 'success');
             if (this.visInputText) {
                 this.renderFromJson(this.visInputText);
@@ -3734,6 +3970,8 @@
             const merged = this.mergeWosJson(base || {}, incoming);
             this.visInputText = JSON.stringify(merged, null, 2);
             textarea.value = this.visInputText;
+            this.recordInputHistory(textarea.value || '');
+            this.persistInputDraft(textarea.value || '');
             this.renderFromJson(this.visInputText);
             this.notify('Merged and rendered', 'success');
         }
@@ -3791,6 +4029,7 @@
         renderSavedSelect(list) {
             const select = this.getEl(this.ids.savedSelect);
             if (!select) return;
+            const currentValue = select.value;
             select.innerHTML = '';
             if (!list.length) {
                 const opt = document.createElement('option');
@@ -3807,6 +4046,10 @@
                 opt.textContent = item?.name || `Record ${idx + 1}`;
                 select.appendChild(opt);
             });
+            const currentIdx = Number.parseInt(currentValue, 10);
+            if (Number.isFinite(currentIdx) && currentIdx >= 0 && currentIdx < list.length) {
+                select.value = String(currentIdx);
+            }
         }
 
         async saveNetworkJson() {
@@ -3838,29 +4081,43 @@
             const trimmed = list.slice(0, 50);
             await this.persistSavedList(trimmed);
             this.renderSavedSelect(trimmed);
+            this.setSavedSelectValue(0, { persist: true, list: trimmed });
             this.notify('Network JSON saved', 'success');
         }
 
-        async restoreNetworkJson() {
-            const list = await this.loadSavedList();
+        async restoreNetworkJson(options = {}) {
+            const list = options.list || await this.loadSavedList();
             const select = this.getEl(this.ids.savedSelect);
             if (!list.length || (select && select.disabled)) {
-                this.notify('No saved items', 'info');
+                if (!options.silent) {
+                    this.notify('No saved items', 'info');
+                }
                 return;
             }
             const fallbackIdx = select ? Number.parseInt(select.value, 10) : 0;
-            const idx = Number.isFinite(this.pendingSavedIndex) ? this.pendingSavedIndex : fallbackIdx;
+            const idx = Number.isFinite(options.idx)
+                ? options.idx
+                : (Number.isFinite(this.pendingSavedIndex) ? this.pendingSavedIndex : fallbackIdx);
             const item = list[idx] || list[0];
             if (!item || !item.json) {
-                this.notify('Invalid selection', 'error');
+                if (!options.silent) {
+                    this.notify('Invalid selection', 'error');
+                }
                 return;
+            }
+            if (select) {
+                select.value = String(idx);
+            }
+            this.pendingSavedIndex = idx;
+            if (!options.skipPersist) {
+                this.persistSavedSelect(idx);
             }
             this.visInputText = item.json;
             this.lastRenderedJson = item.json;
-            const textarea = this.getEl(this.ids.inputTextarea);
-            if (textarea) textarea.value = item.json;
             this.renderFromJson(item.json);
-            this.notify('Network JSON restored', 'success');
+            if (!options.silent) {
+                this.notify('Network JSON restored', 'success');
+            }
         }
 
         async deleteNetworkJson() {
@@ -3882,7 +4139,28 @@
             list.splice(idx, 1);
             await this.persistSavedList(list);
             this.renderSavedSelect(list);
+            if (!list.length) {
+                this.persistSavedSelect(null);
+                this.pendingSavedIndex = null;
+            } else {
+                const nextIdx = Math.min(idx, list.length - 1);
+                this.setSavedSelectValue(nextIdx, { persist: true, list });
+            }
             this.notify('Deleted', 'success');
+        }
+
+        async handleViewActivated() {
+            const list = await this.loadSavedList();
+            const safeList = Array.isArray(list) ? list : [];
+            this.renderSavedSelect(safeList);
+            const savedIdx = await this.loadSavedSelect();
+            const idx = this.getValidSavedIndex(safeList, savedIdx);
+            if (idx == null) {
+                this.renderFromCurrentData();
+                return;
+            }
+            this.setSavedSelectValue(idx, { persist: false, list: safeList });
+            await this.restoreNetworkJson({ list: safeList, idx, silent: true, skipPersist: true });
         }
 
         clearNetworkView() {
@@ -3926,7 +4204,34 @@
                     }
                     return;
                 }
+                const textarea = this.getEl(this.ids.inputTextarea);
+                const writeToTextarea = (payload) => {
+                    if (!textarea || payload == null) return;
+                    textarea.value = JSON.stringify(payload, null, 2);
+                };
                 const nodeId = params?.nodes?.[0];
+                if (nodeId) {
+                    const dataset = network?.body?.data?.nodes;
+                    if (dataset && typeof dataset.get === 'function') {
+                        const node = dataset.get(nodeId);
+                        if (node) {
+                            console.log('[vis node json]', JSON.stringify(node, null, 2));
+                            writeToTextarea(node);
+                        }
+                    }
+                } else {
+                    const edgeId = params?.edges?.[0];
+                    if (edgeId) {
+                        const edgeDataset = network?.body?.data?.edges;
+                        if (edgeDataset && typeof edgeDataset.get === 'function') {
+                            const edge = edgeDataset.get(edgeId);
+                            if (edge) {
+                                console.log('[vis edge json]', JSON.stringify(edge, null, 2));
+                                writeToTextarea(edge);
+                            }
+                        }
+                    }
+                }
                 if (!nodeId) return;
                 this.openFileByWosId(nodeId);
             };

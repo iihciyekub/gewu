@@ -2112,6 +2112,14 @@ class PaperStatsApp {
                 this.toggleMdMenu(false);
             });
         }
+        const mdDeleteDraftItem = document.getElementById('mdDeleteDraftItem');
+        if (mdDeleteDraftItem) {
+            mdDeleteDraftItem.addEventListener('click', async (e) => {
+                e.preventDefault();
+                await this.deleteDraftMarkdownFile();
+                this.toggleMdMenu(false);
+            });
+        }
         const mdTextarea = document.getElementById('markdownTextarea');
         if (mdTextarea) {
             mdTextarea.addEventListener('input', () => this.onMarkdownEditorInput());
@@ -14968,6 +14976,69 @@ class PaperStatsApp {
         }
     }
 
+    async deleteDraftMarkdownFile() {
+        const mdFilename = this.getDraftFilename();
+        let exists = true;
+        try {
+            await this.readProjectFile(mdFilename);
+        } catch (_e) {
+            exists = false;
+        }
+        if (!exists) {
+            this.showNotification('No draft file to delete', 'info');
+            return;
+        }
+
+        const confirmed = window.confirm(`Delete draft file "${mdFilename}"?\nThis action cannot be undone.`);
+        if (!confirmed) return;
+
+        const projectPath = this.getRequiredProjectPath();
+        if (!projectPath) return;
+        try {
+            const resp = await fetch('/delete-json', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    projectPath,
+                    filename: mdFilename
+                })
+            });
+
+            if (!resp.ok) {
+                const text = await resp.text();
+                throw new Error(text || 'Delete failed');
+            }
+
+            if (this.isDraftViewActive) {
+                this.currentMarkdownExists = false;
+                this.currentMarkdownFile = null;
+                this.currentMarkdownText = '';
+                this.currentMarkdownBaselineText = '';
+                this.isMarkdownEditing = false;
+                this.hasUnsavedMarkdownChanges = false;
+                this.renderMarkdownView('');
+                const textarea = document.getElementById('markdownTextarea');
+                if (textarea) textarea.value = '';
+            } else if (this.draftMarkdownState) {
+                this.draftMarkdownState = {
+                    exists: false,
+                    file: mdFilename,
+                    text: '',
+                    baseline: '',
+                    isEditing: false,
+                    hasUnsaved: false
+                };
+            }
+
+            this.updateMarkdownToolbar();
+            this.updateMarkdownDirtyUI();
+            this.showNotification(`Deleted: ${mdFilename}`, 'success');
+        } catch (err) {
+            console.error('Failed to delete draft:', err);
+            this.showNotification(`Failed to delete: ${err.message}`, 'error');
+        }
+    }
+
     toggleMarkdownEdit(editing, opts = {}) {
         if (!this.currentMarkdownExists) return;
         if (editing && this.isEditLocked) {
@@ -15317,7 +15388,11 @@ class PaperStatsApp {
             } else if (view === 'vis-network' && visNetwork) {
                 visNetwork.classList.add('active');
                 if (this.visManager && prevView !== 'vis-network') {
-                    this.visManager.renderFromCurrentData();
+                    if (typeof this.visManager.handleViewActivated === 'function') {
+                        await this.visManager.handleViewActivated();
+                    } else {
+                        this.visManager.renderFromCurrentData();
+                    }
                 }
             } else if (view === 'settings' && settings) {
                 settings.classList.add('active');
@@ -15342,7 +15417,17 @@ class PaperStatsApp {
                 this.cacheDraftMarkdownState();
                 this.isDraftViewActive = false;
                 const expectedMd = this.currentFile ? this.getMarkdownFilename(this.currentFile) : '';
-                if (this.fileMarkdownState && this.fileMarkdownState.file === expectedMd) {
+                if (view === 'markdown' && !this.currentFile) {
+                    this.currentMarkdownExists = false;
+                    this.currentMarkdownFile = '';
+                    this.currentMarkdownText = '';
+                    this.currentMarkdownBaselineText = '';
+                    this.isMarkdownEditing = false;
+                    this.hasUnsavedMarkdownChanges = false;
+                    this.renderMarkdownView('', { forceText: true });
+                    this.updateMarkdownToolbar();
+                    this.updateMarkdownDirtyUI();
+                } else if (this.fileMarkdownState && this.fileMarkdownState.file === expectedMd) {
                     this.applyMarkdownState(this.fileMarkdownState, { render: view === 'markdown' });
                 } else if (view === 'markdown') {
                     await this.loadMarkdownForCurrentFile();
@@ -15357,17 +15442,26 @@ class PaperStatsApp {
                     await this.loadMarkdownForCurrentFile();
                 }
             }
+            if (!this.isDraftViewActive && view === 'markdown') {
+                const draftFile = this.getDraftFilename();
+                if (!this.currentFile || this.currentMarkdownFile === draftFile) {
+                    await this.loadMarkdownForCurrentFile();
+                }
+            }
 
             if (view === 'markdown' && this.currentMarkdownExists && !isDraftRequested) {
+                const content = this.currentMarkdownText || '';
                 const textarea = document.getElementById('markdownTextarea');
-                const content = (this.isMarkdownEditing && textarea) ? textarea.value : (this.currentMarkdownText || '');
+                if (this.isMarkdownEditing && textarea) {
+                    textarea.value = content;
+                }
                 const preferEditing = this.getMarkdownEditPreference(false);
                 if (this.isMarkdownEditing && !preferEditing) {
                     this.currentMarkdownText = content;
                     this.hasUnsavedMarkdownChanges = content !== (this.currentMarkdownBaselineText || '');
                     this.toggleMarkdownEdit(false, { skipConfirm: true });
                 }
-                this.renderMarkdownView(content);
+                this.renderMarkdownView(content, { forceText: true });
                 this.updateMarkdownToolbar();
                 this.updateMarkdownDirtyUI();
             }
@@ -15377,6 +15471,11 @@ class PaperStatsApp {
             switchError = err;
         } finally {
             this.isSwitchingView = false;
+            if (requestedView === 'draft') {
+                this.isDraftViewActive = true;
+            } else if (requestedView) {
+                this.isDraftViewActive = false;
+            }
         }
         const pending = this.pendingViewSwitch;
         this.pendingViewSwitch = null;
