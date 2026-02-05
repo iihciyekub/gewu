@@ -22,9 +22,12 @@ class ProjectStorageManager {
             'file-filter-history': 'file-filter-history.json',
             'md-chat-fields': 'md-chat-fields.json',
             'vis-network-saved': 'vis-network-saved.json',
+            'vis-network-saved-select': 'vis-network-saved-select.json',
             'vis-network-last': 'vis-network-last.json',
             'vis-network-settings': 'vis-network-settings.json',
-            'vis-network-label-slots': 'vis-network-label-slots.json'
+            'vis-network-label-slots': 'vis-network-label-slots.json',
+            'vis-network-input-draft': 'vis-network-input-draft.json',
+            'vis-network-input-history': 'vis-network-input-history.json'
         };
     }
     

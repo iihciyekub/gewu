@@ -230,7 +230,7 @@
         return { nodes, edges, meta };
     }
 
-    function renderVisNetworkFromJson(raw, options = {}) {
+    function renderVisNetworkFromVisData(raw, options = {}) {
         const container = options.container || document.getElementById('visNetworkCanvas');
         const view = options.view || document.getElementById('visNetworkView');
         if (!container || !view) return { network: null, data: null };
@@ -238,16 +238,19 @@
             if (options.onError) options.onError('vis-network 未加载');
             return { network: null, data: null };
         }
-        let data = raw;
+        let visData = raw;
         if (typeof raw === 'string') {
             try {
-                data = JSON.parse(raw);
+                visData = JSON.parse(raw);
             } catch (err) {
                 if (options.onError) options.onError(`JSON 解析失败: ${err.message}`);
                 return { network: null, data: null };
             }
         }
-        const visData = buildVisNetworkDataFromWos(data);
+        if (!visData || !Array.isArray(visData.nodes) || !Array.isArray(visData.edges)) {
+            if (options.onError) options.onError('Invalid vis data');
+            return { network: null, data: null };
+        }
         applyThemeToVisData(visData, isDarkTheme());
         if (!visData.nodes.length) {
             view.classList.remove('has-network');
@@ -316,6 +319,20 @@
             options.onDebug(visData.meta);
         }
         return { network, data: visData };
+    }
+
+    function renderVisNetworkFromJson(raw, options = {}) {
+        let data = raw;
+        if (typeof raw === 'string') {
+            try {
+                data = JSON.parse(raw);
+            } catch (err) {
+                if (options.onError) options.onError(`JSON 解析失败: ${err.message}`);
+                return { network: null, data: null };
+            }
+        }
+        const visData = buildVisNetworkDataFromWos(data);
+        return renderVisNetworkFromVisData(visData, options);
     }
 
     function debugNodeSize(raw, nodeId) {
@@ -598,6 +615,7 @@
                 saveBtn: options.saveBtnId || 'visSaveNetworkBtn',
                 restoreBtn: options.restoreBtnId || 'visRestoreNetworkBtn',
                 deleteBtn: options.deleteBtnId || 'visDeleteNetworkBtn',
+                viewBtn: options.viewBtnId || 'visViewNetworkBtn',
                 savedSelect: options.savedSelectId || 'visSavedSelect',
                 labelPanelBtn: options.labelPanelBtnId || 'visToggleLabelsBtn',
                 labelPanel: options.labelPanelId || 'visSettingsLabelPanel',
@@ -748,6 +766,7 @@
             const saveBtn = this.getEl(this.ids.saveBtn);
             const restoreBtn = this.getEl(this.ids.restoreBtn);
             const deleteBtn = this.getEl(this.ids.deleteBtn);
+            const viewBtn = this.getEl(this.ids.viewBtn);
             const savedSelect = this.getEl(this.ids.savedSelect);
             const importBtn = this.getEl(this.ids.importBtn);
             const importInput = this.getEl(this.ids.importJsonFileInput);
@@ -953,6 +972,12 @@
                 deleteBtn.addEventListener('click', (e) => {
                     e.preventDefault();
                     this.deleteNetworkJson();
+                });
+            }
+            if (viewBtn) {
+                viewBtn.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    this.viewVisDataJson();
                 });
             }
             if (importBtn && importInput) {
@@ -2111,6 +2136,86 @@
             this.queuePersistNetworkState();
         }
 
+        renderFromVisData(raw, options = {}) {
+            if (!global.WosVisNetwork) {
+                this.notify('WOS Vis module not loaded', 'error');
+                return;
+            }
+            const canvas = this.getEl(this.ids.canvas);
+            const view = this.getEl(this.ids.view);
+            if (canvas && !canvas.dataset.visFocusGuard) {
+                canvas.dataset.visFocusGuard = '1';
+                canvas.tabIndex = -1;
+                canvas.addEventListener('focus', (e) => {
+                    e.preventDefault();
+                    canvas.blur();
+                });
+            }
+            if (view && !view.dataset.visFocusGuard) {
+                view.dataset.visFocusGuard = '1';
+                view.tabIndex = -1;
+                view.addEventListener('focus', (e) => {
+                    e.preventDefault();
+                    view.blur();
+                });
+            }
+            const { network, data } = global.WosVisNetwork.renderVisNetworkFromVisData(raw, {
+                container: canvas,
+                view: view,
+                network: this.visNetwork,
+                labelToggleButton: this.getEl(this.ids.labelToggleBtn),
+                onError: (msg) => this.notify(msg, 'error'),
+                onInfo: (msg) => this.notify(msg, 'info'),
+                onDebug: (meta) => {
+                    this.debugMeta = meta;
+                }
+            });
+            if (network) this.visNetwork = network;
+            if (data) this.visNetworkData = data;
+            const sourceJson = typeof options.sourceJson === 'string' ? options.sourceJson : '';
+            this.lastRenderedJson = sourceJson;
+            this.visInputText = sourceJson;
+            const textarea = this.getEl(this.ids.inputTextarea);
+            if (textarea && sourceJson) {
+                textarea.value = sourceJson;
+            }
+            this.wosDataIndex = null;
+            this.wosDataIndexSource = null;
+            this._wosDataIndex = null;
+            this._wosDataIndexView = null;
+            this.wosNodeIndex = null;
+            this.wosNodeIndexSource = null;
+            if (this.visNetwork) {
+                this.bindNetworkEvents(this.visNetwork);
+                this.bindZoomEvents(this.visNetwork);
+                this.applyInteractionMode();
+            }
+            this.wrapLabelToggleButton();
+            const minSlider = this.getEl(this.ids.labelMinSlider);
+            if (minSlider) {
+                minSlider.value = String(this.labelMinCitations || 0);
+            }
+            this.refreshLabelFieldOptions();
+            void this.applyLabelField(this.labelField);
+            this.applyLabelFade();
+            this.applyLabelSizeScale();
+            this.applyLabelWeight();
+            this.applyLabelColor();
+            this.applyLabelBgColor();
+            this.applyLabelBorderColor();
+            this.applyLabelThreshold();
+            this.applyNodeSizeScale();
+            this.applyNodeBorderWidth();
+            this.applyNodeColor();
+            this.applyNodeBorderColor();
+            this.applyPhysicsSettings();
+            this.applyEdgeFade();
+            this.applyEdgeWidthRange();
+            this.applyEdgeStyle();
+            this.applyDepthMode(this.depthMode);
+            this.queuePersistNetworkState();
+        }
+
         wrapLabelToggleButton() {
             const btn = this.getEl(this.ids.labelToggleBtn);
             if (!btn || btn.dataset.visWrapped) return;
@@ -2368,6 +2473,17 @@
                 });
             });
             return map;
+        }
+
+        getWorkingJson() {
+            const raw = this.visInputText || this.lastRenderedJson || null;
+            if (!raw) return null;
+            if (typeof raw === 'object') return raw;
+            try {
+                return JSON.parse(raw);
+            } catch (_e) {
+                return null;
+            }
         }
 
         getCurrentViewData() {
@@ -4074,30 +4190,21 @@
         }
 
         async saveNetworkJson() {
-            let payload = this.lastRenderedJson || this.visInputText;
-            if (!payload && this.app && this.app.currentData && typeof this.app.currentData === 'object') {
-                try {
-                    payload = JSON.stringify(this.app.currentData, null, 2);
-                } catch (_e) { }
-            }
-            if (!payload) {
-                this.notify('No JSON to save', 'info');
+            const visData = this.visNetworkData;
+            if (!visData || !Array.isArray(visData.nodes) || !Array.isArray(visData.edges)) {
+                this.notify('No vis data to save', 'info');
                 return;
             }
-            let parsed = null;
-            try {
-                parsed = typeof payload === 'string' ? JSON.parse(payload) : payload;
-            } catch (err) {
-                this.notify(`JSON 解析失败: ${err.message}`, 'error');
-                return;
-            }
+            const sourceJson = this.lastRenderedJson || this.visInputText || '';
             const name = prompt('Save name', `network-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, '')}`);
             if (!name) return;
             const list = await this.loadSavedList();
             list.unshift({
                 name,
                 createdAt: Date.now(),
-                json: JSON.stringify(parsed)
+                type: 'vis-data',
+                visData: visData,
+                sourceJson
             });
             const trimmed = list.slice(0, 50);
             await this.persistSavedList(trimmed);
@@ -4120,7 +4227,7 @@
                 ? options.idx
                 : (Number.isFinite(this.pendingSavedIndex) ? this.pendingSavedIndex : fallbackIdx);
             const item = list[idx] || list[0];
-            if (!item || !item.json) {
+            if (!item) {
                 if (!options.silent) {
                     this.notify('Invalid selection', 'error');
                 }
@@ -4133,9 +4240,19 @@
             if (!options.skipPersist) {
                 this.persistSavedSelect(idx);
             }
-            this.visInputText = item.json;
-            this.lastRenderedJson = item.json;
-            this.renderFromJson(item.json);
+            if (item.type === 'vis-data' || item.visData) {
+                const sourceJson = typeof item.sourceJson === 'string' ? item.sourceJson : '';
+                this.renderFromVisData(item.visData || {}, { sourceJson });
+            } else if (item.json) {
+                this.visInputText = item.json;
+                this.lastRenderedJson = item.json;
+                this.renderFromJson(item.json);
+            } else {
+                if (!options.silent) {
+                    this.notify('Invalid selection', 'error');
+                }
+                return;
+            }
             if (!options.silent) {
                 this.notify('Network JSON restored', 'success');
             }
@@ -4168,6 +4285,24 @@
                 this.setSavedSelectValue(nextIdx, { persist: true, list });
             }
             this.notify('Deleted', 'success');
+        }
+
+        viewVisDataJson() {
+            const data = this.visNetworkData;
+            if (!data) {
+                this.notify('No vis data available', 'info');
+                return;
+            }
+            const textarea = this.getEl(this.ids.inputTextarea);
+            if (textarea) {
+                textarea.value = JSON.stringify(data, null, 2);
+                this.visInputText = textarea.value;
+                this.recordInputHistory(textarea.value || '');
+                this.persistInputDraft(textarea.value || '');
+                this.notify('Vis data loaded', 'success');
+                return;
+            }
+            this.notify('Vis input not ready', 'info');
         }
 
         async handleViewActivated() {
@@ -4443,6 +4578,7 @@
 
     global.WosVisNetwork = {
         buildVisNetworkDataFromWos,
+        renderVisNetworkFromVisData,
         renderVisNetworkFromJson,
         debugNodeSize,
         getSizeStats
