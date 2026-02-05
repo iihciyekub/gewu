@@ -92,10 +92,6 @@
             const text = String(value).trim();
             return text ? text : 'undef';
         };
-        const formatFieldForTitle = (value) => ensureField(value);
-        const buildTitle = (id, citationsRaw, refRaw) => (
-            `${id}\nC:${formatFieldForTitle(citationsRaw)} Ref:${formatFieldForTitle(refRaw)}`
-        );
         const buildNodeCounts = (citationsRaw, refRaw) => ({
             citations_count: parseNumber(citationsRaw),
             ref_count: parseNumber(refRaw)
@@ -105,9 +101,7 @@
             if (!rootKey) return;
             const rootCitationsRaw = payload?.citations_count;
             const rootRefRaw = payload?.ref_count;
-            const rootTitle = buildTitle(rootKey, rootCitationsRaw, rootRefRaw);
             const rootNodeId = addNode(rootKey, rootKey, {
-                title: rootTitle,
                 shape: 'dot',
                 size: 16,
                 font: { size: 14, color: '#111', align: 'bottom', vadjust: 12 },
@@ -124,9 +118,7 @@
                 const relatedRaw = item?.related_count;
                 const refRaw = item?.ref_count;
                 const label = childKey;
-                const title = buildTitle(childKey, citationsRaw, refRaw);
                 const childNodeId = addNode(childKey, label, {
-                    title,
                     shape: 'dot',
                     size: 12,
                     font: { size: 11, color: '#111', align: 'bottom', vadjust: 12 },
@@ -723,6 +715,7 @@
                 labelPanelBtn: options.labelPanelBtnId || 'visToggleLabelsBtn',
                 labelPanel: options.labelPanelId || 'visSettingsLabelPanel',
                 labelToggleBtn: options.labelToggleBtnId || 'visLabelToggleAllBtn',
+                edgeLabelToggleBtn: options.edgeLabelToggleBtnId || 'visEdgeLabelToggleBtn',
                 labelAutoBtn: options.labelAutoBtnId || 'visLabelAutoBtn',
                 labelCloseBtn: options.labelCloseBtnId || 'visLabelCloseBtn',
                 labelFieldInput: options.labelFieldInputId || 'visLabelFieldInput',
@@ -827,8 +820,9 @@
             this.exportSvgScale = 1;
             this.exportSvgMargin = 6;
             this.exportSvgIncludeLabels = true;
-            this.edgeFocusFadeAlpha = 0.15;
+            this.edgeFocusFadeAlpha = 0;
             this.edgeHoverLabelEnabled = false;
+            this.edgeLabelEnabled = false;
             this.wosNodeIndex = null;
             this.wosNodeIndexSource = null;
             this.labelFieldHistory = [];
@@ -865,6 +859,7 @@
             this._edgeFocusState = null;
             this._edgeHoverLabelState = null;
             this._edgeContextMenu = null;
+            this._edgeBaseLabels = null;
         }
 
         bind() {
@@ -890,6 +885,7 @@
             const labelPanelBtn = this.getEl(this.ids.labelPanelBtn);
             const labelCloseBtn = this.getEl(this.ids.labelCloseBtn);
             const labelAutoBtn = this.getEl(this.ids.labelAutoBtn);
+            const edgeLabelToggleBtn = this.getEl(this.ids.edgeLabelToggleBtn);
             const settingsCloseBtn = this.getEl(this.ids.settingsCloseBtn);
             const labelFieldInput = this.getEl(this.ids.labelFieldInput);
             const labelSuggest = this.getEl(this.ids.labelSuggest);
@@ -985,6 +981,13 @@
                     e.preventDefault();
                     this.restoreLabelDefaults();
                 });
+            }
+            if (edgeLabelToggleBtn) {
+                edgeLabelToggleBtn.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    this.toggleEdgeLabels();
+                });
+                this.updateEdgeLabelToggleButton();
             }
             if (inputApplyBtn) {
                 inputApplyBtn.addEventListener('click', (e) => {
@@ -2316,6 +2319,8 @@
             this.applyEdgeFade();
             this.applyEdgeWidthRange();
             this.applyEdgeStyle();
+            this.applyEdgeLabelDisplay();
+            this.updateEdgeLabelToggleButton();
             this.applyDepthMode(this.depthMode);
             // Skip auto-restoring label rendering on reload.
             this.queuePersistNetworkState();
@@ -2416,6 +2421,8 @@
             this.applyEdgeFade();
             this.applyEdgeWidthRange();
             this.applyEdgeStyle();
+            this.applyEdgeLabelDisplay();
+            this.updateEdgeLabelToggleButton();
             this.applyDepthMode(this.depthMode);
             this.queuePersistNetworkState();
         }
@@ -3566,6 +3573,54 @@
             this.visNetwork.setOptions({ edges: edgesOptions });
         }
 
+        getEdgeLabelText(edge) {
+            if (!edge) return '';
+            if (this._edgeBaseLabels && this._edgeBaseLabels.has(edge.id)) {
+                const base = this._edgeBaseLabels.get(edge.id);
+                if (base) return String(base);
+            }
+            const related = getRelatedCount(edge);
+            if (!Number.isFinite(related)) return '';
+            return String(related);
+        }
+
+        applyEdgeLabelDisplay() {
+            if (!this.visNetwork) return;
+            const dataset = this.visNetwork?.body?.data?.edges;
+            if (!dataset) return;
+            if (!this._edgeBaseLabels) this._edgeBaseLabels = new Map();
+            const show = !!this.edgeLabelEnabled;
+            const updates = dataset.get().map((edge) => {
+                if (!this._edgeBaseLabels.has(edge.id)) {
+                    this._edgeBaseLabels.set(edge.id, edge.label || '');
+                }
+                const label = show ? this.getEdgeLabelText(edge) : '';
+                const font = show ? { ...(edge.font || {}), size: 10 } : edge.font;
+                return { id: edge.id, label, font };
+            });
+            dataset.update(updates);
+            this.visNetwork.redraw();
+        }
+
+        updateEdgeLabelToggleButton() {
+            const btn = this.getEl(this.ids.edgeLabelToggleBtn);
+            if (!btn) return;
+            const icon = btn.querySelector('i');
+            const enabled = !!this.edgeLabelEnabled;
+            const label = enabled ? 'Hide edge labels' : 'Show edge labels';
+            if (icon) icon.className = 'fa-solid fa-link';
+            btn.setAttribute('aria-label', label);
+            btn.setAttribute('title', label);
+            btn.classList.toggle('is-active', enabled);
+        }
+
+        toggleEdgeLabels() {
+            this.edgeLabelEnabled = !this.edgeLabelEnabled;
+            this.applyEdgeLabelDisplay();
+            this.updateEdgeLabelToggleButton();
+            this.queuePersistSettings();
+        }
+
         getEdgeFocusState() {
             if (!this._edgeFocusState) {
                 this._edgeFocusState = {
@@ -3584,12 +3639,14 @@
             state.dirty = true;
         }
 
-        resetEdgeFocusState({ keepLocks = false } = {}) {
+        resetEdgeFocusState({ keepLocks = false, keepBaseColors = false } = {}) {
             const state = this.getEdgeFocusState();
             state.hoverEdgeId = null;
             if (!keepLocks) state.lockedEdgeIds.clear();
-            state.baseNodeColors.clear();
-            state.baseEdgeColors.clear();
+            if (!keepBaseColors) {
+                state.baseNodeColors.clear();
+                state.baseEdgeColors.clear();
+            }
             state.dirty = true;
             this.hideEdgeHoverLabels();
             this.closeEdgeContextMenu();
@@ -3872,20 +3929,24 @@
             menu.style.top = `${e.pageY}px`;
             const isLocked = this.isEdgeLocked(edgeId);
             const isLabelEnabled = !!this.edgeHoverLabelEnabled;
-            const fadePercent = Math.round((Number(this.edgeFocusFadeAlpha) || 0.15) * 100);
+            const fadePercent = Math.round((Number(this.edgeFocusFadeAlpha) || 0) * 100);
             menu.innerHTML = `
                 <div class="context-menu-item" data-action="toggleEdgeLock">
                     <i class="fas ${isLocked ? 'fa-unlock' : 'fa-lock'}"></i>
-                    ${isLocked ? '解锁' : '锁定'}
+                    ${isLocked ? 'Unlock Edge' : 'Lock Edge'}
                 </div>
                 <div class="context-menu-item" data-action="toggleEdgeHoverLabels">
                     <i class="fas ${isLabelEnabled ? 'fa-eye' : 'fa-eye-slash'}"></i>
-                    ${isLabelEnabled ? '隐藏边标签' : '显示边标签'}
+                    ${isLabelEnabled ? 'Hide Edge Labels' : 'Show Edge Labels'}
+                </div>
+                <div class="context-menu-item" data-action="restoreEdgeFocus">
+                    <i class="fas fa-rotate-left"></i>
+                    Restore Edge Style
                 </div>
                 <div class="context-menu-divider"></div>
                 <div class="context-menu-item context-menu-slider" data-action="edgeFadeAlpha">
-                    <span>透明度</span>
-                    <input type="range" min="5" max="100" step="1" value="${fadePercent}" />
+                    <span>Opacity</span>
+                    <input type="range" min="0" max="100" step="1" value="${fadePercent}" />
                     <span class="context-menu-value">${fadePercent}%</span>
                 </div>
             `;
@@ -3917,6 +3978,12 @@
                         }
                         this.queuePersistSettings();
                     }
+                    if (action === 'restoreEdgeFocus') {
+                        this.restoreEdgeFocusBaseColors();
+                        this.resetEdgeFocusState({ keepLocks: false, keepBaseColors: true });
+                        this.applyEdgeFocusDisplay();
+                        this.queuePersistSettings();
+                    }
                     if (action !== 'edgeFadeAlpha') {
                         this.closeEdgeContextMenu();
                     }
@@ -3929,7 +3996,7 @@
                 slider.addEventListener('input', (ev) => {
                     const value = Number(ev.target.value) || 15;
                     if (sliderValue) sliderValue.textContent = `${value}%`;
-                    this.edgeFocusFadeAlpha = Math.max(0.05, Math.min(1, value / 100));
+                    this.edgeFocusFadeAlpha = Math.max(0, Math.min(1, value / 100));
                     this.applyEdgeFocusDisplay();
                 });
                 slider.addEventListener('mousedown', (ev) => ev.stopPropagation());
@@ -4182,6 +4249,7 @@
                 edgeColor: this.edgeColor,
                 edgeStyle: this.edgeStyle,
                 edgeHoverLabelEnabled: this.edgeHoverLabelEnabled,
+                edgeLabelEnabled: this.edgeLabelEnabled,
                 zoomCollapsed: this.zoomCollapsed,
                 exportSvgScale: this.exportSvgScale,
                 exportSvgMargin: this.exportSvgMargin,
@@ -4226,6 +4294,9 @@
             if (typeof payload.edgeHoverLabelEnabled === 'boolean') {
                 this.edgeHoverLabelEnabled = payload.edgeHoverLabelEnabled;
             }
+            if (typeof payload.edgeLabelEnabled === 'boolean') {
+                this.edgeLabelEnabled = payload.edgeLabelEnabled;
+            }
             if (typeof payload.depthMode === 'boolean') this.depthMode = payload.depthMode;
             if (Number.isFinite(payload.exportSvgScale)) this.exportSvgScale = payload.exportSvgScale;
             if (Number.isFinite(payload.exportSvgMargin)) this.exportSvgMargin = payload.exportSvgMargin;
@@ -4249,6 +4320,8 @@
             this.applyEdgeFade();
             this.applyEdgeWidthRange();
             this.applyEdgeStyle();
+            this.applyEdgeLabelDisplay();
+            this.updateEdgeLabelToggleButton();
             this.applyDepthMode(this.depthMode);
             if (this.visNetwork) this.visNetwork.redraw();
             this.syncSettingsSliders();
