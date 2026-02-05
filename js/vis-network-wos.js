@@ -912,6 +912,7 @@
             this._edgeContextMenu = null;
             this._edgeBaseLabels = null;
             this._edgeBaseFonts = null;
+            this.settingsAutoSave = false;
         }
 
         bind() {
@@ -3754,7 +3755,7 @@
                 if (base) return String(base);
             }
             const related = getRelatedCount(edge);
-            if (!Number.isFinite(related)) return '';
+            if (!Number.isFinite(related) || related <= 0) return '';
             return String(related);
         }
 
@@ -4670,6 +4671,7 @@
         }
 
         queuePersistSettings() {
+            if (!this.settingsAutoSave) return;
             if (this._settingsSaveTimer) clearTimeout(this._settingsSaveTimer);
             this._settingsSaveTimer = setTimeout(() => {
                 this.persistSettings();
@@ -5323,6 +5325,7 @@
         }
 
         async saveNetworkJson() {
+            this.persistSettings();
             const visData = this.visNetworkData;
             if (!visData || !Array.isArray(visData.nodes) || !Array.isArray(visData.edges)) {
                 this.notify('No vis data to save', 'info');
@@ -5349,6 +5352,7 @@
                     labelMode: showAll ? 'all' : 'hover'
                 }
                 : null;
+            const settings = this.getPersistedSettingsPayload();
             const payload = this.graphModel
                 ? this.graphModel.getSavedPayload({ name, state })
                 : {
@@ -5360,6 +5364,7 @@
                 };
             list.unshift({
                 ...payload,
+                settings,
                 createdAt: Date.now(),
                 type: 'wos-graph'
             });
@@ -5421,6 +5426,9 @@
                         if (item.state.labelMode) {
                             this.applyLabelShowAll(item.state.labelMode === 'all');
                         }
+                    }
+                    if (item.settings) {
+                        this.applyLabelPanelSettingsPayload(item.settings);
                     }
                 } else {
                     this.notify('Saved payload missing model support', 'error');
