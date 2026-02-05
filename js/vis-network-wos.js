@@ -3635,9 +3635,13 @@
             if (!dataset) return;
             if (!this._edgeBaseLabels) this._edgeBaseLabels = new Map();
             if (!this._edgeBaseFonts) this._edgeBaseFonts = new Map();
+            const state = this.getEdgeFocusState();
+            const hoverEdgeId = state.hoverEdgeId;
             const show = !!this.edgeLabelEnabled;
             const fontSize = Number.isFinite(this.edgeLabelFontSize) ? this.edgeLabelFontSize : 12;
             const fontColor = this.edgeLabelFontColor || '#111111';
+            const strokeWidth = Number.isFinite(this.edgeLabelStrokeWidth) ? this.edgeLabelStrokeWidth : 0;
+            const strokeColor = this.edgeLabelStrokeColor || '#ffffff';
             const updates = dataset.get().map((edge) => {
                 if (!this._edgeBaseLabels.has(edge.id)) {
                     this._edgeBaseLabels.set(edge.id, edge.label || '');
@@ -3646,16 +3650,24 @@
                     this._edgeBaseFonts.set(edge.id, edge.font || null);
                 }
                 const alpha = getEdgeColorAlpha(edge);
-                const label = show && alpha > 0 ? this.getEdgeLabelText(edge) : '';
-                const font = show
+                const shouldShowLabel = show
+                    && alpha > 0
+                    && (!hoverEdgeId || edge.id === hoverEdgeId);
+                const label = shouldShowLabel ? this.getEdgeLabelText(edge) : '';
+                const font = shouldShowLabel
                     ? {
                         ...(edge.font || {}),
                         size: fontSize,
                         face: 'Times New Roman, Times, serif',
                         align: 'middle',
-                        color: fontColor
+                        color: fontColor,
+                        strokeWidth,
+                        strokeColor
                     }
-                    : (this._edgeBaseFonts.get(edge.id) || edge.font);
+                    : {
+                        ...(this._edgeBaseFonts.get(edge.id) || edge.font || {}),
+                        size: 0
+                    };
                 return { id: edge.id, label, font };
             });
             dataset.update(updates);
@@ -3857,6 +3869,7 @@
                 dataset.nodes.update(nodeUpdates);
                 dataset.edges.update(edgeUpdates);
                 this.applyEdgeFocusLabelDisplay(null);
+                this.applyEdgeLabelDisplay();
                 return;
             }
             const activeNodes = new Set();
@@ -3865,24 +3878,26 @@
                 if (edge.from != null) activeNodes.add(edge.from);
                 if (edge.to != null) activeNodes.add(edge.to);
             });
-            const alpha = this.edgeFocusFadeAlpha;
+            const nodeDimAlpha = this.edgeFocusFadeAlpha;
+            const edgeDimAlpha = state.hoverEdgeId ? 0 : this.edgeFocusFadeAlpha;
             const nodeUpdates = nodes.map((node) => {
                 const baseColor = state.baseNodeColors.get(node.id) || node.color;
                 const color = activeNodes.has(node.id)
                     ? fadeNodeColor(baseColor, 1)
-                    : fadeNodeColor(baseColor, alpha);
+                    : fadeNodeColor(baseColor, nodeDimAlpha);
                 return { id: node.id, color };
             });
             const edgeUpdates = edges.map((edge) => {
                 const baseColor = state.baseEdgeColors.get(edge.id) || edge.color;
                 const color = activeEdges.has(edge.id)
                     ? fadeEdgeColor(baseColor, 1)
-                    : fadeEdgeColor(baseColor, alpha);
+                    : fadeEdgeColor(baseColor, edgeDimAlpha);
                 return { id: edge.id, color };
             });
             dataset.nodes.update(nodeUpdates);
             dataset.edges.update(edgeUpdates);
             this.applyEdgeFocusLabelDisplay(activeNodes);
+            this.applyEdgeLabelDisplay();
         }
 
         applyEdgeFocusLabelDisplay(activeNodes) {
