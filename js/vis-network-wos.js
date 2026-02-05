@@ -3879,7 +3879,7 @@
                 if (edge.to != null) activeNodes.add(edge.to);
             });
             const nodeDimAlpha = this.edgeFocusFadeAlpha;
-            const edgeDimAlpha = state.hoverEdgeId ? 0 : this.edgeFocusFadeAlpha;
+            const edgeDimAlpha = this.edgeFocusFadeAlpha;
             const nodeUpdates = nodes.map((node) => {
                 const baseColor = state.baseNodeColors.get(node.id) || node.color;
                 const color = activeNodes.has(node.id)
@@ -4069,7 +4069,8 @@
             const sliderValue = sliderWrap ? sliderWrap.querySelector('.context-menu-value') : null;
             if (slider) {
                 slider.addEventListener('input', (ev) => {
-                    const value = Number(ev.target.value) || 15;
+                    const raw = Number(ev.target.value);
+                    const value = Number.isFinite(raw) ? raw : 0;
                     if (sliderValue) sliderValue.textContent = `${value}%`;
                     this.edgeFocusFadeAlpha = Math.max(0, Math.min(1, value / 100));
                     this.applyEdgeFocusDisplay();

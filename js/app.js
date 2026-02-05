@@ -2917,7 +2917,7 @@ class PaperStatsApp {
         const pdfFullscreenBtn = document.getElementById('btnPdfJsFullscreen');
         if (pdfFullscreenBtn) {
             pdfFullscreenBtn.addEventListener('click', async () => {
-                await this.ensurePdfLoaded();
+                await this.ensurePdfLoaded({ force: true });
                 this.enterPdfJsFullscreen();
             });
         }
@@ -2926,7 +2926,7 @@ class PaperStatsApp {
         const pdfDownloadBtn = document.getElementById('btnPdfJsDownload');
         if (pdfDownloadBtn) {
             pdfDownloadBtn.addEventListener('click', async () => {
-                await this.ensurePdfLoaded();
+                await this.ensurePdfLoaded({ force: true });
                 this.downloadCurrentPdf();
             });
         }
@@ -2960,11 +2960,11 @@ class PaperStatsApp {
             const btn = this.pdfPlaceholderEl.querySelector('.pdf-placeholder-btn');
             if (btn) {
                 btn.addEventListener('click', async () => {
-                    await this.ensurePdfLoaded();
+                    await this.ensurePdfLoaded({ force: true });
                 });
             }
             this.pdfPlaceholderEl.addEventListener('click', async () => {
-                await this.ensurePdfLoaded();
+                await this.ensurePdfLoaded({ force: true });
             });
         }
 
@@ -6818,7 +6818,7 @@ class PaperStatsApp {
             this._skipPdfAvailabilityCheck = true;
 
             this.resetPdfViewerFrame();
-            await this.ensurePdfLoaded();
+            await this.ensurePdfLoaded({ force: true });
         } catch (error) {
             console.error('PDF processing failed:', error);
             this.showNotification(`PDF processing failed: ${error.message}`, 'error');
@@ -7446,7 +7446,9 @@ class PaperStatsApp {
                 this.currentPdfLoadToken++;
                 this.lastPdfLoadedKey = '';
                 this.updatePdfPlaceholder('pending');
-                this.prewarmPdf(primaryUrl);
+                if (this.autoLoadPdf || this._forceLoadPdfOnNextFile) {
+                    this.prewarmPdf(primaryUrl);
+                }
                 // 如果autoLoadPdf开启，或者有强制加载标志，则自动加载PDF
                 const shouldForceLoad = this._forceLoadPdfOnNextFile;
                 if (shouldForceLoad) {
@@ -7455,7 +7457,7 @@ class PaperStatsApp {
                     this._skipPdfAvailabilityCheck = true;
                 }
                 if ((this.autoLoadPdf || shouldForceLoad) && this.isPdfViewActive()) {
-                    await this.ensurePdfLoaded();
+                    await this.ensurePdfLoaded({ force: shouldForceLoad });
                 }
             } else {
                 this.currentPdfUrl = null;
@@ -16919,9 +16921,14 @@ class PaperStatsApp {
         return '';
     }
 
-    async ensurePdfLoaded() {
+    async ensurePdfLoaded(options = {}) {
+        const force = !!options.force;
         if (!this.isPdfViewActive()) {
             console.log('⏭️ PDF view inactive, skip loading');
+            return;
+        }
+        if (!this.autoLoadPdf && !force && !this.lastPdfLoadedUrl) {
+            console.log('⏭️ Auto-load disabled, skip loading');
             return;
         }
         const url = this.pendingPdfUrl || this.currentPdfUrl;
