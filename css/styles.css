@@ -2721,7 +2721,6 @@ body.theme-dark .vis-settings-panel.is-open .vis-label-panel .vis-section-toggle
 
 .vis-label-panel .vis-label-section.is-collapsed {
     padding-top: 0;
-    margin-top: -6px;
     margin-left: 0;
     min-height: 22px;
     display: flex;
@@ -3024,7 +3023,6 @@ body.theme-dark .vis-settings-panel.is-open .vis-label-panel .vis-section-toggle
     display: grid;
     grid-template-columns: 140px 1fr;
     gap: 6px 10px;
-    margin-top: 8px;
     align-items: center;
 }
 

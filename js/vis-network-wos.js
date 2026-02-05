@@ -758,7 +758,6 @@
                 labelSuggest: options.labelSuggestId || 'visLabelSuggest',
                 labelFields: options.labelFieldsId || 'visLabelFields',
                 labelSlots: options.labelSlotsId || 'visLabelSlots',
-                labelSlotsSaveBtn: options.labelSlotsSaveBtnId || 'visLabelSlotsSaveBtn',
                 labelFadeSlider: options.labelFadeSliderId || 'visLabelFadeSlider',
                 labelColorInput: options.labelColorInputId || 'visLabelColorInput',
                 labelBgColorInput: options.labelBgColorInputId || 'visLabelBgColorInput',
@@ -879,10 +878,8 @@
             this.labelFieldHistory = [];
             this.labelFieldHistoryIndex = -1;
             this.settingsKey = 'vis-network-settings';
-            this.labelSlotsKey = 'vis-network-label-slots';
-            this.labelSlots = Array.from({ length: 10 }, () => null);
-            this.activeLabelSlot = -1;
-            this._labelSlotsLoaded = false;
+            this.settingsSlotsKey = 'vis-network-settings-slots';
+            this.settingsSlots = Array.from({ length: 10 }, () => null);
             this._settingsSaveTimer = null;
             this._settingsLoaded = false;
             this.networkStateKey = 'vis-network-last';
@@ -919,6 +916,7 @@
             this.mountDrawer();
             this.mountLabelDrawer();
             this.disableVisSettingsTabFocus();
+            this.loadSettingsSlots();
             this.loadPersistedSettings();
             this.loadInputDraft();
             this.loadInputHistory();
@@ -945,7 +943,6 @@
             const labelSuggest = this.getEl(this.ids.labelSuggest);
             const labelFields = this.getEl(this.ids.labelFields);
             const labelSlots = this.getEl(this.ids.labelSlots);
-            const labelSlotsSaveBtn = this.getEl(this.ids.labelSlotsSaveBtn);
             const labelFadeSlider = this.getEl(this.ids.labelFadeSlider);
             const labelColorInput = this.getEl(this.ids.labelColorInput);
             const labelBgColorInput = this.getEl(this.ids.labelBgColorInput);
@@ -1715,28 +1712,10 @@
                 labelSlots.addEventListener('click', (e) => {
                     const btn = e.target.closest('[data-slot]');
                     if (!btn) return;
-                    const idx = Number(btn.dataset.slot) - 1;
-                    if (!Number.isFinite(idx) || idx < 0) return;
-                    this.activeLabelSlot = idx;
-                    this.applyLabelSlot(idx);
-                    this.updateLabelSlotButtons();
-                    this.persistLabelSlots();
-                });
-                labelSlots.addEventListener('contextmenu', (e) => {
-                    const btn = e.target.closest('[data-slot]');
-                    if (!btn) return;
                     e.preventDefault();
                     const idx = Number(btn.dataset.slot) - 1;
                     if (!Number.isFinite(idx) || idx < 0) return;
-                    const ok = window.confirm(`Clear Slot ${idx + 1} saved settings?`);
-                    if (!ok) return;
-                    this.clearLabelSlot(idx);
-                });
-            }
-            if (labelSlotsSaveBtn && !labelSlotsSaveBtn.dataset.visBound) {
-                labelSlotsSaveBtn.dataset.visBound = '1';
-                labelSlotsSaveBtn.addEventListener('click', () => {
-                    this.saveLabelSlot();
+                    this.showSettingsSlotMenu(e, idx, btn);
                 });
             }
             if (exportSvgScaleInput && !exportSvgScaleInput.dataset.visBound) {
@@ -1776,7 +1755,6 @@
             }
             this.bindHoldHotkeys();
             // outside click to close disabled
-            this.loadLabelSlots();
             this.loadSavedList().then((list) => {
                 const safeList = Array.isArray(list) ? list : [];
                 this.renderSavedSelect(safeList);
@@ -4575,111 +4553,165 @@
             this.queuePersistSettings();
         }
 
-        loadLabelSlots() {
-            if (this._labelSlotsLoaded) return;
-            this._labelSlotsLoaded = true;
-            const apply = (payload) => {
-                if (!payload || typeof payload !== 'object') return;
-                if (Array.isArray(payload.slots)) {
-                    this.labelSlots = payload.slots
-                        .slice(0, 10)
-                        .map((item) => (item && typeof item === 'object' ? item : null));
-                    while (this.labelSlots.length < 10) {
-                        this.labelSlots.push(null);
+
+        loadSettingsSlots() {
+            if (this._settingsSlotsLoaded) return;
+            this._settingsSlotsLoaded = true;
+            try {
+                const raw = localStorage.getItem(this.settingsSlotsKey);
+                if (raw) {
+                    const payload = JSON.parse(raw);
+                    if (Array.isArray(payload)) {
+                        this.settingsSlots = payload.slice(0, 10);
+                        while (this.settingsSlots.length < 10) this.settingsSlots.push(null);
                     }
                 }
-                if (Number.isFinite(payload.activeSlot)) {
-                    const idx = payload.activeSlot;
-                    this.activeLabelSlot = idx >= 0 && idx < 10 ? idx : -1;
-                }
-                this.updateLabelSlotButtons();
-            };
-            try {
-                const raw = localStorage.getItem(this.labelSlotsKey);
-                if (raw) apply(JSON.parse(raw));
             } catch (_e) {
                 // ignore
             }
-            if (this.app && this.app.projectStorage && this.app.currentProject) {
-                this.app.projectStorage.load(this.labelSlotsKey).then((data) => {
-                    apply(data);
-                }).catch(() => {
-                    // ignore
-                });
-            }
+            this.updateSettingsSlotButtons();
         }
 
-        persistLabelSlots() {
-            const payload = {
-                slots: this.labelSlots,
-                activeSlot: this.activeLabelSlot
-            };
-            if (this.app && this.app.projectStorage && this.app.currentProject) {
-                this.app.projectStorage.update(this.labelSlotsKey, payload);
-            }
+        persistSettingsSlots() {
             try {
-                localStorage.setItem(this.labelSlotsKey, JSON.stringify(payload));
+                localStorage.setItem(this.settingsSlotsKey, JSON.stringify(this.settingsSlots));
             } catch (_e) {
                 // ignore
             }
-            this.updateLabelSlotButtons();
+            this.updateSettingsSlotButtons();
         }
 
-        updateLabelSlotButtons() {
+        updateSettingsSlotButtons() {
             const wrap = this.getEl(this.ids.labelSlots);
-            const saveBtn = this.getEl(this.ids.labelSlotsSaveBtn);
             if (!wrap) return;
             const buttons = Array.from(wrap.querySelectorAll('[data-slot]'));
             buttons.forEach((btn) => {
                 const idx = Number(btn.dataset.slot) - 1;
-                const filled = !!this.labelSlots[idx];
+                const filled = !!this.settingsSlots[idx];
+                btn.classList.toggle('is-active', filled);
                 const icon = btn.querySelector('i');
                 if (icon) {
-                    icon.className = filled
-                        ? 'fa-solid fa-circle-check'
-                        : 'fa-regular fa-circle';
+                    icon.className = filled ? 'fa-solid fa-circle' : 'fa-regular fa-circle';
+                    icon.style.color = filled ? '#111111' : '';
                 }
-                btn.classList.toggle('is-filled', filled);
-                btn.classList.toggle('is-active', idx === this.activeLabelSlot);
-                btn.title = filled ? `Slot ${idx + 1} (saved)` : `Slot ${idx + 1} (empty)`;
             });
-            if (saveBtn) {
-                const hasEmpty = this.labelSlots.some((slot) => !slot);
-                saveBtn.disabled = !hasEmpty;
-                saveBtn.title = hasEmpty ? 'Save to next empty slot' : 'All slots are full';
-            }
         }
 
-        saveLabelSlot() {
-            const payload = this.getLabelPanelSettingsPayload();
-            let idx = this.labelSlots.findIndex((slot) => !slot);
-            if (idx === -1) {
-                this.notify('All slots are full', 'info');
-                return;
-            }
-            this.labelSlots[idx] = payload;
-            this.activeLabelSlot = idx;
-            this.persistLabelSlots();
-            this.notify(`Saved settings to Slot ${idx + 1}`, 'success');
+        getVisSettingsSnapshot() {
+            const panel = this.getEl(this.ids.settingsPanel);
+            const body = panel ? panel.querySelector('.vis-settings-body') : null;
+            if (!body) return [];
+            const controls = Array.from(body.querySelectorAll('input, select, textarea'));
+            return controls
+                .filter((el) => el.id)
+                .map((el) => {
+                    const type = el.type || el.tagName.toLowerCase();
+                    if (type === 'checkbox') {
+                        return { id: el.id, type, checked: el.checked };
+                    }
+                    return { id: el.id, type, value: el.value };
+                });
         }
 
-        applyLabelSlot(idx) {
-            const payload = this.labelSlots[idx];
-            if (!payload) {
-                this.notify(`Slot ${idx + 1} is empty`, 'info');
-                return;
-            }
-            this.applyLabelPanelSettingsPayload(payload);
-            this.notify(`Applied settings from Slot ${idx + 1}`, 'success');
+        applyVisSettingsSnapshot(snapshot = []) {
+            if (!Array.isArray(snapshot)) return;
+            snapshot.forEach((item) => {
+                if (!item || !item.id) return;
+                const el = document.getElementById(item.id);
+                if (!el) return;
+                const type = el.type || el.tagName.toLowerCase();
+                if (type === 'checkbox') {
+                    el.checked = !!item.checked;
+                } else {
+                    let next = item.value ?? '';
+                    if (type === 'number') {
+                        const num = Number(next);
+                        if (Number.isFinite(num)) {
+                            next = num.toFixed(4);
+                        }
+                    }
+                    el.value = String(next);
+                }
+                el.dispatchEvent(new Event('input', { bubbles: true }));
+                el.dispatchEvent(new Event('change', { bubbles: true }));
+            });
         }
 
-        clearLabelSlot(idx) {
-            this.labelSlots[idx] = null;
-            if (this.activeLabelSlot === idx) {
-                this.activeLabelSlot = -1;
-            }
-            this.persistLabelSlots();
-            this.notify(`Cleared Slot ${idx + 1}`, 'info');
+        showSettingsSlotMenu(e, idx, anchorEl) {
+            this.loadSettingsSlots();
+            this.closeSettingsSlotMenu();
+            const menu = document.createElement('div');
+            menu.className = 'context-menu';
+            const label = `Slot ${idx + 1}`;
+            menu.innerHTML = `
+                <div class="context-menu-item" data-action="save">
+                    <i class="fa-solid fa-floppy-disk"></i>
+                    Save ${label}
+                </div>
+                <div class="context-menu-item" data-action="load">
+                    <i class="fas fa-folder-open"></i>
+                    Load ${label}
+                </div>
+                <div class="context-menu-item" data-action="clear">
+                    <i class="fa-regular fa-trash-can"></i>
+                    Clear ${label}
+                </div>
+            `;
+            document.body.appendChild(menu);
+            const rect = anchorEl.getBoundingClientRect();
+            menu.style.left = `${rect.right + 8}px`;
+            menu.style.top = `${rect.top}px`;
+            const onAction = (action) => {
+                if (action === 'save') {
+                    this.settingsSlots[idx] = {
+                        savedAt: Date.now(),
+                        data: this.getVisSettingsSnapshot()
+                    };
+                    this.persistSettingsSlots();
+                    this.notify(`Saved ${label}`, 'success');
+                }
+                if (action === 'load') {
+                    const payload = this.settingsSlots[idx];
+                    if (payload?.data) {
+                        this.applyVisSettingsSnapshot(payload.data);
+                        this.notify(`Loaded ${label}`, 'success');
+                    } else {
+                        this.notify(`Slot ${idx + 1} is empty`, 'info');
+                    }
+                }
+                if (action === 'clear') {
+                    this.settingsSlots[idx] = null;
+                    this.persistSettingsSlots();
+                    this.notify(`Cleared ${label}`, 'info');
+                }
+                this.closeSettingsSlotMenu();
+            };
+            menu.querySelectorAll('.context-menu-item').forEach((item) => {
+                item.addEventListener('click', () => {
+                    const action = item.dataset.action;
+                    onAction(action);
+                });
+            });
+            const clickOutside = (ev) => {
+                if (!menu.contains(ev.target)) this.closeSettingsSlotMenu();
+            };
+            const keyHandler = (ev) => {
+                if (ev.key === 'Escape') this.closeSettingsSlotMenu();
+            };
+            menu._slotClickHandler = clickOutside;
+            menu._slotKeyHandler = keyHandler;
+            document.addEventListener('mousedown', clickOutside);
+            document.addEventListener('keydown', keyHandler);
+            this._settingsSlotMenu = menu;
+        }
+
+        closeSettingsSlotMenu() {
+            const menu = this._settingsSlotMenu;
+            if (!menu) return;
+            if (menu._slotClickHandler) document.removeEventListener('mousedown', menu._slotClickHandler);
+            if (menu._slotKeyHandler) document.removeEventListener('keydown', menu._slotKeyHandler);
+            menu.remove();
+            this._settingsSlotMenu = null;
         }
 
         queuePersistSettings() {
