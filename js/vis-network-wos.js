@@ -507,8 +507,8 @@
     }
 
     function applyLabelStyle(label, node) {
-        if (!label || !node || !node.labelStyle) return;
-        const style = node.labelStyle;
+        if (!label || !node) return;
+        const style = node.labelStyle || {};
         if (style.fontSize) label.style.fontSize = `${style.fontSize}px`;
         if (style.fontWeight) label.style.fontWeight = String(style.fontWeight);
         if (style.textColor) label.style.color = style.textColor;
@@ -520,6 +520,7 @@
             label.style.backgroundColor = '';
         }
         let opacity = typeof style.opacity === 'number' ? style.opacity : 1;
+        if (getNodeAlpha(node) <= 0) opacity = 0;
         if (node.labelHidden) opacity = 0;
         label.style.opacity = String(opacity);
     }
@@ -597,6 +598,27 @@
         return rgbaToString({ ...rgba, a: next });
     }
 
+    function getNodeAlpha(node) {
+        if (!node || !node.color) return 1;
+        const pickAlpha = (value) => {
+            const rgba = parseColorToRgba(value);
+            return rgba ? rgba.a : null;
+        };
+        if (typeof node.color === 'string') {
+            const alpha = pickAlpha(node.color);
+            return alpha == null ? 1 : alpha;
+        }
+        if (node.color.background != null) {
+            const alpha = pickAlpha(node.color.background);
+            if (alpha != null) return alpha;
+        }
+        if (node.color.border != null) {
+            const alpha = pickAlpha(node.color.border);
+            if (alpha != null) return alpha;
+        }
+        return 1;
+    }
+
     function setColorAlpha(input, alpha) {
         const rgba = parseColorToRgba(input);
         if (!rgba) return input;
@@ -662,8 +684,8 @@
     }
 
     function applyEdgeHoverLabelStyle(label, node) {
-        if (!label || !node || !node.labelStyle) return;
-        const style = node.labelStyle;
+        if (!label || !node) return;
+        const style = node.labelStyle || {};
         if (style.fontSize) label.style.fontSize = `${style.fontSize}px`;
         if (style.fontWeight) label.style.fontWeight = String(style.fontWeight);
         if (style.textColor) label.style.color = style.textColor;
@@ -673,7 +695,8 @@
         } else {
             label.style.backgroundColor = '';
         }
-        const opacity = typeof style.opacity === 'number' ? style.opacity : 1;
+        let opacity = typeof style.opacity === 'number' ? style.opacity : 1;
+        if (getNodeAlpha(node) <= 0) opacity = 0;
         label.style.opacity = String(opacity);
     }
 
@@ -805,6 +828,7 @@
             this.exportSvgMargin = 6;
             this.exportSvgIncludeLabels = true;
             this.edgeFocusFadeAlpha = 0.15;
+            this.edgeHoverLabelEnabled = false;
             this.wosNodeIndex = null;
             this.wosNodeIndexSource = null;
             this.labelFieldHistory = [];
@@ -2144,6 +2168,22 @@
             const panel = this.getEl(this.ids.settingsPanel);
             if (!panel || panel.dataset.labelMounted) return;
             panel.dataset.labelMounted = '1';
+            const labelPanel = panel.querySelector('.vis-label-panel');
+            if (labelPanel && !labelPanel.dataset.sectionBound) {
+                labelPanel.dataset.sectionBound = '1';
+                labelPanel.addEventListener('click', (e) => {
+                    const btn = e.target.closest('.vis-section-toggle');
+                    if (!btn) return;
+                    const section = btn.closest('.vis-label-section');
+                    if (!section) return;
+                    const collapsed = section.classList.toggle('is-collapsed');
+                    btn.setAttribute('aria-expanded', String(!collapsed));
+                    const icon = btn.querySelector('i');
+                    if (icon) {
+                        icon.className = collapsed ? 'fa-solid fa-chevron-down' : 'fa-solid fa-chevron-up';
+                    }
+                });
+            }
         }
 
         getEl(id) {
@@ -3283,10 +3323,19 @@
                 if (!Number.isFinite(citations)) return;
                 if (citations < min) lowNodes.add(node.id);
             });
+            const lowEdges = new Set();
+            const nodeHasStrongEdge = new Map();
+            edges.forEach((edge) => {
+                const related = getRelatedCount(edge);
+                if (related < relatedMin) {
+                    lowEdges.add(edge.id);
+                } else {
+                    nodeHasStrongEdge.set(edge.from, true);
+                    nodeHasStrongEdge.set(edge.to, true);
+                }
+            });
             nodes.forEach((node) => {
-                const related = getRelatedCount(node);
-                if (!Number.isFinite(related)) return;
-                if (related < relatedMin) lowRelatedNodes.add(node.id);
+                if (!nodeHasStrongEdge.get(node.id)) lowRelatedNodes.add(node.id);
             });
             const nodeUpdates = nodes.map((node) => {
                 const baseColor = state.baseNodeColors.get(node.id) || node.color;
@@ -3306,10 +3355,7 @@
                 if (hasLabelRule && (lowNodes.has(edge.from) || lowNodes.has(edge.to))) {
                     alpha = Math.min(alpha, dimAlpha);
                 }
-                if (hasRelatedRule && (lowRelatedNodes.has(edge.from) || lowRelatedNodes.has(edge.to))) {
-                    alpha = Math.min(alpha, relatedDimAlpha);
-                }
-                if (hasRelatedRule && getRelatedCount(edge) < relatedMin) {
+                if (hasRelatedRule && lowEdges.has(edge.id)) {
                     alpha = Math.min(alpha, relatedDimAlpha);
                 }
                 const color = alpha < 1 ? fadeEdgeColor(baseColor, alpha) : baseColor;
@@ -3726,6 +3772,7 @@
             const view = this.getEl(this.ids.view);
             const layer = ensureLabelLayer(view);
             if (!layer) return;
+            const nodeDataset = this.visNetwork?.body?.data?.nodes;
             const labels = Array.from(layer.querySelectorAll('.vis-node-label'));
             const dimAlpha = this.edgeFocusFadeAlpha;
             labels.forEach((label) => {
@@ -3747,6 +3794,16 @@
                 }
                 const nodeId = label.dataset.nodeId;
                 if (!nodeId) return;
+                if (nodeDataset && typeof nodeDataset.get === 'function') {
+                    const node = nodeDataset.get(nodeId);
+                    if (node && getNodeAlpha(node) <= 0) {
+                        if (label.dataset.baseOpacity == null) {
+                            label.dataset.baseOpacity = label.style.opacity || '1';
+                        }
+                        label.style.opacity = '0';
+                        return;
+                    }
+                }
                 if (!activeNodes) {
                     if (label.dataset.baseOpacity != null) {
                         label.style.opacity = label.dataset.baseOpacity;
@@ -3768,7 +3825,7 @@
         setEdgeHover(edgeId) {
             const state = this.getEdgeFocusState();
             state.hoverEdgeId = edgeId || null;
-            if (edgeId) {
+            if (edgeId && this.edgeHoverLabelEnabled) {
                 this.showEdgeHoverLabels(edgeId);
             } else {
                 this.hideEdgeHoverLabels();
@@ -3814,11 +3871,16 @@
             menu.style.left = `${e.pageX}px`;
             menu.style.top = `${e.pageY}px`;
             const isLocked = this.isEdgeLocked(edgeId);
+            const isLabelEnabled = !!this.edgeHoverLabelEnabled;
             const fadePercent = Math.round((Number(this.edgeFocusFadeAlpha) || 0.15) * 100);
             menu.innerHTML = `
                 <div class="context-menu-item" data-action="toggleEdgeLock">
                     <i class="fas ${isLocked ? 'fa-unlock' : 'fa-lock'}"></i>
                     ${isLocked ? '解锁' : '锁定'}
+                </div>
+                <div class="context-menu-item" data-action="toggleEdgeHoverLabels">
+                    <i class="fas ${isLabelEnabled ? 'fa-eye' : 'fa-eye-slash'}"></i>
+                    ${isLabelEnabled ? '隐藏边标签' : '显示边标签'}
                 </div>
                 <div class="context-menu-divider"></div>
                 <div class="context-menu-item context-menu-slider" data-action="edgeFadeAlpha">
@@ -3845,6 +3907,15 @@
                     const action = item.dataset.action;
                     if (action === 'toggleEdgeLock') {
                         this.toggleEdgeLock(edgeId);
+                    }
+                    if (action === 'toggleEdgeHoverLabels') {
+                        this.edgeHoverLabelEnabled = !this.edgeHoverLabelEnabled;
+                        if (this.edgeHoverLabelEnabled) {
+                            this.showEdgeHoverLabels(edgeId);
+                        } else {
+                            this.hideEdgeHoverLabels();
+                        }
+                        this.queuePersistSettings();
                     }
                     if (action !== 'edgeFadeAlpha') {
                         this.closeEdgeContextMenu();
@@ -4110,6 +4181,7 @@
                 edgeMaxWidth: this.edgeMaxWidth,
                 edgeColor: this.edgeColor,
                 edgeStyle: this.edgeStyle,
+                edgeHoverLabelEnabled: this.edgeHoverLabelEnabled,
                 zoomCollapsed: this.zoomCollapsed,
                 exportSvgScale: this.exportSvgScale,
                 exportSvgMargin: this.exportSvgMargin,
@@ -4151,6 +4223,9 @@
             if (Number.isFinite(payload.edgeMaxWidth)) this.edgeMaxWidth = payload.edgeMaxWidth;
             if (typeof payload.edgeColor === 'string') this.edgeColor = payload.edgeColor;
             if (typeof payload.edgeStyle === 'string') this.edgeStyle = payload.edgeStyle;
+            if (typeof payload.edgeHoverLabelEnabled === 'boolean') {
+                this.edgeHoverLabelEnabled = payload.edgeHoverLabelEnabled;
+            }
             if (typeof payload.depthMode === 'boolean') this.depthMode = payload.depthMode;
             if (Number.isFinite(payload.exportSvgScale)) this.exportSvgScale = payload.exportSvgScale;
             if (Number.isFinite(payload.exportSvgMargin)) this.exportSvgMargin = payload.exportSvgMargin;

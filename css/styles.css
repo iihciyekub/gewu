@@ -2644,11 +2644,11 @@ body.theme-dark .vis-label-suggest .vis-label-suggest-item.active {
 }
 
 .vis-label-panel {
-    display: grid;
-    grid-template-columns: 140px 1fr;
+    display: flex;
+    flex-direction: column;
     width: 100%;
     position: relative;
-    align-items: center;
+    align-items: stretch;
 }
 
 
@@ -2670,6 +2670,61 @@ body.theme-dark .vis-label-suggest .vis-label-suggest-item.active {
 
 body.theme-dark .vis-settings-panel.is-open .vis-label-panel label {
     color: #cbd5e1;
+}
+
+.vis-label-panel .vis-label-section {
+    position: relative;
+    padding-top: 18px;
+}
+
+.vis-label-panel .vis-section-toggle {
+    position: absolute;
+    top: 0;
+    left: 0;
+    border: none;
+    background: transparent;
+    color: var(--vis-label-color, #000000);
+    width: auto;
+    height: 18px;
+    border-radius: 6px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 0 2px;
+    white-space: nowrap;
+    cursor: pointer;
+}
+
+.vis-label-panel .vis-section-toggle i {
+    font-size: 0.7rem;
+}
+
+.vis-label-panel .vis-section-toggle .vis-toggle-text {
+    font-size: 10px;
+    font-weight: 700;
+    color: #374151;
+}
+
+body.theme-dark .vis-settings-panel.is-open .vis-label-panel .vis-section-toggle .vis-toggle-text {
+    color: #cbd5e1;
+}
+
+.vis-label-panel .vis-label-section.is-collapsed > :not(.vis-section-toggle) {
+    display: none;
+}
+
+.vis-label-panel .vis-label-section.is-collapsed {
+    padding-top: 0;
+    margin-top: -6px;
+    margin-left: 0;
+    min-height: 22px;
+    display: flex;
+    align-items: flex-start;
+}
+
+.vis-label-panel .vis-label-section.is-collapsed .vis-section-toggle {
+    position: static;
 }
 
 .vis-label-panel input[type="text"] {
@@ -2706,12 +2761,7 @@ body.theme-dark .vis-settings-panel.is-open .vis-label-panel label {
     overflow: auto;
 }
 
-.vis-label-panel>div {
-    grid-column: 1 / -1;
-}
-
 .vis-label-panel .vis-label-input-full {
-    grid-column: 1 / -1;
     width: 100%;
     padding: 8px 10px;
     border: 1px solid #d7dce3;
@@ -2814,7 +2864,6 @@ body.theme-dark .vis-settings-panel.is-open .vis-label-panel label {
     display: grid;
     grid-template-columns: 140px 1fr;
     gap: 6px 10px;
-    margin-top: 8px;
     align-items: center;
 }
 
@@ -2822,7 +2871,6 @@ body.theme-dark .vis-settings-panel.is-open .vis-label-panel label {
     display: grid;
     grid-template-columns: 140px 1fr;
     gap: 6px 10px;
-    margin-top: 8px;
     align-items: center;
 }
 
@@ -2830,7 +2878,6 @@ body.theme-dark .vis-settings-panel.is-open .vis-label-panel label {
     display: grid;
     grid-template-columns: 140px 1fr;
     gap: 6px 10px;
-    margin-top: 8px;
     align-items: center;
 }
 
@@ -2838,7 +2885,6 @@ body.theme-dark .vis-settings-panel.is-open .vis-label-panel label {
     display: grid;
     grid-template-columns: 140px 1fr;
     gap: 6px 10px;
-    margin-top: 8px;
     align-items: center;
 }
 
@@ -2846,7 +2892,6 @@ body.theme-dark .vis-settings-panel.is-open .vis-label-panel label {
     display: grid;
     grid-template-columns: 140px 1fr;
     gap: 6px 10px;
-    margin-top: 8px;
     align-items: center;
 }
 
@@ -2854,7 +2899,6 @@ body.theme-dark .vis-settings-panel.is-open .vis-label-panel label {
     display: grid;
     grid-template-columns: 140px 1fr;
     gap: 6px 10px;
-    margin-top: 8px;
     align-items: center;
 }
 
@@ -2862,7 +2906,6 @@ body.theme-dark .vis-settings-panel.is-open .vis-label-panel label {
     display: grid;
     grid-template-columns: 140px 1fr;
     gap: 6px 10px;
-    margin-top: 8px;
     align-items: center;
 }
 
@@ -2870,7 +2913,6 @@ body.theme-dark .vis-settings-panel.is-open .vis-label-panel label {
     display: grid;
     grid-template-columns: 140px 1fr;
     gap: 6px 10px;
-    margin-top: 8px;
     align-items: center;
 }
 
@@ -2895,7 +2937,6 @@ body.theme-dark .vis-settings-panel.is-open .vis-label-panel label {
     display: grid;
     grid-template-columns: 140px 1fr;
     gap: 6px 10px;
-    margin-top: 8px;
     align-items: center;
 }
 
@@ -3070,7 +3111,6 @@ body.theme-dark .vis-settings-panel.is-open .vis-label-panel label {
     display: grid;
     grid-template-columns: 140px 1fr;
     gap: 6px 10px;
-    margin-top: 6px;
     align-items: center;
 }
 
