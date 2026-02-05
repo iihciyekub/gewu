@@ -910,6 +910,7 @@
             this._edgeBaseLabels = null;
             this._edgeBaseFonts = null;
             this.settingsAutoSave = false;
+            this._visViewReady = false;
         }
 
         bind() {
@@ -2451,6 +2452,7 @@
             this.applyDepthMode(this.depthMode);
             // Skip auto-restoring label rendering on reload.
             this.queuePersistNetworkState();
+            this._visViewReady = true;
         }
 
         renderFromVisData(raw, options = {}) {
@@ -2552,6 +2554,7 @@
             this.updateEdgeLabelToggleButton();
             this.applyDepthMode(this.depthMode);
             this.queuePersistNetworkState();
+            this._visViewReady = true;
         }
 
         wrapLabelToggleButton() {
@@ -2610,6 +2613,7 @@
             } else {
                 const view = this.getEl(this.ids.view);
                 if (view) view.classList.remove('has-network');
+                this._visViewReady = false;
             }
         }
 
@@ -3822,6 +3826,9 @@
             if (!this._edgeFocusState) {
                 this._edgeFocusState = {
                     hoverEdgeId: null,
+                    lastHoverEdgeId: null,
+                    hoverNodeId: null,
+                    lastHoverNodeId: null,
                     lockedEdgeIds: new Set(),
                     baseNodeColors: new Map(),
                     baseEdgeColors: new Map(),
@@ -3839,6 +3846,9 @@
         resetEdgeFocusState({ keepLocks = false, keepBaseColors = false } = {}) {
             const state = this.getEdgeFocusState();
             state.hoverEdgeId = null;
+            state.lastHoverEdgeId = null;
+            state.hoverNodeId = null;
+            state.lastHoverNodeId = null;
             if (!keepLocks) state.lockedEdgeIds.clear();
             if (!keepBaseColors) {
                 state.baseNodeColors.clear();
@@ -3957,8 +3967,10 @@
             const nodes = dataset.nodes.get();
             const edges = dataset.edges.get();
             const state = this.getEdgeFocusState();
+            const hoverNodeId = state.hoverNodeId;
+            const nodeFocusActive = !!hoverNodeId;
             const activeEdges = new Set(state.lockedEdgeIds);
-            if (state.hoverEdgeId) activeEdges.add(state.hoverEdgeId);
+            if (!nodeFocusActive && state.hoverEdgeId) activeEdges.add(state.hoverEdgeId);
             if (state.dirty) {
                 if (activeEdges.size && (state.baseNodeColors.size || state.baseEdgeColors.size)) {
                     const nodeUpdates = nodes.map((node) => ({
@@ -3981,6 +3993,38 @@
                     state.baseEdgeColors.set(edge.id, cloneVisColor(edge.color));
                 });
                 state.dirty = false;
+            }
+            if (nodeFocusActive) {
+                const activeNodes = new Set([hoverNodeId]);
+                const nodeDimAlpha = this.edgeFocusFadeAlpha;
+                const edgeDimAlpha = this.edgeFocusFadeAlpha;
+                const focusEdges = new Set();
+                edges.forEach((edge) => {
+                    if (edge.from === hoverNodeId || edge.to === hoverNodeId) {
+                        focusEdges.add(edge.id);
+                        if (edge.from != null) activeNodes.add(edge.from);
+                        if (edge.to != null) activeNodes.add(edge.to);
+                    }
+                });
+                const nodeUpdates = nodes.map((node) => {
+                    const baseColor = state.baseNodeColors.get(node.id) || node.color;
+                    const color = activeNodes.has(node.id)
+                        ? fadeNodeColor(baseColor, 1)
+                        : fadeNodeColor(baseColor, nodeDimAlpha);
+                    return { id: node.id, color };
+                });
+                const edgeUpdates = edges.map((edge) => {
+                    const baseColor = state.baseEdgeColors.get(edge.id) || edge.color;
+                    const color = focusEdges.has(edge.id)
+                        ? fadeEdgeColor(baseColor, 1)
+                        : fadeEdgeColor(baseColor, edgeDimAlpha);
+                    return { id: edge.id, color };
+                });
+                dataset.nodes.update(nodeUpdates);
+                dataset.edges.update(edgeUpdates);
+                this.applyEdgeFocusLabelDisplay(activeNodes);
+                this.applyEdgeLabelDisplay();
+                return;
             }
             if (!activeEdges.size) {
                 const nodeUpdates = nodes.map((node) => ({
@@ -4092,6 +4136,16 @@
 
         clearEdgeHover() {
             this.setEdgeHover(null);
+        }
+
+        setNodeHover(nodeId) {
+            const state = this.getEdgeFocusState();
+            state.hoverNodeId = nodeId || null;
+            this.applyEdgeFocusDisplay();
+        }
+
+        clearNodeHover() {
+            this.setNodeHover(null);
         }
 
         isEdgeLocked(edgeId) {
@@ -5540,6 +5594,9 @@
             const list = await this.loadSavedList();
             const safeList = Array.isArray(list) ? list : [];
             this.renderSavedSelect(safeList);
+            if (this._visViewReady && this.visNetwork && this.visNetworkData) {
+                return;
+            }
             const savedIdx = await this.loadSavedSelect();
             const idx = this.getValidSavedIndex(safeList, savedIdx);
             if (idx == null) {
@@ -5591,6 +5648,18 @@
                 }
                 if (this._onEdgeContext) {
                     this._boundNetwork.off('oncontext', this._onEdgeContext);
+                }
+                if (this._onNodeHover) {
+                    this._boundNetwork.off('hoverNode', this._onNodeHover);
+                }
+                if (this._onNodeBlur) {
+                    this._boundNetwork.off('blurNode', this._onNodeBlur);
+                }
+                if (this._edgeHoverKeyDown) {
+                    document.removeEventListener('keydown', this._edgeHoverKeyDown);
+                }
+                if (this._edgeHoverKeyUp) {
+                    document.removeEventListener('keyup', this._edgeHoverKeyUp);
                 }
             }
             this._onNetworkClick = (params) => {
@@ -5692,9 +5761,11 @@
             };
             network.on('afterDrawing', this._onNetworkAfterDraw);
             this._onEdgeHover = (params) => {
+                const state = this.getEdgeFocusState();
                 const edgeId = params?.edge;
                 const evt = params?.event?.event || params?.event?.srcEvent || params?.event;
                 const hasMod = !!(evt && (evt.metaKey || evt.ctrlKey));
+                state.lastHoverEdgeId = edgeId || null;
                 if (!hasMod) {
                     if (this.getEdgeFocusState().hoverEdgeId) {
                         this.clearEdgeHover();
@@ -5706,7 +5777,30 @@
                 }
             };
             this._onEdgeBlur = () => {
+                const state = this.getEdgeFocusState();
+                state.lastHoverEdgeId = null;
                 this.clearEdgeHover();
+            };
+            this._onNodeHover = (params) => {
+                const state = this.getEdgeFocusState();
+                const nodeId = params?.node;
+                const evt = params?.event?.event || params?.event?.srcEvent || params?.event;
+                const hasMod = !!(evt && (evt.metaKey || evt.ctrlKey));
+                state.lastHoverNodeId = nodeId || null;
+                if (!hasMod) {
+                    if (state.hoverNodeId) {
+                        this.clearNodeHover();
+                    }
+                    return;
+                }
+                if (nodeId) {
+                    this.setNodeHover(nodeId);
+                }
+            };
+            this._onNodeBlur = () => {
+                const state = this.getEdgeFocusState();
+                state.lastHoverNodeId = null;
+                this.clearNodeHover();
             };
             this._onEdgeContext = (params) => {
                 const evt = params?.event?.event || params?.event?.srcEvent || params?.event;
@@ -5721,7 +5815,39 @@
             };
             network.on('hoverEdge', this._onEdgeHover);
             network.on('blurEdge', this._onEdgeBlur);
+            network.on('hoverNode', this._onNodeHover);
+            network.on('blurNode', this._onNodeBlur);
             network.on('oncontext', this._onEdgeContext);
+            this._edgeHoverKeyDown = (e) => {
+                if (!(e.metaKey || e.ctrlKey)) return;
+                const view = this.getEl(this.ids.view);
+                if (!view || !view.classList.contains('active')) return;
+                const state = this.getEdgeFocusState();
+                const nodeId = state.lastHoverNodeId;
+                if (nodeId) {
+                    if (state.hoverNodeId !== nodeId) {
+                        this.setNodeHover(nodeId);
+                    }
+                    return;
+                }
+                const edgeId = state.lastHoverEdgeId;
+                if (!edgeId) return;
+                if (state.hoverEdgeId === edgeId) return;
+                this.setEdgeHover(edgeId);
+            };
+            this._edgeHoverKeyUp = (e) => {
+                if (e.key !== 'Meta' && e.key !== 'Control') return;
+                const view = this.getEl(this.ids.view);
+                if (!view || !view.classList.contains('active')) return;
+                if (this.getEdgeFocusState().hoverEdgeId) {
+                    this.clearEdgeHover();
+                }
+                if (this.getEdgeFocusState().hoverNodeId) {
+                    this.clearNodeHover();
+                }
+            };
+            document.addEventListener('keydown', this._edgeHoverKeyDown);
+            document.addEventListener('keyup', this._edgeHoverKeyUp);
             this._boundNetwork = network;
         }
 
