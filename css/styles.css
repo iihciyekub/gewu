@@ -2973,7 +2973,8 @@ body.theme-dark .vis-settings-panel.is-open .vis-label-panel label {
     flex-wrap: wrap;
 }
 
-.vis-label-threshold {
+.vis-label-threshold,
+.vis-related-threshold {
     display: grid;
     grid-template-columns: 140px 1fr;
     gap: 6px 10px;
@@ -2999,6 +3000,70 @@ body.theme-dark .vis-settings-panel.is-open .vis-label-panel label {
     gap: 6px 10px;
     margin-top: 6px;
     align-items: center;
+}
+
+.doi-index-settings-panel .settings-field-actions {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-top: 4px;
+}
+
+.doi-index-count {
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.doi-index-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-top: 8px;
+    max-height: 320px;
+    overflow-y: auto;
+    padding-right: 4px;
+}
+
+.doi-index-item {
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+    border: 1px solid var(--wos-border, #e5e7eb);
+    border-radius: 10px;
+    padding: 8px 10px;
+    background: var(--wos-card, #ffffff);
+}
+
+.doi-index-item-main {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+}
+
+.doi-index-item-title {
+    font-weight: 600;
+    font-size: 12px;
+    color: var(--wos-text, #111111);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.doi-index-item-meta {
+    font-size: 11px;
+    color: var(--wos-muted, #6b7280);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.doi-index-empty {
+    margin-top: 8px;
+    font-size: 12px;
+    color: var(--wos-muted, #6b7280);
 }
 
 .vis-label-weight {
@@ -3144,14 +3209,41 @@ body.theme-dark .vis-settings-panel.is-open .vis-label-panel label {
 
 .settings-field-row {
     display: grid;
-    grid-template-columns: 110px 1fr;
+    grid-template-columns: 1fr auto;
     gap: 10px;
     align-items: center;
     font-size: 12px;
+    padding: 12px 14px;
+    border-radius: 12px;
+    border: 1px solid var(--wos-border, #e5e7eb);
+    background: var(--wos-card, #ffffff);
+    box-shadow: 0 6px 16px rgba(15, 23, 42, 0.06);
 }
 
 .settings-field-row label {
-    color: var(--gray-600);
+    color: var(--gray-700);
+    font-weight: 600;
+    letter-spacing: 0.2px;
+}
+
+.settings-field-row .doi-index-count {
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--wos-text, #111111);
+}
+
+body.theme-dark .settings-field-row {
+    border-color: rgba(148, 163, 184, 0.25);
+    background: rgba(15, 23, 42, 0.65);
+    box-shadow: 0 8px 18px rgba(2, 6, 23, 0.5);
+}
+
+body.theme-dark .settings-field-row label {
+    color: rgba(226, 232, 240, 0.8);
+}
+
+body.theme-dark .settings-field-row .doi-index-count {
+    color: #f1f5f9;
 }
 
 .settings-field-row input {

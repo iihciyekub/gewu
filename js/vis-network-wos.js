@@ -45,6 +45,14 @@
         });
     }
 
+    function parseNumber(value) {
+        if (value == null) return 0;
+        const rawText = String(value);
+        const digits = rawText.replace(/\D+/g, '');
+        if (!digits) return 0;
+        return Number.parseInt(digits, 10);
+    }
+
     function buildVisNetworkDataFromWos(raw) {
         const nodes = [];
         const edges = [];
@@ -72,13 +80,6 @@
             nodeMap.set(normalizedId, node);
             return normalizedId;
         };
-        const parseNumber = (value) => {
-            if (value == null) return 0;
-            const rawText = String(value);
-            const digits = rawText.replace(/\D+/g, '');
-            if (!digits) return 0;
-            return Number.parseInt(digits, 10);
-        };
         const ensureField = (value) => {
             if (value == null) return 'undef';
             const text = String(value).trim();
@@ -99,8 +100,7 @@
                 shape: 'dot',
                 size: 16,
                 font: { size: 14, color: '#111', align: 'bottom', vadjust: 12 },
-                citationsValue: rootCitations,
-                citations_count: ensureField(rootCitationsRaw),
+                citations_count: rootCitations,
                 related_count: ensureField(rootRelatedRaw),
                 ref_count: ensureField(rootRefRaw)
             });
@@ -126,8 +126,7 @@
                     shape: 'dot',
                     size: 12,
                     font: { size: 11, color: '#111', align: 'bottom', vadjust: 12 },
-                    citationsValue,
-                    citations_count: ensureField(citationsRaw),
+                    citations_count: citationsValue,
                     related_count: ensureField(relatedRaw),
                     ref_count: ensureField(refRaw)
                 });
@@ -146,14 +145,14 @@
         let minCitation = Infinity;
         let maxCitation = -Infinity;
         nodes.forEach((node) => {
-            const citations = Number.isFinite(node.citationsValue) ? node.citationsValue : 0;
+            const citations = parseNumber(node.citations_count);
             minCitation = Math.min(minCitation, citations);
             maxCitation = Math.max(maxCitation, citations);
         });
         let minNodeSize = Infinity;
         let maxNodeSize = -Infinity;
         nodes.forEach((node) => {
-            const citations = Number.isFinite(node.citationsValue) ? node.citationsValue : 0;
+            const citations = parseNumber(node.citations_count);
             let size = minSize;
             if (Number.isFinite(minCitation) && Number.isFinite(maxCitation) && maxCitation > minCitation) {
                 const t = (citations - minCitation) / (maxCitation - minCitation);
@@ -196,11 +195,13 @@
                 hover: `rgba(0,0,0,${Math.min(1, alpha + 0.15).toFixed(3)})`
             };
         });
-        nodes.forEach((node) => {
-            const related = nodeRelatedMax.get(node.id) || 0;
-            const t = normalize(related, minRelated, maxRelated);
-            const alpha = 0.35 + t * 0.55;
-            node.color = {
+            nodes.forEach((node) => {
+                const relatedRaw = parseNumber(node.related_count);
+                const related = Number.isFinite(relatedRaw) ? relatedRaw : 0;
+                const t = normalize(related, minRelated, maxRelated);
+                const alpha = 0.35 + t * 0.55;
+                node.relatedValue = related;
+                node.color = {
                 background: '#ffffff',
                 border: `rgba(0,0,0,${Math.min(1, alpha + 0.15).toFixed(3)})`,
                 highlight: {
@@ -348,11 +349,11 @@
         const visData = buildVisNetworkDataFromWos(data);
         const node = visData.nodes.find((n) => n.id === nodeId);
         if (!node) return null;
-        return {
-            id: node.id,
-            citationsValue: node.citationsValue || 0,
-            size: node.size
-        };
+            return {
+                id: node.id,
+                citations_count: parseNumber(node.citations_count),
+                size: node.size
+            };
     }
 
     function getSizeStats(raw) {
@@ -609,6 +610,25 @@
         return JSON.parse(JSON.stringify(input));
     }
 
+    function coerceNumericFields(value) {
+        if (Array.isArray(value)) {
+            return value.map((item) => coerceNumericFields(item));
+        }
+        if (value && typeof value === 'object') {
+            Object.keys(value).forEach((key) => {
+                value[key] = coerceNumericFields(value[key]);
+            });
+            return value;
+        }
+        if (typeof value !== 'string') return value;
+        const trimmed = value.trim();
+        if (!trimmed) return value;
+        const numericPattern = /^[+-]?\d+(?:\.\d+)?(?:e[+-]?\d+)?$/i;
+        if (!numericPattern.test(trimmed)) return value;
+        const next = Number(trimmed);
+        return Number.isFinite(next) ? next : value;
+    }
+
     function fadeEdgeColor(baseColor, alpha) {
         if (!baseColor) return baseColor;
         if (typeof baseColor === 'string') return setColorAlpha(baseColor, alpha);
@@ -694,6 +714,9 @@
                 labelBorderColorInput: options.labelBorderColorInputId || 'visLabelBorderColorInput',
                 labelSizeSlider: options.labelSizeSliderId || 'visLabelSizeSlider',
                 labelMinSlider: options.labelMinSliderId || 'visLabelMinSlider',
+                labelMinDimSlider: options.labelMinDimSliderId || 'visLabelMinDimSlider',
+                relatedMinSlider: options.relatedMinSliderId || 'visRelatedMinSlider',
+                relatedMinDimSlider: options.relatedMinDimSliderId || 'visRelatedMinDimSlider',
                 nodeSizeMinSlider: options.nodeSizeMinSliderId || 'visNodeSizeMinSlider',
                 nodeSizeMaxSlider: options.nodeSizeMaxSliderId || 'visNodeSizeMaxSlider',
                 nodeSizeGammaSlider: options.nodeSizeGammaSliderId || 'visNodeSizeGammaSlider',
@@ -758,6 +781,11 @@
             this.labelWeight = 500;
             this.labelFontMin = 9;
             this.labelFontMax = 30;
+            this.labelMinDimAlpha = 0.2;
+            this.relatedMinValue = 0;
+            this.relatedMinDimAlpha = 0.2;
+            this._labelThresholdBaseDirty = true;
+            this._labelThresholdDimState = null;
             this.nodeSizeMin = 6;
             this.nodeSizeMax = 60;
             this.nodeSizeGamma = 1;
@@ -851,6 +879,9 @@
             const labelBorderColorInput = this.getEl(this.ids.labelBorderColorInput);
             const labelSizeSlider = this.getEl(this.ids.labelSizeSlider);
             const labelMinSlider = this.getEl(this.ids.labelMinSlider);
+            const labelMinDimSlider = this.getEl(this.ids.labelMinDimSlider);
+            const relatedMinSlider = this.getEl(this.ids.relatedMinSlider);
+            const relatedMinDimSlider = this.getEl(this.ids.relatedMinDimSlider);
             const nodeSizeMinSlider = this.getEl(this.ids.nodeSizeMinSlider);
             const nodeSizeMaxSlider = this.getEl(this.ids.nodeSizeMaxSlider);
             const nodeSizeGammaSlider = this.getEl(this.ids.nodeSizeGammaSlider);
@@ -989,6 +1020,7 @@
                         }
                     }
                     if (!parsed) return;
+                    parsed = coerceNumericFields(parsed);
                     const formatted = JSON.stringify(parsed, null, 2);
                     inputTextarea.value = formatted;
                     this.visInputText = formatted;
@@ -1323,6 +1355,23 @@
             bindNumberInput(labelMinSlider, (next) => {
                 this.labelMinCitations = next;
                 this.applyLabelThreshold();
+                this.queuePersistSettings();
+            });
+            bindNumberInput(labelMinDimSlider, (next) => {
+                const clamped = Math.max(0, Math.min(1, Number.isFinite(next) ? next : 0.2));
+                this.labelMinDimAlpha = clamped;
+                this.applyLabelThresholdDimming();
+                this.queuePersistSettings();
+            });
+            bindNumberInput(relatedMinSlider, (next) => {
+                this.relatedMinValue = Number.isFinite(next) ? next : 0;
+                this.applyLabelThresholdDimming();
+                this.queuePersistSettings();
+            });
+            bindNumberInput(relatedMinDimSlider, (next) => {
+                const clamped = Math.max(0, Math.min(1, Number.isFinite(next) ? next : 0.2));
+                this.relatedMinDimAlpha = clamped;
+                this.applyLabelThresholdDimming();
                 this.queuePersistSettings();
             });
             bindNumberInput(labelWeightSlider, (next) => {
@@ -2196,8 +2245,20 @@
             }
             this.wrapLabelToggleButton();
             const minSlider = this.getEl(this.ids.labelMinSlider);
+            const minDimSlider = this.getEl(this.ids.labelMinDimSlider);
+            const relatedMinSlider = this.getEl(this.ids.relatedMinSlider);
+            const relatedMinDimSlider = this.getEl(this.ids.relatedMinDimSlider);
             if (minSlider) {
                 minSlider.value = String(this.labelMinCitations || 0);
+            }
+            if (minDimSlider) {
+                minDimSlider.value = String(this.labelMinDimAlpha ?? 0.2);
+            }
+            if (relatedMinSlider) {
+                relatedMinSlider.value = String(this.relatedMinValue || 0);
+            }
+            if (relatedMinDimSlider) {
+                relatedMinDimSlider.value = String(this.relatedMinDimAlpha ?? 0.2);
             }
             this.refreshLabelFieldOptions();
             void this.applyLabelField(this.labelField);
@@ -2294,6 +2355,10 @@
             const minSlider = this.getEl(this.ids.labelMinSlider);
             if (minSlider) {
                 minSlider.value = String(this.labelMinCitations || 0);
+            }
+            const minDimSlider = this.getEl(this.ids.labelMinDimSlider);
+            if (minDimSlider) {
+                minDimSlider.value = String(this.labelMinDimAlpha ?? 0.2);
             }
             this.refreshLabelFieldOptions();
             void this.applyLabelField(this.labelField);
@@ -2460,6 +2525,12 @@
                 if (slider) slider.value = String(this.labelFade || 0);
                 const minSlider = this.getEl(this.ids.labelMinSlider);
                 if (minSlider) minSlider.value = String(this.labelMinCitations || 0);
+                const minDimSlider = this.getEl(this.ids.labelMinDimSlider);
+                if (minDimSlider) minDimSlider.value = String(this.labelMinDimAlpha ?? 0.2);
+                const relatedMinSlider = this.getEl(this.ids.relatedMinSlider);
+                if (relatedMinSlider) relatedMinSlider.value = String(this.relatedMinValue || 0);
+                const relatedMinDimSlider = this.getEl(this.ids.relatedMinDimSlider);
+                if (relatedMinDimSlider) relatedMinDimSlider.value = String(this.relatedMinDimAlpha ?? 0.2);
                 const sizeSlider = this.getEl(this.ids.labelSizeSlider);
                 if (sizeSlider) sizeSlider.value = String(Math.round((this.labelSizeScale || 1) * 100));
                 const labelFontMinInput = this.getEl(this.ids.labelFontMinInput);
@@ -3032,7 +3103,9 @@
                     || node.labelStyle?.fontSize
                     || node.labelFontSize
                     || 12;
-                const citations = Number.isFinite(node.citationsValue) ? node.citationsValue : null;
+            const citations = Number.isFinite(parseNumber(node.citations_count))
+                ? parseNumber(node.citations_count)
+                : null;
                 let factor = 1;
                 if (citations != null && maxCitation > minCitation) {
                     const t = (citations - minCitation) / (maxCitation - minCitation);
@@ -3111,7 +3184,7 @@
             const lightRange = Math.round(60 + fade * 120);
             const darkMode = isDarkTheme();
             const updates = dataset.get().map((node) => {
-                const citations = Number.isFinite(node.citationsValue) ? node.citationsValue : 0;
+            const citations = parseNumber(node.citations_count);
                 const t = maxCitation > minCitation ? (citations - minCitation) / (maxCitation - minCitation) : 1;
                 const k = Math.max(0, Math.min(1, t));
                 const grayRaw = darkMode
@@ -3136,20 +3209,119 @@
                 if (node.labelMissingField) {
                     return { id: node.id, labelHidden: true };
                 }
-                if (!Number.isFinite(node.citationsValue)) {
-                    const value = this.labelValueMap.get(node.id);
-                    return value != null
-                        ? { id: node.id, hiddenLabel: String(value), labelHidden: false }
-                        : { id: node.id, labelHidden: false };
-                }
-                if (node.citationsValue < min) {
-                    return { id: node.id, labelHidden: true };
-                }
+            if (!Number.isFinite(parseNumber(node.citations_count))) {
+                const value = this.labelValueMap.get(node.id);
+                return value != null
+                    ? { id: node.id, hiddenLabel: String(value), labelHidden: false }
+                    : { id: node.id, labelHidden: false };
+            }
+            if (parseNumber(node.citations_count) < min) {
+                return { id: node.id, labelHidden: true };
+            }
                 const value = this.labelValueMap.get(node.id) ?? node.labelValue ?? node.hiddenLabel ?? '';
                 return { id: node.id, hiddenLabel: value, labelHidden: false };
             });
             dataset.update(updates);
             this.updateLabelLayer();
+            this.applyLabelThresholdDimming();
+        }
+
+        applyLabelThresholdDimming() {
+            if (!this.visNetwork) return;
+            const dataset = this.visNetwork?.body?.data;
+            if (!dataset?.nodes || !dataset?.edges) return;
+            const min = Number.isFinite(this.labelMinCitations) ? this.labelMinCitations : 0;
+            const dimAlpha = Number.isFinite(this.labelMinDimAlpha) ? this.labelMinDimAlpha : 0.2;
+            const relatedMin = Number.isFinite(this.relatedMinValue) ? this.relatedMinValue : 0;
+            const relatedDimAlpha = Number.isFinite(this.relatedMinDimAlpha) ? this.relatedMinDimAlpha : 0.2;
+            const state = this._labelThresholdDimState || {
+                baseNodeColors: new Map(),
+                baseEdgeColors: new Map()
+            };
+            this._labelThresholdDimState = state;
+            const nodes = dataset.nodes.get();
+            const edges = dataset.edges.get();
+            const hasLabelRule = min > 0 && dimAlpha < 1;
+            const hasRelatedRule = relatedMin > 0 && relatedDimAlpha < 1;
+            if (!hasLabelRule && !hasRelatedRule) {
+                if (state.baseNodeColors.size || state.baseEdgeColors.size) {
+                    const nodeUpdates = nodes.map((node) => ({
+                        id: node.id,
+                        color: state.baseNodeColors.get(node.id) || node.color
+                    }));
+                    const edgeUpdates = edges.map((edge) => ({
+                        id: edge.id,
+                        color: state.baseEdgeColors.get(edge.id) || edge.color
+                    }));
+                    dataset.nodes.update(nodeUpdates);
+                    dataset.edges.update(edgeUpdates);
+                    state.baseNodeColors.clear();
+                    state.baseEdgeColors.clear();
+                    this.markEdgeFocusDirty();
+                    this.applyEdgeFocusDisplay();
+                }
+                return;
+            }
+            if (this._labelThresholdBaseDirty) {
+                state.baseNodeColors.clear();
+                state.baseEdgeColors.clear();
+                this._labelThresholdBaseDirty = false;
+            }
+            nodes.forEach((node) => {
+                if (!state.baseNodeColors.has(node.id)) {
+                    state.baseNodeColors.set(node.id, cloneVisColor(node.color));
+                }
+            });
+            edges.forEach((edge) => {
+                if (!state.baseEdgeColors.has(edge.id)) {
+                    state.baseEdgeColors.set(edge.id, cloneVisColor(edge.color));
+                }
+            });
+            const lowNodes = new Set();
+            const lowRelatedNodes = new Set();
+            nodes.forEach((node) => {
+                const citations = parseNumber(node.citations_count);
+                if (!Number.isFinite(citations)) return;
+                if (citations < min) lowNodes.add(node.id);
+            });
+            nodes.forEach((node) => {
+                const relatedRaw = Number.isFinite(node.relatedValue)
+                    ? node.relatedValue
+                    : parseNumber(node.related_count);
+                if (!Number.isFinite(relatedRaw)) return;
+                if (relatedRaw < relatedMin) lowRelatedNodes.add(node.id);
+            });
+            const nodeUpdates = nodes.map((node) => {
+                const baseColor = state.baseNodeColors.get(node.id) || node.color;
+                let alpha = 1;
+                if (hasLabelRule && lowNodes.has(node.id)) {
+                    alpha = Math.min(alpha, dimAlpha);
+                }
+                if (hasRelatedRule && lowRelatedNodes.has(node.id)) {
+                    alpha = Math.min(alpha, relatedDimAlpha);
+                }
+                const color = alpha < 1 ? fadeNodeColor(baseColor, alpha) : baseColor;
+                return { id: node.id, color };
+            });
+            const edgeUpdates = edges.map((edge) => {
+                const baseColor = state.baseEdgeColors.get(edge.id) || edge.color;
+                let alpha = 1;
+                if (hasLabelRule && (lowNodes.has(edge.from) || lowNodes.has(edge.to))) {
+                    alpha = Math.min(alpha, dimAlpha);
+                }
+                if (hasRelatedRule && (lowRelatedNodes.has(edge.from) || lowRelatedNodes.has(edge.to))) {
+                    alpha = Math.min(alpha, relatedDimAlpha);
+                }
+                if (hasRelatedRule && Number.isFinite(edge.relatedValue) && edge.relatedValue < relatedMin) {
+                    alpha = Math.min(alpha, relatedDimAlpha);
+                }
+                const color = alpha < 1 ? fadeEdgeColor(baseColor, alpha) : baseColor;
+                return { id: edge.id, color };
+            });
+            dataset.nodes.update(nodeUpdates);
+            dataset.edges.update(edgeUpdates);
+            this.markEdgeFocusDirty();
+            this.applyEdgeFocusDisplay();
         }
 
         applyNodeSizeScale() {
@@ -3162,7 +3334,7 @@
             const maxSize = Number.isFinite(Number(this.nodeSizeMax)) ? Number(this.nodeSizeMax) : minSize + 1;
             const gamma = Number.isFinite(Number(this.nodeSizeGamma)) ? Number(this.nodeSizeGamma) : 1;
             const updates = dataset.get().map((node) => {
-                const citations = Number.isFinite(node.citationsValue) ? node.citationsValue : 0;
+            const citations = parseNumber(node.citations_count);
                 const t = maxCitation > minCitation ? (citations - minCitation) / (maxCitation - minCitation) : 0;
                 const bounded = Math.max(0, Math.min(1, t));
                 const eased = bounded === 0 ? 0 : Math.pow(bounded, gamma);
@@ -3181,7 +3353,7 @@
             const base = Number.isFinite(Number(this.nodeBorderWidth)) ? Number(this.nodeBorderWidth) : 1.5;
             const range = Math.abs(base) * 2.2;
             const updates = dataset.get().map((node) => {
-                const citations = Number.isFinite(node.citationsValue) ? node.citationsValue : 0;
+            const citations = parseNumber(node.citations_count);
                 let t = maxCitation > minCitation ? (citations - minCitation) / (maxCitation - minCitation) : 0;
                 t = Math.max(0, Math.min(1, t));
                 const eased = Math.pow(t, 1.6);
@@ -3216,6 +3388,8 @@
             dataset.update(updates);
             this.markEdgeFocusDirty();
             this.applyEdgeFocusDisplay();
+            this._labelThresholdBaseDirty = true;
+            this.applyLabelThresholdDimming();
         }
 
         applyNodeBorderColor() {
@@ -3230,6 +3404,8 @@
             dataset.update(updates);
             this.markEdgeFocusDirty();
             this.applyEdgeFocusDisplay();
+            this._labelThresholdBaseDirty = true;
+            this.applyLabelThresholdDimming();
         }
 
         applyEdgeFade() {
@@ -3278,6 +3454,8 @@
             dataset.update(updates);
             this.markEdgeFocusDirty();
             this.applyEdgeFocusDisplay();
+            this._labelThresholdBaseDirty = true;
+            this.applyLabelThresholdDimming();
         }
 
         applyEdgeWidthRange() {
@@ -3767,6 +3945,9 @@
             this.labelBgColor = '#fafafaff';
             this.labelBorderColor = '#dbdbdbff';
             this.labelMinCitations = 0;
+            this.labelMinDimAlpha = 0.2;
+            this.relatedMinValue = 0;
+            this.relatedMinDimAlpha = 0.2;
 
             this.applyLabelFade();
             this.applyLabelSizeScale();
@@ -3843,6 +4024,9 @@
             const labelSizeSlider = this.getEl(this.ids.labelSizeSlider);
             const labelFadeSlider = this.getEl(this.ids.labelFadeSlider);
             const labelMinSlider = this.getEl(this.ids.labelMinSlider);
+            const labelMinDimSlider = this.getEl(this.ids.labelMinDimSlider);
+            const relatedMinSlider = this.getEl(this.ids.relatedMinSlider);
+            const relatedMinDimSlider = this.getEl(this.ids.relatedMinDimSlider);
             const labelWeightSlider = this.getEl(this.ids.labelWeightSlider);
             const labelBgColorInput = this.getEl(this.ids.labelBgColorInput);
             const labelBorderColorInput = this.getEl(this.ids.labelBorderColorInput);
@@ -3868,6 +4052,9 @@
             if (labelBgColorInput) labelBgColorInput.value = this.labelBgColor || '#f2f2f2f1';
             if (labelBorderColorInput) labelBorderColorInput.value = this.labelBorderColor || '#00000021';
             if (labelMinSlider) labelMinSlider.value = String(minCite);
+            if (labelMinDimSlider) labelMinDimSlider.value = String(this.labelMinDimAlpha ?? 0.2);
+            if (relatedMinSlider) relatedMinSlider.value = String(this.relatedMinValue || 0);
+            if (relatedMinDimSlider) relatedMinDimSlider.value = String(this.relatedMinDimAlpha ?? 0.2);
             if (labelWeightSlider) labelWeightSlider.value = String(this.labelWeight || 500);
             if (physicsSpringSlider) physicsSpringSlider.value = String(this.physicsSpringLength);
             if (physicsStrengthSlider) physicsStrengthSlider.value = String(this.physicsSpringConstant);
@@ -3886,6 +4073,7 @@
             this.applyLabelColor();
             this.applyLabelBgColor();
             this.applyLabelThreshold();
+            this.applyLabelThresholdDimming();
             this.applyLabelWeight();
             this.applyPhysicsSettings();
             this.applyEdgeFade();
@@ -3902,6 +4090,9 @@
                 labelBorderColor: this.labelBorderColor,
                 labelSizeScale: this.labelSizeScale,
                 labelMinCitations: this.labelMinCitations,
+                labelMinDimAlpha: this.labelMinDimAlpha,
+                relatedMinValue: this.relatedMinValue,
+                relatedMinDimAlpha: this.relatedMinDimAlpha,
                 labelWeight: this.labelWeight,
                 labelFontMin: this.labelFontMin,
                 labelFontMax: this.labelFontMax,
@@ -3941,6 +4132,9 @@
             if (typeof payload.labelBorderColor === 'string') this.labelBorderColor = payload.labelBorderColor;
             if (Number.isFinite(payload.labelSizeScale)) this.labelSizeScale = payload.labelSizeScale;
             if (Number.isFinite(payload.labelMinCitations)) this.labelMinCitations = payload.labelMinCitations;
+            if (Number.isFinite(payload.labelMinDimAlpha)) this.labelMinDimAlpha = payload.labelMinDimAlpha;
+            if (Number.isFinite(payload.relatedMinValue)) this.relatedMinValue = payload.relatedMinValue;
+            if (Number.isFinite(payload.relatedMinDimAlpha)) this.relatedMinDimAlpha = payload.relatedMinDimAlpha;
             if (Number.isFinite(payload.labelWeight)) this.labelWeight = payload.labelWeight;
             if (Number.isFinite(payload.labelFontMin)) this.labelFontMin = payload.labelFontMin;
             if (Number.isFinite(payload.labelFontMax)) this.labelFontMax = payload.labelFontMax;
@@ -3974,6 +4168,7 @@
             this.applyLabelBgColor();
             this.applyLabelBorderColor();
             this.applyLabelThreshold();
+            this.applyLabelThresholdDimming();
             this.applyNodeSizeScale();
             this.applyNodeBorderWidth();
             this.applyNodeColor();
@@ -4382,6 +4577,9 @@
                 if (typeof payload.labelBorderColor === 'string') this.labelBorderColor = payload.labelBorderColor;
                 if (Number.isFinite(payload.labelSizeScale)) this.labelSizeScale = payload.labelSizeScale;
                 if (Number.isFinite(payload.labelMinCitations)) this.labelMinCitations = payload.labelMinCitations;
+                if (Number.isFinite(payload.labelMinDimAlpha)) this.labelMinDimAlpha = payload.labelMinDimAlpha;
+                if (Number.isFinite(payload.relatedMinValue)) this.relatedMinValue = payload.relatedMinValue;
+                if (Number.isFinite(payload.relatedMinDimAlpha)) this.relatedMinDimAlpha = payload.relatedMinDimAlpha;
                 if (Number.isFinite(payload.labelWeight)) this.labelWeight = payload.labelWeight;
                 if (Number.isFinite(payload.labelFontMin)) this.labelFontMin = payload.labelFontMin;
                 if (Number.isFinite(payload.labelFontMax)) this.labelFontMax = payload.labelFontMax;
@@ -4458,6 +4656,9 @@
             const labelBorderColorInput = this.getEl(this.ids.labelBorderColorInput);
             const labelSizeSlider = this.getEl(this.ids.labelSizeSlider);
             const labelMinSlider = this.getEl(this.ids.labelMinSlider);
+            const labelMinDimSlider = this.getEl(this.ids.labelMinDimSlider);
+            const relatedMinSlider = this.getEl(this.ids.relatedMinSlider);
+            const relatedMinDimSlider = this.getEl(this.ids.relatedMinDimSlider);
             const labelWeightSlider = this.getEl(this.ids.labelWeightSlider);
             const labelFontMinInput = this.getEl(this.ids.labelFontMinInput);
             const labelFontMaxInput = this.getEl(this.ids.labelFontMaxInput);
@@ -4483,6 +4684,9 @@
             this.setColorInputValue(labelBorderColorInput, this.labelBorderColor || '#00000021');
             if (labelSizeSlider) labelSizeSlider.value = String(Math.round((this.labelSizeScale || 1) * 100));
             if (labelMinSlider) labelMinSlider.value = String(this.labelMinCitations || 0);
+            if (labelMinDimSlider) labelMinDimSlider.value = String(this.labelMinDimAlpha ?? 0.2);
+            if (relatedMinSlider) relatedMinSlider.value = String(this.relatedMinValue || 0);
+            if (relatedMinDimSlider) relatedMinDimSlider.value = String(this.relatedMinDimAlpha ?? 0.2);
             if (labelWeightSlider) labelWeightSlider.value = String(this.labelWeight || 500);
             if (labelFontMinInput) labelFontMinInput.value = String(this.labelFontMin ?? 9);
             if (labelFontMaxInput) labelFontMaxInput.value = String(this.labelFontMax ?? 30);
@@ -4576,6 +4780,7 @@
                 this.notify(`JSON 解析失败: ${err.message}`, 'error');
                 return;
             }
+            parsed = coerceNumericFields(parsed);
             const formatted = JSON.stringify(parsed, null, 2);
             this.visInputText = formatted;
             textarea.value = formatted;
@@ -4604,6 +4809,7 @@
                 this.notify(`JSON 解析失败: ${err.message}`, 'error');
                 return;
             }
+            incoming = coerceNumericFields(incoming);
             let base = this.graphModel?.source || null;
             if (!base && this.visInputText) {
                 try {

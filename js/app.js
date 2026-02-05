@@ -158,6 +158,7 @@ class PaperStatsApp {
         this.autoLoadPdf = false;
         this.apiSettingsVisible = false;
         this.autoSaveConfigVisible = false;
+        this.doiIndexVisible = false;
         this.pdfPopupWindow = null;
         this.isPdfPopupMode = false;
         this.pdfPopupFocusInterval = null;
@@ -1601,12 +1602,20 @@ class PaperStatsApp {
         this.specialSyntaxManager = new SpecialSyntaxManager(this);
         this.projectStorage = new ProjectStorageManager(this);
         this.doiCacheManager = new DoiCacheManager(this);
+        this.wosIndexManager = window.WosIndexManager ? new WosIndexManager(this) : null;
 
         // 初始化 DOI 缓存的 IndexedDB
         try {
             await this.doiCacheManager.init();
         } catch (err) {
             console.error('Failed to initialize DOI cache:', err);
+        }
+        if (this.wosIndexManager) {
+            try {
+                await this.wosIndexManager.init();
+            } catch (err) {
+                console.error('Failed to initialize WOS index:', err);
+            }
         }
 
         // 加载环境信息（用于占位符和默认路径），不阻塞主流程
@@ -2884,6 +2893,22 @@ class PaperStatsApp {
                 await this.refreshDoiCacheFromUi();
             });
         }
+        // DOI index panel UI now shows only basic info; no list or search/actions.
+        const wosIndexClearBtn = document.getElementById('wosIndexClearBtn');
+        if (wosIndexClearBtn && !wosIndexClearBtn.dataset.bound) {
+            wosIndexClearBtn.dataset.bound = '1';
+            wosIndexClearBtn.addEventListener('click', async () => {
+                if (!this.wosIndexManager) return;
+                if (!confirm('Clear all WOS Global DB entries?')) return;
+                try {
+                    await this.wosIndexManager.clearAll();
+                    await this.renderDoiIndexPanel({ data: this._doiIndexData || [] });
+                    this.showNotification('WOS Global DB cleared', 'success');
+                } catch (err) {
+                    this.showNotification(`Failed to clear WOS DB: ${err.message}`, 'error');
+                }
+            });
+        }
 
         // 粘贴事件监听
         document.addEventListener('paste', (e) => this.handlePaste(e));
@@ -4042,6 +4067,154 @@ class PaperStatsApp {
             const msg = await response.text().catch(() => '');
             throw new Error(msg || 'Save failed');
         }
+    }
+
+    async backfillWosDataFromIndex(filename) {
+        if (!this.wosIndexManager) return;
+        if (!this.currentData || typeof this.currentData !== 'object') return;
+        if (this.currentData.wos_data) return;
+        const doi = this.currentData?.meta_info?.doi || '';
+        if (!doi) return;
+        try {
+            const record = await this.wosIndexManager.getByDoi(doi);
+            if (!record || !record.data) return;
+            this.currentData.wos_data = JSON.parse(JSON.stringify(record.data));
+            await this.saveJsonPayload(filename, this.currentData);
+            this.hasUnsavedChanges = false;
+            delete this.tempDataCache[filename];
+            this.showNotification('WOS data restored from index', 'success');
+        } catch (err) {
+            console.warn('WOS index backfill failed:', err);
+        }
+    }
+
+    async applyWosDataFromIndexForCurrentFile() {
+        if (!this.wosIndexManager) {
+            this.showNotification('WOS index not initialized', 'warning');
+            return;
+        }
+        const filename = this.currentFile;
+        if (!filename) {
+            this.showNotification('No file selected', 'info');
+            return;
+        }
+        let data = this.currentData;
+        if (!data || typeof data !== 'object') {
+            try {
+                data = await this.readProjectFile(filename);
+            } catch (err) {
+                this.showNotification(`Failed to read file: ${err.message}`, 'error');
+                return;
+            }
+        }
+        const doi = data?.meta_info?.doi || '';
+        if (!doi) {
+            this.showNotification('meta_info.doi not found', 'info');
+            return;
+        }
+        try {
+            const record = await this.wosIndexManager.getByDoi(doi);
+            if (!record || !record.data) {
+                this.showNotification('No WOS data found in index', 'info');
+                return;
+            }
+            data.wos_data = JSON.parse(JSON.stringify(record.data));
+            await this.saveJsonPayload(filename, data);
+            this.currentData = data;
+            this.hasUnsavedChanges = false;
+            delete this.tempDataCache[filename];
+            this.updateSaveButtonState();
+            this.updateSchemaBadge();
+            this.renderStructuredView();
+            this.renderFlatView();
+            this.setupEditableListeners();
+            await this.applyCurrentView();
+            this.showNotification('WOS data loaded from index', 'success');
+        } catch (err) {
+            this.showNotification(`WOS index lookup failed: ${err.message}`, 'error');
+        }
+    }
+
+    async applyWosDataFromIndexForGroup(group) {
+        if (!this.wosIndexManager) {
+            this.showNotification('WOS index not initialized', 'warning');
+            return;
+        }
+        if (!group || !Array.isArray(group.files) || !group.files.length) {
+            this.showNotification('No files in group', 'info');
+            return;
+        }
+        this.showNotification('WOS index: processing group...', 'info');
+        const view = this.currentJsonView || 'view1';
+        let updated = 0;
+        let skipped = 0;
+        let missingDoi = 0;
+        let notFound = 0;
+        for (const base of group.files) {
+            const cleanBase = String(base || '').replace(/\.json$/i, '');
+            if (!cleanBase) {
+                skipped += 1;
+                continue;
+            }
+            const path = this.getViewPathForBase(cleanBase, view);
+            if (!path) {
+                skipped += 1;
+                continue;
+            }
+            let data = this.tempDataCache[path];
+            if (!data) {
+                try {
+                    data = await this.readProjectFile(path);
+                } catch (_err) {
+                    skipped += 1;
+                    continue;
+                }
+            }
+            if (!data || typeof data !== 'object') {
+                skipped += 1;
+                continue;
+            }
+            if (data.wos_data) {
+                skipped += 1;
+                continue;
+            }
+            const doi = data?.meta_info?.doi || '';
+            if (!doi) {
+                missingDoi += 1;
+                continue;
+            }
+            const record = await this.wosIndexManager.getByDoi(doi);
+            if (!record || !record.data) {
+                notFound += 1;
+                continue;
+            }
+            data.wos_data = JSON.parse(JSON.stringify(record.data));
+            try {
+                await this.saveJsonPayload(path, data);
+            } catch (_err) {
+                skipped += 1;
+                continue;
+            }
+            if (this.currentFile === path) {
+                this.currentData = data;
+                this.hasUnsavedChanges = false;
+                delete this.tempDataCache[path];
+                this.updateSaveButtonState();
+                this.updateSchemaBadge();
+                this.renderStructuredView();
+                this.renderFlatView();
+                this.setupEditableListeners();
+                await this.applyCurrentView();
+            }
+            updated += 1;
+        }
+        const parts = [];
+        if (updated) parts.push(`updated ${updated}`);
+        if (skipped) parts.push(`skipped ${skipped}`);
+        if (missingDoi) parts.push(`missing doi ${missingDoi}`);
+        if (notFound) parts.push(`not found ${notFound}`);
+        const msg = parts.length ? parts.join(', ') : 'no changes';
+        this.showNotification(`WOS index: ${msg}`, updated ? 'success' : 'info');
     }
 
     async createJsonFromDoiList() {
@@ -5692,6 +5865,9 @@ class PaperStatsApp {
             <div class="context-menu-item" data-action="updateGroupFromWos">
                 <i class="fas fa-cloud-download-alt"></i> Submit to Chrome Extension
             </div>
+            <div class="context-menu-item" data-action="fillWosFromIndex">
+                <i class="fas fa-database"></i> Fill wos_data from IndexDB
+            </div>
             <div class="context-menu-divider"></div>
             <div class="context-menu-item danger" data-action="deleteGroupFiles">
                 <i class="fas fa-trash-alt"></i> Delete All Files in Group (JSON/MD/PDF)
@@ -5741,6 +5917,8 @@ class PaperStatsApp {
                     await this.sortGroupByTimesCitedAll(group.id);
                 } else if (action === 'updateGroupFromWos') {
                     await this.updateGroupFromWos(group);
+                } else if (action === 'fillWosFromIndex') {
+                    await this.applyWosDataFromIndexForGroup(group);
                 } else if (action === 'deleteGroupFiles') {
                     await this.deleteAllFilesInGroup(group);
                 } else if (action === 'renameGroup') {
@@ -7228,6 +7406,8 @@ class PaperStatsApp {
             this.setLastSelectedFile(base);
             this.updateFileMeta();
 
+            await this.backfillWosDataFromIndex(filename);
+
             // 更新UI状态
             this.updateSaveButtonState();
             this.updateSchemaBadge();
@@ -7274,7 +7454,7 @@ class PaperStatsApp {
                     // 刚导入的PDF，跳过可用性检查直接加载
                     this._skipPdfAvailabilityCheck = true;
                 }
-                if (this.autoLoadPdf || shouldForceLoad) {
+                if ((this.autoLoadPdf || shouldForceLoad) && this.isPdfViewActive()) {
                     await this.ensurePdfLoaded();
                 }
             } else {
@@ -9713,6 +9893,76 @@ class PaperStatsApp {
         }
     }
 
+    toggleDoiIndexPanel(forceVisible) {
+        const panel = document.getElementById('doiIndexPanel');
+        if (this.doiIndexVisible && forceVisible !== false) {
+            if (panel) this.moveSettingsPanelToEnd(panel);
+            this.updateSettingsPanelsVisibility();
+            this.saveSettingsPanelsState();
+            this.switchToView('settings');
+            this.renderDoiIndexPanel();
+            const input = document.getElementById('doiIndexSearchInput');
+            if (input) setTimeout(() => input.focus({ preventScroll: true }), 0);
+            return;
+        }
+        const next = typeof forceVisible === 'boolean' ? forceVisible : !this.doiIndexVisible;
+        this.doiIndexVisible = next;
+        if (panel) panel.classList.toggle('is-visible', next);
+        if (next) this.moveSettingsPanelToEnd(panel);
+        this.updateSettingsPanelsVisibility();
+        this.saveSettingsPanelsState();
+        if (next) {
+            this.switchToView('settings');
+            this.renderDoiIndexPanel();
+            const input = document.getElementById('doiIndexSearchInput');
+            if (input) setTimeout(() => input.focus({ preventScroll: true }), 0);
+        }
+    }
+
+    async getDoiIndexData({ rebuild = false } = {}) {
+        if (!this.doiCacheManager) return [];
+        if (rebuild) {
+            const data = await this.doiCacheManager.buildCache({ notify: true });
+            return Array.isArray(data) ? data : [];
+        }
+        const cached = await this.doiCacheManager.loadFromCache();
+        return Array.isArray(cached) ? cached : [];
+    }
+
+    async deleteDoiIndexEntry(doi) {
+        if (!this.doiCacheManager) return;
+        const data = await this.getDoiIndexData();
+        const target = this.normalizeDoi(doi);
+        const filtered = data.filter((item) => this.normalizeDoi(item?.doi || '') !== target);
+        await this.doiCacheManager.saveToCache(filtered);
+        this.renderDoiIndexPanel({ data: filtered });
+    }
+
+    async clearDoiIndexCache() {
+        if (!this.doiCacheManager) return;
+        await this.doiCacheManager.clearAllCache();
+        this.renderDoiIndexPanel({ data: [] });
+    }
+
+    async renderDoiIndexPanel(options = {}) {
+        const countEl = document.getElementById('doiIndexCount');
+        const wosCountEl = document.getElementById('wosIndexCount');
+        if (!countEl) return;
+        const data = Array.isArray(options.data)
+            ? options.data
+            : await this.getDoiIndexData({ rebuild: !!options.rebuild });
+        this._doiIndexData = data;
+        if (wosCountEl && this.wosIndexManager && typeof this.wosIndexManager.countAll === 'function') {
+            try {
+                const wosCount = await this.wosIndexManager.countAll();
+                wosCountEl.textContent = String(wosCount);
+            } catch (_err) {
+                wosCountEl.textContent = '0';
+            }
+        }
+        countEl.textContent = String(data.length);
+    }
+
     toggleAutoSavePanel(forceVisible) {
         const panel = document.getElementById('autoSaveConfigPanel');
         if (this.autoSaveConfigVisible && forceVisible !== false) {
@@ -9800,7 +10050,7 @@ class PaperStatsApp {
 
     updateSettingsPanelsVisibility() {
         const settingsContent = document.getElementById('settingsContent');
-        const hasAny = !!(this.fileFilterVisible || this.createGroupVisible || this.projectInfoVisible || this.thirdPartyInfoVisible || this.shortcutsVisible || this.queryExportVisible || this.visExportVisible || this.apiSettingsVisible || this.autoSaveConfigVisible || this.aboutVisible);
+        const hasAny = !!(this.fileFilterVisible || this.createGroupVisible || this.projectInfoVisible || this.thirdPartyInfoVisible || this.shortcutsVisible || this.queryExportVisible || this.visExportVisible || this.apiSettingsVisible || this.autoSaveConfigVisible || this.aboutVisible || this.doiIndexVisible);
         if (settingsContent) settingsContent.classList.toggle('is-empty', !hasAny);
     }
 
@@ -9849,7 +10099,9 @@ class PaperStatsApp {
         const candidates = [
             { id: 'autoSaveConfigPanel', flag: 'autoSaveConfigVisible' },
             { id: 'queryExportPanel', flag: 'queryExportVisible' },
+            { id: 'visExportSettingsPanel', flag: 'visExportVisible' },
             { id: 'apiSettingsPanel', flag: 'apiSettingsVisible' },
+            { id: 'doiIndexPanel', flag: 'doiIndexVisible' },
             { id: 'shortcutsInfoPanel', flag: 'shortcutsVisible' },
             { id: 'thirdPartyInfoPanel', flag: 'thirdPartyInfoVisible' },
             { id: 'projectInfoPanel', flag: 'projectInfoVisible' },
@@ -9976,6 +10228,7 @@ class PaperStatsApp {
             visExportVisible: !!this.visExportVisible,
             apiSettingsVisible: !!this.apiSettingsVisible,
             autoSaveConfigVisible: !!this.autoSaveConfigVisible,
+            doiIndexVisible: !!this.doiIndexVisible,
             panelOrder: this.getSettingsPanelsOrder()
         };
         try {
@@ -9996,6 +10249,7 @@ class PaperStatsApp {
         this.visExportVisible = !!state.visExportVisible;
         this.apiSettingsVisible = !!state.apiSettingsVisible;
         this.autoSaveConfigVisible = !!state.autoSaveConfigVisible;
+        this.doiIndexVisible = !!state.doiIndexVisible;
         this.applySettingsPanelsOrder(state.panelOrder);
 
         const fileFilterPanel = document.getElementById('fileFilterSettingsPanel');
@@ -10007,6 +10261,7 @@ class PaperStatsApp {
         const visExportPanel = document.getElementById('visExportSettingsPanel');
         const apiSettingsPanel = document.getElementById('apiSettingsPanel');
         const autoSaveConfigPanel = document.getElementById('autoSaveConfigPanel');
+        const doiIndexPanel = document.getElementById('doiIndexPanel');
         const fileFilterBtn = document.getElementById('fileFilterToggleBtn');
         const addGroupBtn = document.getElementById('addGroupBtn');
         const queryExportBtn = document.getElementById('queryExportBtn');
@@ -10020,6 +10275,7 @@ class PaperStatsApp {
         if (visExportPanel) visExportPanel.classList.toggle('is-visible', this.visExportVisible);
         if (apiSettingsPanel) apiSettingsPanel.classList.toggle('is-visible', this.apiSettingsVisible);
         if (autoSaveConfigPanel) autoSaveConfigPanel.classList.toggle('is-visible', this.autoSaveConfigVisible);
+        if (doiIndexPanel) doiIndexPanel.classList.toggle('is-visible', this.doiIndexVisible);
         if (fileFilterBtn) fileFilterBtn.classList.toggle('active', this.fileFilterVisible);
         if (addGroupBtn) addGroupBtn.classList.toggle('active', this.createGroupVisible);
         if (queryExportBtn) queryExportBtn.classList.toggle('active', this.queryExportVisible);
@@ -10048,6 +10304,9 @@ class PaperStatsApp {
             }
             this.refreshQueryFieldOptions();
             this.updateDoiStats();
+        }
+        if (this.doiIndexVisible) {
+            this.renderDoiIndexPanel();
         }
         if (this.apiSettingsVisible) {
             this.applyApiSettingsInputs();
@@ -11508,6 +11767,9 @@ class PaperStatsApp {
                 break;
             case 'visExport':
                 this.toggleVisExportPanel(true);
+                break;
+            case 'doiIndex':
+                this.toggleDoiIndexPanel(true);
                 break;
             default:
                 break;
@@ -16628,6 +16890,10 @@ class PaperStatsApp {
     }
 
     async ensurePdfLoaded() {
+        if (!this.isPdfViewActive()) {
+            console.log('⏭️ PDF view inactive, skip loading');
+            return;
+        }
         const url = this.pendingPdfUrl || this.currentPdfUrl;
         const loadToken = this.currentPdfLoadToken;
         console.log('🔍 ensurePdfLoaded called with URL:', url);
@@ -16672,6 +16938,7 @@ class PaperStatsApp {
 
     prewarmPdf(url) {
         if (!url) return;
+        if (!this.isPdfViewActive()) return;
         const cache = this._pdfPrewarmCache || new Map();
         this._pdfPrewarmCache = cache;
         const now = Date.now();
@@ -16712,6 +16979,13 @@ class PaperStatsApp {
                 textEl.textContent = 'Drop or paste a PDF here to auto link and display.';
             }
         }
+    }
+
+    isPdfViewActive() {
+        if (this.isPdfPopupMode && this.pdfPopupWindow && !this.pdfPopupWindow.closed) return true;
+        const rightPanel = document.querySelector('.right-panel');
+        if (!rightPanel) return false;
+        return !rightPanel.classList.contains('panel-collapsed');
     }
 
     setPdfSidebarPrefClosed() {
@@ -19427,8 +19701,8 @@ document.addEventListener('DOMContentLoaded', () => {
             console.warn('DOI Cache Manager not initialized');
             return;
         }
-        await app.doiCacheManager.clearCache();
-        console.log('✅ DOI cache cleared');
+        await app.doiCacheManager.clearAllCache();
+        console.log('✅ DOI cache cleared (global)');
     };
 
     const disableButtonTabFocus = () => {

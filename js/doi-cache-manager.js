@@ -55,15 +55,13 @@ class DoiCacheManager {
     }
 
     /**
-     * 获取当前项目的缓存键
+     * 获取全局缓存键
      */
     getProjectCacheKey() {
         if (this.cacheKey) return this.cacheKey;
 
-        // 使用项目路径和文件数量生成唯一键
-        const projectPath = this.app.currentProjectPath || '';
-        const fileCount = Object.keys(this.app.fileMetaByBase || {}).length;
-        this.cacheKey = `${projectPath}_${fileCount}`;
+        // 全局缓存键（不区分项目）
+        this.cacheKey = 'global';
         return this.cacheKey;
     }
 
@@ -415,6 +413,30 @@ class DoiCacheManager {
     }
 
     /**
+     * 清空所有缓存（不区分项目）
+     */
+    async clearAllCache() {
+        if (!this.db) {
+            await this.init();
+        }
+        return new Promise((resolve, reject) => {
+            const transaction = this.db.transaction([this.storeName], 'readwrite');
+            const objectStore = transaction.objectStore(this.storeName);
+            const request = objectStore.clear();
+            request.onsuccess = () => {
+                this.memoryCache = null;
+                this.lastUpdateTime = null;
+                console.log('✓ All DOI cache cleared');
+                resolve();
+            };
+            request.onerror = () => {
+                console.error('Failed to clear all cache:', request.error);
+                reject(request.error);
+            };
+        });
+    }
+
+    /**
      * 启动自动更新
      */
     startAutoUpdate() {
@@ -452,10 +474,159 @@ class DoiCacheManager {
     }
 }
 
+/**
+ * 全局 WOS 索引（跨项目）
+ * 以 wos_id 为主键，doi 为二级索引
+ */
+class WosIndexManager {
+    constructor(app) {
+        this.app = app;
+        this.dbName = 'GEWUGlobalWosIndex';
+        this.dbVersion = 1;
+        this.storeName = 'wosData';
+        this.db = null;
+    }
+
+    async init() {
+        return new Promise((resolve, reject) => {
+            const request = indexedDB.open(this.dbName, this.dbVersion);
+            request.onerror = () => {
+                console.error('Failed to open WOS IndexedDB:', request.error);
+                reject(request.error);
+            };
+            request.onsuccess = () => {
+                this.db = request.result;
+                console.log('✓ WOS IndexedDB initialized');
+                resolve();
+            };
+            request.onupgradeneeded = (event) => {
+                const db = event.target.result;
+                if (!db.objectStoreNames.contains(this.storeName)) {
+                    const store = db.createObjectStore(this.storeName, { keyPath: 'wos_id' });
+                    store.createIndex('doiLower', 'doiLower', { unique: false });
+                    store.createIndex('updatedAt', 'updatedAt', { unique: false });
+                    console.log('✓ WOS object store created');
+                }
+            };
+        });
+    }
+
+    normalizeWosId(value) {
+        if (this.app && typeof this.app.normalizeWosIdPrefix === 'function') {
+            return this.app.normalizeWosIdPrefix(value);
+        }
+        const clean = String(value || '').trim();
+        if (!clean) return '';
+        return clean.includes(':') ? clean : `WOS:${clean}`;
+    }
+
+    normalizeDoi(value) {
+        if (this.app && typeof this.app.normalizeDoiString === 'function') {
+            return this.app.normalizeDoiString(value);
+        }
+        if (this.app && typeof this.app.normalizeDoi === 'function') {
+            return this.app.normalizeDoi(value);
+        }
+        return String(value || '').trim().toLowerCase();
+    }
+
+    async getByWosId(wosId) {
+        if (!this.db) await this.init();
+        const key = this.normalizeWosId(wosId);
+        if (!key) return null;
+        return new Promise((resolve, reject) => {
+            const tx = this.db.transaction([this.storeName], 'readonly');
+            const store = tx.objectStore(this.storeName);
+            const req = store.get(key);
+            req.onsuccess = () => resolve(req.result || null);
+            req.onerror = () => reject(req.error);
+        });
+    }
+
+    async getByDoi(doi) {
+        if (!this.db) await this.init();
+        const doiLower = this.normalizeDoi(doi);
+        if (!doiLower) return null;
+        return new Promise((resolve, reject) => {
+            const tx = this.db.transaction([this.storeName], 'readonly');
+            const store = tx.objectStore(this.storeName);
+            const index = store.index('doiLower');
+            const req = index.get(doiLower);
+            req.onsuccess = () => resolve(req.result || null);
+            req.onerror = () => reject(req.error);
+        });
+    }
+
+    async upsertWosData(wosData, { overwrite = false } = {}) {
+        if (!this.db) await this.init();
+        const rawId = wosData?.wos_id || wosData?.wosid || '';
+        const wosId = this.normalizeWosId(rawId);
+        if (!wosId) return { added: 0, skipped: 1, updated: 0 };
+        const doiRaw = wosData?.doi || wosData?.DI || wosData?.di || '';
+        const doiLower = this.normalizeDoi(doiRaw);
+        const existing = await this.getByWosId(wosId);
+        if (existing && !overwrite) {
+            return { added: 0, skipped: 1, updated: 0 };
+        }
+        const entry = {
+            wos_id: wosId,
+            doiLower: doiLower || '',
+            data: wosData,
+            updatedAt: Date.now()
+        };
+        return new Promise((resolve, reject) => {
+            const tx = this.db.transaction([this.storeName], 'readwrite');
+            const store = tx.objectStore(this.storeName);
+            const req = store.put(entry);
+            req.onsuccess = () => {
+                resolve({ added: existing ? 0 : 1, skipped: 0, updated: existing ? 1 : 0 });
+            };
+            req.onerror = () => reject(req.error);
+        });
+    }
+
+    async upsertWosDataList(list = [], { overwrite = false } = {}) {
+        let added = 0;
+        let skipped = 0;
+        let updated = 0;
+        for (const item of list) {
+            const result = await this.upsertWosData(item, { overwrite });
+            added += result.added;
+            skipped += result.skipped;
+            updated += result.updated;
+        }
+        return { added, skipped, updated };
+    }
+
+    async countAll() {
+        if (!this.db) await this.init();
+        return new Promise((resolve, reject) => {
+            const tx = this.db.transaction([this.storeName], 'readonly');
+            const store = tx.objectStore(this.storeName);
+            const req = store.count();
+            req.onsuccess = () => resolve(req.result || 0);
+            req.onerror = () => reject(req.error);
+        });
+    }
+
+    async clearAll() {
+        if (!this.db) await this.init();
+        return new Promise((resolve, reject) => {
+            const tx = this.db.transaction([this.storeName], 'readwrite');
+            const store = tx.objectStore(this.storeName);
+            const req = store.clear();
+            req.onsuccess = () => resolve();
+            req.onerror = () => reject(req.error);
+        });
+    }
+}
+
 // 导出
 if (typeof module !== 'undefined' && module.exports) {
     module.exports = DoiCacheManager;
+    module.exports.WosIndexManager = WosIndexManager;
 }
 if (typeof window !== 'undefined') {
     window.DoiCacheManager = DoiCacheManager;
+    window.WosIndexManager = WosIndexManager;
 }

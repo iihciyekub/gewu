@@ -35,6 +35,9 @@
             let processed = 0;
             let updated = 0;
             let skipped = 0;
+            let indexAdded = 0;
+            let indexUpdated = 0;
+            let indexSkipped = 0;
             const total = bases.length;
             const updateProgress = () => {
                 const percent = total ? Math.round((processed / total) * 100) : 100;
@@ -95,6 +98,12 @@
                         this.mergeWosData(payload, recs);
                     }
                     await this.saveJsonPayload(path, payload);
+                    if (this.wosIndexManager && payload?.wos_data) {
+                        const result = await this.wosIndexManager.upsertWosData(payload.wos_data, { overwrite: true });
+                        indexAdded += result.added;
+                        indexUpdated += result.updated;
+                        indexSkipped += result.skipped;
+                    }
                     if (this.currentFile === path) {
                         this.currentData = payload;
                         this.hasUnsavedChanges = false;
@@ -118,6 +127,9 @@
 
             if (updated) {
                 await this.loadFileList(true);
+            }
+            if (indexAdded || indexUpdated || indexSkipped) {
+                console.log(`WOS index updated: added ${indexAdded}, updated ${indexUpdated}, skipped ${indexSkipped}`);
             }
             tracker.finish('WOS update: done', 800);
             const parts = [];
@@ -224,6 +236,7 @@
                 return;
             }
             const view = this.currentJsonView || 'view1';
+            const overwriteIndex = window.confirm('Overwrite existing WOS index entries? (Cancel = skip duplicates)');
             let tracker = null;
             try {
                 tracker = this.createStatusProgressTracker('WOS import');
@@ -318,6 +331,9 @@
                 let created = 0;
                 let updated = 0;
                 let failed = 0;
+                let indexAdded = 0;
+                let indexUpdated = 0;
+                let indexSkipped = 0;
                 const totalBatches = batches.size;
                 let processedBatches = 0;
                 const notifyBatchStep = Math.max(1, Math.floor(totalBatches / 10));
@@ -363,6 +379,13 @@
                             updated += 1;
                         }
 
+                        if (this.wosIndexManager && payload?.wos_data) {
+                            const result = await this.wosIndexManager.upsertWosData(payload.wos_data, { overwrite: overwriteIndex });
+                            indexAdded += result.added;
+                            indexUpdated += result.updated;
+                            indexSkipped += result.skipped;
+                        }
+
                         if (entry.isWosidOnly) wosidBases.push(base);
                     } catch (err) {
                         console.warn('WOS import failed for base:', base, err);
@@ -392,6 +415,11 @@
                 if (invalid) parts.push(`invalid ${invalid}`);
                 if (empty) parts.push(`empty ${empty}`);
                 if (readFailed) parts.push(`read failed ${readFailed}`);
+                if (indexAdded || indexUpdated || indexSkipped) {
+                    parts.push(`index added ${indexAdded}`);
+                    if (indexUpdated) parts.push(`index updated ${indexUpdated}`);
+                    if (indexSkipped) parts.push(`index skipped ${indexSkipped}`);
+                }
                 const type = failed ? 'error' : 'success';
                 tracker.finish('WOS import: finalizing...', 800);
                 this.showNotification(`WOS import: ${parts.join(', ')}`, type);
