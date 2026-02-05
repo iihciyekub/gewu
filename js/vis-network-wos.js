@@ -870,6 +870,7 @@
             this.exportSvgScale = 1;
             this.exportSvgMargin = 6;
             this.exportSvgIncludeLabels = true;
+            this.useNativeNodeBorder = false;
             this.edgeFocusFadeAlpha = 0;
             this.edgeHoverLabelEnabled = false;
             this.edgeLabelEnabled = false;
@@ -5603,12 +5604,13 @@
                     ? Number(this.nodeOuterBorderWidth)
                     : 2;
                 if (outlineWidth <= 0) return;
-                const outlineColor = this.nodeOuterBorderColor || '#ffffff';
                 const scale = Number(network.getScale()) || 1;
                 const ratio = Number(network.canvas?.pixelRatio) || 1;
                 ctx.save();
                 ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
                 nodes.forEach((node) => {
+                    const nodeAlpha = Math.max(0, Math.min(1, getNodeAlpha(node)));
+                    const outlineColor = setColorAlpha(this.nodeOuterBorderColor || '#ffffff', nodeAlpha);
                     const pos = network.getPositions([node.id])[node.id];
                     if (!pos) return;
                     const dom = typeof network.canvasToDOM === 'function'
