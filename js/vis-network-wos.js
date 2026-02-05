@@ -755,6 +755,8 @@
                 nodeOuterBorderWidthInput: options.nodeOuterBorderWidthInputId || 'visNodeOuterBorderWidth',
                 nodeOuterBorderColorInput: options.nodeOuterBorderColorInputId || 'visNodeOuterBorderColor',
                 edgeColorInput: options.edgeColorInputId || 'visEdgeColorInput',
+                edgeLabelFontSizeInput: options.edgeLabelFontSizeInputId || 'visEdgeLabelFontSizeInput',
+                edgeLabelColorInput: options.edgeLabelColorInputId || 'visEdgeLabelColorInput',
                 labelWeightSlider: options.labelWeightSliderId || 'visLabelWeightSlider',
                 labelFontMinInput: options.labelFontMinInputId || 'visLabelFontMinInput',
                 labelFontMaxInput: options.labelFontMaxInputId || 'visLabelFontMaxInput',
@@ -830,6 +832,8 @@
             this.edgeMinWidth = 1;
             this.edgeMaxWidth = 6;
             this.edgeColor = '#111111';
+            this.edgeLabelFontSize = 12;
+            this.edgeLabelFontColor = '#111111';
             this.edgeStyle = 'curve-dynamic';
             this.exportSvgScale = 1;
             this.exportSvgMargin = 6;
@@ -934,6 +938,8 @@
             const edgeMinWidthSlider = this.getEl(this.ids.edgeMinWidthSlider);
             const edgeMaxWidthSlider = this.getEl(this.ids.edgeMaxWidthSlider);
             const edgeColorInput = this.getEl(this.ids.edgeColorInput);
+            const edgeLabelFontSizeInput = this.getEl(this.ids.edgeLabelFontSizeInput);
+            const edgeLabelColorInput = this.getEl(this.ids.edgeLabelColorInput);
             const exportSvgScaleInput = this.getEl(this.ids.exportSvgScaleInput);
             const exportSvgMarginInput = this.getEl(this.ids.exportSvgMarginInput);
             const exportSvgIncludeLabelsInput = this.getEl(this.ids.exportSvgIncludeLabelsInput);
@@ -1460,6 +1466,11 @@
                 this.applyEdgeWidthRange();
                 this.queuePersistSettings();
             });
+            bindNumberInput(edgeLabelFontSizeInput, (next) => {
+                this.edgeLabelFontSize = next;
+                this.applyEdgeLabelDisplay();
+                this.queuePersistSettings();
+            });
             bindNumberInput(nodeSizeMinSlider, (next) => {
                 this.nodeSizeMin = next;
                 this.applyNodeSizeScale();
@@ -1506,6 +1517,13 @@
                     });
                     global.Coloris({
                         el: '#visEdgeColorInput',
+                        alpha: true,
+                        format: 'hex',
+                        formatToggle: false,
+                        forceAlpha: true
+                    });
+                    global.Coloris({
+                        el: '#visEdgeLabelColorInput',
                         alpha: true,
                         format: 'hex',
                         formatToggle: false,
@@ -1570,6 +1588,14 @@
                 edgeColorInput.addEventListener('input', () => {
                     this.edgeColor = edgeColorInput.value || '#111111';
                     this.applyEdgeFade();
+                    this.queuePersistSettings();
+                });
+            }
+            if (edgeLabelColorInput && !edgeLabelColorInput.dataset.visBound) {
+                edgeLabelColorInput.dataset.visBound = '1';
+                edgeLabelColorInput.addEventListener('input', () => {
+                    this.edgeLabelFontColor = edgeLabelColorInput.value || '#111111';
+                    this.applyEdgeLabelDisplay();
                     this.queuePersistSettings();
                 });
             }
@@ -2608,6 +2634,8 @@
                 const labelBgColorInput = this.getEl(this.ids.labelBgColorInput);
                 const labelBorderColorInput = this.getEl(this.ids.labelBorderColorInput);
                 const edgeColorInput = this.getEl(this.ids.edgeColorInput);
+                const edgeLabelFontSizeInput = this.getEl(this.ids.edgeLabelFontSizeInput);
+                const edgeLabelColorInput = this.getEl(this.ids.edgeLabelColorInput);
                 const labelWeightSlider = this.getEl(this.ids.labelWeightSlider);
                 const physicsSpringSlider = this.getEl(this.ids.physicsSpringSlider);
                 const physicsStrengthSlider = this.getEl(this.ids.physicsStrengthSlider);
@@ -2629,6 +2657,8 @@
                 this.setColorInputValue(labelBgColorInput, this.labelBgColor || '#f2f2f2f1');
                 this.setColorInputValue(labelBorderColorInput, this.labelBorderColor || '#00000021');
                 this.setColorInputValue(edgeColorInput, this.edgeColor || '#111111');
+                if (edgeLabelFontSizeInput) edgeLabelFontSizeInput.value = String(this.edgeLabelFontSize ?? 12);
+                this.setColorInputValue(edgeLabelColorInput, this.edgeLabelFontColor || '#111111');
                 if (labelWeightSlider) labelWeightSlider.value = String(this.labelWeight || 500);
                 if (physicsSpringSlider) physicsSpringSlider.value = String(this.physicsSpringLength || 120);
                 if (physicsStrengthSlider) physicsStrengthSlider.value = String(this.physicsSpringConstant || 0.05);
@@ -3606,6 +3636,8 @@
             if (!this._edgeBaseLabels) this._edgeBaseLabels = new Map();
             if (!this._edgeBaseFonts) this._edgeBaseFonts = new Map();
             const show = !!this.edgeLabelEnabled;
+            const fontSize = Number.isFinite(this.edgeLabelFontSize) ? this.edgeLabelFontSize : 12;
+            const fontColor = this.edgeLabelFontColor || '#111111';
             const updates = dataset.get().map((edge) => {
                 if (!this._edgeBaseLabels.has(edge.id)) {
                     this._edgeBaseLabels.set(edge.id, edge.label || '');
@@ -3618,9 +3650,10 @@
                 const font = show
                     ? {
                         ...(edge.font || {}),
-                        size: 12,
+                        size: fontSize,
                         face: 'Times New Roman, Times, serif',
-                        align: 'middle'
+                        align: 'middle',
+                        color: fontColor
                     }
                     : (this._edgeBaseFonts.get(edge.id) || edge.font);
                 return { id: edge.id, label, font };
@@ -4098,6 +4131,8 @@
             this.edgeMaxWidth = 14.5;
             this.edgeFade = 39;
             this.edgeColor = '#1a1a1aff';
+            this.edgeLabelFontSize = 12;
+            this.edgeLabelFontColor = '#1a1a1aff';
             this.labelFontMin = 5;
             this.labelFontMax = 23;
             this.labelSizeScale = 1.37;
@@ -4122,6 +4157,7 @@
             this.applyPhysicsSettings();
             this.applyEdgeFade();
             this.applyEdgeWidthRange();
+            this.applyEdgeLabelDisplay();
             if (this.visNetwork) this.visNetwork.redraw();
             this.syncSettingsSliders();
             this.queuePersistSettings();
@@ -4274,6 +4310,8 @@
                 edgeMinWidth: this.edgeMinWidth,
                 edgeMaxWidth: this.edgeMaxWidth,
                 edgeColor: this.edgeColor,
+                edgeLabelFontSize: this.edgeLabelFontSize,
+                edgeLabelFontColor: this.edgeLabelFontColor,
                 edgeStyle: this.edgeStyle,
                 edgeHoverLabelEnabled: this.edgeHoverLabelEnabled,
                 edgeLabelEnabled: this.edgeLabelEnabled,
@@ -4317,6 +4355,8 @@
             if (Number.isFinite(payload.edgeMinWidth)) this.edgeMinWidth = payload.edgeMinWidth;
             if (Number.isFinite(payload.edgeMaxWidth)) this.edgeMaxWidth = payload.edgeMaxWidth;
             if (typeof payload.edgeColor === 'string') this.edgeColor = payload.edgeColor;
+            if (Number.isFinite(payload.edgeLabelFontSize)) this.edgeLabelFontSize = payload.edgeLabelFontSize;
+            if (typeof payload.edgeLabelFontColor === 'string') this.edgeLabelFontColor = payload.edgeLabelFontColor;
             if (typeof payload.edgeStyle === 'string') this.edgeStyle = payload.edgeStyle;
             if (typeof payload.edgeHoverLabelEnabled === 'boolean') {
                 this.edgeHoverLabelEnabled = payload.edgeHoverLabelEnabled;
@@ -4849,6 +4889,8 @@
             const edgeMinWidthSlider = this.getEl(this.ids.edgeMinWidthSlider);
             const edgeMaxWidthSlider = this.getEl(this.ids.edgeMaxWidthSlider);
             const edgeColorInput = this.getEl(this.ids.edgeColorInput);
+            const edgeLabelFontSizeInput = this.getEl(this.ids.edgeLabelFontSizeInput);
+            const edgeLabelColorInput = this.getEl(this.ids.edgeLabelColorInput);
 
             if (labelFadeSlider) labelFadeSlider.value = String(this.labelFade || 0);
             this.setColorInputValue(labelColorInput, this.labelColor || '#000000');
@@ -4877,6 +4919,8 @@
             if (edgeMinWidthSlider) edgeMinWidthSlider.value = String(this.edgeMinWidth || 1);
             if (edgeMaxWidthSlider) edgeMaxWidthSlider.value = String(this.edgeMaxWidth || 6);
             this.setColorInputValue(edgeColorInput, this.edgeColor || '#111111');
+            if (edgeLabelFontSizeInput) edgeLabelFontSizeInput.value = String(this.edgeLabelFontSize ?? 12);
+            this.setColorInputValue(edgeLabelColorInput, this.edgeLabelFontColor || '#111111');
             this.syncExportSettingsInputs();
         }
 
