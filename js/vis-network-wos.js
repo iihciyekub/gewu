@@ -918,6 +918,7 @@
         bind() {
             this.mountDrawer();
             this.mountLabelDrawer();
+            this.disableVisSettingsTabFocus();
             this.loadPersistedSettings();
             this.loadInputDraft();
             this.loadInputHistory();
@@ -2322,6 +2323,17 @@
                     }
                 });
             }
+        }
+
+        disableVisSettingsTabFocus() {
+            const panel = this.getEl(this.ids.settingsPanel);
+            const body = panel ? panel.querySelector('.vis-settings-body') : null;
+            if (!body) return;
+            const focusables = body.querySelectorAll('a, button, input, select, textarea, [tabindex]');
+            focusables.forEach((el) => {
+                if (!(el instanceof HTMLElement)) return;
+                el.setAttribute('tabindex', '-1');
+            });
         }
 
         getEl(id) {

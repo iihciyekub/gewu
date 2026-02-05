@@ -2444,6 +2444,11 @@ body.theme-dark .vis-network-view {
     overflow: hidden;
 }
 
+.vis-settings-body *:focus,
+.vis-settings-body *:focus-visible {
+    outline: none;
+}
+
 .vis-settings-title {
     font-size: 12px;
     font-weight: 600;
