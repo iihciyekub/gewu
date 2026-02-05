@@ -692,6 +692,20 @@
         label.style.opacity = String(opacity);
     }
 
+    function getEdgeColorAlpha(edge) {
+        if (!edge) return 1;
+        const color = edge.color;
+        const value = typeof color === 'string'
+            ? color
+            : (color && typeof color === 'object' ? color.color : null);
+        if (!value || typeof value !== 'string') return 1;
+        const rgbaMatch = value.match(/rgba\(\s*\d+\s*,\s*\d+\s*,\s*\d+\s*,\s*([0-9.]+)\s*\)/i);
+        if (rgbaMatch) return Math.max(0, Math.min(1, Number(rgbaMatch[1]) || 0));
+        const hslaMatch = value.match(/hsla\(\s*[\d.]+\s*,\s*[\d.]+%\s*,\s*[\d.]+%\s*,\s*([0-9.]+)\s*\)/i);
+        if (hslaMatch) return Math.max(0, Math.min(1, Number(hslaMatch[1]) || 0));
+        return 1;
+    }
+
     class WosVisManager {
         constructor(options = {}) {
             this.app = options.app || null;
@@ -860,6 +874,7 @@
             this._edgeHoverLabelState = null;
             this._edgeContextMenu = null;
             this._edgeBaseLabels = null;
+            this._edgeBaseFonts = null;
         }
 
         bind() {
@@ -3589,13 +3604,25 @@
             const dataset = this.visNetwork?.body?.data?.edges;
             if (!dataset) return;
             if (!this._edgeBaseLabels) this._edgeBaseLabels = new Map();
+            if (!this._edgeBaseFonts) this._edgeBaseFonts = new Map();
             const show = !!this.edgeLabelEnabled;
             const updates = dataset.get().map((edge) => {
                 if (!this._edgeBaseLabels.has(edge.id)) {
                     this._edgeBaseLabels.set(edge.id, edge.label || '');
                 }
-                const label = show ? this.getEdgeLabelText(edge) : '';
-                const font = show ? { ...(edge.font || {}), size: 10 } : edge.font;
+                if (!this._edgeBaseFonts.has(edge.id)) {
+                    this._edgeBaseFonts.set(edge.id, edge.font || null);
+                }
+                const alpha = getEdgeColorAlpha(edge);
+                const label = show && alpha > 0 ? this.getEdgeLabelText(edge) : '';
+                const font = show
+                    ? {
+                        ...(edge.font || {}),
+                        size: 12,
+                        face: 'Times New Roman, Times, serif',
+                        align: 'middle'
+                    }
+                    : (this._edgeBaseFonts.get(edge.id) || edge.font);
                 return { id: edge.id, label, font };
             });
             dataset.update(updates);
