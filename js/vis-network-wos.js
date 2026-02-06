@@ -5968,10 +5968,6 @@
                     <span class="context-slider-label">Self Loop Size</span>
                     <input class="context-number-input" data-role="selfRefSize" type="number" min="10" max="100" step="5" value="20" aria-label="Self Reference Size">
                 </div>
-                <div class="context-input-row" data-role="arrowScaleRow" style="display: none;">
-                    <span class="context-slider-label">Arrow Scale</span>
-                    <input class="context-number-input" data-role="arrowScale" type="number" min="0.1" max="3" step="0.1" value="1.0" aria-label="Arrow Scale">
-                </div>
                 <div class="context-input-row">
                     <label class="context-input-label" style="width: 100%;">Line Style
                         <select class="context-select-input" data-role="smoothType" aria-label="Smooth Type" style="width: 100%; margin-top: 3px;">
@@ -5983,25 +5979,71 @@
                         </select>
                     </label>
                 </div>
-                <div class="context-input-row" style="display: flex; gap: 10px;">
-                    <label class="context-popover-toggle" style="flex: 1; margin: 0;">
+                <div class="context-input-row">
+                    <label class="context-popover-toggle" style="margin: 0;">
                         <input type="checkbox" class="context-popover-checkbox" data-role="dashed" aria-label="Dashed">
                         <span>Dashed</span>
                     </label>
+                </div>
+                <div class="context-input-row">
+                    <span class="context-slider-label">Edge Length</span>
+                    <input class="context-number-input" data-role="edgeLength" type="number" min="50" max="500" step="10" value="100" aria-label="Edge Length">
+                </div>
+                <div class="context-input-row" style="display: flex; gap: 10px;">
                     <label class="context-popover-toggle" style="flex: 1; margin: 0;">
-                        <input type="checkbox" class="context-popover-checkbox" data-role="arrows" aria-label="Arrows">
-                        <span>Arrows</span>
+                        <input type="checkbox" class="context-popover-checkbox" data-role="arrowTo" aria-label="Arrow To">
+                        <span>Arrow To →</span>
+                    </label>
+                    <label class="context-popover-toggle" style="flex: 1; margin: 0;">
+                        <input type="checkbox" class="context-popover-checkbox" data-role="arrowFrom" aria-label="Arrow From">
+                        <span>Arrow From ←</span>
                     </label>
                 </div>
-                <div class="context-input-row" data-role="arrowTypeRow" style="display: none;">
-                    <label class="context-input-label" style="width: 100%;">Arrow Type
-                        <select class="context-select-input" data-role="arrowType" aria-label="Arrow Type" style="width: 100%; margin-top: 3px;">
-                            <option value="to">To (→)</option>
-                            <option value="from">From (←)</option>
-                            <option value="to;from">Both (↔)</option>
-                            <option value="middle">Middle</option>
-                        </select>
-                    </label>
+                <div data-role="arrowToConfig" style="display: none;">
+                    <div class="context-input-row">
+                        <label class="context-input-label" style="width: 100%;">To Arrow Shape
+                            <select class="context-select-input" data-role="arrowToShape" style="width: 100%; margin-top: 3px;">
+                                <option value="arrow">Arrow</option>
+                                <option value="bar">Bar</option>
+                                <option value="circle">Circle</option>
+                                <option value="box">Box</option>
+                                <option value="crow">Crow</option>
+                                <option value="curve">Curve</option>
+                                <option value="diamond">Diamond</option>
+                                <option value="inv_curve">Inv Curve</option>
+                                <option value="triangle">Triangle</option>
+                                <option value="inv_triangle">Inv Triangle</option>
+                                <option value="vee">Vee</option>
+                            </select>
+                        </label>
+                    </div>
+                    <div class="context-input-row">
+                        <span class="context-slider-label">To Arrow Scale</span>
+                        <input class="context-number-input" data-role="arrowToScale" type="number" min="0.1" max="3" step="0.1" value="1.0">
+                    </div>
+                </div>
+                <div data-role="arrowFromConfig" style="display: none;">
+                    <div class="context-input-row">
+                        <label class="context-input-label" style="width: 100%;">From Arrow Shape
+                            <select class="context-select-input" data-role="arrowFromShape" style="width: 100%; margin-top: 3px;">
+                                <option value="arrow">Arrow</option>
+                                <option value="bar">Bar</option>
+                                <option value="circle">Circle</option>
+                                <option value="box">Box</option>
+                                <option value="crow">Crow</option>
+                                <option value="curve">Curve</option>
+                                <option value="diamond">Diamond</option>
+                                <option value="inv_curve">Inv Curve</option>
+                                <option value="triangle">Triangle</option>
+                                <option value="inv_triangle">Inv Triangle</option>
+                                <option value="vee">Vee</option>
+                            </select>
+                        </label>
+                    </div>
+                    <div class="context-input-row">
+                        <span class="context-slider-label">From Arrow Scale</span>
+                        <input class="context-number-input" data-role="arrowFromScale" type="number" min="0.1" max="3" step="0.1" value="1.0">
+                    </div>
                 </div>
             `;
             document.body.appendChild(pop);
@@ -6204,11 +6246,17 @@
             // Setup style controls
             const smoothTypeSelect = pop.querySelector('[data-role="smoothType"]');
             const dashedCheckbox = pop.querySelector('[data-role="dashed"]');
-            const arrowsCheckbox = pop.querySelector('[data-role="arrows"]');
-            const arrowTypeRow = pop.querySelector('[data-role="arrowTypeRow"]');
-            const arrowTypeSelect = pop.querySelector('[data-role="arrowType"]');
-            const arrowScaleRow = pop.querySelector('[data-role="arrowScaleRow"]');
-            const arrowScaleInput = pop.querySelector('[data-role="arrowScale"]');
+            const edgeLengthInput = pop.querySelector('[data-role="edgeLength"]');
+
+            // Arrow controls
+            const arrowToCheckbox = pop.querySelector('[data-role="arrowTo"]');
+            const arrowFromCheckbox = pop.querySelector('[data-role="arrowFrom"]');
+            const arrowToConfig = pop.querySelector('[data-role="arrowToConfig"]');
+            const arrowFromConfig = pop.querySelector('[data-role="arrowFromConfig"]');
+            const arrowToShapeSelect = pop.querySelector('[data-role="arrowToShape"]');
+            const arrowFromShapeSelect = pop.querySelector('[data-role="arrowFromShape"]');
+            const arrowToScaleInput = pop.querySelector('[data-role="arrowToScale"]');
+            const arrowFromScaleInput = pop.querySelector('[data-role="arrowFromScale"]');
 
             // Initialize with current edge style or defaults
             const currentSmooth = edge?.smooth;
@@ -6229,22 +6277,46 @@
             }
 
             if (dashedCheckbox) dashedCheckbox.checked = currentDashed;
-            if (arrowsCheckbox) arrowsCheckbox.checked = !!currentArrows;
-            if (arrowTypeSelect && currentArrows) arrowTypeSelect.value = currentArrows;
-            if (arrowTypeRow) arrowTypeRow.style.display = currentArrows ? 'block' : 'none';
-            if (arrowScaleRow) arrowScaleRow.style.display = currentArrows ? 'block' : 'none';
 
-            // Initialize arrow scale
-            const currentArrowScale = edge?.arrows?.to?.scaleFactor ?? edge?.arrows?.from?.scaleFactor ?? 1.0;
-            if (arrowScaleInput) arrowScaleInput.value = currentArrowScale.toFixed(1);
+            // Initialize edge length
+            const currentLength = edge?.length ?? 100;
+            if (edgeLengthInput) edgeLengthInput.value = String(currentLength);
+
+            // Initialize arrow controls
+            const hasArrowTo = edge?.arrows?.to?.enabled ?? false;
+            const hasArrowFrom = edge?.arrows?.from?.enabled ?? false;
+            if (arrowToCheckbox) arrowToCheckbox.checked = hasArrowTo;
+            if (arrowFromCheckbox) arrowFromCheckbox.checked = hasArrowFrom;
+            if (arrowToConfig) arrowToConfig.style.display = hasArrowTo ? 'block' : 'none';
+            if (arrowFromConfig) arrowFromConfig.style.display = hasArrowFrom ? 'block' : 'none';
+
+            // Initialize arrow shapes and scales
+            if (arrowToShapeSelect && edge?.arrows?.to?.type) {
+                arrowToShapeSelect.value = edge.arrows.to.type;
+            }
+            if (arrowFromShapeSelect && edge?.arrows?.from?.type) {
+                arrowFromShapeSelect.value = edge.arrows.from.type;
+            }
+            if (arrowToScaleInput) {
+                arrowToScaleInput.value = (edge?.arrows?.to?.scaleFactor ?? 1.0).toFixed(1);
+            }
+            if (arrowFromScaleInput) {
+                arrowFromScaleInput.value = (edge?.arrows?.from?.scaleFactor ?? 1.0).toFixed(1);
+            }
 
             // Helper to apply combined style
             const applyStyle = () => {
                 const smoothType = smoothTypeSelect.value;
                 const dashed = dashedCheckbox.checked;
-                const hasArrows = arrowsCheckbox.checked;
-                const arrowType = hasArrows ? arrowTypeSelect.value : false;
-                const arrowScale = arrowScaleInput ? Number(arrowScaleInput.value) : 1.0;
+                const length = edgeLengthInput ? Number(edgeLengthInput.value) : 100;
+
+                // Arrow configuration
+                const hasArrowTo = arrowToCheckbox ? arrowToCheckbox.checked : false;
+                const hasArrowFrom = arrowFromCheckbox ? arrowFromCheckbox.checked : false;
+                const arrowToShape = arrowToShapeSelect ? arrowToShapeSelect.value : 'arrow';
+                const arrowFromShape = arrowFromShapeSelect ? arrowFromShapeSelect.value : 'arrow';
+                const arrowToScale = arrowToScaleInput ? Number(arrowToScaleInput.value) : 1.0;
+                const arrowFromScale = arrowFromScaleInput ? Number(arrowFromScaleInput.value) : 1.0;
 
                 const updates = {};
 
@@ -6264,23 +6336,23 @@
                 // Apply dashed
                 updates.dashes = dashed ? [6, 6] : false;
 
-                // Apply arrows - explicitly handle enabled/disabled state with scale
-                if (arrowType) {
-                    // Enable arrows with the selected type and scale factor
-                    if (arrowType === 'to;from') {
-                        updates.arrows = {
-                            to: { enabled: true, scaleFactor: arrowScale },
-                            from: { enabled: true, scaleFactor: arrowScale }
-                        };
-                    } else {
-                        updates.arrows = {
-                            [arrowType]: { enabled: true, scaleFactor: arrowScale }
-                        };
-                    }
-                } else {
-                    // Explicitly disable all arrows
-                    updates.arrows = { to: { enabled: false }, from: { enabled: false }, middle: { enabled: false } };
-                }
+                // Apply edge length
+                updates.length = length;
+
+                // Apply arrows with separate to/from configuration
+                updates.arrows = {
+                    to: {
+                        enabled: hasArrowTo,
+                        type: arrowToShape,
+                        scaleFactor: arrowToScale
+                    },
+                    from: {
+                        enabled: hasArrowFrom,
+                        type: arrowFromShape,
+                        scaleFactor: arrowFromScale
+                    },
+                    middle: { enabled: false }
+                };
 
                 applyEdgeStyle(updates);
             };
@@ -6300,38 +6372,58 @@
                 });
             }
 
-            if (arrowsCheckbox) {
-                arrowsCheckbox.addEventListener('change', (ev) => {
+            // Arrow To checkbox
+            if (arrowToCheckbox) {
+                arrowToCheckbox.addEventListener('change', (ev) => {
                     ev.stopPropagation();
-                    const hasArrows = arrowsCheckbox.checked;
-                    if (arrowTypeRow) arrowTypeRow.style.display = hasArrows ? 'block' : 'none';
-                    if (arrowScaleRow) arrowScaleRow.style.display = hasArrows ? 'block' : 'none';
+                    const enabled = arrowToCheckbox.checked;
+                    if (arrowToConfig) arrowToConfig.style.display = enabled ? 'block' : 'none';
                     applyStyle();
                 });
             }
 
-            if (arrowTypeSelect) {
-                arrowTypeSelect.addEventListener('change', (ev) => {
+            // Arrow From checkbox
+            if (arrowFromCheckbox) {
+                arrowFromCheckbox.addEventListener('change', (ev) => {
+                    ev.stopPropagation();
+                    const enabled = arrowFromCheckbox.checked;
+                    if (arrowFromConfig) arrowFromConfig.style.display = enabled ? 'block' : 'none';
+                    applyStyle();
+                });
+            }
+
+            // Arrow To shape and scale
+            if (arrowToShapeSelect) {
+                arrowToShapeSelect.addEventListener('change', (ev) => {
+                    ev.stopPropagation();
+                    applyStyle();
+                });
+            }
+            if (arrowToScaleInput) {
+                arrowToScaleInput.addEventListener('input', (ev) => {
                     ev.stopPropagation();
                     applyStyle();
                 });
             }
 
-            if (arrowScaleInput) {
-                arrowScaleInput.addEventListener('input', (ev) => {
+            // Arrow From shape and scale
+            if (arrowFromShapeSelect) {
+                arrowFromShapeSelect.addEventListener('change', (ev) => {
                     ev.stopPropagation();
                     applyStyle();
                 });
-                arrowScaleInput.addEventListener('wheel', (ev) => {
-                    ev.preventDefault();
-                    const step = 0.1;
-                    const delta = ev.deltaY < 0 ? step : -step;
-                    const currentVal = Number(arrowScaleInput.value) || 1.0;
-                    const nextVal = Math.max(0.1, Math.min(3, currentVal + delta));
-                    arrowScaleInput.value = nextVal.toFixed(1);
-                    applyStyle();
-                }, { passive: false });
             }
+            if (arrowFromScaleInput) {
+                arrowFromScaleInput.addEventListener('input', (ev) => {
+                    ev.stopPropagation();
+                    applyStyle();
+                });
+            }
+
+            // Edge length
+            bindNumberInput('edgeLength', (val) => {
+                applyStyle();
+            });
 
             // Setup opacity and selfReference controls
             const opacityInput = pop.querySelector('[data-role="opacity"]');
