@@ -5618,7 +5618,6 @@
         closeNodeStylePopover() {
             const pop = this._nodeStylePopover?.el || document.querySelector('.context-style-popover');
             if (pop) {
-                if (pop._nodeStyleClickHandler) document.removeEventListener('mousedown', pop._nodeStyleClickHandler);
                 if (pop._nodeStyleKeyHandler) document.removeEventListener('keydown', pop._nodeStyleKeyHandler);
                 pop.remove();
             }
@@ -5649,7 +5648,6 @@
         closeNodeBasePopover() {
             const pop = this._nodeBasePopover?.el || document.querySelector('.context-node-popover');
             if (pop) {
-                if (pop._nodeBaseClickHandler) document.removeEventListener('mousedown', pop._nodeBaseClickHandler);
                 if (pop._nodeBaseKeyHandler) document.removeEventListener('keydown', pop._nodeBaseKeyHandler);
                 pop.remove();
             }
@@ -5675,7 +5673,6 @@
         closeNodeLabelStylePopover() {
             const pop = this._nodeLabelStylePopover?.el;
             if (pop) {
-                if (pop._nodeLabelStyleClickHandler) document.removeEventListener('mousedown', pop._nodeLabelStyleClickHandler);
                 if (pop._nodeLabelStyleKeyHandler) document.removeEventListener('keydown', pop._nodeLabelStyleKeyHandler);
                 pop.remove();
             }
@@ -5685,6 +5682,63 @@
                 clearTimeout(this._nodePopoverCloseTimer);
                 this._nodePopoverCloseTimer = null;
             }
+        }
+
+        _makePopoverDraggable(pop) {
+            const handle = pop.querySelector('.context-popover-drag-handle');
+            if (!handle) return;
+            let startX, startY, origLeft, origTop;
+            const onMouseMove = (e) => {
+                const dx = e.clientX - startX;
+                const dy = e.clientY - startY;
+                pop.style.left = `${origLeft + dx}px`;
+                pop.style.top = `${origTop + dy}px`;
+            };
+            const onMouseUp = () => {
+                document.removeEventListener('mousemove', onMouseMove);
+                document.removeEventListener('mouseup', onMouseUp);
+            };
+            handle.addEventListener('mousedown', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                startX = e.clientX;
+                startY = e.clientY;
+                origLeft = parseFloat(pop.style.left) || 0;
+                origTop = parseFloat(pop.style.top) || 0;
+                document.addEventListener('mousemove', onMouseMove);
+                document.addEventListener('mouseup', onMouseUp);
+            });
+        }
+
+        switchNodePopoverTarget(newNodeId) {
+            if (!newNodeId) return false;
+            let switched = false;
+            if (this._nodeBasePopover?.el) {
+                const el = this._nodeBasePopover.el;
+                const x = parseFloat(el.style.left) || 0;
+                const y = parseFloat(el.style.top) || 0;
+                this.closeNodeBasePopover();
+                this.openNodeBasePopover({ nodeId: newNodeId, x, y });
+                switched = true;
+            }
+            if (this._nodeLabelStylePopover?.el) {
+                const el = this._nodeLabelStylePopover.el;
+                const x = parseFloat(el.style.left) || 0;
+                const y = parseFloat(el.style.top) || 0;
+                this.closeNodeLabelStylePopover();
+                this.openNodeLabelStylePopover({ nodeId: newNodeId, x, y });
+                switched = true;
+            }
+            if (this._nodeStylePopover?.el) {
+                const el = this._nodeStylePopover.el;
+                const x = parseFloat(el.style.left) || 0;
+                const y = parseFloat(el.style.top) || 0;
+                const type = this._nodeStylePopover.type;
+                this.closeNodeStylePopover();
+                this.openNodeStylePopover({ nodeId: newNodeId, type, x, y });
+                switched = true;
+            }
+            return switched;
         }
 
         scheduleCloseNodePopovers(delay = 180) {
@@ -6045,10 +6099,6 @@
             if (!nodeId || !e) return;
             this.closeEdgeContextMenu();
             this.closeNodeContextMenu();
-            this.closeNodeStylePopover();
-            this.closeNodeSizePopover();
-            this.closeNodeBasePopover();
-            this.closeNodeLabelStylePopover();
             if (this._toolbarMode === 'edge') return;
             this._tempToolbarMode = 'node';
             const menu = document.createElement('div');
@@ -6083,20 +6133,6 @@
             menu.style.left = `${Math.max(margin, nextLeft)}px`;
             menu.style.top = `${Math.max(margin, nextTop)}px`;
             menu.querySelectorAll('.context-menu-item').forEach((item) => {
-                item.addEventListener('mouseenter', (ev) => {
-                    const action = item.dataset.action;
-                    const menuRect = menu.getBoundingClientRect();
-                    const anchor = {
-                        x: menuRect.right + 6,
-                        y: menuRect.top
-                    };
-                    if (action === 'pickNodeBaseStyle') {
-                        this.openNodeBasePopover({ nodeId, x: anchor.x, y: anchor.y });
-                    }
-                    if (action === 'pickNodeLabelStyle') {
-                        this.openNodeLabelStylePopover({ nodeId, x: anchor.x, y: anchor.y });
-                    }
-                });
                 item.addEventListener('click', (ev) => {
                     const action = item.dataset.action;
                     if (action === 'selectNodeFocus') {
@@ -6141,8 +6177,6 @@
         openNodeStylePopover({ nodeId, type, x, y }) {
             if (!nodeId || !type) return;
             this.closeNodeStylePopover();
-            this.closeNodeBasePopover();
-            this.closeNodeLabelStylePopover();
             const dataset = this.visNetwork?.body?.data?.nodes;
             const node = dataset && typeof dataset.get === 'function' ? dataset.get(nodeId) : null;
             const isStroke = type === 'stroke';
@@ -6163,6 +6197,7 @@
             pop.style.left = `${anchorX}px`;
             pop.style.top = `${anchorY}px`;
             pop.innerHTML = `
+                <button type="button" class="context-popover-close-btn" data-role="closePopover" title="Close (Esc)">&times;</button>
                 <label class="context-popover-toggle">
                     <input type="checkbox" class="context-popover-checkbox" aria-label="Apply to all nodes">
                     <span>Apply to all nodes</span>
@@ -6177,6 +6212,13 @@
                 </div>
             `;
             document.body.appendChild(pop);
+            const closeBtn = pop.querySelector('[data-role="closePopover"]');
+            if (closeBtn) {
+                closeBtn.addEventListener('click', (ev) => {
+                    ev.stopPropagation();
+                    this.closeNodeStylePopover();
+                });
+            }
             pop.addEventListener('mouseenter', () => {
                 this._nodePopoverHover = true;
                 if (this._nodePopoverCloseTimer) {
@@ -6275,15 +6317,10 @@
                 input.addEventListener('click', (ev) => ev.stopPropagation());
                 input.focus({ preventScroll: true });
             }
-            const clickOutside = (ev) => {
-                if (!pop.contains(ev.target)) this.closeNodeStylePopover();
-            };
             const keyHandler = (ev) => {
                 if (ev.key === 'Escape') this.closeNodeStylePopover();
             };
-            pop._nodeStyleClickHandler = clickOutside;
             pop._nodeStyleKeyHandler = keyHandler;
-            document.addEventListener('mousedown', clickOutside);
             document.addEventListener('keydown', keyHandler);
             if (!this._nodeStylePopover) {
                 this._nodeStylePopover = { el: pop, nodeId, type, movedInput: null };
@@ -6293,8 +6330,6 @@
         openNodeBasePopover({ nodeId, x, y }) {
             if (!nodeId) return;
             this.closeNodeBasePopover();
-            this.closeNodeStylePopover();
-            this.closeNodeLabelStylePopover();
             const dataset = this.visNetwork?.body?.data?.nodes;
             const node = dataset && typeof dataset.get === 'function' ? dataset.get(nodeId) : null;
             const step = 0.1;
@@ -6315,6 +6350,8 @@
             pop.style.left = `${anchorX}px`;
             pop.style.top = `${anchorY}px`;
             pop.innerHTML = `
+                <div class="context-popover-drag-handle" title="Drag to move"></div>
+                <button type="button" class="context-popover-close-btn" data-role="closePopover" title="Close (Esc)">&times;</button>
                 <label class="context-popover-toggle">
                     <input type="checkbox" class="context-popover-checkbox" aria-label="Apply to all nodes">
                     <span>Apply to all nodes</span>
@@ -6383,6 +6420,14 @@
                 </div>
             `;
             document.body.appendChild(pop);
+            this._makePopoverDraggable(pop);
+            const closeBtn = pop.querySelector('[data-role="closePopover"]');
+            if (closeBtn) {
+                closeBtn.addEventListener('click', (ev) => {
+                    ev.stopPropagation();
+                    this.closeNodeBasePopover();
+                });
+            }
             pop.addEventListener('mouseenter', () => {
                 this._nodePopoverHover = true;
                 if (this._nodePopoverCloseTimer) {
@@ -6659,15 +6704,10 @@
                 }
             });
 
-            const clickOutside = (ev) => {
-                if (!pop.contains(ev.target)) this.closeNodeBasePopover();
-            };
             const keyHandler = (ev) => {
                 if (ev.key === 'Escape') this.closeNodeBasePopover();
             };
-            pop._nodeBaseClickHandler = clickOutside;
             pop._nodeBaseKeyHandler = keyHandler;
-            document.addEventListener('mousedown', clickOutside);
             document.addEventListener('keydown', keyHandler);
             if (!this._nodeBasePopover) {
                 this._nodeBasePopover = { el: pop, nodeId, movedInput: null };
@@ -6677,8 +6717,6 @@
         openNodeLabelStylePopover({ nodeId, x, y }) {
             if (!nodeId) return;
             this.closeNodeLabelStylePopover();
-            this.closeNodeStylePopover();
-            this.closeNodeBasePopover();
             const dataset = this.visNetwork?.body?.data?.nodes;
             const node = dataset && typeof dataset.get === 'function' ? dataset.get(nodeId) : null;
 
@@ -6703,6 +6741,8 @@
             pop.style.left = `${anchorX}px`;
             pop.style.top = `${anchorY}px`;
             pop.innerHTML = `
+                <div class="context-popover-drag-handle" title="Drag to move"></div>
+                <button type="button" class="context-popover-close-btn" data-role="closePopover" title="Close (Esc)">&times;</button>
                 <label class="context-popover-toggle">
                     <input type="checkbox" class="context-popover-checkbox" aria-label="Apply to all nodes" checked disabled>
                     <span>Apply to all nodes (only)</span>
@@ -6752,6 +6792,14 @@
                 </div>
             `;
             document.body.appendChild(pop);
+            this._makePopoverDraggable(pop);
+            const closeBtn = pop.querySelector('[data-role="closePopover"]');
+            if (closeBtn) {
+                closeBtn.addEventListener('click', (ev) => {
+                    ev.stopPropagation();
+                    this.closeNodeLabelStylePopover();
+                });
+            }
 
             pop.addEventListener('mouseenter', () => {
                 this._nodePopoverHover = true;
@@ -7040,15 +7088,10 @@
                 this.queuePersistSettings();
             });
 
-            const clickOutside = (ev) => {
-                if (!pop.contains(ev.target)) this.closeNodeLabelStylePopover();
-            };
             const keyHandler = (ev) => {
                 if (ev.key === 'Escape') this.closeNodeLabelStylePopover();
             };
-            pop._nodeLabelStyleClickHandler = clickOutside;
             pop._nodeLabelStyleKeyHandler = keyHandler;
-            document.addEventListener('mousedown', clickOutside);
             document.addEventListener('keydown', keyHandler);
             this._nodeLabelStylePopover = { el: pop, nodeId };
         }
@@ -9002,6 +9045,9 @@
                 const nodeId = params?.nodes?.[0];
                 this.closeEdgeContextMenu();
                 this.closeNodeContextMenu();
+                if (nodeId && this.switchNodePopoverTarget(nodeId)) {
+                    return;
+                }
                 if (nodeId && evt && evt.shiftKey) {
                     if (this.removeNodeFromCustomFocus(nodeId)) return;
                 }
@@ -9187,6 +9233,7 @@
                     if (evt && typeof evt.preventDefault === 'function') {
                         evt.preventDefault();
                     }
+                    this.switchNodePopoverTarget(nodeId);
                     if (this.visNetwork) {
                         this.visNetwork.unselectAll();
                     }
