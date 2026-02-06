@@ -917,6 +917,11 @@
             if (!['normal', 'node', 'edge'].includes(mode)) return;
             const snapshot = this.state.modes?.[mode];
             if (!snapshot) return;
+            // Check if snapshot has required data
+            if (!snapshot.nodes || !snapshot.edges) {
+                console.warn('[VisModeStateStore] Snapshot missing nodes or edges data for mode:', mode);
+                return;
+            }
             const dataset = manager.visNetwork?.body?.data;
             if (!dataset?.nodes || !dataset?.edges) return;
             const nodes = dataset.nodes.get();
@@ -1037,6 +1042,7 @@
                 inputApplyBtn: options.inputApplyBtnId || 'visInputApplyBtn',
                 inputAppendBtn: options.inputAppendBtnId || 'visInputAppendBtn',
                 updateNodeBtn: options.updateNodeBtnId || 'visUpdateNodeBtn',
+                updateStyleBtn: options.updateStyleBtnId || 'visUpdateStyleBtn',
                 inputDepthFocusBtn: options.inputDepthFocusBtnId || 'visInputDepthFocusBtn',
                 saveBtn: options.saveBtnId || 'visSaveNetworkBtn',
                 restoreBtn: options.restoreBtnId || 'visRestoreNetworkBtn',
@@ -1240,6 +1246,7 @@
             const inputAppendBtn = this.getEl(this.ids.inputAppendBtn);
             const inputTextarea = this.getEl(this.ids.inputTextarea);
             const updateNodeBtn = this.getEl(this.ids.updateNodeBtn);
+            const updateStyleBtn = this.getEl(this.ids.updateStyleBtn);
             const inputDepthFocusBtn = this.getEl(this.ids.inputDepthFocusBtn);
             const saveBtn = this.getEl(this.ids.saveBtn);
             const restoreBtn = this.getEl(this.ids.restoreBtn);
@@ -1415,6 +1422,14 @@
                     e.preventDefault();
                     if (inputTextarea) {
                         this.tryApplySingleNodeFromTextarea(inputTextarea);
+                    }
+                });
+            }
+            if (updateStyleBtn) {
+                updateStyleBtn.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    if (inputTextarea) {
+                        this.tryUpdateStyleFromTextarea(inputTextarea);
                     }
                 });
             }
@@ -4447,6 +4462,144 @@
             }
             this.notify('Node not found for update', 'info');
             return false;
+        }
+
+        tryUpdateStyleFromTextarea(textarea) {
+            if (!textarea) return false;
+            const raw = (textarea.value || '').trim();
+            if (!raw || (!raw.startsWith('{') && !raw.startsWith('['))) {
+                console.warn('[WosVisManager] Update style skipped: textarea not JSON.');
+                return false;
+            }
+            
+            let parsed = null;
+            try {
+                parsed = JSON.parse(raw);
+            } catch (_e) {
+                this.notify('Invalid JSON for style update', 'error');
+                return false;
+            }
+            
+            // Convert to array if single object
+            let items = Array.isArray(parsed) ? parsed : [parsed];
+            
+            // Filter items that have an id field
+            items = items.filter(item => item && typeof item === 'object' && item.id);
+            
+            if (!items.length) {
+                this.notify('No items with "id" field found', 'info');
+                return false;
+            }
+            
+            // Get the vis-network dataset
+            const dataset = this.visNetwork?.body?.data;
+            if (!dataset || !dataset.nodes || !dataset.edges) {
+                this.notify('No network loaded', 'info');
+                return false;
+            }
+            
+            const nodeUpdates = [];
+            const edgeUpdates = [];
+            
+            items.forEach(item => {
+                const id = item.id;
+                
+                // Try to find in nodes first
+                try {
+                    const node = dataset.nodes.get(id);
+                    if (node) {
+                        // Deep merge the properties
+                        const updated = this.deepMerge(node, item);
+                        nodeUpdates.push(updated);
+                        console.log('[WosVisManager] Matched node for style update:', id);
+                        return;
+                    }
+                } catch (_e) {
+                    // Node not found, continue to check edges
+                }
+                
+                // Try to find in edges
+                try {
+                    const edge = dataset.edges.get(id);
+                    if (edge) {
+                        // Deep merge the properties
+                        const updated = this.deepMerge(edge, item);
+                        edgeUpdates.push(updated);
+                        console.log('[WosVisManager] Matched edge for style update:', id);
+                        return;
+                    }
+                } catch (_e) {
+                    // Edge not found
+                }
+                
+                console.warn('[WosVisManager] No node or edge found with id:', id);
+            });
+            
+            let updateCount = 0;
+            if (nodeUpdates.length) {
+                dataset.nodes.update(nodeUpdates);
+                updateCount += nodeUpdates.length;
+                console.log('[WosVisManager] Updated nodes:', nodeUpdates.length);
+            }
+            if (edgeUpdates.length) {
+                dataset.edges.update(edgeUpdates);
+                updateCount += edgeUpdates.length;
+                console.log('[WosVisManager] Updated edges:', edgeUpdates.length);
+            }
+            
+            if (updateCount > 0) {
+                this.notify(`Style updated: ${updateCount} item(s)`, 'success');
+                
+                // Update visNetworkData to reflect changes
+                if (this.visNetworkData) {
+                    if (this.visNetworkData.nodes && nodeUpdates.length) {
+                        nodeUpdates.forEach(updated => {
+                            const idx = this.visNetworkData.nodes.findIndex(n => n.id === updated.id);
+                            if (idx !== -1) {
+                                this.visNetworkData.nodes[idx] = updated;
+                            }
+                        });
+                    }
+                    if (this.visNetworkData.edges && edgeUpdates.length) {
+                        edgeUpdates.forEach(updated => {
+                            const idx = this.visNetworkData.edges.findIndex(e => e.id === updated.id);
+                            if (idx !== -1) {
+                                this.visNetworkData.edges[idx] = updated;
+                            }
+                        });
+                    }
+                }
+                
+                return true;
+            }
+            
+            this.notify('No matching nodes or edges found', 'info');
+            return false;
+        }
+
+        deepMerge(target, source) {
+            const output = { ...target };
+            
+            if (source && typeof source === 'object') {
+                Object.keys(source).forEach(key => {
+                    const sourceValue = source[key];
+                    const targetValue = output[key];
+                    
+                    if (sourceValue && typeof sourceValue === 'object' && !Array.isArray(sourceValue)) {
+                        // Recursively merge objects
+                        if (targetValue && typeof targetValue === 'object' && !Array.isArray(targetValue)) {
+                            output[key] = this.deepMerge(targetValue, sourceValue);
+                        } else {
+                            output[key] = { ...sourceValue };
+                        }
+                    } else {
+                        // Replace arrays and primitive values
+                        output[key] = sourceValue;
+                    }
+                });
+            }
+            
+            return output;
         }
 
         async applyLabelField(field) {
