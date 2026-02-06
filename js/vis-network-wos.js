@@ -865,19 +865,24 @@
             const positions = typeof manager.visNetwork.getPositions === 'function'
                 ? manager.visNetwork.getPositions()
                 : {};
+            // 保持官方提供的完整对象数据，不要自己构建，避免丢失数据
             const nodeSnapshots = nodes.map((node) => {
                 const pos = positions?.[node.id];
                 return {
-                    id: node.id,
-                    color: cloneVisColor(node.color),
+                    ...node,  // 保留所有官方属性
+                    color: node.color != null ? cloneVisColor(node.color) : node.color,
+                    icon: node.icon != null ? cloneVisColor(node.icon) : node.icon,
+                    font: node.font != null ? cloneVisColor(node.font) : node.font,
+                    labelStyle: node.labelStyle != null ? cloneVisColor(node.labelStyle) : node.labelStyle,
                     x: pos?.x ?? node.x,
                     y: pos?.y ?? node.y,
                     fixed: node.fixed ?? null
                 };
             });
+            // 保持官方提供的完整对象数据，不要自己构建，避免丢失数据
             const edgeSnapshots = edges.map((edge) => ({
-                id: edge.id,
-                color: cloneVisColor(edge.color)
+                ...edge,  // 保留所有官方属性
+                color: edge.color != null ? cloneVisColor(edge.color) : edge.color
             }));
             const state = manager.getEdgeFocusState();
             const focusMapEntries = state.customFocusMap
@@ -921,18 +926,20 @@
                     return;
                 }
             }
+            // 使用完整的对象数据进行恢复，保持所有属性
             const nodeUpdates = snapshot.nodes.map((node) => {
-                const next = { id: node.id, color: cloneVisColor(node.color) };
-                if (Number.isFinite(node.x) && Number.isFinite(node.y)) {
-                    next.x = node.x;
-                    next.y = node.y;
-                }
-                if (node.fixed != null) next.fixed = node.fixed;
-                return next;
+                return {
+                    ...node,  // 保留所有官方属性
+                    color: node.color != null ? cloneVisColor(node.color) : node.color,
+                    icon: node.icon != null ? cloneVisColor(node.icon) : node.icon,
+                    font: node.font != null ? cloneVisColor(node.font) : node.font,
+                    labelStyle: node.labelStyle != null ? cloneVisColor(node.labelStyle) : node.labelStyle
+                };
             });
+            // 使用完整的对象数据进行恢复，保持所有属性
             const edgeUpdates = snapshot.edges.map((edge) => ({
-                id: edge.id,
-                color: cloneVisColor(edge.color)
+                ...edge,  // 保留所有官方属性
+                color: edge.color != null ? cloneVisColor(edge.color) : edge.color
             }));
             if (nodeUpdates.length) dataset.nodes.update(nodeUpdates);
             if (edgeUpdates.length) dataset.edges.update(edgeUpdates);
@@ -1192,6 +1199,7 @@
             this._edgeContextMenu = null;
             this._edgeBaseLabels = null;
             this._edgeBaseFonts = null;
+            this._edgeBaseArrows = null;  // 保存边的原始箭头信息
             this.settingsAutoSave = false;
             this._visViewReady = false;
             this._nodeContextColorTarget = null;
@@ -3692,6 +3700,8 @@
             });
             if (network) this.visNetwork = network;
             if (data) this.visNetworkData = data;
+            // 重置边的原始箭头信息，以便保存新数据的原始状态
+            this._edgeBaseArrows = null;
             this.lastRenderedJson = typeof raw === 'string' ? raw : JSON.stringify(raw, null, 2);
             if (!this.graphModel && global.WosGraphModel) {
                 this.graphModel = new global.WosGraphModel({ source: null });
@@ -3809,6 +3819,8 @@
             });
             if (network) this.visNetwork = network;
             if (data) this.visNetworkData = data;
+            // 重置边的原始箭头信息，以便保存新数据的原始状态
+            this._edgeBaseArrows = null;
             this.resetEdgeFocusState();
             const sourceJson = typeof options.sourceJson === 'string' ? options.sourceJson : '';
             this.lastRenderedJson = sourceJson;
@@ -4977,6 +4989,19 @@
             if (!this.visNetwork) return;
             const dataset = this.visNetwork?.body?.data?.edges;
             if (!dataset) return;
+
+            // 初始化时保存原始箭头信息
+            if (!this._edgeBaseArrows) {
+                this._edgeBaseArrows = new Map();
+                const allEdges = dataset.get();
+                allEdges.forEach((edge) => {
+                    // 保存原始的 arrows 属性（可能是字符串、对象或 undefined）
+                    if (edge.arrows !== undefined && edge.arrows !== null) {
+                        this._edgeBaseArrows.set(edge.id, edge.arrows);
+                    }
+                });
+            }
+
             const style = this.edgeStyle || 'curve-dynamic';
             const isArrow = style === 'arrow';
             const isDashed = style === 'dashed';
@@ -4984,7 +5009,24 @@
             const isCurve = style.startsWith('curve-');
             const updates = dataset.get().map((edge) => {
                 const next = { id: edge.id };
-                next.arrows = isArrow ? 'to' : null;
+
+                // 箭头处理：根据样式决定使用原始值还是删除
+                if (isArrow) {
+                    // 明确选择箭头样式时，设置箭头
+                    next.arrows = 'to';
+                } else {
+                    // 非箭头样式时，恢复原始箭头信息（如果有的话），否则删除箭头属性
+                    const originalArrows = this._edgeBaseArrows.get(edge.id);
+                    if (originalArrows !== undefined) {
+                        // 有原始箭头，恢复它
+                        next.arrows = originalArrows;
+                    } else {
+                        // 没有原始箭头，删除箭头属性（用 undefined，不要用 null）
+                        next.arrows = undefined;
+                    }
+                }
+
+                // 虚线样式
                 next.dashes = isDashed ? [6, 6] : false;
                 if (isStraight) {
                     next.smooth = false;
