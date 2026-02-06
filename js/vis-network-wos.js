@@ -814,20 +814,6 @@
                     }
                 } catch (_e) { }
             }
-            try {
-                const raw = localStorage.getItem(this.key);
-                if (raw) {
-                    const data = JSON.parse(raw);
-                    const existing = this.state || {};
-                    this.state = {
-                        ...data,
-                        ...existing,
-                        modes: { ...(data.modes || {}), ...(existing.modes || {}) },
-                        settings: existing.settings ?? data.settings ?? null,
-                        meta: existing.meta ?? data.meta ?? null
-                    };
-                }
-            } catch (_e) { }
             return this.state;
         }
 
@@ -838,9 +824,6 @@
                     await storage.save(this.key, this.state);
                 } catch (_e) { }
             }
-            try {
-                localStorage.setItem(this.key, JSON.stringify(this.state));
-            } catch (_e) { }
         }
 
         async saveSettings(payload) {
@@ -915,39 +898,84 @@
             const manager = this.manager;
             if (!manager?.visNetwork) return;
             if (!['normal', 'node', 'edge'].includes(mode)) return;
+            // 如果正在恢复网络且是normal模式，则跳过（避免双重应用样式）
+            if (manager._isRestoringNetwork && mode === 'normal') {
+                console.debug(`[VisModeStateStore] Skipping apply('${mode}') during network restore`);
+                return;
+            }
             const snapshot = this.state.modes?.[mode];
-            if (!snapshot) return;
+            if (!snapshot) {
+                // 如果快照不存在（首次或数据改变）,创建一个新的快照
+                console.warn(`[VisModeStateStore] Snapshot for mode '${mode}' not found, skipping apply`);
+                return;
+            }
             // Check if snapshot has required data
             if (!snapshot.nodes || !snapshot.edges) {
                 console.warn('[VisModeStateStore] Snapshot missing nodes or edges data for mode:', mode);
                 return;
             }
+            // 检查节点和边的数量是否匹配（数据可能已改变）
             const dataset = manager.visNetwork?.body?.data;
             if (!dataset?.nodes || !dataset?.edges) return;
             const nodes = dataset.nodes.get();
             const edges = dataset.edges.get();
+            console.debug(`[VisModeStateStore] apply('${mode}'): current data has ${nodes.length} nodes, ${edges.length} edges`);
+            console.debug(`[VisModeStateStore] apply('${mode}'): snapshot has ${snapshot.nodes.length} nodes, ${snapshot.edges.length} edges`);
+            
             if (this.state.meta) {
                 if (nodes.length !== this.state.meta.nodeCount || edges.length !== this.state.meta.edgeCount) {
+                    console.warn(`[VisModeStateStore] Data size mismatch for mode '${mode}', skipping apply`);
+                    console.warn(`  Expected: ${this.state.meta.nodeCount} nodes, ${this.state.meta.edgeCount} edges`);
+                    console.warn(`  Current: ${nodes.length} nodes, ${edges.length} edges`);
                     return;
                 }
             }
-            // 使用完整的对象数据进行恢复，保持所有属性
-            const nodeUpdates = snapshot.nodes.map((node) => {
-                return {
-                    ...node,  // 保留所有官方属性
-                    color: node.color != null ? cloneVisColor(node.color) : node.color,
-                    icon: node.icon != null ? cloneVisColor(node.icon) : node.icon,
-                    font: node.font != null ? cloneVisColor(node.font) : node.font,
-                    labelStyle: node.labelStyle != null ? cloneVisColor(node.labelStyle) : node.labelStyle
-                };
-            });
-            // 使用完整的对象数据进行恢复，保持所有属性
-            const edgeUpdates = snapshot.edges.map((edge) => ({
-                ...edge,  // 保留所有官方属性
-                color: edge.color != null ? cloneVisColor(edge.color) : edge.color
-            }));
-            if (nodeUpdates.length) dataset.nodes.update(nodeUpdates);
-            if (edgeUpdates.length) dataset.edges.update(edgeUpdates);
+            
+            // 验证快照和当前数据的 ID 是否匹配，防止添加重复节点/边
+            const currentNodeIds = new Set(nodes.map(n => n.id));
+            const snapshotNodeIds = new Set(snapshot.nodes.map(n => n.id));
+            const unmatchedNodes = snapshot.nodes.filter(n => !currentNodeIds.has(n.id));
+            
+            if (unmatchedNodes.length > 0) {
+                console.error(`[VisModeStateStore] ERROR: Snapshot contains ${unmatchedNodes.length} nodes not in current dataset!`);
+                console.error(`  Unmatched node IDs:`, unmatchedNodes.map(n => n.id).slice(0, 10));
+                console.error(`  This would cause duplicate nodes. Aborting apply.`);
+                return;
+            }
+            
+            const currentEdgeIds = new Set(edges.map(e => e.id));
+            const unmatchedEdges = snapshot.edges.filter(e => !currentEdgeIds.has(e.id));
+            
+            if (unmatchedEdges.length > 0) {
+                console.error(`[VisModeStateStore] ERROR: Snapshot contains ${unmatchedEdges.length} edges not in current dataset!`);
+                console.error(`  Unmatched edge IDs:`, unmatchedEdges.map(e => e.id).slice(0, 10));
+                console.error(`  This would cause duplicate edges. Aborting apply.`);
+                return;
+            }
+            
+            // 使用完整的对象数据进行恢复，保持所有属性（深拷贝避免引用问题）
+            console.debug(`[VisModeStateStore] apply('${mode}'): validation passed, updating ${snapshot.nodes.length} nodes and ${snapshot.edges.length} edges`);
+            const nodeUpdates = snapshot.nodes.map((node) => JSON.parse(JSON.stringify(node)));
+            const edgeUpdates = snapshot.edges.map((edge) => JSON.parse(JSON.stringify(edge)));
+            
+            if (nodeUpdates.length) {
+                dataset.nodes.update(nodeUpdates);
+                console.debug(`[VisModeStateStore] apply('${mode}'): nodes updated`);
+            }
+            if (edgeUpdates.length) {
+                dataset.edges.update(edgeUpdates);
+                console.debug(`[VisModeStateStore] apply('${mode}'): edges updated`);
+            }
+            
+            // 验证更新后数据集大小没有改变
+            const nodesAfter = dataset.nodes.get();
+            const edgesAfter = dataset.edges.get();
+            if (nodesAfter.length !== nodes.length || edgesAfter.length !== edges.length) {
+                console.error(`[VisModeStateStore] CRITICAL ERROR: Data size changed after update!`);
+                console.error(`  Before: ${nodes.length} nodes, ${edges.length} edges`);
+                console.error(`  After: ${nodesAfter.length} nodes, ${edgesAfter.length} edges`);
+                console.error(`  This indicates duplicate data was added. Manual intervention required.`);
+            }
             if (Number.isFinite(snapshot.edgeFocusFadeAlpha)) {
                 manager.edgeFocusFadeAlpha = snapshot.edgeFocusFadeAlpha;
             }
@@ -955,18 +983,14 @@
             state.baseNodeColors.clear();
             state.baseEdgeColors.clear();
             state.dirty = true;
-            // When applying normal mode, preserve customFocus settings from node mode
-            // so that Cmd+hover uses the same depth/opacity configured in node mode toolbar.
-            // For node/edge modes, restore from their snapshots.
-            if (mode !== 'normal') {
-                if (Number.isFinite(snapshot.customFocusAlpha)) {
-                    state.customFocusAlpha = snapshot.customFocusAlpha;
-                }
-                if (Number.isFinite(snapshot.customFocusDepth)) {
-                    state.customFocusDepth = snapshot.customFocusDepth;
-                }
-                state.customFocusDepthMap = new Map(snapshot.customFocusDepthMapEntries || []);
-            }
+            // Restore custom focus settings strictly from the snapshot for this mode.
+            state.customFocusAlpha = Number.isFinite(snapshot.customFocusAlpha)
+                ? snapshot.customFocusAlpha
+                : null;
+            state.customFocusDepth = Number.isFinite(snapshot.customFocusDepth)
+                ? snapshot.customFocusDepth
+                : null;
+            state.customFocusDepthMap = new Map(snapshot.customFocusDepthMapEntries || []);
             state.customFocusRootId = snapshot.customFocusRootId ?? null;
             state.customFocusMap = new Map(
                 (snapshot.customFocusMapEntries || []).map(([key, value]) => [key, new Set(value || [])])
@@ -1217,6 +1241,7 @@
             this._nodePopoverHover = false;
             this._nodePopoverCloseTimer = null;
             this._skipNodeColorApply = false;
+            this._isRestoringNetwork = false;  // 标记是否正在恢复网络，避免双重应用样式
             this._toolbarMode = null;
             this.selectedNodeIds = new Set();
             this._edgeModeEnabled = false;
@@ -2572,6 +2597,7 @@
         setToolbarMode(mode, { nodeId = null, edgeId = null, select = false } = {}) {
             const prevMode = this._toolbarMode || 'normal';
             const nextMode = mode || 'normal';
+            console.debug(`[DEBUG] setToolbarMode: prevMode='${prevMode}', nextMode='${nextMode}', _isRestoringNetwork=${this._isRestoringNetwork}`);
             this._toolbarMode = mode || null;
             if (!this.visNetwork) {
                 this.updateModeToolbar();
@@ -2581,15 +2607,19 @@
             this.visNetwork._wosNodeModeActive = this._toolbarMode === 'node';
             if (this.modeStateStore) {
                 const applyForMode = () => {
+                    console.debug(`[DEBUG] applyForMode: capturing '${prevMode}' and applying '${nextMode}'`);
                     this.modeStateStore.capture(prevMode);
                     this.modeStateStore.apply(nextMode);
                 };
                 if (this._modeStoreReady) {
+                    console.debug('[DEBUG] setToolbarMode: _modeStoreReady exists, waiting...');
                     this._modeStoreReady.then(() => {
                         if ((this._toolbarMode || 'normal') !== nextMode) return;
+                        console.debug('[DEBUG] setToolbarMode: _modeStoreReady resolved, executing applyForMode');
                         applyForMode();
                     });
                 } else {
+                    console.debug('[DEBUG] setToolbarMode: no _modeStoreReady, executing applyForMode immediately');
                     applyForMode();
                 }
             }
@@ -3671,8 +3701,30 @@
 
         async initModeStateStore() {
             if (this._modeStoreLoaded || !this.modeStateStore) return;
+            console.debug(`[DEBUG] initModeStateStore called, _isRestoringNetwork=${this._isRestoringNetwork}`);
             this._modeStoreLoaded = true;
             this._modeStoreReady = this.modeStateStore.load().then(() => {
+                console.debug(`[DEBUG] modeStateStore.load() completed, about to apply('normal'), _isRestoringNetwork=${this._isRestoringNetwork}`);
+                
+                // 验证加载的快照是否与当前数据匹配
+                // 如果不匹配（例如切换了数据源），则清空快照避免重复节点
+                const dataset = this.visNetwork?.body?.data;
+                if (dataset?.nodes && dataset?.edges) {
+                    const currentNodes = dataset.nodes.get();
+                    const currentEdges = dataset.edges.get();
+                    const meta = this.modeStateStore.state.meta;
+                    
+                    if (meta && (currentNodes.length !== meta.nodeCount || currentEdges.length !== meta.edgeCount)) {
+                        console.warn(`[DEBUG] initModeStateStore: Loaded snapshots don't match current data size`);
+                        console.warn(`  Loaded meta: ${meta.nodeCount} nodes, ${meta.edgeCount} edges`);
+                        console.warn(`  Current data: ${currentNodes.length} nodes, ${currentEdges.length} edges`);
+                        console.warn(`  Clearing old snapshots to prevent duplicate nodes/edges`);
+                        this.modeStateStore.state.modes = { normal: null, node: null, edge: null };
+                        this.modeStateStore.state.meta = null;
+                        // 不保存到 localStorage，让用户可以回退到这些快照如果需要
+                    }
+                }
+                
                 this.modeStateStore.applySettings();
                 this.modeStateStore.apply('normal');
                 return true;
@@ -3799,9 +3851,23 @@
         }
 
         renderFromVisData(raw, options = {}) {
+            console.debug('[DEBUG] renderFromVisData started', { nodeCount: raw?.nodes?.length, edgeCount: raw?.edges?.length, _isRestoringNetwork: this._isRestoringNetwork });
             if (!global.WosVisNetwork) {
                 this.notify('WOS Vis module not loaded', 'error');
                 return;
+            }
+            // 重置 modeStore 标志，因为新数据加载后旧的快照不再有效
+            // 这可确保 initModeStateStore 会重新初始化并创建新的快照
+            if (!this._isRestoringNetwork) {
+                console.debug('[DEBUG] renderFromVisData: resetting _modeStoreLoaded to allow fresh mode store init');
+                this._modeStoreLoaded = false;
+                this._modeStoreReady = null;
+                // 清空旧的快照，因为新数据的节点/边 ID 可能完全不同
+                if (this.modeStateStore) {
+                    console.debug('[DEBUG] renderFromVisData: clearing old mode snapshots for new data');
+                    this.modeStateStore.state.modes = { normal: null, node: null, edge: null };
+                    this.modeStateStore.state.meta = null;
+                }
             }
             const canvas = this.getEl(this.ids.canvas);
             const view = this.getEl(this.ids.view);
@@ -3901,6 +3967,7 @@
             this.queuePersistNetworkState();
             this.updateModeToolbar();
             this._visViewReady = true;
+            console.debug('[DEBUG] renderFromVisData ending, calling initModeStateStore');
             this.initModeStateStore();
         }
 
@@ -4508,8 +4575,8 @@
                 try {
                     const node = dataset.nodes.get(id);
                     if (node) {
-                        // Deep merge the properties
-                        const updated = this.deepMerge(node, item);
+                        // Merge properties: keep node's properties, apply item's overrides
+                        const updated = { ...node, ...item };
                         nodeUpdates.push(updated);
                         console.log('[WosVisManager] Matched node for style update:', id);
                         return;
@@ -4522,8 +4589,8 @@
                 try {
                     const edge = dataset.edges.get(id);
                     if (edge) {
-                        // Deep merge the properties
-                        const updated = this.deepMerge(edge, item);
+                        // Merge properties: keep edge's properties, apply item's overrides
+                        const updated = { ...edge, ...item };
                         edgeUpdates.push(updated);
                         console.log('[WosVisManager] Matched edge for style update:', id);
                         return;
@@ -4575,31 +4642,6 @@
             
             this.notify('No matching nodes or edges found', 'info');
             return false;
-        }
-
-        deepMerge(target, source) {
-            const output = { ...target };
-            
-            if (source && typeof source === 'object') {
-                Object.keys(source).forEach(key => {
-                    const sourceValue = source[key];
-                    const targetValue = output[key];
-                    
-                    if (sourceValue && typeof sourceValue === 'object' && !Array.isArray(sourceValue)) {
-                        // Recursively merge objects
-                        if (targetValue && typeof targetValue === 'object' && !Array.isArray(targetValue)) {
-                            output[key] = this.deepMerge(targetValue, sourceValue);
-                        } else {
-                            output[key] = { ...sourceValue };
-                        }
-                    } else {
-                        // Replace arrays and primitive values
-                        output[key] = sourceValue;
-                    }
-                });
-            }
-            
-            return output;
         }
 
         async applyLabelField(field) {
@@ -6413,8 +6455,11 @@
                 colorInput.addEventListener('input', () => updateColor(colorInput.value));
                 colorInput.addEventListener('change', () => updateColor(colorInput.value));
 
-                slot.addEventListener('click', () => {
-                    colorInput.dispatchEvent(new Event('click', { bubbles: true }));
+                slot.addEventListener('click', (e) => {
+                    // 防止无限递归：如果点击的是 colorInput 本身，不要重复触发
+                    if (e.target === colorInput) return;
+                    // 使用 click() 方法，不会造成事件冒泡导致的无限递归
+                    colorInput.click();
                 });
 
                 if (typeof global.Coloris !== 'undefined') {
@@ -6905,7 +6950,8 @@
                     type,
                     movedInput: { input: colorInput, parent, next }
                 };
-                colorInput.dispatchEvent(new Event('click', { bubbles: true }));
+                // 使用 click() 方法触发颜色选择器，不需要事件冒泡
+                colorInput.click();
             }
 
             const toggle = pop.querySelector('.context-popover-checkbox');
@@ -7196,8 +7242,11 @@
                 colorInput.addEventListener('change', () => updateColor(colorInput.value));
 
                 // Click slot to open color picker
-                slot.addEventListener('click', () => {
-                    colorInput.dispatchEvent(new Event('click', { bubbles: true }));
+                slot.addEventListener('click', (e) => {
+                    // 防止无限递归：如果点击的是 colorInput 本身，不要重复触发
+                    if (e.target === colorInput) return;
+                    // 使用 click() 方法，不会造成事件冒泡导致的无限递归
+                    colorInput.click();
                 });
 
                 // Initialize coloris (without auto-open)
@@ -7685,8 +7734,11 @@
                 colorInput.addEventListener('change', () => updateColor(colorInput.value));
 
                 // Click slot to open color picker
-                slot.addEventListener('click', () => {
-                    colorInput.dispatchEvent(new Event('click', { bubbles: true }));
+                slot.addEventListener('click', (e) => {
+                    // 防止无限递归：如果点击的是 colorInput 本身，不要重复触发
+                    if (e.target === colorInput) return;
+                    // 使用 click() 方法，不会造成事件冒泡导致的无限递归
+                    colorInput.click();
                 });
 
                 // Initialize coloris for this input (without auto-open)
@@ -7966,8 +8018,11 @@
                 colorInput.addEventListener('input', () => updateColor(colorInput.value));
                 colorInput.addEventListener('change', () => updateColor(colorInput.value));
 
-                slot.addEventListener('click', () => {
-                    colorInput.dispatchEvent(new Event('click', { bubbles: true }));
+                slot.addEventListener('click', (e) => {
+                    // 防止无限递归：如果点击的是 colorInput 本身，不要重复触发
+                    if (e.target === colorInput) return;
+                    // 使用 click() 方法，不会造成事件冒泡导致的无限递归
+                    colorInput.click();
                 });
 
                 if (typeof global.Coloris !== 'undefined') {
@@ -8635,12 +8690,6 @@
                 this._savedSelectValue = Number.isFinite(idx) ? idx : null;
                 return this._savedSelectValue;
             };
-            try {
-                const raw = localStorage.getItem(this.savedSelectKey);
-                if (raw != null) apply(raw);
-            } catch (_e) {
-                // ignore
-            }
             if (this.app && this.app.projectStorage && this.app.currentProject) {
                 try {
                     const data = await this.app.projectStorage.load(this.savedSelectKey);
@@ -8667,15 +8716,6 @@
             this._savedSelectValue = Number.isFinite(idx) ? idx : null;
             if (this.app && this.app.projectStorage && this.app.currentProject) {
                 this.app.projectStorage.update(this.savedSelectKey, this._savedSelectValue);
-            }
-            try {
-                if (this._savedSelectValue == null) {
-                    localStorage.removeItem(this.savedSelectKey);
-                } else {
-                    localStorage.setItem(this.savedSelectKey, String(this._savedSelectValue));
-                }
-            } catch (_e) {
-                // ignore
             }
         }
 
@@ -8709,12 +8749,6 @@
                 this._inputDraftText = value;
                 this.applyInputDraftToTextarea();
             };
-            try {
-                const raw = localStorage.getItem(this.inputDraftKey);
-                if (raw != null) apply(raw);
-            } catch (_e) {
-                // ignore
-            }
             if (this.app && this.app.projectStorage && this.app.currentProject) {
                 this.app.projectStorage.load(this.inputDraftKey).then((data) => {
                     apply(typeof data === 'string' ? data : '');
@@ -8742,11 +8776,6 @@
             this._inputDraftSaveTimer = setTimeout(() => {
                 if (this.app && this.app.projectStorage && this.app.currentProject) {
                     this.app.projectStorage.update(this.inputDraftKey, text);
-                }
-                try {
-                    localStorage.setItem(this.inputDraftKey, text);
-                } catch (_e) {
-                    // ignore
                 }
             }, 160);
         }
@@ -9440,6 +9469,92 @@
             }
         }
 
+        // 直接序列化保存 visData 到本地（完整全样式保存）
+        saveVisDataSerialized(name) {
+            const visData = this.getCurrentVisDataSnapshot() || this.visNetworkData;
+            if (!visData || !Array.isArray(visData.nodes) || !Array.isArray(visData.edges)) {
+                this.notify('No vis data to save', 'info');
+                return false;
+            }
+            try {
+                // 完整序列化：所有属性都保存
+                const serialized = JSON.stringify(visData);
+                const key = `vis-data-snapshot-${name}`;
+                localStorage.setItem(key, serialized);
+                console.log(`[WosVisManager] 已序列化保存: ${key} (${serialized.length} bytes)`);
+                this.notify(`Snapshot saved locally: ${name}`, 'success');
+                return true;
+            } catch (e) {
+                console.error('[WosVisManager] 序列化保存失败:', e);
+                this.notify(`Save failed: ${e.message}`, 'error');
+                return false;
+            }
+        }
+
+        // 直接从本地反序列化恢复 visData（完整全样式恢复）
+        restoreVisDataSerialized(name) {
+            try {
+                const key = `vis-data-snapshot-${name}`;
+                const serialized = localStorage.getItem(key);
+                if (!serialized) {
+                    this.notify(`Snapshot not found: ${name}`, 'info');
+                    return false;
+                }
+                // 完整反序列化：恢复所有属性
+                const visData = JSON.parse(serialized);
+                if (!visData || !Array.isArray(visData.nodes) || !Array.isArray(visData.edges)) {
+                    this.notify('Invalid snapshot data', 'error');
+                    return false;
+                }
+                // 直接应用到现有图形
+                this.restoreVisDataStyles(visData);
+                console.log(`[WosVisManager] 已从本地恢复: ${key}`);
+                this.notify(`Snapshot restored: ${name}`, 'success');
+                return true;
+            } catch (e) {
+                console.error('[WosVisManager] 反序列化恢复失败:', e);
+                this.notify(`Restore failed: ${e.message}`, 'error');
+                return false;
+            }
+        }
+
+        // 列出所有本地快照
+        listVisDataSnapshots() {
+            const snapshots = [];
+            for (let i = 0; i < localStorage.length; i++) {
+                const key = localStorage.key(i);
+                if (key && key.startsWith('vis-data-snapshot-')) {
+                    const name = key.replace('vis-data-snapshot-', '');
+                    const data = localStorage.getItem(key);
+                    snapshots.push({
+                        name,
+                        key,
+                        size: data ? data.length : 0,
+                        date: new Date(parseInt(name.match(/\d+$/)?.[0] || Date.now())).toLocaleString()
+                    });
+                }
+            }
+            return snapshots;
+        }
+
+        // 快速保存（使用时间戳作为名称）
+        quickSaveVisData() {
+            const timestamp = Date.now().toString();
+            return this.saveVisDataSerialized(timestamp);
+        }
+
+        // 快速恢复最新的快照
+        quickRestoreVisData() {
+            const snapshots = this.listVisDataSnapshots();
+            if (!snapshots.length) {
+                this.notify('No snapshots available', 'info');
+                return false;
+            }
+            // 恢复最新的快照（按时间戳倒序）
+            const latest = snapshots.sort((a, b) => parseInt(b.name) - parseInt(a.name))[0];
+            return this.restoreVisDataSerialized(latest.name);
+        }
+
         async saveNetworkJson() {
             this.persistSettings();
             const visData = this.getCurrentVisDataSnapshot() || this.visNetworkData;
@@ -9546,6 +9661,8 @@
                     // per-node colors during renderFromVisData – they will be properly
                     // restored by restoreVisDataStyles below.
                     this._skipNodeColorApply = true;
+                    this._isRestoringNetwork = true;  // 标记正在恢复，防止modeStateStore apply('normal')
+                    console.debug('[DEBUG] restoreNetworkJson: starting restore, _isRestoringNetwork=true');
                     this.renderFromVisData(model.visData || {}, { sourceJson });
                     // Restore saved viewport immediately without animation so the
                     // user never sees the default auto-fit scale.  Also register a
@@ -9581,21 +9698,31 @@
                     // restoreVisDataStyles and overwrite the correct per-node/edge
                     // colours with stale snapshot values.
                     if (this._modeStoreReady) {
+                        console.debug('[DEBUG] restoreNetworkJson: waiting for _modeStoreReady...');
                         await this._modeStoreReady;
+                        console.debug('[DEBUG] restoreNetworkJson: _modeStoreReady completed');
                     }
                     if (item.settings) {
+                        console.debug('[DEBUG] restoreNetworkJson: applying settings and restoring styles');
                         this.applyLabelPanelSettingsPayload(item.settings);
+                        // 在应用模式之后恢复样式，避免被模式应用覆盖
                         this.restoreVisDataStyles(model.visData);
                     }
                     this._skipNodeColorApply = false;
+                    this._isRestoringNetwork = false;  // 恢复完成，清除标记
+                    console.debug('[DEBUG] restoreNetworkJson: restore complete, _isRestoringNetwork=false');
                 } else {
                     this.notify('Saved payload missing model support', 'error');
+                    this._skipNodeColorApply = false;
+                    this._isRestoringNetwork = false;
                     return;
                 }
             } else {
                 if (!options.silent) {
                     this.notify('Invalid selection', 'error');
                 }
+                this._skipNodeColorApply = false;
+                this._isRestoringNetwork = false;
                 return;
             }
             if (!options.silent) {
