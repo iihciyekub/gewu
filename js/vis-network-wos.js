@@ -1139,6 +1139,8 @@
             this.edgeFade = 100;
             this.edgeMinWidth = 1;
             this.edgeMaxWidth = 6;
+            this.edgeWidthScale = 1.0;
+            this.edgeSmooth = 100;
             this.edgeColor = '#111111';
             this.edgeLabelFontSize = 12;
             this.edgeLabelFontColor = '#111111';
@@ -4981,10 +4983,12 @@
             const maxRelated = Number.isFinite(meta.maxRelated) ? meta.maxRelated : minRelated;
             const minW = Number.isFinite(Number(this.edgeMinWidth)) ? Number(this.edgeMinWidth) : 1;
             const maxW = Number.isFinite(Number(this.edgeMaxWidth)) ? Number(this.edgeMaxWidth) : 6;
+            const scale = Number.isFinite(Number(this.edgeWidthScale)) ? Number(this.edgeWidthScale) : 1.0;
             const updates = dataset.get().map((edge) => {
                 const related = getRelatedCount(edge);
                 const t = maxRelated > minRelated ? (related - minRelated) / (maxRelated - minRelated) : 0;
-                const width = minW + Math.max(0, Math.min(1, t)) * (maxW - minW);
+                const baseWidth = minW + Math.max(0, Math.min(1, t)) * (maxW - minW);
+                const width = baseWidth * scale;
                 return { id: edge.id, width: Number(width.toFixed(2)) };
             });
             dataset.update(updates);
@@ -5695,6 +5699,270 @@
             }, delay);
         }
 
+        closeEdgeStylePopover() {
+            const pop = this._edgeStylePopover?.el || document.querySelector('.context-edge-style-popover');
+            if (pop) {
+                if (pop._edgeStyleClickHandler) document.removeEventListener('mousedown', pop._edgeStyleClickHandler);
+                if (pop._edgeStyleKeyHandler) document.removeEventListener('keydown', pop._edgeStyleKeyHandler);
+                pop.remove();
+            }
+            this._edgeStylePopover = null;
+            this._edgePopoverHover = false;
+            if (this._edgePopoverCloseTimer) {
+                clearTimeout(this._edgePopoverCloseTimer);
+                this._edgePopoverCloseTimer = null;
+            }
+        }
+
+        closeEdgeLabelStylePopover() {
+            const pop = this._edgeLabelStylePopover?.el || document.querySelector('.context-edge-label-style-popover');
+            if (pop) {
+                if (pop._edgeLabelStyleClickHandler) document.removeEventListener('mousedown', pop._edgeLabelStyleClickHandler);
+                if (pop._edgeLabelStyleKeyHandler) document.removeEventListener('keydown', pop._edgeLabelStyleKeyHandler);
+                pop.remove();
+            }
+            this._edgeLabelStylePopover = null;
+            this._edgePopoverHover = false;
+            if (this._edgePopoverCloseTimer) {
+                clearTimeout(this._edgePopoverCloseTimer);
+                this._edgePopoverCloseTimer = null;
+            }
+        }
+
+        scheduleCloseEdgePopovers(delay = 180) {
+            if (this._edgePopoverCloseTimer) {
+                clearTimeout(this._edgePopoverCloseTimer);
+            }
+            this._edgePopoverCloseTimer = setTimeout(() => {
+                if (this._edgePopoverHover) return;
+                this.closeEdgeStylePopover();
+                this.closeEdgeLabelStylePopover();
+            }, delay);
+        }
+
+        openEdgeStylePopover({ edgeId, x, y }) {
+            if (!edgeId) return;
+            this.closeEdgeStylePopover();
+            this.closeEdgeLabelStylePopover();
+            const dataset = this.visNetwork?.body?.data?.edges;
+            const edge = dataset && typeof dataset.get === 'function' ? dataset.get(edgeId) : null;
+            const step = 0.1;
+            
+            const edgeMinWidth = Number(this.edgeMinWidth ?? 1);
+            const edgeMaxWidth = Number(this.edgeMaxWidth ?? 6);
+            const edgeWidthScale = Number(this.edgeWidthScale ?? 1.0);
+            
+            const formatValue = (value) => {
+                const next = Number(value);
+                return Number.isFinite(next) ? next.toFixed(2) : '0.00';
+            };
+            
+            const pop = document.createElement('div');
+            pop.className = 'context-edge-style-popover context-style-popover';
+            const anchorX = Number(x) || 0;
+            const anchorY = Number(y) || 0;
+            pop.style.left = `${anchorX}px`;
+            pop.style.top = `${anchorY}px`;
+            pop.innerHTML = `
+                <label class="context-popover-toggle">
+                    <input type="checkbox" class="context-popover-checkbox" aria-label="Apply to all edges">
+                    <span>Apply to all edges</span>
+                </label>
+                <div class="context-input-row context-input-group-row">
+                    <div class="context-input-group">
+                        <label class="context-input-label">Min</label>
+                        <input class="context-number-input" data-role="minWidth" type="number" min="0.1" max="50" step="${step}" value="${formatValue(edgeMinWidth)}" aria-label="Min Width">
+                    </div>
+                    <div class="context-input-group">
+                        <label class="context-input-label">Scale</label>
+                        <input class="context-number-input" data-role="scale" type="number" min="0.1" max="3" step="0.05" value="${formatValue(edgeWidthScale)}" aria-label="Width Scale">
+                    </div>
+                    <div class="context-input-group">
+                        <label class="context-input-label">Max</label>
+                        <input class="context-number-input" data-role="maxWidth" type="number" min="0.1" max="50" step="${step}" value="${formatValue(edgeMaxWidth)}" aria-label="Max Width">
+                    </div>
+                </div>
+                <div class="context-color-row">
+                    <span class="context-slider-label">Color</span>
+                    <div class="context-color-slot" data-role="edgeColor"></div>
+                </div>
+            `;
+            document.body.appendChild(pop);
+            
+            pop.addEventListener('mouseenter', () => {
+                this._edgePopoverHover = true;
+                if (this._edgePopoverCloseTimer) {
+                    clearTimeout(this._edgePopoverCloseTimer);
+                    this._edgePopoverCloseTimer = null;
+                }
+            });
+            pop.addEventListener('mouseleave', () => {
+                this._edgePopoverHover = false;
+            });
+            
+            const rect = pop.getBoundingClientRect();
+            const margin = 8;
+            let nextLeft = anchorX;
+            let nextTop = anchorY;
+            if (anchorX + rect.width > window.innerWidth - margin) {
+                nextLeft = anchorX - rect.width - 12;
+            }
+            if (nextLeft < margin) {
+                nextLeft = margin;
+            }
+            if (rect.bottom > window.innerHeight - margin) {
+                nextTop = window.innerHeight - rect.height - margin;
+            }
+            pop.style.left = `${Math.max(margin, nextLeft)}px`;
+            pop.style.top = `${Math.max(margin, nextTop)}px`;
+            
+            const toggle = pop.querySelector('.context-popover-checkbox');
+            const getApplyToAll = () => toggle ? toggle.checked : false;
+            
+            // Helper to apply to all edges or single edge
+            const applyEdgeStyle = (updates) => {
+                if (!this.visNetwork || !this.visNetwork.body?.data?.edges) return;
+                const dataset = this.visNetwork.body.data;
+                
+                if (getApplyToAll()) {
+                    const edges = dataset.edges.get();
+                    const edgeUpdates = edges.map((e) => {
+                        const currentEdge = dataset.edges.get(e.id);
+                        return { id: e.id, ...updates };
+                    });
+                    dataset.edges.update(edgeUpdates);
+                } else {
+                    dataset.edges.update({ id: edgeId, ...updates });
+                }
+                if (this.visNetwork) this.visNetwork.redraw();
+            };
+            
+            // Bind number inputs
+            const bindNumberInput = (role, onChange) => {
+                const input = pop.querySelector(`input[data-role="${role}"]`);
+                if (!input) return;
+                const applyValue = (raw) => {
+                    const next = Number(raw);
+                    if (!Number.isFinite(next)) return;
+                    const min = Number(input.min) || 0;
+                    const max = Number(input.max) || 200;
+                    const clamped = Math.max(min, Math.min(max, next));
+                    input.value = String(clamped);
+                    onChange(clamped);
+                };
+                input.addEventListener('input', (ev) => {
+                    ev.stopPropagation();
+                    applyValue(input.value);
+                });
+                input.addEventListener('change', (ev) => {
+                    ev.stopPropagation();
+                    applyValue(input.value);
+                });
+                input.addEventListener('wheel', (ev) => {
+                    ev.preventDefault();
+                    const step = Number(input.step) || 1;
+                    const delta = ev.deltaY < 0 ? step : -step;
+                    const currentVal = Number(input.value) || 0;
+                    const min = Number(input.min) || 0;
+                    const max = Number(input.max) || 200;
+                    const nextVal = Math.max(min, Math.min(max, currentVal + delta));
+                    applyValue(nextVal);
+                }, { passive: false });
+                input.addEventListener('click', (ev) => ev.stopPropagation());
+            };
+            
+            bindNumberInput('minWidth', (val) => {
+                this.edgeMinWidth = val;
+                this.applyEdgeWidthRange();
+                this.queuePersistSettings();
+            });
+            
+            bindNumberInput('maxWidth', (val) => {
+                this.edgeMaxWidth = val;
+                this.applyEdgeWidthRange();
+                this.queuePersistSettings();
+            });
+            
+            bindNumberInput('scale', (val) => {
+                this.edgeWidthScale = val;
+                this.applyEdgeWidthRange();
+                this.queuePersistSettings();
+            });
+            
+            // Setup color picker
+            const setupColorPicker = (slotRole, property, defaultColor, applyGlobal) => {
+                const slot = pop.querySelector(`[data-role="${slotRole}"]`);
+                if (!slot) return;
+                
+                const currentColor = edge?.color || defaultColor;
+                let initialColor = defaultColor;
+                if (currentColor && currentColor !== 'transparent' && currentColor !== 'none') {
+                    initialColor = currentColor;
+                }
+                
+                const colorDisplay = document.createElement('div');
+                colorDisplay.className = 'context-color-display';
+                colorDisplay.style.backgroundColor = initialColor;
+                
+                const colorInput = document.createElement('input');
+                colorInput.type = 'text';
+                colorInput.className = 'context-color-input';
+                colorInput.setAttribute('data-coloris', '');
+                colorInput.value = initialColor;
+                
+                slot.appendChild(colorDisplay);
+                slot.appendChild(colorInput);
+                
+                const updateColor = (val) => {
+                    colorDisplay.style.backgroundColor = val;
+                    colorInput.value = val;
+                    if (getApplyToAll() && applyGlobal) {
+                        applyGlobal.call(this, val);
+                    } else {
+                        applyEdgeStyle({ color: val });
+                    }
+                };
+                
+                colorInput.addEventListener('input', () => updateColor(colorInput.value));
+                colorInput.addEventListener('change', () => updateColor(colorInput.value));
+                
+                slot.addEventListener('click', () => {
+                    colorInput.dispatchEvent(new Event('click', { bubbles: true }));
+                });
+                
+                if (typeof global.Coloris !== 'undefined') {
+                    try {
+                        global.Coloris({
+                            el: colorInput,
+                            alpha: false,
+                            format: 'hex',
+                            formatToggle: false,
+                            wrap: false
+                        });
+                    } catch (e) {
+                        // Coloris initialization failed
+                    }
+                }
+            };
+            
+            setupColorPicker('edgeColor', 'color', this.edgeColor || '#1a1a1aff', (val) => {
+                this.edgeColor = val;
+                this.queuePersistSettings();
+            });
+            
+            const clickOutside = (ev) => {
+                if (!pop.contains(ev.target)) this.closeEdgeStylePopover();
+            };
+            const keyHandler = (ev) => {
+                if (ev.key === 'Escape') this.closeEdgeStylePopover();
+            };
+            pop._edgeStyleClickHandler = clickOutside;
+            pop._edgeStyleKeyHandler = keyHandler;
+            document.addEventListener('mousedown', clickOutside);
+            document.addEventListener('keydown', keyHandler);
+            this._edgeStylePopover = { el: pop, edgeId };
+        }
+
         showEdgeContextMenu(e, edgeId) {
             if (!edgeId || !e) return;
             this.closeNodeContextMenu();
@@ -5702,13 +5970,21 @@
             if (this._toolbarMode === 'node') return;
             this._tempToolbarMode = 'edge';
             const menu = document.createElement('div');
-            menu.className = 'context-menu';
+            menu.className = 'context-menu edge-menu';
             menu.style.left = `${e.pageX}px`;
             menu.style.top = `${e.pageY}px`;
             menu.innerHTML = `
                 <div class="context-menu-item" data-action="enterEdgeMode">
                     <i class="fas fa-bullseye"></i>
                     Enter Edge Mode
+                </div>
+                <div class="context-menu-item" data-action="pickEdgeStyle">
+                    <i class="fas fa-palette"></i>
+                    Edge Style
+                </div>
+                <div class="context-menu-item" data-action="pickEdgeLabelStyle">
+                    <i class="fas fa-font"></i>
+                    Edge Label Style
                 </div>
             `;
             document.body.appendChild(menu);
@@ -5725,6 +6001,24 @@
             menu.style.left = `${Math.max(margin, nextLeft)}px`;
             menu.style.top = `${Math.max(margin, nextTop)}px`;
             menu.querySelectorAll('.context-menu-item').forEach((item) => {
+                item.addEventListener('mouseenter', (ev) => {
+                    const action = item.dataset.action;
+                    const menuRect = menu.getBoundingClientRect();
+                    const anchor = {
+                        x: menuRect.right + 6,
+                        y: menuRect.top
+                    };
+                    if (action === 'pickEdgeStyle') {
+                        this.openEdgeStylePopover({ edgeId, x: anchor.x, y: anchor.y });
+                    } else if (action === 'pickEdgeLabelStyle') {
+                        this.openEdgeLabelStylePopover({ edgeId, x: anchor.x, y: anchor.y });
+                    }
+                });
+                item.addEventListener('mouseleave', () => {
+                    if (item.dataset.action === 'pickEdgeStyle' || item.dataset.action === 'pickEdgeLabelStyle') {
+                        this.scheduleCloseEdgePopovers();
+                    }
+                });
                 item.addEventListener('click', () => {
                     const action = item.dataset.action;
                     if (action === 'enterEdgeMode') {
@@ -6759,6 +7053,227 @@
             this._nodeLabelStylePopover = { el: pop, nodeId };
         }
 
+        openEdgeLabelStylePopover({ edgeId, x, y }) {
+            if (!edgeId) return;
+            this.closeEdgeLabelStylePopover();
+            this.closeEdgeStylePopover();
+            const dataset = this.visNetwork?.body?.data?.edges;
+            const edge = dataset && typeof dataset.get === 'function' ? dataset.get(edgeId) : null;
+
+            // Get current values
+            const currentFontSize = Number(edge?.font?.size || this.edgeLabelFontSize || 14);
+            const currentStrokeWidth = Number(edge?.font?.strokeWidth || this.edgeLabelStrokeWidth || 0);
+            
+            const formatValue = (value, decimals = 1) => {
+                const next = Number(value);
+                return Number.isFinite(next) ? next.toFixed(decimals) : '0.0';
+            };
+
+            const pop = document.createElement('div');
+            pop.className = 'context-edge-label-style-popover context-style-popover';
+            const anchorX = Number(x) || 0;
+            const anchorY = Number(y) || 0;
+            pop.style.left = `${anchorX}px`;
+            pop.style.top = `${anchorY}px`;
+            pop.innerHTML = `
+                <label class="context-popover-toggle">
+                    <input type="checkbox" class="context-popover-checkbox" aria-label="Apply to all edges">
+                    <span>Apply to all edges</span>
+                </label>
+                <div class="context-input-row context-input-group-row">
+                    <div class="context-input-group">
+                        <label class="context-input-label">Size</label>
+                        <input class="context-number-input" data-role="fontSize" type="number" min="8" max="72" step="1" value="${Math.round(currentFontSize)}" aria-label="Font Size">
+                    </div>
+                </div>
+                <div class="context-color-row">
+                    <span class="context-slider-label">Text Color</span>
+                    <div class="context-color-slot" data-role="fontColor"></div>
+                </div>
+                <div class="context-input-row">
+                    <span class="context-slider-label">Stroke</span>
+                    <input class="context-number-input" data-role="strokeWidth" type="number" min="0" max="10" step="0.1" value="${currentStrokeWidth.toFixed(2)}" aria-label="Stroke Width">
+                    <div class="context-color-slot" data-role="strokeColor"></div>
+                </div>
+                <div class="context-color-row">
+                    <span class="context-slider-label">Background</span>
+                    <div class="context-color-slot" data-role="bgColor"></div>
+                </div>
+            `;
+            document.body.appendChild(pop);
+
+            pop.addEventListener('mouseenter', () => {
+                this._edgePopoverHover = true;
+                if (this._edgePopoverCloseTimer) {
+                    clearTimeout(this._edgePopoverCloseTimer);
+                    this._edgePopoverCloseTimer = null;
+                }
+            });
+            pop.addEventListener('mouseleave', () => {
+                this._edgePopoverHover = false;
+            });
+
+            const rect = pop.getBoundingClientRect();
+            const margin = 8;
+            let nextLeft = anchorX;
+            let nextTop = anchorY;
+            if (anchorX + rect.width > window.innerWidth - margin) {
+                nextLeft = anchorX - rect.width - 12;
+            }
+            if (nextLeft < margin) {
+                nextLeft = margin;
+            }
+            if (rect.bottom > window.innerHeight - margin) {
+                nextTop = window.innerHeight - rect.height - margin;
+            }
+            pop.style.left = `${Math.max(margin, nextLeft)}px`;
+            pop.style.top = `${Math.max(margin, nextTop)}px`;
+
+            const toggle = pop.querySelector('.context-popover-checkbox');
+            const getApplyToAll = () => toggle ? toggle.checked : false;
+
+            // Helper to apply styles
+            const applyEdgeLabelStyle = (updates) => {
+                if (!this.visNetwork || !this.visNetwork.body?.data?.edges) return;
+                const dataset = this.visNetwork.body.data;
+
+                if (getApplyToAll()) {
+                    const edges = dataset.edges.get();
+                    const edgeUpdates = edges.map((e) => {
+                        const currentEdge = dataset.edges.get(e.id);
+                        return { id: e.id, font: { ...currentEdge?.font, ...updates } };
+                    });
+                    dataset.edges.update(edgeUpdates);
+                } else {
+                    const currentEdge = dataset.edges.get(edgeId);
+                    dataset.edges.update({ id: edgeId, font: { ...currentEdge?.font, ...updates } });
+                }
+                if (this.visNetwork) this.visNetwork.redraw();
+            };
+
+            // Bind number inputs
+            const bindNumberInput = (role, onChange) => {
+                const input = pop.querySelector(`input[data-role="${role}"]`);
+                if (!input) return;
+                const applyValue = (raw) => {
+                    const next = Number(raw);
+                    if (!Number.isFinite(next)) return;
+                    const min = Number(input.min) || 0;
+                    const max = Number(input.max) || 200;
+                    const clamped = Math.max(min, Math.min(max, next));
+                    input.value = String(clamped);
+                    onChange(clamped);
+                };
+                input.addEventListener('input', (ev) => {
+                    ev.stopPropagation();
+                    applyValue(input.value);
+                });
+                input.addEventListener('change', (ev) => {
+                    ev.stopPropagation();
+                    applyValue(input.value);
+                });
+                input.addEventListener('wheel', (ev) => {
+                    ev.preventDefault();
+                    const step = Number(input.step) || 1;
+                    const delta = ev.deltaY < 0 ? step : -step;
+                    const currentVal = Number(input.value) || 0;
+                    const min = Number(input.min) || 0;
+                    const max = Number(input.max) || 200;
+                    const nextVal = Math.max(min, Math.min(max, currentVal + delta));
+                    applyValue(nextVal);
+                }, { passive: false });
+                input.addEventListener('click', (ev) => ev.stopPropagation());
+            };
+
+            bindNumberInput('fontSize', (val) => {
+                this.edgeLabelFontSize = val;
+                applyEdgeLabelStyle({ size: val });
+                this.queuePersistSettings();
+            });
+
+            bindNumberInput('strokeWidth', (val) => {
+                this.edgeLabelStrokeWidth = val;
+                applyEdgeLabelStyle({ strokeWidth: val });
+                this.queuePersistSettings();
+            });
+
+            // Setup color pickers
+            const setupColorPicker = (slotRole, property, defaultColor, globalProp) => {
+                const slot = pop.querySelector(`[data-role="${slotRole}"]`);
+                if (!slot) return;
+
+                let currentColor = defaultColor;
+                if (slotRole === 'fontColor') currentColor = edge?.font?.color || this[globalProp] || defaultColor;
+                else if (slotRole === 'strokeColor') currentColor = edge?.font?.strokeColor || this[globalProp] || defaultColor;
+                else if (slotRole === 'bgColor') currentColor = edge?.font?.background || this[globalProp] || defaultColor;
+
+                const colorDisplay = document.createElement('div');
+                colorDisplay.className = 'context-color-display';
+                colorDisplay.style.backgroundColor = currentColor;
+
+                const colorInput = document.createElement('input');
+                colorInput.type = 'text';
+                colorInput.className = 'context-color-input';
+                colorInput.setAttribute('data-coloris', '');
+                colorInput.value = currentColor;
+
+                slot.appendChild(colorDisplay);
+                slot.appendChild(colorInput);
+
+                const updateColor = (val) => {
+                    colorDisplay.style.backgroundColor = val;
+                    colorInput.value = val;
+                    const updates = {};
+                    if (slotRole === 'fontColor') updates.color = val;
+                    else if (slotRole === 'strokeColor') updates.strokeColor = val;
+                    else if (slotRole === 'bgColor') updates.background = val;
+                    
+                    if (getApplyToAll() && globalProp) {
+                        this[globalProp] = val;
+                        this.queuePersistSettings();
+                    }
+                    applyEdgeLabelStyle(updates);
+                };
+
+                colorInput.addEventListener('input', () => updateColor(colorInput.value));
+                colorInput.addEventListener('change', () => updateColor(colorInput.value));
+
+                slot.addEventListener('click', () => {
+                    colorInput.dispatchEvent(new Event('click', { bubbles: true }));
+                });
+
+                if (typeof global.Coloris !== 'undefined') {
+                    try {
+                        global.Coloris({
+                            el: colorInput,
+                            alpha: false,
+                            format: 'hex',
+                            formatToggle: false,
+                            wrap: false
+                        });
+                    } catch (e) {
+                        // Coloris initialization failed
+                    }
+                }
+            };
+
+            setupColorPicker('fontColor', 'color', '#000000', 'edgeLabelFontColor');
+            setupColorPicker('strokeColor', 'strokeColor', '#ffffff', 'edgeLabelStrokeColor');
+            setupColorPicker('bgColor', 'background', 'rgba(255,255,255,0.85)', 'edgeLabelBgColor');
+
+            const clickOutside = (ev) => {
+                if (!pop.contains(ev.target)) this.closeEdgeLabelStylePopover();
+            };
+            const keyHandler = (ev) => {
+                if (ev.key === 'Escape') this.closeEdgeLabelStylePopover();
+            };
+            pop._edgeLabelStyleClickHandler = clickOutside;
+            pop._edgeLabelStyleKeyHandler = keyHandler;
+            document.addEventListener('mousedown', clickOutside);
+            document.addEventListener('keydown', keyHandler);
+            this._edgeLabelStylePopover = { el: pop, edgeId };
+        }
+
         applyLabelShowAll(showAll) {
             if (!this.visNetwork) {
                 return;
@@ -6813,6 +7328,7 @@
             this.nodeOuterBorderColor = '#ffffffb2';
             this.edgeMinWidth = 3.0;
             this.edgeMaxWidth = 14.5;
+            this.edgeWidthScale = 1.2;
             this.edgeFade = 39;
             this.edgeColor = '#1a1a1aff';
             this.edgeLabelFontSize = 12;
@@ -6971,6 +7487,8 @@
                 edgeFade: this.edgeFade,
                 edgeMinWidth: this.edgeMinWidth,
                 edgeMaxWidth: this.edgeMaxWidth,
+                edgeWidthScale: this.edgeWidthScale,
+                edgeSmooth: this.edgeSmooth,
                 edgeColor: this.edgeColor,
                 edgeLabelFontSize: this.edgeLabelFontSize,
                 edgeLabelFontColor: this.edgeLabelFontColor,
@@ -7063,6 +7581,8 @@
             if (Number.isFinite(payload.edgeFade)) this.edgeFade = payload.edgeFade;
             if (Number.isFinite(payload.edgeMinWidth)) this.edgeMinWidth = payload.edgeMinWidth;
             if (Number.isFinite(payload.edgeMaxWidth)) this.edgeMaxWidth = payload.edgeMaxWidth;
+            if (Number.isFinite(payload.edgeWidthScale)) this.edgeWidthScale = payload.edgeWidthScale;
+            if (Number.isFinite(payload.edgeSmooth)) this.edgeSmooth = payload.edgeSmooth;
             if (typeof payload.edgeColor === 'string') this.edgeColor = payload.edgeColor;
             if (Number.isFinite(payload.edgeLabelFontSize)) this.edgeLabelFontSize = payload.edgeLabelFontSize;
             if (typeof payload.edgeLabelFontColor === 'string') this.edgeLabelFontColor = payload.edgeLabelFontColor;
@@ -7608,6 +8128,8 @@
                 if (Number.isFinite(payload.edgeFade)) this.edgeFade = payload.edgeFade;
                 if (Number.isFinite(payload.edgeMinWidth)) this.edgeMinWidth = payload.edgeMinWidth;
                 if (Number.isFinite(payload.edgeMaxWidth)) this.edgeMaxWidth = payload.edgeMaxWidth;
+                if (Number.isFinite(payload.edgeWidthScale)) this.edgeWidthScale = payload.edgeWidthScale;
+                if (Number.isFinite(payload.edgeSmooth)) this.edgeSmooth = payload.edgeSmooth;
                 if (typeof payload.edgeColor === 'string') this.edgeColor = payload.edgeColor;
                 if (typeof payload.depthMode === 'boolean') this.depthMode = payload.depthMode;
                 if (Number.isFinite(payload.edgeFocusFadeAlpha)) this.edgeFocusFadeAlpha = payload.edgeFocusFadeAlpha;
