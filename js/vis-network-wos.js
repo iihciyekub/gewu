@@ -5961,6 +5961,18 @@
                     <div class="context-color-slot" data-role="edgeColor"></div>
                 </div>
                 <div class="context-input-row">
+                    <span class="context-slider-label">Opacity</span>
+                    <input class="context-number-input" data-role="opacity" type="number" min="0" max="1" step="0.05" value="1.00" aria-label="Edge Opacity">
+                </div>
+                <div class="context-input-row">
+                    <span class="context-slider-label">Self Loop Size</span>
+                    <input class="context-number-input" data-role="selfRefSize" type="number" min="10" max="100" step="5" value="20" aria-label="Self Reference Size">
+                </div>
+                <div class="context-input-row" data-role="arrowScaleRow" style="display: none;">
+                    <span class="context-slider-label">Arrow Scale</span>
+                    <input class="context-number-input" data-role="arrowScale" type="number" min="0.1" max="3" step="0.1" value="1.0" aria-label="Arrow Scale">
+                </div>
+                <div class="context-input-row">
                     <label class="context-input-label" style="width: 100%;">Line Style
                         <select class="context-select-input" data-role="smoothType" aria-label="Smooth Type" style="width: 100%; margin-top: 3px;">
                             <option value="straight">Straight</option>
@@ -6195,6 +6207,8 @@
             const arrowsCheckbox = pop.querySelector('[data-role="arrows"]');
             const arrowTypeRow = pop.querySelector('[data-role="arrowTypeRow"]');
             const arrowTypeSelect = pop.querySelector('[data-role="arrowType"]');
+            const arrowScaleRow = pop.querySelector('[data-role="arrowScaleRow"]');
+            const arrowScaleInput = pop.querySelector('[data-role="arrowScale"]');
 
             // Initialize with current edge style or defaults
             const currentSmooth = edge?.smooth;
@@ -6218,6 +6232,11 @@
             if (arrowsCheckbox) arrowsCheckbox.checked = !!currentArrows;
             if (arrowTypeSelect && currentArrows) arrowTypeSelect.value = currentArrows;
             if (arrowTypeRow) arrowTypeRow.style.display = currentArrows ? 'block' : 'none';
+            if (arrowScaleRow) arrowScaleRow.style.display = currentArrows ? 'block' : 'none';
+
+            // Initialize arrow scale
+            const currentArrowScale = edge?.arrows?.to?.scaleFactor ?? edge?.arrows?.from?.scaleFactor ?? 1.0;
+            if (arrowScaleInput) arrowScaleInput.value = currentArrowScale.toFixed(1);
 
             // Helper to apply combined style
             const applyStyle = () => {
@@ -6225,6 +6244,7 @@
                 const dashed = dashedCheckbox.checked;
                 const hasArrows = arrowsCheckbox.checked;
                 const arrowType = hasArrows ? arrowTypeSelect.value : false;
+                const arrowScale = arrowScaleInput ? Number(arrowScaleInput.value) : 1.0;
 
                 const updates = {};
 
@@ -6244,11 +6264,22 @@
                 // Apply dashed
                 updates.dashes = dashed ? [6, 6] : false;
 
-                // Apply arrows
+                // Apply arrows - explicitly handle enabled/disabled state with scale
                 if (arrowType) {
-                    updates.arrows = arrowType;
+                    // Enable arrows with the selected type and scale factor
+                    if (arrowType === 'to;from') {
+                        updates.arrows = {
+                            to: { enabled: true, scaleFactor: arrowScale },
+                            from: { enabled: true, scaleFactor: arrowScale }
+                        };
+                    } else {
+                        updates.arrows = {
+                            [arrowType]: { enabled: true, scaleFactor: arrowScale }
+                        };
+                    }
                 } else {
-                    updates.arrows = undefined;
+                    // Explicitly disable all arrows
+                    updates.arrows = { to: { enabled: false }, from: { enabled: false }, middle: { enabled: false } };
                 }
 
                 applyEdgeStyle(updates);
@@ -6274,6 +6305,7 @@
                     ev.stopPropagation();
                     const hasArrows = arrowsCheckbox.checked;
                     if (arrowTypeRow) arrowTypeRow.style.display = hasArrows ? 'block' : 'none';
+                    if (arrowScaleRow) arrowScaleRow.style.display = hasArrows ? 'block' : 'none';
                     applyStyle();
                 });
             }
@@ -6284,6 +6316,51 @@
                     applyStyle();
                 });
             }
+
+            if (arrowScaleInput) {
+                arrowScaleInput.addEventListener('input', (ev) => {
+                    ev.stopPropagation();
+                    applyStyle();
+                });
+                arrowScaleInput.addEventListener('wheel', (ev) => {
+                    ev.preventDefault();
+                    const step = 0.1;
+                    const delta = ev.deltaY < 0 ? step : -step;
+                    const currentVal = Number(arrowScaleInput.value) || 1.0;
+                    const nextVal = Math.max(0.1, Math.min(3, currentVal + delta));
+                    arrowScaleInput.value = nextVal.toFixed(1);
+                    applyStyle();
+                }, { passive: false });
+            }
+
+            // Setup opacity and selfReference controls
+            const opacityInput = pop.querySelector('[data-role="opacity"]');
+            const selfRefSizeInput = pop.querySelector('[data-role="selfRefSize"]');
+
+            // Initialize opacity from edge
+            const currentOpacity = edge?.opacity ?? 1.0;
+            if (opacityInput) opacityInput.value = currentOpacity.toFixed(2);
+
+            // Initialize selfReference size
+            const currentSelfRefSize = edge?.selfReference?.size ?? 20;
+            if (selfRefSizeInput) selfRefSizeInput.value = String(currentSelfRefSize);
+
+            // Bind opacity control
+            bindNumberInput('opacity', (val) => {
+                const updates = { opacity: val };
+                applyEdgeStyle(updates);
+            });
+
+            // Bind selfReference control using new API
+            bindNumberInput('selfRefSize', (val) => {
+                const updates = {
+                    selfReference: {
+                        size: val,
+                        angle: Math.PI / 4
+                    }
+                };
+                applyEdgeStyle(updates);
+            });
 
             const keyHandler = (ev) => {
                 if (ev.key === 'Escape') this.closeEdgeStylePopover();
