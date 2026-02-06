@@ -498,6 +498,12 @@
                             </div>
                         </div>
                     </div>
+                    <input class="vis-node-context-color-input" id="visNodeContextColorInput" type="text"
+                        value="#ffffff" data-coloris aria-label="Node context fill color">
+                    <input class="vis-node-context-color-input" id="visNodeContextBorderColorInput" type="text"
+                        value="#111111" data-coloris aria-label="Node context border color">
+                    <input class="vis-node-context-color-input" id="visNodeContextStrokeColorInput" type="text"
+                        value="#ffffff" data-coloris aria-label="Node context stroke color">
                     <div class="empty-state">
                         <i class="fas fa-project-diagram"></i>
                         <h3>No Network Loaded</h3>
@@ -619,46 +625,6 @@
                                                     <input id="visPhysicsGravitySlider" type="number" step="100" value="-9000"
                                                         inputmode="decimal">
                                                 </div>
-                                                <!-- node settings -->
-                                                <div class="vis-node-size vis-label-section" data-section="Node size">
-                                                    <button type="button" class="vis-section-toggle" aria-expanded="true" title="Collapse">
-                                                        <i class="fa-solid fa-chevron-up"></i>
-                                                        <span class="vis-toggle-text">Node size</span>
-                                                    </button>
-                                                    <label for="visNodeSizeMinSlider">Node size min</label>
-                                                    <input id="visNodeSizeMinSlider" type="number" step="0.1" value="6"
-                                                        inputmode="decimal">
-                                                    <label for="visNodeSizeMaxSlider">Node size max</label>
-                                                    <input id="visNodeSizeMaxSlider" type="number" step="1" value="60"
-                                                        inputmode="decimal">
-                                                    <label for="visNodeSizeGammaSlider">Node size curve</label>
-                                                    <input id="visNodeSizeGammaSlider" type="number" step="0.05" value="1"
-                                                        inputmode="decimal">
-                                                    <label for="visNodeColorInput">Node color</label>
-                                                    <input id="visNodeColorInput" type="text" value="#ffffff" data-coloris
-                                                        inputmode="text">
-                                                </div>
-
-                                                <!-- node border -->
-                                                <div class="vis-node-border vis-label-section" data-section="Node border">
-                                                    <button type="button" class="vis-section-toggle" aria-expanded="true" title="Collapse">
-                                                        <i class="fa-solid fa-chevron-up"></i>
-                                                        <span class="vis-toggle-text">Node border</span>
-                                                    </button>
-                                                    <label for="visNodeBorderSlider">Node border width</label>
-                                                    <input id="visNodeBorderSlider" type="number" step="0.1" value="1.5"
-                                                        inputmode="decimal">
-                                                    <label for="visNodeBorderColorInput">Node border color</label>
-                                                    <input id="visNodeBorderColorInput" type="text" value="#111111" data-coloris
-                                                        inputmode="text">
-                                                    <label for="visNodeOuterBorderWidth">Outer border width</label>
-                                                    <input id="visNodeOuterBorderWidth" type="number" step="0.1" value="2"
-                                                        inputmode="decimal">
-                                                    <label for="visNodeOuterBorderColor">Outer border color</label>
-                                                    <input id="visNodeOuterBorderColor" type="text" value="#ffffff" data-coloris
-                                                        inputmode="text">
-                                                </div>
-
                                                 <!-- edge settings -->
                                                 <div class="vis-edge-width vis-label-section" data-section="Edge">
                                                     <button type="button" class="vis-section-toggle" aria-expanded="true" title="Collapse">

@@ -964,6 +964,34 @@
         }
     }
 
+    function buildNodeBorderColor(baseColor, borderColor) {
+        const border = normalizeVisColor(borderColor);
+        if (!border) return baseColor;
+        if (!baseColor || typeof baseColor === 'string') {
+            const background = typeof baseColor === 'string' ? baseColor : border;
+            return {
+                background,
+                border,
+                highlight: { background, border },
+                hover: { background, border }
+            };
+        }
+        const highlight = baseColor.highlight || {};
+        const hover = baseColor.hover || {};
+        return {
+            ...baseColor,
+            border,
+            highlight: {
+                ...highlight,
+                border
+            },
+            hover: {
+                ...hover,
+                border
+            }
+        };
+    }
+
     class WosVisManager {
         constructor(options = {}) {
             this.app = options.app || null;
@@ -1006,14 +1034,10 @@
                 labelMinDimSlider: options.labelMinDimSliderId || 'visLabelMinDimSlider',
                 relatedMinSlider: options.relatedMinSliderId || 'visRelatedMinSlider',
                 relatedMinDimSlider: options.relatedMinDimSliderId || 'visRelatedMinDimSlider',
-                nodeSizeMinSlider: options.nodeSizeMinSliderId || 'visNodeSizeMinSlider',
-                nodeSizeMaxSlider: options.nodeSizeMaxSliderId || 'visNodeSizeMaxSlider',
-                nodeSizeGammaSlider: options.nodeSizeGammaSliderId || 'visNodeSizeGammaSlider',
-                nodeColorInput: options.nodeColorInputId || 'visNodeColorInput',
-                nodeBorderSlider: options.nodeBorderSliderId || 'visNodeBorderSlider',
-                nodeBorderColorInput: options.nodeBorderColorInputId || 'visNodeBorderColorInput',
-                nodeOuterBorderWidthInput: options.nodeOuterBorderWidthInputId || 'visNodeOuterBorderWidth',
-                nodeOuterBorderColorInput: options.nodeOuterBorderColorInputId || 'visNodeOuterBorderColor',
+                // Node size/border settings UI removed
+                nodeContextColorInput: options.nodeContextColorInputId || 'visNodeContextColorInput',
+                nodeContextBorderColorInput: options.nodeContextBorderColorInputId || 'visNodeContextBorderColorInput',
+                nodeContextStrokeColorInput: options.nodeContextStrokeColorInputId || 'visNodeContextStrokeColorInput',
                 edgeColorInput: options.edgeColorInputId || 'visEdgeColorInput',
                 edgeLabelFontSizeInput: options.edgeLabelFontSizeInputId || 'visEdgeLabelFontSizeInput',
                 edgeLabelColorInput: options.edgeLabelColorInputId || 'visEdgeLabelColorInput',
@@ -1155,6 +1179,12 @@
             this._edgeBaseFonts = null;
             this.settingsAutoSave = false;
             this._visViewReady = false;
+            this._nodeContextColorTarget = null;
+            this._nodeContextColorAnchor = null;
+            this._nodeStylePopover = null;
+            this._nodeStyleApplyAll = false;
+            this._nodeSizePopover = null;
+            this._nodeBasePopover = null;
             this._toolbarMode = null;
             this.selectedNodeIds = new Set();
             this._edgeModeEnabled = false;
@@ -1212,14 +1242,9 @@
             const labelMinDimSlider = this.getEl(this.ids.labelMinDimSlider);
             const relatedMinSlider = this.getEl(this.ids.relatedMinSlider);
             const relatedMinDimSlider = this.getEl(this.ids.relatedMinDimSlider);
-            const nodeSizeMinSlider = this.getEl(this.ids.nodeSizeMinSlider);
-            const nodeSizeMaxSlider = this.getEl(this.ids.nodeSizeMaxSlider);
-            const nodeSizeGammaSlider = this.getEl(this.ids.nodeSizeGammaSlider);
-            const nodeColorInput = this.getEl(this.ids.nodeColorInput);
-            const nodeBorderSlider = this.getEl(this.ids.nodeBorderSlider);
-            const nodeBorderColorInput = this.getEl(this.ids.nodeBorderColorInput);
-            const nodeOuterBorderWidthInput = this.getEl(this.ids.nodeOuterBorderWidthInput);
-            const nodeOuterBorderColorInput = this.getEl(this.ids.nodeOuterBorderColorInput);
+            const nodeContextColorInput = this.getEl(this.ids.nodeContextColorInput);
+            const nodeContextBorderColorInput = this.getEl(this.ids.nodeContextBorderColorInput);
+            const nodeContextStrokeColorInput = this.getEl(this.ids.nodeContextStrokeColorInput);
             const labelWeightSlider = this.getEl(this.ids.labelWeightSlider);
             const labelFontMinInput = this.getEl(this.ids.labelFontMinInput);
             const labelFontMaxInput = this.getEl(this.ids.labelFontMaxInput);
@@ -1794,43 +1819,9 @@
                 this.applyEdgeLabelDisplay();
                 this.queuePersistSettings();
             });
-            bindNumberInput(nodeSizeMinSlider, (next) => {
-                this.nodeSizeMin = next;
-                this.applyNodeSizeScale();
-                this.queuePersistSettings();
-            });
-            bindNumberInput(nodeSizeMaxSlider, (next) => {
-                this.nodeSizeMax = next;
-                this.applyNodeSizeScale();
-                this.queuePersistSettings();
-            });
-            bindNumberInput(nodeSizeGammaSlider, (next) => {
-                this.nodeSizeGamma = next;
-                this.applyNodeSizeScale();
-                this.queuePersistSettings();
-            });
-            bindNumberInput(nodeBorderSlider, (next) => {
-                this.nodeBorderWidth = next;
-                this.applyNodeBorderWidth();
-                this.queuePersistSettings();
-            });
             if (global.Coloris && !this._colorisInit) {
                 this._colorisInit = true;
                 try {
-                    global.Coloris({
-                        el: '#visNodeOuterBorderColor',
-                        alpha: true,
-                        format: 'hex',
-                        formatToggle: false,
-                        forceAlpha: true
-                    });
-                    global.Coloris({
-                        el: '#visNodeColorInput',
-                        alpha: true,
-                        format: 'hex',
-                        formatToggle: false,
-                        forceAlpha: true
-                    });
                     global.Coloris({
                         el: '#visModeNodeColorInput',
                         alpha: true,
@@ -1839,10 +1830,27 @@
                         forceAlpha: true
                     });
                     global.Coloris({
-                        el: '#visNodeBorderColorInput',
+                        el: '#visNodeContextColorInput',
                         alpha: true,
                         format: 'hex',
                         formatToggle: false,
+                        wrap: false,
+                        forceAlpha: true
+                    });
+                    global.Coloris({
+                        el: '#visNodeContextBorderColorInput',
+                        alpha: true,
+                        format: 'hex',
+                        formatToggle: false,
+                        wrap: false,
+                        forceAlpha: true
+                    });
+                    global.Coloris({
+                        el: '#visNodeContextStrokeColorInput',
+                        alpha: true,
+                        format: 'hex',
+                        formatToggle: false,
+                        wrap: false,
                         forceAlpha: true
                     });
                     global.Coloris({
@@ -1905,34 +1913,59 @@
                     // ignore color picker init issues
                 }
             }
-            bindNumberInput(nodeOuterBorderWidthInput, (next) => {
-                this.nodeOuterBorderWidth = next;
-                if (this.visNetwork) this.visNetwork.redraw();
-                this.queuePersistSettings();
-            });
-            if (nodeOuterBorderColorInput && !nodeOuterBorderColorInput.dataset.visBound) {
-                nodeOuterBorderColorInput.dataset.visBound = '1';
-                nodeOuterBorderColorInput.addEventListener('input', () => {
-                    this.nodeOuterBorderColor = nodeOuterBorderColorInput.value || '#ffffff';
-                    if (this.visNetwork) this.visNetwork.redraw();
-                    this.queuePersistSettings();
-                });
+            if (nodeContextColorInput && !nodeContextColorInput.dataset.visBound) {
+                nodeContextColorInput.dataset.visBound = '1';
+                const applyContextColor = () => {
+                    const targetId = this._nodeContextColorTarget;
+                    if (!targetId) return;
+                    const next = String(nodeContextColorInput.value || '').trim();
+                    if (!next) return;
+                    if (this._nodeStyleApplyAll) {
+                        this.nodeColor = next;
+                        this.applyNodeColor();
+                        this.queuePersistSettings();
+                        return;
+                    }
+                    this.applyNodeColorForId(targetId, next);
+                };
+                nodeContextColorInput.addEventListener('input', applyContextColor);
+                nodeContextColorInput.addEventListener('change', applyContextColor);
             }
-            if (nodeColorInput && !nodeColorInput.dataset.visBound) {
-                nodeColorInput.dataset.visBound = '1';
-                nodeColorInput.addEventListener('input', () => {
-                    this.nodeColor = nodeColorInput.value || '#ffffff';
-                    this.applyNodeColor();
-                    this.queuePersistSettings();
-                });
+            if (nodeContextBorderColorInput && !nodeContextBorderColorInput.dataset.visBound) {
+                nodeContextBorderColorInput.dataset.visBound = '1';
+                const applyContextBorder = () => {
+                    const targetId = this._nodeContextColorTarget;
+                    if (!targetId) return;
+                    const next = String(nodeContextBorderColorInput.value || '').trim();
+                    if (!next) return;
+                    if (this._nodeStyleApplyAll) {
+                        this.nodeBorderColor = next;
+                        this.applyNodeBorderColor();
+                        this.queuePersistSettings();
+                        return;
+                    }
+                    this.applyNodeBorderColorForId(targetId, next);
+                };
+                nodeContextBorderColorInput.addEventListener('input', applyContextBorder);
+                nodeContextBorderColorInput.addEventListener('change', applyContextBorder);
             }
-            if (nodeBorderColorInput && !nodeBorderColorInput.dataset.visBound) {
-                nodeBorderColorInput.dataset.visBound = '1';
-                nodeBorderColorInput.addEventListener('input', () => {
-                    this.nodeBorderColor = nodeBorderColorInput.value || '#111111';
-                    this.applyNodeBorderColor();
-                    this.queuePersistSettings();
-                });
+            if (nodeContextStrokeColorInput && !nodeContextStrokeColorInput.dataset.visBound) {
+                nodeContextStrokeColorInput.dataset.visBound = '1';
+                const applyContextStroke = () => {
+                    const targetId = this._nodeContextColorTarget;
+                    if (!targetId) return;
+                    const next = String(nodeContextStrokeColorInput.value || '').trim();
+                    if (!next) return;
+                    if (this._nodeStyleApplyAll) {
+                        this.nodeOuterBorderColor = next;
+                        if (this.visNetwork) this.visNetwork.redraw();
+                        this.queuePersistSettings();
+                        return;
+                    }
+                    this.applyNodeOuterBorderColorForId(targetId, next);
+                };
+                nodeContextStrokeColorInput.addEventListener('input', applyContextStroke);
+                nodeContextStrokeColorInput.addEventListener('change', applyContextStroke);
             }
             if (edgeColorInput && !edgeColorInput.dataset.visBound) {
                 edgeColorInput.dataset.visBound = '1';
@@ -2805,6 +2838,119 @@
             if (!Array.isArray(nodes)) return;
             const target = nodes.find((node) => node && node.id === nodeId);
             if (target) target.color = cloneVisColor(color);
+        }
+
+        updateVisDataNodeStyle(nodeId, updates) {
+            const nodes = this.visNetworkData?.nodes;
+            if (!Array.isArray(nodes)) return;
+            const target = nodes.find((node) => node && node.id === nodeId);
+            if (!target) return;
+            Object.assign(target, updates || {});
+        }
+
+        applyNodeColorForId(nodeId, color) {
+            if (!this.visNetwork || !nodeId) return;
+            const dataset = this.visNetwork?.body?.data?.nodes;
+            if (!dataset || typeof dataset.get !== 'function') return;
+            const node = dataset.get(nodeId);
+            if (!node) return;
+            const nextColor = buildSelectedNodeColor(node.color, color);
+            dataset.update({ id: nodeId, color: nextColor });
+            this.updateVisDataNodeColor(nodeId, nextColor);
+            if (this._nodeModeOriginalColors.has(nodeId)) {
+                this._nodeModeOriginalColors.set(nodeId, cloneVisColor(nextColor));
+            }
+            const state = this.getEdgeFocusState();
+            if (state?.baseNodeColors && state.baseNodeColors.has(nodeId)) {
+                state.baseNodeColors.set(nodeId, cloneVisColor(nextColor));
+            }
+            this.markEdgeFocusDirty();
+            this.applyEdgeFocusDisplay();
+            this._labelThresholdBaseDirty = true;
+            this.applyLabelThresholdDimming();
+        }
+
+        applyNodeBorderColorForId(nodeId, color) {
+            if (!this.visNetwork || !nodeId) return;
+            const dataset = this.visNetwork?.body?.data?.nodes;
+            if (!dataset || typeof dataset.get !== 'function') return;
+            const node = dataset.get(nodeId);
+            if (!node) return;
+            const nextColor = buildNodeBorderColor(node.color, color);
+            dataset.update({ id: nodeId, color: nextColor });
+            this.updateVisDataNodeColor(nodeId, nextColor);
+            if (this._nodeModeOriginalColors.has(nodeId)) {
+                this._nodeModeOriginalColors.set(nodeId, cloneVisColor(nextColor));
+            }
+            const state = this.getEdgeFocusState();
+            if (state?.baseNodeColors && state.baseNodeColors.has(nodeId)) {
+                state.baseNodeColors.set(nodeId, cloneVisColor(nextColor));
+            }
+            this.markEdgeFocusDirty();
+            this.applyEdgeFocusDisplay();
+            this._labelThresholdBaseDirty = true;
+            this.applyLabelThresholdDimming();
+        }
+
+        applyNodeOuterBorderColorForId(nodeId, color) {
+            if (!this.visNetwork || !nodeId) return;
+            const dataset = this.visNetwork?.body?.data?.nodes;
+            if (!dataset || typeof dataset.get !== 'function') return;
+            const node = dataset.get(nodeId);
+            if (!node) return;
+            const next = normalizeVisColor(color) || color;
+            dataset.update({ id: nodeId, outerBorderColor: next });
+            this.updateVisDataNodeStyle(nodeId, { outerBorderColor: next });
+            if (this.visNetwork) this.visNetwork.redraw();
+        }
+
+        applyNodeBorderWidthForId(nodeId, width) {
+            if (!this.visNetwork || !nodeId) return;
+            const dataset = this.visNetwork?.body?.data?.nodes;
+            if (!dataset || typeof dataset.get !== 'function') return;
+            const next = Number(width);
+            if (!Number.isFinite(next) || next < 0) return;
+            dataset.update({ id: nodeId, borderWidth: next });
+            this.updateVisDataNodeStyle(nodeId, { borderWidth: next });
+            if (this.visNetwork) this.visNetwork.redraw();
+        }
+
+        applyNodeOuterBorderWidthForId(nodeId, width) {
+            if (!this.visNetwork || !nodeId) return;
+            const dataset = this.visNetwork?.body?.data?.nodes;
+            if (!dataset || typeof dataset.get !== 'function') return;
+            const next = Number(width);
+            if (!Number.isFinite(next) || next < 0) return;
+            dataset.update({ id: nodeId, outerBorderWidth: next });
+            this.updateVisDataNodeStyle(nodeId, { outerBorderWidth: next });
+            if (this.visNetwork) this.visNetwork.redraw();
+        }
+
+        openNodeContextColorPicker(nodeId, mode = 'fill') {
+            if (!nodeId) return;
+            const input = mode === 'stroke'
+                ? this.getEl(this.ids.nodeContextStrokeColorInput)
+                : mode === 'border'
+                    ? this.getEl(this.ids.nodeContextBorderColorInput)
+                    : this.getEl(this.ids.nodeContextColorInput);
+            if (!input) return;
+            if (this._nodeContextColorAnchor) {
+                const { x, y } = this._nodeContextColorAnchor;
+                input.style.left = `${Number(x) || 0}px`;
+                input.style.top = `${Number(y) || 0}px`;
+            }
+            const dataset = this.visNetwork?.body?.data?.nodes;
+            const node = dataset && typeof dataset.get === 'function' ? dataset.get(nodeId) : null;
+            const seed = mode === 'stroke'
+                ? (node?.outerBorderColor || this.nodeOuterBorderColor || '#ffffff')
+                : mode === 'border'
+                    ? (node?.color?.border || this.nodeBorderColor || '#111111')
+                    : (typeof node?.color === 'string'
+                        ? node.color
+                        : (node?.color?.background || this.nodeColor || '#ffffff'));
+            this._nodeContextColorTarget = nodeId;
+            this.setColorInputValueSilent(input, seed);
+            input.dispatchEvent(new Event('click', { bubbles: true }));
         }
 
         applyNodeInputColor(color) {
@@ -3779,14 +3925,6 @@
                 if (sizeSlider) sizeSlider.value = String(Math.round((this.labelSizeScale || 1) * 100));
                 const labelFontMinInput = this.getEl(this.ids.labelFontMinInput);
                 const labelFontMaxInput = this.getEl(this.ids.labelFontMaxInput);
-                const nodeSizeMinSlider = this.getEl(this.ids.nodeSizeMinSlider);
-                const nodeSizeMaxSlider = this.getEl(this.ids.nodeSizeMaxSlider);
-                const nodeSizeGammaSlider = this.getEl(this.ids.nodeSizeGammaSlider);
-                const nodeColorInput = this.getEl(this.ids.nodeColorInput);
-                const nodeBorderSlider = this.getEl(this.ids.nodeBorderSlider);
-                const nodeBorderColorInput = this.getEl(this.ids.nodeBorderColorInput);
-                const nodeOuterBorderWidthInput = this.getEl(this.ids.nodeOuterBorderWidthInput);
-                const nodeOuterBorderColorInput = this.getEl(this.ids.nodeOuterBorderColorInput);
                 const labelColorInput = this.getEl(this.ids.labelColorInput);
                 const labelBgColorInput = this.getEl(this.ids.labelBgColorInput);
                 const labelBorderColorInput = this.getEl(this.ids.labelBorderColorInput);
@@ -3807,14 +3945,6 @@
                 const edgeMaxWidthSlider = this.getEl(this.ids.edgeMaxWidthSlider);
                 if (labelFontMinInput) labelFontMinInput.value = String(this.labelFontMin ?? 9);
                 if (labelFontMaxInput) labelFontMaxInput.value = String(this.labelFontMax ?? 30);
-                if (nodeSizeMinSlider) nodeSizeMinSlider.value = String(this.nodeSizeMin || 1);
-                if (nodeSizeMaxSlider) nodeSizeMaxSlider.value = String(this.nodeSizeMax || 60);
-                if (nodeSizeGammaSlider) nodeSizeGammaSlider.value = String(this.nodeSizeGamma || 1);
-                this.setColorInputValue(nodeColorInput, this.nodeColor || '#ffffff');
-                if (nodeBorderSlider) nodeBorderSlider.value = String(this.nodeBorderWidth || 1.5);
-                this.setColorInputValue(nodeBorderColorInput, this.nodeBorderColor || '#111111');
-                if (nodeOuterBorderWidthInput) nodeOuterBorderWidthInput.value = String(this.nodeOuterBorderWidth ?? 2);
-                this.setColorInputValue(nodeOuterBorderColorInput, this.nodeOuterBorderColor || '#ffffff');
                 this.setColorInputValue(labelColorInput, this.labelColor || '#000000');
                 this.setColorInputValue(labelBgColorInput, this.labelBgColor || '#f2f2f2f1');
                 this.setColorInputValue(labelBorderColorInput, this.labelBorderColor || '#00000021');
@@ -5370,6 +5500,7 @@
                 menu.remove();
             }
             this._nodeContextMenu = null;
+            this._nodeContextColorAnchor = null;
             if (this._tempToolbarMode === 'node') {
                 if (this._toolbarMode !== 'node') {
                     const state = this.getEdgeFocusState();
@@ -5379,6 +5510,59 @@
                 }
                 this._tempToolbarMode = null;
             }
+        }
+
+        closeNodeStylePopover() {
+            const pop = this._nodeStylePopover?.el || document.querySelector('.context-style-popover');
+            if (pop) {
+                if (pop._nodeStyleClickHandler) document.removeEventListener('mousedown', pop._nodeStyleClickHandler);
+                if (pop._nodeStyleKeyHandler) document.removeEventListener('keydown', pop._nodeStyleKeyHandler);
+                pop.remove();
+            }
+            const moved = this._nodeStylePopover?.movedInput;
+            if (moved && moved.input && moved.parent) {
+                const { input, parent, next } = moved;
+                input.classList.remove('context-color-input');
+                input.classList.add('vis-node-context-color-input');
+                if (next && next.parentNode === parent) {
+                    parent.insertBefore(input, next);
+                } else {
+                    parent.appendChild(input);
+                }
+            }
+            this._nodeStylePopover = null;
+            this._nodeStyleApplyAll = false;
+        }
+
+        closeNodeSizePopover() {
+            const pop = this._nodeSizePopover?.el || document.querySelector('.context-size-popover');
+            if (pop) {
+                if (pop._nodeSizeClickHandler) document.removeEventListener('mousedown', pop._nodeSizeClickHandler);
+                if (pop._nodeSizeKeyHandler) document.removeEventListener('keydown', pop._nodeSizeKeyHandler);
+                pop.remove();
+            }
+            this._nodeSizePopover = null;
+        }
+
+        closeNodeBasePopover() {
+            const pop = this._nodeBasePopover?.el || document.querySelector('.context-node-popover');
+            if (pop) {
+                if (pop._nodeBaseClickHandler) document.removeEventListener('mousedown', pop._nodeBaseClickHandler);
+                if (pop._nodeBaseKeyHandler) document.removeEventListener('keydown', pop._nodeBaseKeyHandler);
+                pop.remove();
+            }
+            const moved = this._nodeBasePopover?.movedInput;
+            if (moved && moved.input && moved.parent) {
+                const { input, parent, next } = moved;
+                input.classList.remove('context-color-input');
+                input.classList.add('vis-node-context-color-input');
+                if (next && next.parentNode === parent) {
+                    parent.insertBefore(input, next);
+                } else {
+                    parent.appendChild(input);
+                }
+            }
+            this._nodeBasePopover = null;
         }
 
         showEdgeContextMenu(e, edgeId) {
@@ -5437,6 +5621,9 @@
             if (!nodeId || !e) return;
             this.closeEdgeContextMenu();
             this.closeNodeContextMenu();
+            this.closeNodeStylePopover();
+            this.closeNodeSizePopover();
+            this.closeNodeBasePopover();
             if (this._toolbarMode === 'edge') return;
             this._tempToolbarMode = 'node';
             const menu = document.createElement('div');
@@ -5447,6 +5634,23 @@
                 <div class="context-menu-item" data-action="selectNodeFocus">
                     <i class="fas fa-bullseye"></i>
                     Enter Node Mode
+                </div>
+                <div class="context-menu-item" data-action="pickNodeBaseStyle">
+                    <i class="fas fa-palette"></i>
+                    Node Style
+                </div>
+                <div class="context-menu-item" data-action="pickNodeBorderColor">
+                    <i class="fas fa-border-all"></i>
+                    Border Style
+                </div>
+                <div class="context-menu-item" data-action="pickNodeStrokeColor">
+                    <i class="fas fa-highlighter"></i>
+                    Stroke Style
+                </div>
+                <div class="context-menu-item context-menu-toggle" data-action="toggleApplyAll">
+                    <i class="fas fa-globe"></i>
+                    <span>Apply to all nodes</span>
+                    <input type="checkbox" class="context-menu-checkbox" aria-label="Apply to all nodes">
                 </div>
             `;
             document.body.appendChild(menu);
@@ -5463,16 +5667,64 @@
             menu.style.left = `${Math.max(margin, nextLeft)}px`;
             menu.style.top = `${Math.max(margin, nextTop)}px`;
             menu.querySelectorAll('.context-menu-item').forEach((item) => {
-                item.addEventListener('click', () => {
+                item.addEventListener('click', (ev) => {
                     const action = item.dataset.action;
+                    if (action === 'toggleApplyAll') {
+                        ev.stopPropagation();
+                        const checkbox = item.querySelector('.context-menu-checkbox');
+                        if (checkbox) {
+                            checkbox.checked = !checkbox.checked;
+                            this._nodeStyleApplyAll = checkbox.checked;
+                        }
+                        return;
+                    }
                     if (action === 'selectNodeFocus') {
                         this.setToolbarMode('node');
                         this.closeNodeContextMenu();
                         this.updateModeToolbar();
                         return;
                     }
+                    if (action === 'pickNodeBaseStyle') {
+                        this.openNodeBasePopover({
+                            nodeId,
+                            x: ev.pageX,
+                            y: ev.pageY
+                        });
+                        this.closeNodeContextMenu();
+                        return;
+                    }
+                    if (action === 'pickNodeBorderColor') {
+                        this.openNodeStylePopover({
+                            nodeId,
+                            type: 'border',
+                            x: ev.pageX,
+                            y: ev.pageY
+                        });
+                        this.closeNodeContextMenu();
+                        return;
+                    }
+                    if (action === 'pickNodeStrokeColor') {
+                        this.openNodeStylePopover({
+                            nodeId,
+                            type: 'stroke',
+                            x: ev.pageX,
+                            y: ev.pageY
+                        });
+                        this.closeNodeContextMenu();
+                        return;
+                    }
                 });
             });
+            const applyAllCheckbox = menu.querySelector('.context-menu-checkbox');
+            if (applyAllCheckbox) {
+                applyAllCheckbox.checked = !!this._nodeStyleApplyAll;
+                applyAllCheckbox.addEventListener('click', (ev) => {
+                    ev.stopPropagation();
+                });
+                applyAllCheckbox.addEventListener('change', () => {
+                    this._nodeStyleApplyAll = applyAllCheckbox.checked;
+                });
+            }
             const clickOutside = (ev) => {
                 if (!menu.contains(ev.target)) this.closeNodeContextMenu();
             };
@@ -5483,7 +5735,272 @@
             menu._nodeKeyHandler = keyHandler;
             document.addEventListener('mousedown', clickOutside);
             document.addEventListener('keydown', keyHandler);
-            this._nodeContextMenu = { menuEl: menu, nodeId };
+            this._nodeContextMenu = { menuEl: menu, nodeId, x: e.pageX, y: e.pageY };
+        }
+
+        openNodeStylePopover({ nodeId, type, x, y }) {
+            if (!nodeId || !type) return;
+            this.closeNodeStylePopover();
+            this._nodeStyleApplyAll = false;
+            const dataset = this.visNetwork?.body?.data?.nodes;
+            const node = dataset && typeof dataset.get === 'function' ? dataset.get(nodeId) : null;
+            const isStroke = type === 'stroke';
+            const label = isStroke ? 'Stroke Style' : 'Border Style';
+            const widthLabel = isStroke ? 'Stroke Width' : 'Border Width';
+            const currentWidth = isStroke
+                ? Number(node?.outerBorderWidth ?? this.nodeOuterBorderWidth ?? 2)
+                : Number(node?.borderWidth ?? this.nodeBorderWidth ?? 1.5);
+            const formatWidth = (value) => {
+                const next = Number(value);
+                return Number.isFinite(next) ? next.toFixed(3) : '0.000';
+            };
+            const step = 0.05;
+            const pop = document.createElement('div');
+            pop.className = 'context-style-popover';
+            const anchorX = Number(x) || 0;
+            const anchorY = Number(y) || 0;
+            pop.style.left = `${anchorX}px`;
+            pop.style.top = `${anchorY}px`;
+            pop.innerHTML = `
+                <div class="context-slider-row">
+                    <input type="range" min="0" max="200" step="${step}" value="${Number.isFinite(currentWidth) ? currentWidth : 0}" aria-label="${widthLabel}">
+                    <span class="context-slider-value" data-role="value">${formatWidth(currentWidth)}</span>
+                </div>
+                <div class="context-color-row">
+                    <div class="context-color-slot"></div>
+                </div>
+            `;
+            document.body.appendChild(pop);
+            const rect = pop.getBoundingClientRect();
+            const margin = 8;
+            let nextLeft = anchorX - rect.width / 2;
+            let nextTop = anchorY - rect.height / 2;
+            if (rect.right > window.innerWidth - margin) {
+                nextLeft = window.innerWidth - rect.width - margin;
+            }
+            if (rect.bottom > window.innerHeight - margin) {
+                nextTop = window.innerHeight - rect.height - margin;
+            }
+            pop.style.left = `${Math.max(margin, nextLeft)}px`;
+            pop.style.top = `${Math.max(margin, nextTop)}px`;
+
+            const colorSlot = pop.querySelector('.context-color-slot');
+            const colorInput = isStroke
+                ? this.getEl(this.ids.nodeContextStrokeColorInput)
+                : this.getEl(this.ids.nodeContextBorderColorInput);
+            if (colorInput && colorSlot) {
+                const seed = isStroke
+                    ? (node?.outerBorderColor || this.nodeOuterBorderColor || '#ffffff')
+                    : (node?.color?.border || this.nodeBorderColor || '#111111');
+                const parent = colorInput.parentNode;
+                const next = colorInput.nextSibling;
+                colorInput.classList.remove('vis-node-context-color-input');
+                colorInput.classList.add('context-color-input');
+                colorSlot.appendChild(colorInput);
+                this.setColorInputValueSilent(colorInput, seed);
+                this._nodeContextColorTarget = nodeId;
+                this._nodeStylePopover = {
+                    el: pop,
+                    nodeId,
+                    type,
+                    movedInput: { input: colorInput, parent, next }
+                };
+                colorInput.dispatchEvent(new Event('click', { bubbles: true }));
+            }
+
+            const input = pop.querySelector('input[type="range"]');
+            const valueEl = pop.querySelector('[data-role="value"]');
+            const applyValue = (raw) => {
+                const next = Number(raw);
+                if (!Number.isFinite(next)) return;
+                if (valueEl) valueEl.textContent = formatWidth(next);
+                if (this._nodeStyleApplyAll) {
+                    if (isStroke) {
+                        this.nodeOuterBorderWidth = next;
+                        if (this.visNetwork) this.visNetwork.redraw();
+                    } else {
+                        this.nodeBorderWidth = next;
+                        this.applyNodeBorderWidth();
+                    }
+                    this.queuePersistSettings();
+                    return;
+                }
+                if (isStroke) {
+                    this.applyNodeOuterBorderWidthForId(nodeId, next);
+                } else {
+                    this.applyNodeBorderWidthForId(nodeId, next);
+                }
+            };
+            if (input) {
+                const min = Number(input.min) || 0;
+                const max = Number(input.max) || 200;
+                const base = Number.isFinite(currentWidth) ? currentWidth : 0;
+                input.value = String(Math.max(min, Math.min(max, base)));
+                applyValue(input.value);
+                input.addEventListener('input', (ev) => {
+                    ev.stopPropagation();
+                    applyValue(input.value);
+                });
+                input.addEventListener('wheel', (ev) => {
+                    ev.preventDefault();
+                    const delta = ev.deltaY < 0 ? step : -step;
+                    const currentVal = Number(input.value) || 0;
+                    const nextVal = Math.max(0, Math.min(200, currentVal + delta));
+                    input.value = String(nextVal);
+                    applyValue(nextVal);
+                }, { passive: false });
+                input.addEventListener('click', (ev) => ev.stopPropagation());
+                input.focus({ preventScroll: true });
+            }
+            const clickOutside = (ev) => {
+                if (!pop.contains(ev.target)) this.closeNodeStylePopover();
+            };
+            const keyHandler = (ev) => {
+                if (ev.key === 'Escape') this.closeNodeStylePopover();
+            };
+            pop._nodeStyleClickHandler = clickOutside;
+            pop._nodeStyleKeyHandler = keyHandler;
+            document.addEventListener('mousedown', clickOutside);
+            document.addEventListener('keydown', keyHandler);
+            if (!this._nodeStylePopover) {
+                this._nodeStylePopover = { el: pop, nodeId, type, movedInput: null };
+            }
+        }
+
+        openNodeBasePopover({ nodeId, x, y }) {
+            if (!nodeId) return;
+            this.closeNodeBasePopover();
+            const dataset = this.visNetwork?.body?.data?.nodes;
+            const node = dataset && typeof dataset.get === 'function' ? dataset.get(nodeId) : null;
+            const step = 0.1;
+            const formatValue = (value) => {
+                const next = Number(value);
+                return Number.isFinite(next) ? next.toFixed(3) : '0.000';
+            };
+            const minValue = Number(this.nodeSizeMin ?? 6);
+            const maxValue = Number(this.nodeSizeMax ?? 60);
+            const curveValue = Number(this.nodeSizeGamma ?? 1);
+            const pop = document.createElement('div');
+            pop.className = 'context-node-popover';
+            const anchorX = Number(x) || 0;
+            const anchorY = Number(y) || 0;
+            pop.style.left = `${anchorX}px`;
+            pop.style.top = `${anchorY}px`;
+            pop.innerHTML = `
+                <div class="context-slider-row">
+                    <span class="context-slider-label">Min</span>
+                    <input type="range" data-role="min" min="0.5" max="50" step="${step}" value="${Number.isFinite(minValue) ? minValue : 0.5}" aria-label="Node size min">
+                    <span class="context-slider-value" data-role="minValue">${formatValue(minValue)}</span>
+                </div>
+                <div class="context-slider-row">
+                    <span class="context-slider-label">Max</span>
+                    <input type="range" data-role="max" min="30" max="120" step="${step}" value="${Number.isFinite(maxValue) ? maxValue : 30}" aria-label="Node size max">
+                    <span class="context-slider-value" data-role="maxValue">${formatValue(maxValue)}</span>
+                </div>
+                <div class="context-slider-row">
+                    <span class="context-slider-label">Curve</span>
+                    <input type="range" data-role="curve" min="0" max="1" step="0.005" value="${Number.isFinite(curveValue) ? curveValue : 1}" aria-label="Node size curve">
+                    <span class="context-slider-value" data-role="curveValue">${formatValue(curveValue)}</span>
+                </div>
+                <div class="context-color-row">
+                    <div class="context-color-slot"></div>
+                </div>
+            `;
+            document.body.appendChild(pop);
+            const rect = pop.getBoundingClientRect();
+            const margin = 8;
+            let nextLeft = anchorX - rect.width / 2;
+            let nextTop = anchorY - rect.height / 2;
+            if (rect.right > window.innerWidth - margin) {
+                nextLeft = window.innerWidth - rect.width - margin;
+            }
+            if (rect.bottom > window.innerHeight - margin) {
+                nextTop = window.innerHeight - rect.height - margin;
+            }
+            pop.style.left = `${Math.max(margin, nextLeft)}px`;
+            pop.style.top = `${Math.max(margin, nextTop)}px`;
+
+            const colorSlot = pop.querySelector('.context-color-slot');
+            const colorInput = this.getEl(this.ids.nodeContextColorInput);
+            if (colorInput && colorSlot) {
+                const seed = typeof node?.color === 'string'
+                    ? node.color
+                    : (node?.color?.background || this.nodeColor || '#ffffff');
+                const parent = colorInput.parentNode;
+                const next = colorInput.nextSibling;
+                colorInput.classList.remove('vis-node-context-color-input');
+                colorInput.classList.add('context-color-input');
+                colorSlot.appendChild(colorInput);
+                this.setColorInputValueSilent(colorInput, seed);
+                this._nodeContextColorTarget = nodeId;
+                this._nodeBasePopover = {
+                    el: pop,
+                    nodeId,
+                    movedInput: { input: colorInput, parent, next }
+                };
+                colorInput.dispatchEvent(new Event('click', { bubbles: true }));
+            }
+
+            const bindSlider = (role, onChange) => {
+                const input = pop.querySelector(`input[data-role="${role}"]`);
+                const valueEl = pop.querySelector(`[data-role="${role}Value"]`);
+                if (!input) return;
+                const applyValue = (raw) => {
+                    const next = Number(raw);
+                    if (!Number.isFinite(next)) return;
+                    if (valueEl) valueEl.textContent = formatValue(next);
+                    onChange(next);
+                };
+                const min = Number(input.min) || 0;
+                const max = Number(input.max) || 200;
+                const base = Number(input.value) || 0;
+                input.value = String(Math.max(min, Math.min(max, base)));
+                applyValue(input.value);
+                input.addEventListener('input', (ev) => {
+                    ev.stopPropagation();
+                    applyValue(input.value);
+                });
+                input.addEventListener('wheel', (ev) => {
+                    ev.preventDefault();
+                    const delta = ev.deltaY < 0 ? step : -step;
+                    const currentVal = Number(input.value) || 0;
+                    const nextVal = Math.max(0, Math.min(200, currentVal + delta));
+                    input.value = String(nextVal);
+                    applyValue(nextVal);
+                }, { passive: false });
+                input.addEventListener('click', (ev) => ev.stopPropagation());
+                input.focus({ preventScroll: true });
+            };
+
+            bindSlider('min', (next) => {
+                this.nodeSizeMin = next;
+                this.applyNodeSizeScale();
+                this.queuePersistSettings();
+            });
+            bindSlider('max', (next) => {
+                this.nodeSizeMax = next;
+                this.applyNodeSizeScale();
+                this.queuePersistSettings();
+            });
+            bindSlider('curve', (next) => {
+                this.nodeSizeGamma = next;
+                this.applyNodeSizeScale();
+                this.queuePersistSettings();
+            });
+
+            const clickOutside = (ev) => {
+                if (!pop.contains(ev.target)) this.closeNodeBasePopover();
+            };
+            const keyHandler = (ev) => {
+                if (ev.key === 'Escape') this.closeNodeBasePopover();
+            };
+            pop._nodeBaseClickHandler = clickOutside;
+            pop._nodeBaseKeyHandler = keyHandler;
+            document.addEventListener('mousedown', clickOutside);
+            document.addEventListener('keydown', keyHandler);
+            if (!this._nodeBasePopover) {
+                this._nodeBasePopover = { el: pop, nodeId, movedInput: null };
+            }
         }
 
         applyLabelShowAll(showAll) {
@@ -5627,14 +6144,6 @@
             this.edgeMinWidth = Number(clamp(1 - 0.25 * dense, 0.6, 1.2).toFixed(2));
             this.edgeMaxWidth = Number(clamp(6 - 1.8 * dense - 0.8 * degree, 3.5, 7).toFixed(2));
 
-            const nodeSizeMinSlider = this.getEl(this.ids.nodeSizeMinSlider);
-            const nodeSizeMaxSlider = this.getEl(this.ids.nodeSizeMaxSlider);
-            const nodeSizeGammaSlider = this.getEl(this.ids.nodeSizeGammaSlider);
-            const nodeColorInput = this.getEl(this.ids.nodeColorInput);
-            const nodeBorderSlider = this.getEl(this.ids.nodeBorderSlider);
-            const nodeBorderColorInput = this.getEl(this.ids.nodeBorderColorInput);
-            const nodeOuterBorderWidthInput = this.getEl(this.ids.nodeOuterBorderWidthInput);
-            const nodeOuterBorderColorInput = this.getEl(this.ids.nodeOuterBorderColorInput);
             const labelSizeSlider = this.getEl(this.ids.labelSizeSlider);
             const labelFadeSlider = this.getEl(this.ids.labelFadeSlider);
             const labelMinSlider = this.getEl(this.ids.labelMinSlider);
@@ -5652,14 +6161,6 @@
             const edgeMaxWidthSlider = this.getEl(this.ids.edgeMaxWidthSlider);
             const edgeColorInput = this.getEl(this.ids.edgeColorInput);
 
-            if (nodeSizeMinSlider) nodeSizeMinSlider.value = String(sizeMin);
-            if (nodeSizeMaxSlider) nodeSizeMaxSlider.value = String(sizeMax);
-            if (nodeSizeGammaSlider) nodeSizeGammaSlider.value = String(gamma);
-            if (nodeColorInput) nodeColorInput.value = this.nodeColor || '#ffffff';
-            if (nodeBorderSlider) nodeBorderSlider.value = String(border);
-            if (nodeBorderColorInput) nodeBorderColorInput.value = this.nodeBorderColor || '#111111';
-            if (nodeOuterBorderWidthInput) nodeOuterBorderWidthInput.value = String(this.nodeOuterBorderWidth ?? 2);
-            if (nodeOuterBorderColorInput) nodeOuterBorderColorInput.value = this.nodeOuterBorderColor || '#ffffff';
             if (labelSizeSlider) labelSizeSlider.value = String(Math.round(labelScale * 100));
             if (labelFadeSlider) labelFadeSlider.value = String(fade);
             if (labelColorInput) labelColorInput.value = this.labelColor || '#000000';
@@ -5773,6 +6274,13 @@
                 return {
                     ...node,
                     color: live?.color != null ? cloneVisColor(live.color) : node.color,
+                    borderWidth: live?.borderWidth ?? node.borderWidth,
+                    borderWidthSelected: live?.borderWidthSelected ?? node.borderWidthSelected,
+                    size: live?.size ?? node.size,
+                    font: live?.font != null ? cloneVisColor(live.font) : node.font,
+                    labelStyle: live?.labelStyle != null ? cloneVisColor(live.labelStyle) : node.labelStyle,
+                    outerBorderWidth: live?.outerBorderWidth ?? node.outerBorderWidth,
+                    outerBorderColor: live?.outerBorderColor ?? node.outerBorderColor,
                     x: pos?.x ?? node.x,
                     y: pos?.y ?? node.y,
                     fixed: live?.fixed ?? node.fixed
@@ -5783,7 +6291,8 @@
                 const live = edgesData && typeof edgesData.get === 'function' ? edgesData.get(edge.id) : null;
                 return {
                     ...edge,
-                    color: live?.color != null ? cloneVisColor(live.color) : edge.color
+                    color: live?.color != null ? cloneVisColor(live.color) : edge.color,
+                    width: live?.width ?? edge.width
                 };
             });
             return {
@@ -6452,14 +6961,6 @@
             const labelWeightSlider = this.getEl(this.ids.labelWeightSlider);
             const labelFontMinInput = this.getEl(this.ids.labelFontMinInput);
             const labelFontMaxInput = this.getEl(this.ids.labelFontMaxInput);
-            const nodeSizeMinSlider = this.getEl(this.ids.nodeSizeMinSlider);
-            const nodeSizeMaxSlider = this.getEl(this.ids.nodeSizeMaxSlider);
-            const nodeSizeGammaSlider = this.getEl(this.ids.nodeSizeGammaSlider);
-            const nodeColorInput = this.getEl(this.ids.nodeColorInput);
-            const nodeBorderSlider = this.getEl(this.ids.nodeBorderSlider);
-            const nodeBorderColorInput = this.getEl(this.ids.nodeBorderColorInput);
-            const nodeOuterBorderWidthInput = this.getEl(this.ids.nodeOuterBorderWidthInput);
-            const nodeOuterBorderColorInput = this.getEl(this.ids.nodeOuterBorderColorInput);
             const physicsSpringSlider = this.getEl(this.ids.physicsSpringSlider);
             const physicsStrengthSlider = this.getEl(this.ids.physicsStrengthSlider);
             const physicsGravitySlider = this.getEl(this.ids.physicsGravitySlider);
@@ -6487,14 +6988,6 @@
             if (labelWeightSlider) labelWeightSlider.value = String(this.labelWeight || 500);
             if (labelFontMinInput) labelFontMinInput.value = String(this.labelFontMin ?? 9);
             if (labelFontMaxInput) labelFontMaxInput.value = String(this.labelFontMax ?? 30);
-            if (nodeSizeMinSlider) nodeSizeMinSlider.value = String(this.nodeSizeMin || 1);
-            if (nodeSizeMaxSlider) nodeSizeMaxSlider.value = String(this.nodeSizeMax || 60);
-            if (nodeSizeGammaSlider) nodeSizeGammaSlider.value = String(this.nodeSizeGamma || 1);
-            this.setColorInputValue(nodeColorInput, this.nodeColor || '#ffffff');
-            if (nodeBorderSlider) nodeBorderSlider.value = String(this.nodeBorderWidth || 1.5);
-            this.setColorInputValue(nodeBorderColorInput, this.nodeBorderColor || '#111111');
-            if (nodeOuterBorderWidthInput) nodeOuterBorderWidthInput.value = String(this.nodeOuterBorderWidth ?? 2);
-            this.setColorInputValue(nodeOuterBorderColorInput, this.nodeOuterBorderColor || '#ffffff');
             if (physicsSpringSlider) physicsSpringSlider.value = String(this.physicsSpringLength || 120);
             if (physicsStrengthSlider) physicsStrengthSlider.value = String(this.physicsSpringConstant || 0.05);
             if (physicsGravitySlider) physicsGravitySlider.value = String(this.physicsGravity || -9000);
@@ -6531,6 +7024,16 @@
             }
             input.dispatchEvent(new Event('input', { bubbles: true }));
             input.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+
+        setColorInputValueSilent(input, value) {
+            if (!input) return;
+            const next = value || '';
+            input.value = next;
+            const wrapper = input.closest('.clr-field');
+            if (wrapper) {
+                wrapper.style.setProperty('--clr-color', next);
+            }
         }
 
         updateLabelLayer() {
@@ -6992,9 +7495,15 @@
                 }
                 this.graphModel.visData = visData;
             }
-            const name = prompt('Save name', `network-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, '')}`);
-            if (!name) return;
             const list = await this.loadSavedList();
+            const select = this.getEl(this.ids.savedSelect);
+            const selectedIdx = select ? Number.parseInt(select.value, 10) : -1;
+            const hasSelection = Number.isFinite(selectedIdx) && selectedIdx >= 0 && selectedIdx < list.length;
+            const existingName = hasSelection ? (list[selectedIdx]?.name || '') : '';
+            const name = hasSelection
+                ? existingName || `network-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, '')}`
+                : prompt('Save name', `network-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, '')}`);
+            if (!name) return;
             const showAll = !!this.visNetwork?._wosLabelState?.showAll;
             const state = this.visNetwork
                 ? {
@@ -7013,12 +7522,22 @@
                     visData,
                     state
                 };
-            list.unshift({
+            const nextItem = {
                 ...payload,
                 settings,
-                createdAt: Date.now(),
+                createdAt: hasSelection ? (list[selectedIdx]?.createdAt || Date.now()) : Date.now(),
+                updatedAt: Date.now(),
                 type: 'wos-graph'
-            });
+            };
+            if (hasSelection) {
+                list[selectedIdx] = nextItem;
+                await this.persistSavedList(list);
+                this.renderSavedSelect(list);
+                this.setSavedSelectValue(selectedIdx, { persist: true, list });
+                this.notify('Network JSON updated', 'success');
+                return;
+            }
+            list.unshift(nextItem);
             const trimmed = list.slice(0, 50);
             await this.persistSavedList(trimmed);
             this.renderSavedSelect(trimmed);
@@ -7315,17 +7834,20 @@
                 if (!dataset) return;
                 const nodes = dataset.get();
                 if (!nodes.length) return;
-                const outlineWidth = Number.isFinite(Number(this.nodeOuterBorderWidth))
+                const fallbackOutlineWidth = Number.isFinite(Number(this.nodeOuterBorderWidth))
                     ? Number(this.nodeOuterBorderWidth)
                     : 2;
-                if (outlineWidth <= 0) return;
                 const scale = Number(network.getScale()) || 1;
                 const ratio = Number(network.canvas?.pixelRatio) || 1;
                 ctx.save();
                 ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
                 nodes.forEach((node) => {
+                    const outlineWidth = Number.isFinite(Number(node.outerBorderWidth))
+                        ? Number(node.outerBorderWidth)
+                        : fallbackOutlineWidth;
+                    if (outlineWidth <= 0) return;
                     const nodeAlpha = Math.max(0, Math.min(1, getNodeAlpha(node)));
-                    const outlineColor = setColorAlpha(this.nodeOuterBorderColor || '#ffffff', nodeAlpha);
+                    const outlineColor = setColorAlpha(node.outerBorderColor || this.nodeOuterBorderColor || '#ffffff', nodeAlpha);
                     const pos = network.getPositions([node.id])[node.id];
                     if (!pos) return;
                     const dom = typeof network.canvasToDOM === 'function'
