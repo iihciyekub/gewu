@@ -8233,48 +8233,54 @@
         getCurrentVisDataSnapshot() {
             if (!this.visNetworkData || typeof this.visNetworkData !== 'object') return null;
             const dataset = this.visNetwork?.body?.data;
-            const nodesData = dataset?.nodes;
-            const edgesData = dataset?.edges;
+            if (!dataset?.nodes || !dataset?.edges) return null;
+            
+            // 直接从 vis-network 获取所有节点和边的完整数据
+            const liveNodes = dataset.nodes.get();
+            const liveEdges = dataset.edges.get();
+            
+            // 获取当前位置信息
             const positions = this.visNetwork && typeof this.visNetwork.getPositions === 'function'
                 ? this.visNetwork.getPositions()
                 : {};
-            const nodes = Array.isArray(this.visNetworkData.nodes) ? this.visNetworkData.nodes : [];
-            const edges = Array.isArray(this.visNetworkData.edges) ? this.visNetworkData.edges : [];
-            const baseById = new Map(nodes.filter(Boolean).map((n) => [n.id, n]));
-            const liveNodes = nodesData && typeof nodesData.get === 'function' ? nodesData.get() : [];
-            const nextNodes = (liveNodes.length ? liveNodes : nodes).map((liveNode) => {
-                if (!liveNode || liveNode.id == null) return liveNode;
-                const base = baseById.get(liveNode.id) || {};
-                const pos = positions?.[liveNode.id];
-                return {
-                    ...base,
-                    ...liveNode,
-                    color: liveNode.color != null ? cloneVisColor(liveNode.color) : base.color,
-                    icon: liveNode.icon != null ? cloneVisColor(liveNode.icon) : base.icon,
-                    font: liveNode.font != null ? cloneVisColor(liveNode.font) : base.font,
-                    labelStyle: liveNode.labelStyle != null ? cloneVisColor(liveNode.labelStyle) : base.labelStyle,
-                    x: pos?.x ?? liveNode.x ?? base.x,
-                    y: pos?.y ?? liveNode.y ?? base.y,
-                    fixed: liveNode.fixed ?? base.fixed
-                };
+            
+            // 全样式保存：深拷贝所有节点数据（保留所有属性）
+            const nextNodes = liveNodes.map((node) => {
+                if (!node || node.id == null) return node;
+                // 深拷贝整个节点对象，保留所有样式属性
+                const cloned = JSON.parse(JSON.stringify(node));
+                // 更新位置信息（位置可能更新了）
+                const pos = positions[node.id];
+                if (pos) {
+                    cloned.x = pos.x;
+                    cloned.y = pos.y;
+                }
+                return cloned;
             });
-            const liveEdges = edgesData && typeof edgesData.get === 'function' ? edgesData.get() : [];
-            const edgeById = new Map(edges.filter(Boolean).map((e) => [e.id, e]));
-            const nextEdges = (liveEdges.length ? liveEdges : edges).map((liveEdge) => {
-                if (!liveEdge || liveEdge.id == null) return liveEdge;
-                const base = edgeById.get(liveEdge.id) || {};
-                return {
-                    ...base,
-                    ...liveEdge,
-                    color: liveEdge.color != null ? cloneVisColor(liveEdge.color) : base.color,
-                    width: liveEdge.width ?? base.width
-                };
+            
+            // 全样式保存：深拷贝所有边数据（保留所有属性：dashes, width, smooth, arrows, 等等）
+            const nextEdges = liveEdges.map((edge) => {
+                if (!edge || edge.id == null) return edge;
+                // 深拷贝整个边对象，保留所有样式属性
+                return JSON.parse(JSON.stringify(edge));
             });
-            return {
+            
+            const snapshot = {
                 ...this.visNetworkData,
                 nodes: nextNodes,
                 edges: nextEdges
             };
+            
+            console.log(`[WosVisManager] 全样式快照已创建: ${nextNodes.length} 个节点, ${nextEdges.length} 条边`);
+            // 打印样例以便调试
+            if (nextEdges.length > 0) {
+                console.log('[WosVisManager] 边样例:', nextEdges[0]);
+            }
+            if (nextNodes.length > 0) {
+                console.log('[WosVisManager] 节点样例:', nextNodes[0]);
+            }
+            
+            return snapshot;
         }
 
         applyLabelPanelSettingsPayload(payload) {
@@ -8354,18 +8360,33 @@
         restoreVisDataStyles(visData) {
             if (!this.visNetwork || !this.visNetwork?.body?.data || !visData) return;
             const dataset = this.visNetwork.body.data;
+            
+            // 全样式恢复：直接使用保存的完整数据，不做任何字段过滤或特殊处理
             const nodeUpdates = Array.isArray(visData.nodes)
-                ? visData.nodes
-                    .filter((node) => node && node.id != null && node.color != null)
-                    .map((node) => ({ id: node.id, color: cloneVisColor(node.color) }))
+                ? visData.nodes.filter((node) => node && node.id != null)
                 : [];
+            
             const edgeUpdates = Array.isArray(visData.edges)
-                ? visData.edges
-                    .filter((edge) => edge && edge.id != null && edge.color != null)
-                    .map((edge) => ({ id: edge.id, color: cloneVisColor(edge.color) }))
+                ? visData.edges.filter((edge) => edge && edge.id != null)
                 : [];
-            if (nodeUpdates.length) dataset.nodes.update(nodeUpdates);
-            if (edgeUpdates.length) dataset.edges.update(edgeUpdates);
+            
+            // 直接批量更新到 vis-network（所有属性原样恢复）
+            if (nodeUpdates.length) {
+                dataset.nodes.update(nodeUpdates);
+                console.log(`[WosVisManager] 已恢复 ${nodeUpdates.length} 个节点的全部样式`);
+                if (nodeUpdates.length > 0) {
+                    console.log('[WosVisManager] 节点样例:', nodeUpdates[0]);
+                }
+            }
+            
+            if (edgeUpdates.length) {
+                dataset.edges.update(edgeUpdates);
+                console.log(`[WosVisManager] 已恢复 ${edgeUpdates.length} 条边的全部样式`);
+                if (edgeUpdates.length > 0) {
+                    console.log('[WosVisManager] 边样例:', edgeUpdates[0]);
+                }
+            }
+            
             if (nodeUpdates.length || edgeUpdates.length) {
                 this.markEdgeFocusDirty();
                 this.applyEdgeFocusDisplay();
