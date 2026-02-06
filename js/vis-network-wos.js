@@ -5949,7 +5949,7 @@
                     </div>
                     <div class="context-input-group">
                         <label class="context-input-label">Scale</label>
-                        <input class="context-number-input" data-role="scale" type="number" min="0.1" max="3" step="0.05" value="${formatValue(edgeWidthScale)}" aria-label="Width Scale">
+                        <input class="context-number-input" data-role="scale" type="number" min="0.1" max="3" step="0.01" value="${formatValue(edgeWidthScale)}" aria-label="Width Scale">
                     </div>
                     <div class="context-input-group">
                         <label class="context-input-label">Max</label>
@@ -6053,10 +6053,18 @@
                 input.addEventListener('click', (ev) => ev.stopPropagation());
             };
             
+            // Local variables to track slider values
+            let localMinWidth = edgeMinWidth;
+            let localMaxWidth = edgeMaxWidth;
+            let localScale = edgeWidthScale;
+
             // Helper to calculate and apply width for single edge or all edges
             const applyWidth = () => {
                 if (getApplyToAll()) {
                     // Apply globally: update globals, clear custom widths, recalculate all
+                    this.edgeMinWidth = localMinWidth;
+                    this.edgeMaxWidth = localMaxWidth;
+                    this.edgeWidthScale = localScale;
                     this._edgeCustomWidths.clear();
                     this.applyEdgeWidthRange();
                     this.queuePersistSettings();
@@ -6065,31 +6073,28 @@
                     const meta = this.visNetworkData?.meta || {};
                     const minRelated = Number.isFinite(meta.minRelated) ? meta.minRelated : 0;
                     const maxRelated = Number.isFinite(meta.maxRelated) ? meta.maxRelated : minRelated;
-                    const related = edge?.related || 0;
+                    const related = getRelatedCount(edge);
                     const t = maxRelated > minRelated ? (related - minRelated) / (maxRelated - minRelated) : 0;
-                    const minW = Number(this.edgeMinWidth ?? 1);
-                    const maxW = Number(this.edgeMaxWidth ?? 6);
-                    const scale = Number(this.edgeWidthScale ?? 1.0);
-                    const baseWidth = minW + Math.max(0, Math.min(1, t)) * (maxW - minW);
-                    const width = Number((baseWidth * scale).toFixed(2));
+                    const baseWidth = localMinWidth + Math.max(0, Math.min(1, t)) * (localMaxWidth - localMinWidth);
+                    const width = Number((baseWidth * localScale).toFixed(2));
                     this._edgeCustomWidths.add(edgeId);
-                    dataset.edges.update({ id: edgeId, width });
+                    dataset.update({ id: edgeId, width });
                     if (this.visNetwork) this.visNetwork.redraw();
                 }
             };
 
             bindNumberInput('minWidth', (val) => {
-                this.edgeMinWidth = val;
+                localMinWidth = val;
                 applyWidth();
             });
 
             bindNumberInput('maxWidth', (val) => {
-                this.edgeMaxWidth = val;
+                localMaxWidth = val;
                 applyWidth();
             });
 
             bindNumberInput('scale', (val) => {
-                this.edgeWidthScale = val;
+                localScale = val;
                 applyWidth();
             });
             
@@ -7270,6 +7275,10 @@
                     <input type="checkbox" class="context-popover-checkbox" aria-label="Apply to all edges">
                     <span>Apply to all edges</span>
                 </label>
+                <button type="button" class="context-toggle-button" data-role="edgeLabelToggle" title="${this.edgeLabelEnabled ? 'Hide edge labels' : 'Show edge labels'}" tabindex="-1">
+                    <i class="fa-solid ${this.edgeLabelEnabled ? 'fa-eye' : 'fa-eye-slash'}"></i>
+                    <span>${this.edgeLabelEnabled ? 'Hide Labels' : 'Show Labels'}</span>
+                </button>
                 <div class="context-input-row context-input-group-row">
                     <div class="context-input-group">
                         <label class="context-input-label">Size</label>
@@ -7327,8 +7336,29 @@
             pop.style.left = `${Math.max(margin, nextLeft)}px`;
             pop.style.top = `${Math.max(margin, nextTop)}px`;
 
-            const toggle = pop.querySelector('.context-popover-checkbox');
-            const getApplyToAll = () => toggle ? toggle.checked : false;
+            // Setup edge label visibility toggle button
+            const edgeLabelToggleBtn = pop.querySelector('[data-role="edgeLabelToggle"]');
+            if (edgeLabelToggleBtn) {
+                edgeLabelToggleBtn.addEventListener('click', (ev) => {
+                    ev.stopPropagation();
+                    this.toggleEdgeLabels();
+                    // Update button appearance
+                    const icon = edgeLabelToggleBtn.querySelector('i');
+                    const span = edgeLabelToggleBtn.querySelector('span');
+                    if (this.edgeLabelEnabled) {
+                        icon.className = 'fa-solid fa-eye';
+                        span.textContent = 'Hide Labels';
+                        edgeLabelToggleBtn.title = 'Hide edge labels';
+                    } else {
+                        icon.className = 'fa-solid fa-eye-slash';
+                        span.textContent = 'Show Labels';
+                        edgeLabelToggleBtn.title = 'Show edge labels';
+                    }
+                });
+            }
+
+            const applyToAllToggle = pop.querySelector('.context-popover-checkbox');
+            const getApplyToAll = () => applyToAllToggle ? applyToAllToggle.checked : false;
 
             // Helper to apply styles
             const applyEdgeLabelStyle = (updates) => {

@@ -5841,6 +5841,7 @@ ol.json-array {
     align-items: center;
     justify-content: center;
     gap: 5px;
+    width: 100%;
     padding: 5px 10px;
     background: #f9fafb;
     border: 1px solid #d1d5db;
