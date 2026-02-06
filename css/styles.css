@@ -2300,6 +2300,43 @@ body.theme-dark .vis-network-view.active.no-grid {
     color: #111827;
 }
 
+.vis-mode-stepper {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 2px 6px;
+    border-radius: 999px;
+    border: 1px solid rgba(15, 23, 42, 0.12);
+    background: rgba(255, 255, 255, 0.9);
+    color: #111827;
+}
+
+.vis-mode-stepper-btn {
+    width: 24px;
+    height: 24px;
+    border-radius: 999px;
+    border: 1px solid rgba(15, 23, 42, 0.12);
+    background: #ffffff;
+    color: inherit;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: background 120ms ease, border-color 120ms ease;
+}
+
+.vis-mode-stepper-btn:hover {
+    background: rgba(15, 23, 42, 0.06);
+    border-color: rgba(15, 23, 42, 0.2);
+}
+
+.vis-mode-stepper-value {
+    min-width: 20px;
+    text-align: center;
+    font-size: 12px;
+    font-weight: 600;
+}
+
 .vis-mode-slider-value {
     font-size: 11px;
     font-weight: 600;

@@ -963,6 +963,11 @@
             this.selectedNodeIds = new Set();
             this._edgeModeEnabled = false;
             this._tempToolbarMode = null;
+            this._restoreListOpen = false;
+            this._modeStyleSnapshot = null;
+            this._nodeModeOriginalColors = new Map();
+            this._suspendedEdgeFocus = null;
+            this._nodeModeStyleSnapshot = null;
         }
 
         bind() {
@@ -2403,6 +2408,7 @@
         }
 
         setToolbarMode(mode, { nodeId = null, edgeId = null, select = false } = {}) {
+            const prevMode = this._toolbarMode;
             this._toolbarMode = mode || null;
             if (!this.visNetwork) {
                 this.updateModeToolbar();
@@ -2410,13 +2416,27 @@
             }
             this._edgeModeEnabled = this._toolbarMode === 'edge';
             this.visNetwork._wosNodeModeActive = this._toolbarMode === 'node';
+            if (prevMode === 'node' && this._toolbarMode !== 'node') {
+                this.captureNodeModeStyleSnapshot();
+            }
+            if (prevMode && this._toolbarMode && prevMode !== this._toolbarMode) {
+                this.restoreModeStyleSnapshot();
+            }
             if (!this._toolbarMode) {
-                this.visNetwork.unselectAll?.();
+                this.restoreModeStyleSnapshot();
+                if (prevMode !== 'edge') {
+                    this.visNetwork.unselectAll?.();
+                }
                 this.updateModeToolbar();
                 return;
             }
+            this.captureModeStyleSnapshot();
+            if (this._toolbarMode === 'node') {
+                this.restoreNodeModeStyleSnapshot();
+            }
             if (this._toolbarMode === 'edge') {
                 this._edgeModeEnabled = true;
+                this.restoreSuspendedEdgeFocus();
             }
             if (select) {
                 if (mode === 'node' && nodeId) {
@@ -2434,6 +2454,16 @@
             if (!toolbar || toolbar.dataset.visBound) return;
             toolbar.dataset.visBound = '1';
             toolbar.addEventListener('click', (e) => {
+                const stepperBtn = e.target.closest('.vis-mode-stepper-btn');
+                if (stepperBtn && toolbar.contains(stepperBtn)) {
+                    const wrap = stepperBtn.closest('.vis-mode-stepper');
+                    const action = wrap ? wrap.dataset.action : '';
+                    const delta = Number(stepperBtn.dataset.step) || 0;
+                    if (action) {
+                        this.handleModeToolbarStepper(action, delta);
+                        return;
+                    }
+                }
                 const btn = e.target.closest('button[data-action]');
                 if (!btn || !toolbar.contains(btn)) return;
                 const action = btn.dataset.action;
@@ -2484,10 +2514,7 @@
                 const applyColor = () => {
                     const next = String(colorInput.value || '').trim();
                     if (!next) return;
-                    this.selectedNodeColor = next;
-                    if (this.getEdgeFocusState().customFocusActive) {
-                        this.applyEdgeFocusDisplay();
-                    }
+                    this.applyNodeInputColor(next);
                 };
                 colorInput.addEventListener('input', applyColor);
                 colorInput.addEventListener('change', applyColor);
@@ -2543,6 +2570,180 @@
                 toolbar.removeEventListener('animationend', cleanup);
             };
             toolbar.addEventListener('animationend', cleanup);
+        }
+
+        captureModeStyleSnapshot() {
+            if (this._modeStyleSnapshot) return;
+            if (!this.visNetwork) return;
+            const dataset = this.visNetwork?.body?.data;
+            if (!dataset?.nodes || !dataset?.edges) return;
+            const nodeColors = new Map();
+            const edgeColors = new Map();
+            dataset.nodes.get().forEach((node) => {
+                nodeColors.set(node.id, cloneVisColor(node.color));
+            });
+            dataset.edges.get().forEach((edge) => {
+                edgeColors.set(edge.id, cloneVisColor(edge.color));
+            });
+            this._modeStyleSnapshot = {
+                nodeColors,
+                edgeColors,
+                edgeFocusFadeAlpha: this.edgeFocusFadeAlpha
+            };
+        }
+
+        restoreModeStyleSnapshot() {
+            const snap = this._modeStyleSnapshot;
+            if (!snap || !this.visNetwork) return;
+            const dataset = this.visNetwork?.body?.data;
+            if (!dataset?.nodes || !dataset?.edges) return;
+            const nodeUpdates = [];
+            snap.nodeColors.forEach((color, id) => {
+                nodeUpdates.push({ id, color: cloneVisColor(color) });
+            });
+            const edgeUpdates = [];
+            snap.edgeColors.forEach((color, id) => {
+                edgeUpdates.push({ id, color: cloneVisColor(color) });
+            });
+            if (nodeUpdates.length) dataset.nodes.update(nodeUpdates);
+            if (edgeUpdates.length) dataset.edges.update(edgeUpdates);
+            if (Number.isFinite(snap.edgeFocusFadeAlpha)) {
+                this.edgeFocusFadeAlpha = snap.edgeFocusFadeAlpha;
+            }
+            this._modeStyleSnapshot = null;
+            this._nodeModeOriginalColors.clear();
+            this.markEdgeFocusDirty();
+            this.applyEdgeFocusDisplay();
+            this._labelThresholdBaseDirty = true;
+            this.applyLabelThresholdDimming();
+            this.updateModeToolbar();
+        }
+
+        captureNodeModeStyleSnapshot() {
+            if (!this.visNetwork) return;
+            const dataset = this.visNetwork?.body?.data;
+            if (!dataset?.nodes || !dataset?.edges) return;
+            const nodeColors = new Map();
+            const edgeColors = new Map();
+            dataset.nodes.get().forEach((node) => {
+                nodeColors.set(node.id, cloneVisColor(node.color));
+            });
+            dataset.edges.get().forEach((edge) => {
+                edgeColors.set(edge.id, cloneVisColor(edge.color));
+            });
+            const state = this.getEdgeFocusState();
+            this._nodeModeStyleSnapshot = {
+                nodeColors,
+                edgeColors,
+                edgeFocusFadeAlpha: this.edgeFocusFadeAlpha,
+                customFocusAlpha: state.customFocusAlpha ?? null
+            };
+        }
+
+        restoreNodeModeStyleSnapshot() {
+            const snap = this._nodeModeStyleSnapshot;
+            if (!snap || !this.visNetwork) return;
+            const dataset = this.visNetwork?.body?.data;
+            if (!dataset?.nodes || !dataset?.edges) return;
+            const nodeUpdates = [];
+            snap.nodeColors.forEach((color, id) => {
+                nodeUpdates.push({ id, color: cloneVisColor(color) });
+            });
+            const edgeUpdates = [];
+            snap.edgeColors.forEach((color, id) => {
+                edgeUpdates.push({ id, color: cloneVisColor(color) });
+            });
+            if (nodeUpdates.length) dataset.nodes.update(nodeUpdates);
+            if (edgeUpdates.length) dataset.edges.update(edgeUpdates);
+            if (Number.isFinite(snap.edgeFocusFadeAlpha)) {
+                this.edgeFocusFadeAlpha = snap.edgeFocusFadeAlpha;
+            }
+            const state = this.getEdgeFocusState();
+            if (Number.isFinite(snap.customFocusAlpha)) {
+                state.customFocusAlpha = snap.customFocusAlpha;
+            }
+            this.markEdgeFocusDirty();
+            this.applyEdgeFocusDisplay();
+            this._labelThresholdBaseDirty = true;
+            this.applyLabelThresholdDimming();
+        }
+
+        updateVisDataNodeColor(nodeId, color) {
+            const nodes = this.visNetworkData?.nodes;
+            if (!Array.isArray(nodes)) return;
+            const target = nodes.find((node) => node && node.id === nodeId);
+            if (target) target.color = cloneVisColor(color);
+        }
+
+        applyNodeInputColor(color) {
+            if (!this.visNetwork) return;
+            const input = this.getEl(this.ids.modeNodeInput);
+            const raw = input ? input.value : '';
+            const parsed = this.parseNodeInputIds(raw);
+            if (!parsed.validIds.length) {
+                this.triggerToolbarShake();
+                this.notify('Node not found', 'info');
+                return;
+            }
+            const dataset = this.visNetwork?.body?.data?.nodes;
+            if (!dataset || typeof dataset.get !== 'function') return;
+            parsed.validIds.forEach((nodeId) => {
+                const node = dataset.get(nodeId);
+                if (!node) return;
+                if (!this._nodeModeOriginalColors.has(nodeId)) {
+                    this._nodeModeOriginalColors.set(nodeId, cloneVisColor(node.color));
+                }
+                const nextColor = buildSelectedNodeColor(node.color, color);
+                dataset.update({ id: nodeId, color: nextColor });
+            });
+            this.selectedNodeColor = color;
+            this.markEdgeFocusDirty();
+            this.applyEdgeFocusDisplay();
+            this._labelThresholdBaseDirty = true;
+            this.applyLabelThresholdDimming();
+            if (parsed.missingIds.length) {
+                this.triggerToolbarShake();
+                this.notify(`Missing nodes: ${parsed.missingIds.join(', ')}`, 'info');
+            }
+        }
+
+        restoreNodeOriginalColor(nodeId) {
+            if (!nodeId || !this.visNetwork) return;
+            const original = this._nodeModeOriginalColors.get(nodeId);
+            if (!original) return;
+            const dataset = this.visNetwork?.body?.data?.nodes;
+            if (!dataset) return;
+            dataset.update({ id: nodeId, color: cloneVisColor(original) });
+            this._nodeModeOriginalColors.delete(nodeId);
+            this.markEdgeFocusDirty();
+            this.applyEdgeFocusDisplay();
+            this._labelThresholdBaseDirty = true;
+            this.applyLabelThresholdDimming();
+        }
+
+        suspendEdgeFocus() {
+            const state = this.getEdgeFocusState();
+            if (!state.lockedEdgeIds || !state.lockedEdgeIds.size) {
+                this._suspendedEdgeFocus = null;
+                return;
+            }
+            this._suspendedEdgeFocus = {
+                lockedEdgeIds: Array.from(state.lockedEdgeIds),
+                edgeFocusFadeAlpha: this.edgeFocusFadeAlpha
+            };
+        }
+
+        restoreSuspendedEdgeFocus() {
+            const snap = this._suspendedEdgeFocus;
+            if (!snap || !snap.lockedEdgeIds) return;
+            const state = this.getEdgeFocusState();
+            state.lockedEdgeIds = new Set(snap.lockedEdgeIds);
+            if (Number.isFinite(snap.edgeFocusFadeAlpha)) {
+                this.edgeFocusFadeAlpha = snap.edgeFocusFadeAlpha;
+            }
+            this._suspendedEdgeFocus = null;
+            this.applyEdgeFocusDisplay();
+            this.updateModeToolbar();
         }
 
         handleModeToolbarNodeInput(raw) {
@@ -2652,15 +2853,12 @@
                 this.releaseNodeFocus();
                 return;
             }
-            if (action === 'restoreEdgeFocus') {
-                this.restoreEdgeFocusBaseColors();
-                this.resetEdgeFocusState({ keepLocks: false, keepBaseColors: true });
-                this.applyEdgeFocusDisplay();
+            if (action === 'exitEdgeMode') {
+                this.suspendEdgeFocus();
+                this.resetEdgeFocusState({ keepLocks: false, keepBaseColors: false });
                 this.queuePersistSettings();
-                this.unlockEdges(Array.from(this.getEdgeFocusState().lockedEdgeIds || []));
-                if (this.visNetwork) this.visNetwork.unselectAll();
                 this.setToolbarMode(null);
-                this.updateModeToolbar();
+                return;
             }
         }
 
@@ -2825,6 +3023,7 @@
         }
 
         releaseNodeFocus() {
+            this.captureNodeModeStyleSnapshot();
             this.clearCustomFocusLock();
             if (this.visNetwork) this.visNetwork.unselectAll();
             this.setToolbarMode(null);
@@ -2836,6 +3035,7 @@
                 state.customFocusMap.delete(nodeId);
                 if (state.customFocusDepthMap) state.customFocusDepthMap.delete(nodeId);
                 this.removeSelectedNodeId(nodeId);
+                this.restoreNodeOriginalColor(nodeId);
                 this.rebuildCustomFocusFromMap();
                 return true;
             }
@@ -2965,6 +3165,14 @@
                 }
                 this.updateModeToolbar();
             }
+        }
+
+        handleModeToolbarStepper(action, delta) {
+            if (action !== 'nodeDepth') return;
+            const state = this.getEdgeFocusState();
+            const current = Number.isFinite(state.customFocusDepth) ? state.customFocusDepth : 1;
+            const next = Math.max(0, Math.min(10, current + delta));
+            this.handleModeToolbarSlider('nodeDepth', next);
         }
 
         updateModeToolbar() {
@@ -4829,20 +5037,14 @@
         applyCustomFocusDisplay(state, nodes, edges, dataset) {
             const activeNodes = state.customFocusNodes || new Set();
             const activeEdges = state.customFocusEdges || new Set();
-            const selectedIds = this.selectedNodeIds || new Set();
             const dimAlpha = Number.isFinite(state.customFocusAlpha)
                 ? Math.max(0, Math.min(1, state.customFocusAlpha))
                 : this.edgeFocusFadeAlpha;
             const nodeUpdates = nodes.map((node) => {
                 const baseColor = state.baseNodeColors.get(node.id) || node.color;
-                let color = baseColor;
-                if (activeNodes.has(node.id)) {
-                    color = selectedIds.has(node.id)
-                        ? buildSelectedNodeColor(baseColor, this.selectedNodeColor)
-                        : fadeNodeColor(baseColor, 1);
-                } else {
-                    color = fadeNodeColor(baseColor, dimAlpha);
-                }
+                const color = activeNodes.has(node.id)
+                    ? fadeNodeColor(baseColor, 1)
+                    : fadeNodeColor(baseColor, dimAlpha);
                 return { id: node.id, color };
             });
             const edgeUpdates = edges.map((edge) => {
@@ -5013,9 +5215,11 @@
             }
             this._nodeContextMenu = null;
             if (this._tempToolbarMode === 'node') {
-                const state = this.getEdgeFocusState();
-                if (!state.customFocusActive) {
-                    this.setToolbarMode(null);
+                if (this._toolbarMode !== 'node') {
+                    const state = this.getEdgeFocusState();
+                    if (!state.customFocusActive) {
+                        this.setToolbarMode(null);
+                    }
                 }
                 this._tempToolbarMode = null;
             }
@@ -5031,22 +5235,10 @@
             menu.className = 'context-menu';
             menu.style.left = `${e.pageX}px`;
             menu.style.top = `${e.pageY}px`;
-            const isLocked = this.isEdgeLocked(edgeId);
-            const fadePercent = Math.round((Number(this.edgeFocusFadeAlpha) || 0) * 100);
             menu.innerHTML = `
-                <div class="context-menu-item" data-action="toggleEdgeLock">
-                    <i class="fas ${isLocked ? 'fa-unlock' : 'fa-lock'}"></i>
-                    ${isLocked ? 'Unselect Edge' : 'Select Edge'}
-                </div>
-                <div class="context-menu-item" data-action="restoreEdgeFocus">
-                    <i class="fas fa-rotate-left"></i>
-                    Release
-                </div>
-                <div class="context-menu-divider"></div>
-                <div class="context-menu-item context-menu-slider" data-action="edgeFadeAlpha">
-                    <span>Opacity</span>
-                    <input type="range" min="0" max="100" step="1" value="${fadePercent}" />
-                    <span class="context-menu-value">${fadePercent}%</span>
+                <div class="context-menu-item" data-action="enterEdgeMode">
+                    <i class="fas fa-bullseye"></i>
+                    Enter Edge Mode
                 </div>
             `;
             document.body.appendChild(menu);
@@ -5065,42 +5257,13 @@
             menu.querySelectorAll('.context-menu-item').forEach((item) => {
                 item.addEventListener('click', () => {
                     const action = item.dataset.action;
-                    if (action === 'toggleEdgeLock') {
-                        this.toggleEdgeLock(edgeId);
-                        if (this.hasActiveEdgeSelection()) {
-                            this.setToolbarMode('edge', { edgeId, select: true });
-                        } else if (this._toolbarMode === 'edge') {
-                            this.setToolbarMode(null);
-                        }
-                    }
-                    if (action === 'restoreEdgeFocus') {
-                        this.restoreEdgeFocusBaseColors();
-                        this.resetEdgeFocusState({ keepLocks: false, keepBaseColors: true });
-                        this.applyEdgeFocusDisplay();
-                        this.queuePersistSettings();
-                        this.setToolbarMode(null);
-                    }
-                    this.updateModeToolbar();
-                    if (action !== 'edgeFadeAlpha') {
+                    if (action === 'enterEdgeMode') {
+                        this.setToolbarMode('edge');
+                        this.updateModeToolbar();
                         this.closeEdgeContextMenu();
                     }
                 });
             });
-            const sliderWrap = menu.querySelector('.context-menu-item.context-menu-slider');
-            const slider = sliderWrap ? sliderWrap.querySelector('input[type="range"]') : null;
-            const sliderValue = sliderWrap ? sliderWrap.querySelector('.context-menu-value') : null;
-            if (slider) {
-                slider.addEventListener('input', (ev) => {
-                    const raw = Number(ev.target.value);
-                    const value = Number.isFinite(raw) ? raw : 0;
-                    if (sliderValue) sliderValue.textContent = `${value}%`;
-                    this.edgeFocusFadeAlpha = Math.max(0, Math.min(1, value / 100));
-                    this.applyEdgeFocusDisplay();
-                    this.updateModeToolbar();
-                });
-                slider.addEventListener('mousedown', (ev) => ev.stopPropagation());
-                slider.addEventListener('click', (ev) => ev.stopPropagation());
-            }
             const clickOutside = (ev) => {
                 if (!menu.contains(ev.target)) this.closeEdgeContextMenu();
             };
@@ -5124,34 +5287,10 @@
             menu.className = 'context-menu node-menu';
             menu.style.left = `${e.pageX}px`;
             menu.style.top = `${e.pageY}px`;
-            const state = this.getEdgeFocusState();
-            const depthValue = state.customFocusDepthMap && state.customFocusDepthMap.has(nodeId)
-                ? state.customFocusDepthMap.get(nodeId)
-                : (Number.isFinite(state.customFocusDepth) ? state.customFocusDepth : 1);
-            const fadePercent = Math.round((Number(this.edgeFocusFadeAlpha) || 0) * 100);
             menu.innerHTML = `
                 <div class="context-menu-item" data-action="selectNodeFocus">
                     <i class="fas fa-bullseye"></i>
-                    Select Node
-                </div>
-                <div class="context-menu-item" data-action="unselectNode">
-                    <i class="fas fa-circle-xmark"></i>
-                    Unselect Node
-                </div>
-                <div class="context-menu-item" data-action="unlockDepthFocus">
-                    <i class="fas fa-rotate-left"></i>
-                    Release
-                </div>
-                <div class="context-menu-divider"></div>
-                <div class="context-menu-item context-menu-slider" data-action="nodeFadeAlpha">
-                    <span>Opacity</span>
-                    <input type="range" min="0" max="100" step="1" value="${fadePercent}" />
-                    <span class="context-menu-value">${fadePercent}%</span>
-                </div>
-                <div class="context-menu-item context-menu-slider" data-action="nodeDepth">
-                    <span>Depth</span>
-                    <input type="range" min="0" max="10" step="1" value="${depthValue}" />
-                    <span class="context-menu-value">${depthValue}</span>
+                    Enter Node Mode
                 </div>
             `;
             document.body.appendChild(menu);
@@ -5171,69 +5310,12 @@
                 item.addEventListener('click', () => {
                     const action = item.dataset.action;
                     if (action === 'selectNodeFocus') {
-                        this.setToolbarMode('node', { nodeId, select: true });
-                        if (this.visNetwork) {
-                            const selected = this.visNetwork.getSelectedNodes?.() || [];
-                            if (!selected.includes(nodeId)) {
-                                this.visNetwork.selectNodes([...selected, nodeId]);
-                            }
-                        }
-                        const state = this.getEdgeFocusState();
-                        const depth = state.customFocusDepthMap && state.customFocusDepthMap.has(nodeId)
-                            ? state.customFocusDepthMap.get(nodeId)
-                            : (Number.isFinite(state.customFocusDepth) ? state.customFocusDepth : 1);
-                        this.applyDepthFocusForNode(nodeId, depth, this.edgeFocusFadeAlpha);
+                        this.setToolbarMode('node');
                         this.closeNodeContextMenu();
                         this.updateModeToolbar();
                         return;
-                    }
-                    if (action === 'unselectNode') {
-                        if (this.visNetwork) {
-                            const selected = this.visNetwork.getSelectedNodes?.() || [];
-                            const next = selected.filter((id) => id !== nodeId);
-                            if (next.length) {
-                                this.visNetwork.selectNodes(next);
-                            } else {
-                                this.visNetwork.unselectAll();
-                            }
-                        }
-                        this.closeNodeContextMenu();
-                        this.unselectCurrentNode(nodeId);
-                        return;
-                    }
-                    if (action === 'unlockDepthFocus') {
-                        this.releaseNodeFocus();
-                        this.closeNodeContextMenu();
                     }
                 });
-            });
-            const sliders = menu.querySelectorAll('.context-menu-item.context-menu-slider');
-            sliders.forEach((wrap) => {
-                const slider = wrap.querySelector('input[type="range"]');
-                const valueEl = wrap.querySelector('.context-menu-value');
-                if (!slider) return;
-                slider.addEventListener('input', (ev) => {
-                    const raw = Number(ev.target.value);
-                    const value = Number.isFinite(raw) ? raw : 0;
-                    if (valueEl) valueEl.textContent = String(value) + (wrap.dataset.action === 'nodeFadeAlpha' ? '%' : '');
-                    if (wrap.dataset.action === 'nodeFadeAlpha') {
-                        const nextAlpha = Math.max(0, Math.min(1, value / 100));
-                        this.edgeFocusFadeAlpha = nextAlpha;
-                        const state = this.getEdgeFocusState();
-                        if (state.customFocusActive) {
-                            state.customFocusAlpha = nextAlpha;
-                        }
-                        this.applyEdgeFocusDisplay();
-                        this.updateModeToolbar();
-                        return;
-                    }
-                    if (wrap.dataset.action === 'nodeDepth') {
-                        this.applyDepthFocusForNode(nodeId, value);
-                        this.updateModeToolbar();
-                    }
-                });
-                slider.addEventListener('mousedown', (ev) => ev.stopPropagation());
-                slider.addEventListener('click', (ev) => ev.stopPropagation());
             });
             const clickOutside = (ev) => {
                 if (!menu.contains(ev.target)) this.closeNodeContextMenu();
@@ -5518,6 +5600,43 @@
             return this.getPersistedSettingsPayload();
         }
 
+        getCurrentVisDataSnapshot() {
+            if (!this.visNetworkData || typeof this.visNetworkData !== 'object') return null;
+            const dataset = this.visNetwork?.body?.data;
+            const nodesData = dataset?.nodes;
+            const edgesData = dataset?.edges;
+            const positions = this.visNetwork && typeof this.visNetwork.getPositions === 'function'
+                ? this.visNetwork.getPositions()
+                : {};
+            const nodes = Array.isArray(this.visNetworkData.nodes) ? this.visNetworkData.nodes : [];
+            const edges = Array.isArray(this.visNetworkData.edges) ? this.visNetworkData.edges : [];
+            const nextNodes = nodes.map((node) => {
+                if (!node || node.id == null) return node;
+                const live = nodesData && typeof nodesData.get === 'function' ? nodesData.get(node.id) : null;
+                const pos = positions?.[node.id];
+                return {
+                    ...node,
+                    color: live?.color != null ? cloneVisColor(live.color) : node.color,
+                    x: pos?.x ?? node.x,
+                    y: pos?.y ?? node.y,
+                    fixed: live?.fixed ?? node.fixed
+                };
+            });
+            const nextEdges = edges.map((edge) => {
+                if (!edge || edge.id == null) return edge;
+                const live = edgesData && typeof edgesData.get === 'function' ? edgesData.get(edge.id) : null;
+                return {
+                    ...edge,
+                    color: live?.color != null ? cloneVisColor(live.color) : edge.color
+                };
+            });
+            return {
+                ...this.visNetworkData,
+                nodes: nextNodes,
+                edges: nextEdges
+            };
+        }
+
         applyLabelPanelSettingsPayload(payload) {
             if (!payload || typeof payload !== 'object') return;
             if (Number.isFinite(payload.labelFade)) this.labelFade = payload.labelFade;
@@ -5600,6 +5719,29 @@
             if (this.visNetwork) this.visNetwork.redraw();
             this.syncSettingsSliders();
             this.queuePersistSettings();
+        }
+
+        restoreVisDataStyles(visData) {
+            if (!this.visNetwork || !this.visNetwork?.body?.data || !visData) return;
+            const dataset = this.visNetwork.body.data;
+            const nodeUpdates = Array.isArray(visData.nodes)
+                ? visData.nodes
+                    .filter((node) => node && node.id != null && node.color != null)
+                    .map((node) => ({ id: node.id, color: cloneVisColor(node.color) }))
+                : [];
+            const edgeUpdates = Array.isArray(visData.edges)
+                ? visData.edges
+                    .filter((edge) => edge && edge.id != null && edge.color != null)
+                    .map((edge) => ({ id: edge.id, color: cloneVisColor(edge.color) }))
+                : [];
+            if (nodeUpdates.length) dataset.nodes.update(nodeUpdates);
+            if (edgeUpdates.length) dataset.edges.update(edgeUpdates);
+            if (nodeUpdates.length || edgeUpdates.length) {
+                this.markEdgeFocusDirty();
+                this.applyEdgeFocusDisplay();
+                this._labelThresholdBaseDirty = true;
+                this.applyLabelThresholdDimming();
+            }
         }
 
 
@@ -6676,7 +6818,7 @@
 
         async saveNetworkJson() {
             this.persistSettings();
-            const visData = this.visNetworkData;
+            const visData = this.getCurrentVisDataSnapshot() || this.visNetworkData;
             if (!visData || !Array.isArray(visData.nodes) || !Array.isArray(visData.edges)) {
                 this.notify('No vis data to save', 'info');
                 return;
@@ -6779,6 +6921,7 @@
                     }
                     if (item.settings) {
                         this.applyLabelPanelSettingsPayload(item.settings);
+                        this.restoreVisDataStyles(model.visData);
                     }
                 } else {
                     this.notify('Saved payload missing model support', 'error');
@@ -7135,10 +7278,6 @@
                 }
                 if (hasNode && this._toolbarMode !== 'node' && !this._edgeModeEnabled) {
                     this.setToolbarMode('node');
-                    return;
-                }
-                if (this._toolbarMode === 'node' && !hasNode) {
-                    this.setToolbarMode(null);
                     return;
                 }
                 this.updateModeToolbar();
