@@ -266,6 +266,10 @@
             },
             nodes: {
                 scaling: { min: 1, max: 1 },
+                font: {
+                    align: 'bottom',
+                    vadjust: 12
+                },
                 color: {
                     background: darkMode ? '#f8fafc' : '#ffffff',
                     border: darkMode ? 'rgba(255,255,255,0.7)' : '#111111',
@@ -530,6 +534,14 @@
         if (style.fontWeight) label.style.fontWeight = String(style.fontWeight);
         if (style.textColor) label.style.color = style.textColor;
         if (style.borderColor) label.style.borderColor = style.borderColor;
+        const borderWidth = Number(style.borderWidth);
+        if (Number.isFinite(borderWidth) && borderWidth >= 0) {
+            label.style.borderWidth = `${borderWidth}px`;
+            label.style.borderStyle = 'solid';
+        } else {
+            label.style.borderWidth = '';
+            label.style.borderStyle = '';
+        }
         const strokeWidth = Number(style.strokeWidth);
         if (Number.isFinite(strokeWidth) && strokeWidth > 0 && style.strokeColor) {
             label.style.textShadow = buildLabelStrokeShadow(strokeWidth, style.strokeColor);
@@ -4779,6 +4791,18 @@
             this.updateLabelLayer();
         }
 
+        applyLabelBorderWidth() {
+            const dataset = this.getNetworkNodesDataSet();
+            if (!dataset) return;
+            const width = Math.max(0, Number(this.labelBorderWidth) || 0);
+            const updates = dataset.get().map((node) => ({
+                id: node.id,
+                labelStyle: { ...(node.labelStyle || {}), borderWidth: width }
+            }));
+            dataset.update(updates);
+            this.updateLabelLayer();
+        }
+
         applyLabelStrokeColor() {
             const dataset = this.getNetworkNodesDataSet();
             if (!dataset) return;
@@ -5790,6 +5814,21 @@
             }
         }
 
+        closeNodeLabelStylePopover() {
+            const pop = this._nodeLabelStylePopover?.el;
+            if (pop) {
+                if (pop._nodeLabelStyleClickHandler) document.removeEventListener('mousedown', pop._nodeLabelStyleClickHandler);
+                if (pop._nodeLabelStyleKeyHandler) document.removeEventListener('keydown', pop._nodeLabelStyleKeyHandler);
+                pop.remove();
+            }
+            this._nodeLabelStylePopover = null;
+            this._nodePopoverHover = false;
+            if (this._nodePopoverCloseTimer) {
+                clearTimeout(this._nodePopoverCloseTimer);
+                this._nodePopoverCloseTimer = null;
+            }
+        }
+
         scheduleCloseNodePopovers(delay = 180) {
             if (this._nodePopoverCloseTimer) {
                 clearTimeout(this._nodePopoverCloseTimer);
@@ -5798,6 +5837,7 @@
                 if (this._nodePopoverHover) return;
                 this.closeNodeStylePopover();
                 this.closeNodeBasePopover();
+                this.closeNodeLabelStylePopover();
             }, delay);
         }
 
@@ -5860,6 +5900,7 @@
             this.closeNodeStylePopover();
             this.closeNodeSizePopover();
             this.closeNodeBasePopover();
+            this.closeNodeLabelStylePopover();
             if (this._toolbarMode === 'edge') return;
             this._tempToolbarMode = 'node';
             const menu = document.createElement('div');
@@ -5875,13 +5916,9 @@
                     <i class="fas fa-palette"></i>
                     Node Style
                 </div>
-                <div class="context-menu-item" data-action="pickNodeBorderColor">
-                    <i class="fas fa-border-all"></i>
-                    Border Style
-                </div>
-                <div class="context-menu-item" data-action="pickNodeStrokeColor">
-                    <i class="fas fa-highlighter"></i>
-                    Stroke Style
+                <div class="context-menu-item" data-action="pickNodeLabelStyle">
+                    <i class="fas fa-font"></i>
+                    Node Label Style
                 </div>
             `;
             document.body.appendChild(menu);
@@ -5908,11 +5945,8 @@
                     if (action === 'pickNodeBaseStyle') {
                         this.openNodeBasePopover({ nodeId, x: anchor.x, y: anchor.y });
                     }
-                    if (action === 'pickNodeBorderColor') {
-                        this.openNodeStylePopover({ nodeId, type: 'border', x: anchor.x, y: anchor.y });
-                    }
-                    if (action === 'pickNodeStrokeColor') {
-                        this.openNodeStylePopover({ nodeId, type: 'stroke', x: anchor.x, y: anchor.y });
+                    if (action === 'pickNodeLabelStyle') {
+                        this.openNodeLabelStylePopover({ nodeId, x: anchor.x, y: anchor.y });
                     }
                 });
                 item.addEventListener('click', (ev) => {
@@ -5932,20 +5966,9 @@
                         this.closeNodeContextMenu();
                         return;
                     }
-                    if (action === 'pickNodeBorderColor') {
-                        this.openNodeStylePopover({
+                    if (action === 'pickNodeLabelStyle') {
+                        this.openNodeLabelStylePopover({
                             nodeId,
-                            type: 'border',
-                            x: ev.pageX,
-                            y: ev.pageY
-                        });
-                        this.closeNodeContextMenu();
-                        return;
-                    }
-                    if (action === 'pickNodeStrokeColor') {
-                        this.openNodeStylePopover({
-                            nodeId,
-                            type: 'stroke',
                             x: ev.pageX,
                             y: ev.pageY
                         });
@@ -5971,6 +5994,7 @@
             if (!nodeId || !type) return;
             this.closeNodeStylePopover();
             this.closeNodeBasePopover();
+            this.closeNodeLabelStylePopover();
             const dataset = this.visNetwork?.body?.data?.nodes;
             const node = dataset && typeof dataset.get === 'function' ? dataset.get(nodeId) : null;
             const isStroke = type === 'stroke';
@@ -6122,6 +6146,7 @@
             if (!nodeId) return;
             this.closeNodeBasePopover();
             this.closeNodeStylePopover();
+            this.closeNodeLabelStylePopover();
             const dataset = this.visNetwork?.body?.data?.nodes;
             const node = dataset && typeof dataset.get === 'function' ? dataset.get(nodeId) : null;
             const step = 0.1;
@@ -6133,6 +6158,8 @@
             const minValue = Number(this.nodeSizeMin ?? 6);
             const maxValue = Number(this.nodeSizeMax ?? 60);
             const curveValue = Number(this.nodeSizeGamma ?? 1);
+            const borderWidth = Number(node?.borderWidth ?? this.nodeBorderWidth ?? 1.5);
+            const strokeWidth = Number(node?.outerBorderWidth ?? this.nodeOuterBorderWidth ?? 2);
             const pop = document.createElement('div');
             pop.className = 'context-node-popover';
             const anchorX = Number(x) || 0;
@@ -6144,21 +6171,35 @@
                     <input type="checkbox" class="context-popover-checkbox" aria-label="Apply to all nodes">
                     <span>Apply to all nodes</span>
                 </label>
-                <div class="context-slider-row">
-                    <span class="context-slider-label">Min</span>
-                    <input type="range" data-role="min" min="0.5" max="50" step="${step}" value="${Number.isFinite(minValue) ? minValue : 0.5}" aria-label="Node size min">
-                    <span class="context-slider-value" data-role="minValue">${formatValue(minValue)}</span>
+                <div class="context-input-row context-input-group-row">
+                    <div class="context-input-group">
+                        <label class="context-input-label">Min</label>
+                        <input class="context-number-input" data-role="min" type="number" min="0.5" max="50" step="${step}" value="${Number.isFinite(minValue) ? minValue : 0.5}" aria-label="Node size min">
+                    </div>
+                    <div class="context-input-group">
+                        <label class="context-input-label">Curve</label>
+                        <input class="context-number-input" data-role="curve" type="number" min="0" max="1" step="${curveStep}" value="${Number.isFinite(curveValue) ? curveValue : 1}" aria-label="Node size curve">
+                    </div>
+                    <div class="context-input-group">
+                        <label class="context-input-label">Max</label>
+                        <input class="context-number-input" data-role="max" type="number" min="30" max="120" step="${step}" value="${Number.isFinite(maxValue) ? maxValue : 30}" aria-label="Node size max">
+                    </div>
                 </div>
-                <div class="context-slider-row">
-                    <span class="context-slider-label">Max</span>
-                    <input type="range" data-role="max" min="30" max="120" step="${step}" value="${Number.isFinite(maxValue) ? maxValue : 30}" aria-label="Node size max">
-                    <span class="context-slider-value" data-role="maxValue">${formatValue(maxValue)}</span>
+                <div class="context-input-row">
+                    <span class="context-slider-label">Border</span>
+                    <input class="context-number-input" data-role="borderWidth" type="number" min="0" max="50" step="0.01" value="${borderWidth.toFixed(2)}" aria-label="Border Width">
+                    <div class="context-color-slot" data-role="borderColor"></div>
                 </div>
-                <div class="context-slider-row">
-                    <span class="context-slider-label">Curve</span>
-                    <input type="range" data-role="curve" min="0" max="1" step="${curveStep}" value="${Number.isFinite(curveValue) ? curveValue : 1}" aria-label="Node size curve">
-                    <span class="context-slider-value" data-role="curveValue">${formatValue(curveValue)}</span>
+                <div class="context-input-row">
+                    <span class="context-slider-label">Stroke</span>
+                    <input class="context-number-input" data-role="strokeWidth" type="number" min="0" max="50" step="0.01" value="${strokeWidth.toFixed(2)}" aria-label="Stroke Width">
+                    <div class="context-color-slot" data-role="strokeColor"></div>
                 </div>
+                <div class="context-color-row">
+                    <span class="context-slider-label">Color</span>
+                    <div class="context-color-slot" data-role="nodeColor"></div>
+                </div>
+                <div class="context-divider"></div>
                 <div class="context-select-row">
                     <span class="context-slider-label">Shape</span>
                     <select class="context-select" data-role="shape" aria-label="Node shape">
@@ -6191,9 +6232,6 @@
                     </select>
                     <input class="context-icon-input" data-role="iconInput" type="text" placeholder="f007" aria-label="Icon code (hex)">
                     <input class="context-icon-size" data-role="iconSize" type="number" min="6" max="120" step="1" value="26" aria-label="Icon size">
-                </div>
-                <div class="context-color-row">
-                    <div class="context-color-slot"></div>
                 </div>
             `;
             document.body.appendChild(pop);
@@ -6287,73 +6325,186 @@
                 if (Number.isFinite(currentSize)) iconSize.value = String(currentSize);
                 iconSize.addEventListener('input', applyIconChange);
             }
-            const colorSlot = pop.querySelector('.context-color-slot');
-            const colorInput = this.getEl(this.ids.nodeContextColorInput);
-            if (colorInput && colorSlot) {
-                const seed = typeof node?.color === 'string'
-                    ? node.color
-                    : (node?.color?.background || this.nodeColor || '#ffffff');
-                const parent = colorInput.parentNode;
-                const next = colorInput.nextSibling;
-                colorInput.classList.remove('vis-node-context-color-input');
-                colorInput.classList.add('context-color-input');
-                colorSlot.appendChild(colorInput);
-                this.setColorInputValueSilent(colorInput, seed);
-                this._nodeContextColorTarget = nodeId;
-                this._nodeBasePopover = {
-                    el: pop,
-                    nodeId,
-                    movedInput: { input: colorInput, parent, next }
-                };
-                colorInput.dispatchEvent(new Event('click', { bubbles: true }));
-            }
+            // Setup color pickers with coloris (no auto-popup)
+            const setupColorPicker = (slotRole, defaultColor, applyFn) => {
+                const slot = pop.querySelector(`[data-role="${slotRole}"]`);
+                if (!slot) return;
 
-            const bindSlider = (role, onChange, wheelStep) => {
+                // Create color display div
+                const colorDisplay = document.createElement('div');
+                colorDisplay.className = 'context-color-display';
+                colorDisplay.style.backgroundColor = defaultColor;
+
+                // Create hidden input for coloris
+                const colorInput = document.createElement('input');
+                colorInput.type = 'text';
+                colorInput.className = 'context-color-input';
+                colorInput.setAttribute('data-coloris', '');
+                colorInput.value = defaultColor;
+
+                slot.appendChild(colorDisplay);
+                slot.appendChild(colorInput);
+
+                // Update color display when color changes
+                const updateColor = (color) => {
+                    colorDisplay.style.backgroundColor = color;
+                    colorInput.value = color;
+                    applyFn(color);
+                };
+
+                colorInput.addEventListener('input', () => updateColor(colorInput.value));
+                colorInput.addEventListener('change', () => updateColor(colorInput.value));
+
+                // Click slot to open color picker
+                slot.addEventListener('click', () => {
+                    colorInput.dispatchEvent(new Event('click', { bubbles: true }));
+                });
+
+                // Initialize coloris (without auto-open)
+                if (typeof global.Coloris !== 'undefined') {
+                    try {
+                        global.Coloris({
+                            el: colorInput,
+                            alpha: true,
+                            format: 'hex',
+                            formatToggle: false,
+                            wrap: false,
+                            forceAlpha: true
+                        });
+                    } catch (e) {
+                        // Coloris initialization failed
+                    }
+                }
+            };
+
+            // Node color
+            const nodeColorDefault = typeof node?.color === 'string'
+                ? node.color
+                : (node?.color?.background || this.nodeColor || '#ffffff');
+            setupColorPicker('nodeColor', nodeColorDefault, (val) => {
+                if (this._nodeStyleApplyAll) {
+                    this.nodeColor = val;
+                    this.applyNodeColor();
+                    this.queuePersistSettings();
+                } else {
+                    this.applyNodeColorForId(nodeId, val);
+                }
+            });
+
+            // Border color
+            const borderColorDefault = node?.color?.border || this.nodeBorderColor || '#111111';
+            setupColorPicker('borderColor', borderColorDefault, (val) => {
+                if (this._nodeStyleApplyAll) {
+                    this.nodeBorderColor = val;
+                    this.applyNodeBorderColor();
+                    this.queuePersistSettings();
+                } else {
+                    this.applyNodeBorderColorForId(nodeId, val);
+                }
+            });
+
+            // Stroke color
+            const strokeColorDefault = node?.outerBorderColor || this.nodeOuterBorderColor || '#ffffff';
+            setupColorPicker('strokeColor', strokeColorDefault, (val) => {
+                if (this._nodeStyleApplyAll) {
+                    this.nodeOuterBorderColor = val;
+                    if (this.visNetwork) this.visNetwork.redraw();
+                    this.queuePersistSettings();
+                } else {
+                    this.applyNodeOuterBorderColorForId(nodeId, val);
+                }
+            });
+
+            this._nodeBasePopover = { el: pop, nodeId, movedInput: null };
+
+            const bindNumberInput = (role, onChange) => {
                 const input = pop.querySelector(`input[data-role="${role}"]`);
-                const valueEl = pop.querySelector(`[data-role="${role}Value"]`);
                 if (!input) return;
+                const step = Number(input.step) || 1;
                 const applyValue = (raw) => {
                     const next = Number(raw);
                     if (!Number.isFinite(next)) return;
-                    if (valueEl) valueEl.textContent = formatValue(next);
-                    onChange(next);
+                    const min = Number(input.min) || 0;
+                    const max = Number(input.max) || 200;
+                    const clamped = Math.max(min, Math.min(max, next));
+                    input.value = String(clamped);
+                    onChange(clamped);
                 };
-                const min = Number(input.min) || 0;
-                const max = Number(input.max) || 200;
-                const base = Number(input.value) || 0;
-                input.value = String(Math.max(min, Math.min(max, base)));
-                if (valueEl) valueEl.textContent = formatValue(input.value);
                 input.addEventListener('input', (ev) => {
+                    ev.stopPropagation();
+                    applyValue(input.value);
+                });
+                input.addEventListener('change', (ev) => {
                     ev.stopPropagation();
                     applyValue(input.value);
                 });
                 input.addEventListener('wheel', (ev) => {
                     ev.preventDefault();
-                    const delta = ev.deltaY < 0 ? wheelStep : -wheelStep;
+                    const delta = ev.deltaY < 0 ? step : -step;
                     const currentVal = Number(input.value) || 0;
-                    const nextVal = Math.max(0, Math.min(200, currentVal + delta));
-                    input.value = String(nextVal);
+                    const min = Number(input.min) || 0;
+                    const max = Number(input.max) || 200;
+                    const nextVal = Math.max(min, Math.min(max, currentVal + delta));
                     applyValue(nextVal);
                 }, { passive: false });
                 input.addEventListener('click', (ev) => ev.stopPropagation());
-                input.focus({ preventScroll: true });
             };
 
-            bindSlider('min', (next) => {
-                this.nodeSizeMin = next;
-                this.applyNodeSizeScale();
-                this.queuePersistSettings();
-            }, step);
-            bindSlider('max', (next) => {
-                this.nodeSizeMax = next;
-                this.applyNodeSizeScale();
-                this.queuePersistSettings();
-            }, step);
-            bindSlider('curve', (next) => {
-                this.nodeSizeGamma = next;
-                this.applyNodeSizeScale();
-                this.queuePersistSettings();
-            }, curveStep);
+            bindNumberInput('min', (next) => {
+                if (this._nodeStyleApplyAll) {
+                    this.nodeSizeMin = next;
+                    this.applyNodeSizeScale();
+                    this.queuePersistSettings();
+                } else {
+                    // Apply fixed size to single node
+                    const dataset = this.visNetwork?.body?.data?.nodes;
+                    if (dataset) {
+                        dataset.update({ id: nodeId, size: next });
+                    }
+                }
+            });
+            bindNumberInput('max', (next) => {
+                if (this._nodeStyleApplyAll) {
+                    this.nodeSizeMax = next;
+                    this.applyNodeSizeScale();
+                    this.queuePersistSettings();
+                } else {
+                    // Apply fixed size to single node
+                    const dataset = this.visNetwork?.body?.data?.nodes;
+                    if (dataset) {
+                        dataset.update({ id: nodeId, size: next });
+                    }
+                }
+            });
+            bindNumberInput('curve', (next) => {
+                if (this._nodeStyleApplyAll) {
+                    this.nodeSizeGamma = next;
+                    this.applyNodeSizeScale();
+                    this.queuePersistSettings();
+                } else {
+                    // Curve doesn't apply to single node, ignore
+                }
+            });
+
+            bindNumberInput('borderWidth', (next) => {
+                if (this._nodeStyleApplyAll) {
+                    this.nodeBorderWidth = next;
+                    this.applyNodeBorderWidth();
+                    this.queuePersistSettings();
+                } else {
+                    this.applyNodeBorderWidthForId(nodeId, next);
+                }
+            });
+
+            bindNumberInput('strokeWidth', (next) => {
+                if (this._nodeStyleApplyAll) {
+                    this.nodeOuterBorderWidth = next;
+                    if (this.visNetwork) this.visNetwork.redraw();
+                    this.queuePersistSettings();
+                } else {
+                    this.applyNodeOuterBorderWidthForId(nodeId, next);
+                }
+            });
 
             const clickOutside = (ev) => {
                 if (!pop.contains(ev.target)) this.closeNodeBasePopover();
@@ -6368,6 +6519,339 @@
             if (!this._nodeBasePopover) {
                 this._nodeBasePopover = { el: pop, nodeId, movedInput: null };
             }
+        }
+
+        openNodeLabelStylePopover({ nodeId, x, y }) {
+            if (!nodeId) return;
+            this.closeNodeLabelStylePopover();
+            this.closeNodeStylePopover();
+            this.closeNodeBasePopover();
+            const dataset = this.visNetwork?.body?.data?.nodes;
+            const node = dataset && typeof dataset.get === 'function' ? dataset.get(nodeId) : null;
+
+            // Get current values from node or global settings
+            const currentFontSize = Number(node?.font?.size || this.labelFontMin || 14);
+            const currentStrokeWidth = Number(node?.labelStyle?.strokeWidth || this.labelStrokeWidth || 0);
+            const currentBorderWidth = Number(node?.labelStyle?.borderWidth || this.labelBorderWidth || 0);
+            const currentWeight = Number(node?.font?.weight || this.labelWeight || 500);
+            const currentMinSize = Number(this.labelFontMin || 9);
+            const currentMaxSize = Number(this.labelFontMax || 30);
+            const currentFade = Number(this.labelFade || 0);
+
+            const formatValue = (value, decimals = 1) => {
+                const next = Number(value);
+                return Number.isFinite(next) ? next.toFixed(decimals) : '0.0';
+            };
+
+            const pop = document.createElement('div');
+            pop.className = 'context-style-popover';
+            const anchorX = Number(x) || 0;
+            const anchorY = Number(y) || 0;
+            pop.style.left = `${anchorX}px`;
+            pop.style.top = `${anchorY}px`;
+            pop.innerHTML = `
+                <label class="context-popover-toggle">
+                    <input type="checkbox" class="context-popover-checkbox" aria-label="Apply to all nodes" checked disabled>
+                    <span>Apply to all nodes (only)</span>
+                </label>
+                <div class="context-button-row">
+                    <button type="button" class="context-toggle-button" data-role="toggleLabels" title="Toggle all labels visibility">
+                        <i class="fa-solid fa-eye"></i>
+                        <span>Toggle Labels</span>
+                    </button>
+                </div>
+                <div class="context-divider"></div>
+                <div class="context-input-row context-input-group-row">
+                    <div class="context-input-group">
+                        <label class="context-input-label">Min</label>
+                        <input class="context-number-input" data-role="minSize" type="number" min="6" max="50" step="0.5" value="${currentMinSize}" aria-label="Min Size">
+                    </div>
+                    <div class="context-input-group">
+                        <label class="context-input-label">Size</label>
+                        <input class="context-number-input" data-role="fontSize" type="number" min="6" max="72" step="0.5" value="${currentFontSize}" aria-label="Font Size">
+                    </div>
+                    <div class="context-input-group">
+                        <label class="context-input-label">Weight</label>
+                        <input class="context-number-input" data-role="fontWeight" type="number" min="100" max="900" step="100" value="${currentWeight}" aria-label="Font Weight">
+                    </div>
+                    <div class="context-input-group">
+                        <label class="context-input-label">Max</label>
+                        <input class="context-number-input" data-role="maxSize" type="number" min="10" max="100" step="0.5" value="${currentMaxSize}" aria-label="Max Size">
+                    </div>
+                </div>
+                <div class="context-color-row">
+                    <span class="context-slider-label">Text</span>
+                    <div class="context-color-slot" data-role="fontColor"></div>
+                </div>
+                <div class="context-input-row">
+                    <span class="context-slider-label">Fade</span>
+                    <input class="context-number-input" data-role="fade" type="number" min="0" max="100" step="1" value="${currentFade}" aria-label="Fade">
+                </div>
+                <div class="context-input-row">
+                    <span class="context-slider-label">Border</span>
+                    <input class="context-number-input" data-role="borderWidth" type="number" min="0" max="10" step="0.01" value="${currentBorderWidth.toFixed(2)}" aria-label="Border Width">
+                    <div class="context-color-slot" data-role="fontBorder"></div>
+                </div>
+                <div class="context-input-row">
+                    <span class="context-slider-label">Stroke</span>
+                    <input class="context-number-input" data-role="strokeWidth" type="number" min="0" max="10" step="0.01" value="${currentStrokeWidth.toFixed(2)}" aria-label="Stroke Width">
+                    <div class="context-color-slot" data-role="fontStroke"></div>
+                </div>
+            `;
+            document.body.appendChild(pop);
+
+            pop.addEventListener('mouseenter', () => {
+                this._nodePopoverHover = true;
+                if (this._nodePopoverCloseTimer) {
+                    clearTimeout(this._nodePopoverCloseTimer);
+                    this._nodePopoverCloseTimer = null;
+                }
+            });
+            pop.addEventListener('mouseleave', () => {
+                this._nodePopoverHover = false;
+            });
+
+            const rect = pop.getBoundingClientRect();
+            const margin = 8;
+            let nextLeft = anchorX;
+            let nextTop = anchorY;
+            if (rect.right > window.innerWidth - margin) {
+                nextLeft = window.innerWidth - rect.width - margin;
+            }
+            if (rect.bottom > window.innerHeight - margin) {
+                nextTop = window.innerHeight - rect.height - margin;
+            }
+            pop.style.left = `${Math.max(margin, nextLeft)}px`;
+            pop.style.top = `${Math.max(margin, nextTop)}px`;
+
+            const toggle = pop.querySelector('.context-popover-checkbox');
+            const getApplyToAll = () => toggle ? toggle.checked : false;
+
+            // Helper to apply to single node or all nodes
+            const applyLabelStyle = (updates) => {
+                if (!this.visNetwork || !this.visNetwork.body?.data?.nodes) return;
+                const dataset = this.visNetwork.body.data;
+
+                if (getApplyToAll()) {
+                    // Apply to all nodes
+                    const nodes = dataset.nodes.get();
+                    const nodeUpdates = nodes.map((n) => {
+                        const currentNode = dataset.nodes.get(n.id);
+                        const existingFont = currentNode?.font || {};
+                        return {
+                            id: n.id,
+                            font: { ...existingFont, ...updates }
+                        };
+                    });
+                    dataset.nodes.update(nodeUpdates);
+                } else {
+                    // Apply to single node
+                    const currentNode = dataset.nodes.get(nodeId);
+                    const existingFont = currentNode?.font || {};
+                    dataset.nodes.update({
+                        id: nodeId,
+                        font: { ...existingFont, ...updates }
+                    });
+                }
+            };
+
+            // Bind number inputs
+            const bindNumberInput = (role, onChange) => {
+                const input = pop.querySelector(`input[data-role="${role}"]`);
+                if (!input) return;
+                const step = Number(input.step) || 1;
+                const applyValue = (raw) => {
+                    const next = Number(raw);
+                    if (!Number.isFinite(next)) return;
+                    const min = Number(input.min) || 0;
+                    const max = Number(input.max) || 200;
+                    const clamped = Math.max(min, Math.min(max, next));
+                    input.value = String(clamped);
+                    onChange(clamped);
+                };
+                input.addEventListener('input', (ev) => {
+                    ev.stopPropagation();
+                    applyValue(input.value);
+                });
+                input.addEventListener('change', (ev) => {
+                    ev.stopPropagation();
+                    applyValue(input.value);
+                });
+                input.addEventListener('wheel', (ev) => {
+                    ev.preventDefault();
+                    const delta = ev.deltaY < 0 ? step : -step;
+                    const currentVal = Number(input.value) || 0;
+                    const min = Number(input.min) || 0;
+                    const max = Number(input.max) || 200;
+                    const nextVal = Math.max(min, Math.min(max, currentVal + delta));
+                    applyValue(nextVal);
+                }, { passive: false });
+                input.addEventListener('click', (ev) => ev.stopPropagation());
+            };
+
+            bindNumberInput('fontSize', (val) => {
+                this.labelFontMin = val;
+                this.labelFontMax = val;
+                this.applyLabelSizeScale();
+                this.queuePersistSettings();
+            });
+
+            bindNumberInput('fontWeight', (val) => {
+                this.labelWeight = val;
+                this.applyLabelWeight();
+                this.queuePersistSettings();
+            });
+
+            bindNumberInput('strokeWidth', (val) => {
+                this.labelStrokeWidth = val;
+                this.applyLabelStrokeWidth();
+                this.queuePersistSettings();
+            });
+
+            bindNumberInput('minSize', (val) => {
+                this.labelFontMin = val;
+                this.applyLabelSizeScale();
+                this.queuePersistSettings();
+            });
+
+            bindNumberInput('maxSize', (val) => {
+                this.labelFontMax = val;
+                this.applyLabelSizeScale();
+                this.queuePersistSettings();
+            });
+
+            bindNumberInput('fade', (val) => {
+                this.labelFade = val;
+                this.applyLabelFade();
+                this.queuePersistSettings();
+            });
+
+            bindNumberInput('borderWidth', (val) => {
+                this.labelBorderWidth = val;
+                if (this.applyLabelBorderWidth) {
+                    this.applyLabelBorderWidth();
+                }
+                this.queuePersistSettings();
+            });
+
+            // Setup toggle labels button
+            const toggleBtn = pop.querySelector('button[data-role="toggleLabels"]');
+            if (toggleBtn) {
+                const icon = toggleBtn.querySelector('i');
+                const updateToggleButton = () => {
+                    const labelState = this.visNetwork?._wosLabelState || { showAll: false };
+                    if (icon) {
+                        icon.className = labelState.showAll ? 'fa-solid fa-eye-slash' : 'fa-solid fa-eye';
+                    }
+                    const label = labelState.showAll ? 'Hide Labels' : 'Show Labels';
+                    toggleBtn.setAttribute('title', label);
+                };
+                updateToggleButton();
+                toggleBtn.addEventListener('click', () => {
+                    const labelState = this.visNetwork?._wosLabelState || { showAll: false };
+                    const newState = !labelState.showAll;
+                    this.applyLabelShowAll(newState);
+                    updateToggleButton();
+                });
+            }
+
+            // Setup color pickers using coloris
+            const setupColorPicker = (slotRole, property, defaultColor, applyGlobal) => {
+                const slot = pop.querySelector(`[data-role="${slotRole}"]`);
+                if (!slot) return;
+
+                const currentColor = node?.font?.[property];
+                let initialColor = defaultColor;
+                if (currentColor && currentColor !== 'transparent' && currentColor !== 'none') {
+                    initialColor = currentColor;
+                }
+
+                // Create color display div
+                const colorDisplay = document.createElement('div');
+                colorDisplay.className = 'context-color-display';
+                colorDisplay.style.backgroundColor = initialColor;
+
+                // Create hidden input for coloris
+                const colorInput = document.createElement('input');
+                colorInput.type = 'text';
+                colorInput.className = 'context-color-input';
+                colorInput.setAttribute('data-coloris', '');
+                colorInput.value = initialColor;
+
+                slot.appendChild(colorDisplay);
+                slot.appendChild(colorInput);
+
+                // Update color display when color changes
+                const updateColor = (val) => {
+                    colorDisplay.style.backgroundColor = val;
+                    colorInput.value = val;
+                    if (getApplyToAll() && applyGlobal) {
+                        applyGlobal.call(this, val);
+                    } else {
+                        applyLabelStyle({ [property]: val });
+                    }
+                };
+
+                colorInput.addEventListener('input', () => updateColor(colorInput.value));
+                colorInput.addEventListener('change', () => updateColor(colorInput.value));
+
+                // Click slot to open color picker
+                slot.addEventListener('click', () => {
+                    colorInput.dispatchEvent(new Event('click', { bubbles: true }));
+                });
+
+                // Initialize coloris for this input (without auto-open)
+                if (typeof global.Coloris !== 'undefined') {
+                    try {
+                        global.Coloris({
+                            el: colorInput,
+                            alpha: true,
+                            format: 'hex',
+                            formatToggle: false,
+                            wrap: false,
+                            forceAlpha: true
+                        });
+                    } catch (e) {
+                        // Coloris initialization failed, fallback to text input
+                    }
+                }
+            };
+
+            setupColorPicker('fontColor', 'color', this.labelColor || '#343434', (val) => {
+                this.labelColor = val;
+                this.applyLabelColor();
+                this.queuePersistSettings();
+            });
+
+            setupColorPicker('fontBackground', 'background', this.labelBgColor || '#ffffff', (val) => {
+                this.labelBgColor = val;
+                this.applyLabelBgColor();
+                this.queuePersistSettings();
+            });
+
+            setupColorPicker('fontBorder', 'borderColor', this.labelBorderColor || '#00000021', (val) => {
+                this.labelBorderColor = val;
+                this.applyLabelBorderColor();
+                this.queuePersistSettings();
+            });
+
+            setupColorPicker('fontStroke', 'strokeColor', this.labelStrokeColor || '#ffffff', (val) => {
+                this.labelStrokeColor = val;
+                this.applyLabelStrokeColor();
+                this.queuePersistSettings();
+            });
+
+            const clickOutside = (ev) => {
+                if (!pop.contains(ev.target)) this.closeNodeLabelStylePopover();
+            };
+            const keyHandler = (ev) => {
+                if (ev.key === 'Escape') this.closeNodeLabelStylePopover();
+            };
+            pop._nodeLabelStyleClickHandler = clickOutside;
+            pop._nodeLabelStyleKeyHandler = keyHandler;
+            document.addEventListener('mousedown', clickOutside);
+            document.addEventListener('keydown', keyHandler);
+            this._nodeLabelStylePopover = { el: pop, nodeId };
         }
 
         applyLabelShowAll(showAll) {
