@@ -927,17 +927,22 @@
             state.baseNodeColors.clear();
             state.baseEdgeColors.clear();
             state.dirty = true;
-            if (Number.isFinite(snapshot.customFocusAlpha)) {
-                state.customFocusAlpha = snapshot.customFocusAlpha;
-            }
-            if (Number.isFinite(snapshot.customFocusDepth)) {
-                state.customFocusDepth = snapshot.customFocusDepth;
+            // When applying normal mode, preserve customFocus settings from node mode
+            // so that Cmd+hover uses the same depth/opacity configured in node mode toolbar.
+            // For node/edge modes, restore from their snapshots.
+            if (mode !== 'normal') {
+                if (Number.isFinite(snapshot.customFocusAlpha)) {
+                    state.customFocusAlpha = snapshot.customFocusAlpha;
+                }
+                if (Number.isFinite(snapshot.customFocusDepth)) {
+                    state.customFocusDepth = snapshot.customFocusDepth;
+                }
+                state.customFocusDepthMap = new Map(snapshot.customFocusDepthMapEntries || []);
             }
             state.customFocusRootId = snapshot.customFocusRootId ?? null;
             state.customFocusMap = new Map(
                 (snapshot.customFocusMapEntries || []).map(([key, value]) => [key, new Set(value || [])])
             );
-            state.customFocusDepthMap = new Map(snapshot.customFocusDepthMapEntries || []);
             manager.selectedNodeIds = new Set(snapshot.selectedNodeIds || []);
             state.lockedEdgeIds = new Set(snapshot.lockedEdgeIds || []);
             if (mode === 'node') {
@@ -2110,6 +2115,14 @@
                 return !!(view && view.classList.contains('active'));
             };
             document.addEventListener('keydown', (e) => {
+                if (e.key === 'Escape') {
+                    if (!isVisActive()) return;
+                    if (this._toolbarMode === 'node' || this._toolbarMode === 'edge') {
+                        e.preventDefault();
+                        this.setToolbarMode(null);
+                        return;
+                    }
+                }
                 if (e.key === 'Tab') {
                     if (!isVisActive()) return;
                     if (isTypingTarget()) return;
@@ -3200,8 +3213,60 @@
                 return;
             }
             if (action === 'pickNodeColor') {
-                const input = this.getEl(this.ids.modeNodeColorInput);
-                if (input) input.click();
+                // Copy normal mode styles and reset all node selections
+                if (!this.modeStateStore) {
+                    this.notify('Mode state store not ready', 'info');
+                    return;
+                }
+                const normalSnapshot = this.modeStateStore.state.modes?.['normal'];
+                if (!normalSnapshot) {
+                    this.notify('Normal mode snapshot not found', 'info');
+                    return;
+                }
+                if (!this.visNetwork || !this.visNetwork.body?.data?.nodes || !this.visNetwork.body?.data?.edges) {
+                    this.notify('Vis network not ready', 'info');
+                    return;
+                }
+                const dataset = this.visNetwork.body.data;
+                // Apply normal mode node styles to current view
+                const nodeUpdates = (normalSnapshot.nodes || []).map((node) => {
+                    const update = { id: node.id, color: cloneVisColor(node.color) };
+                    if (Number.isFinite(node.x) && Number.isFinite(node.y)) {
+                        update.x = node.x;
+                        update.y = node.y;
+                    }
+                    if (node.fixed != null) update.fixed = node.fixed;
+                    return update;
+                });
+                // Apply normal mode edge styles to current view
+                const edgeUpdates = (normalSnapshot.edges || []).map((edge) => ({
+                    id: edge.id,
+                    color: cloneVisColor(edge.color)
+                }));
+                if (nodeUpdates.length) dataset.nodes.update(nodeUpdates);
+                if (edgeUpdates.length) dataset.edges.update(edgeUpdates);
+                // Clear all node selections and custom focus state
+                this.visNetwork.unselectAll();
+                this.clearSelectedNodeIds();
+                const state = this.getEdgeFocusState();
+                state.customFocusActive = false;
+                state.customFocusMap?.clear();
+                state.customFocusDepthMap?.clear();
+                state.customFocusNodes?.clear();
+                state.customFocusEdges?.clear();
+                state.customFocusRootId = null;
+                // Update base colors so the new colors are preserved
+                state.baseNodeColors.clear();
+                state.baseEdgeColors.clear();
+                state.dirty = true;
+                this.markEdgeFocusDirty();
+                this.applyEdgeFocusDisplay();
+                // Capture the updated state to node mode
+                if (this._toolbarMode === 'node') {
+                    this.modeStateStore.capture('node');
+                }
+                this.updateModeToolbar();
+                this.notify('Normal mode styles applied, all selections cleared', 'success');
                 return;
             }
             if (action === 'unselectNode') {
@@ -3229,6 +3294,57 @@
             }
             if (action === 'unlockDepthFocus') {
                 this.releaseNodeFocus();
+                return;
+            }
+            if (action === 'applyNormalStyleToEdge') {
+                // Copy normal mode styles and reset all edge selections
+                if (!this.modeStateStore) {
+                    this.notify('Mode state store not ready', 'info');
+                    return;
+                }
+                const normalSnapshot = this.modeStateStore.state.modes?.['normal'];
+                if (!normalSnapshot) {
+                    this.notify('Normal mode snapshot not found', 'info');
+                    return;
+                }
+                if (!this.visNetwork || !this.visNetwork.body?.data?.nodes || !this.visNetwork.body?.data?.edges) {
+                    this.notify('Vis network not ready', 'info');
+                    return;
+                }
+                const dataset = this.visNetwork.body.data;
+                // Apply normal mode node styles to current view
+                const nodeUpdates = (normalSnapshot.nodes || []).map((node) => {
+                    const update = { id: node.id, color: cloneVisColor(node.color) };
+                    if (Number.isFinite(node.x) && Number.isFinite(node.y)) {
+                        update.x = node.x;
+                        update.y = node.y;
+                    }
+                    if (node.fixed != null) update.fixed = node.fixed;
+                    return update;
+                });
+                // Apply normal mode edge styles to current view
+                const edgeUpdates = (normalSnapshot.edges || []).map((edge) => ({
+                    id: edge.id,
+                    color: cloneVisColor(edge.color)
+                }));
+                if (nodeUpdates.length) dataset.nodes.update(nodeUpdates);
+                if (edgeUpdates.length) dataset.edges.update(edgeUpdates);
+                // Clear all edge selections and edge focus state
+                this.visNetwork.unselectAll();
+                const state = this.getEdgeFocusState();
+                state.lockedEdgeIds?.clear();
+                // Update base colors so the new colors are preserved
+                state.baseNodeColors.clear();
+                state.baseEdgeColors.clear();
+                state.dirty = true;
+                this.markEdgeFocusDirty();
+                this.applyEdgeFocusDisplay();
+                // Capture the updated state to edge mode
+                if (this._toolbarMode === 'edge') {
+                    this.modeStateStore.capture('edge');
+                }
+                this.updateModeToolbar();
+                this.notify('Normal mode styles applied, all selections cleared', 'success');
                 return;
             }
             if (action === 'exitEdgeMode') {
@@ -3523,20 +3639,22 @@
                 if (this.modeStateStore && this._toolbarMode === 'edge') {
                     this.modeStateStore.capture('edge');
                 }
+                this.queuePersistSettings();
                 return;
             }
             if (action === 'nodeFadeAlpha') {
                 const nextAlpha = Math.max(0, Math.min(1, value));
                 this.edgeFocusFadeAlpha = nextAlpha;
                 const state = this.getEdgeFocusState();
-                if (state.customFocusActive) {
-                    state.customFocusAlpha = nextAlpha;
-                }
+                // Always sync customFocusAlpha so the value is shared between
+                // hover and persistent node mode and persisted on reload.
+                state.customFocusAlpha = nextAlpha;
                 this.applyEdgeFocusDisplay();
                 this.updateModeToolbar();
                 if (this.modeStateStore && this._toolbarMode === 'node') {
                     this.modeStateStore.capture('node');
                 }
+                this.queuePersistSettings();
                 return;
             }
             if (action === 'nodeDepth') {
@@ -3551,6 +3669,7 @@
                     targetIds.forEach((id) => this.applyDepthFocusForNode(id, value));
                 }
                 this.updateModeToolbar();
+                this.queuePersistSettings();
             }
         }
 
@@ -3592,7 +3711,9 @@
                 const depth = state.customFocusDepthMap && selectedNode && state.customFocusDepthMap.has(selectedNode)
                     ? state.customFocusDepthMap.get(selectedNode)
                     : (Number.isFinite(state.customFocusDepth) ? state.customFocusDepth : 1);
-                const fadeValue = Number(this.edgeFocusFadeAlpha) || 0;
+                const fadeValue = Number.isFinite(state.customFocusAlpha)
+                    ? state.customFocusAlpha
+                    : (Number(this.edgeFocusFadeAlpha) || 0);
                 const fadeInput = nodeGroup.querySelector('[data-action="nodeFadeAlpha"] input[type="range"]');
                 const fadeValueEl = nodeGroup.querySelector('[data-action="nodeFadeAlpha"] [data-role="value"]');
                 const depthInput = nodeGroup.querySelector('[data-action="nodeDepth"] input[type="range"]');
@@ -7957,9 +8078,10 @@
             if (this._boundNetwork === network) return;
             if (this._boundNetwork) {
                 this._boundNetwork.off('click', this._onNetworkClick);
-                if (this._onNetworkDoubleClick) {
-                    this._boundNetwork.off('doubleClick', this._onNetworkDoubleClick);
-                }
+                // Double-click event disabled
+                // if (this._onNetworkDoubleClick) {
+                //     this._boundNetwork.off('doubleClick', this._onNetworkDoubleClick);
+                // }
                 if (this._onNetworkAfterDraw) {
                     this._boundNetwork.off('afterDrawing', this._onNetworkAfterDraw);
                 }
@@ -8067,21 +8189,22 @@
                 this.updateModeToolbar();
             };
             network.on('click', this._onNetworkClick);
-            this._onNetworkDoubleClick = (params) => {
-                const nodeId = params?.nodes?.[0];
-                if (nodeId) return;
-                const edgeId = params?.edges?.[0];
-                if (edgeId && this._toolbarMode === 'node') return;
-                if (edgeId) {
-                    this.toggleEdgeSelectionMode(edgeId);
-                    if (this.hasActiveEdgeSelection()) {
-                        this.setToolbarMode('edge', { edgeId, select: true });
-                    } else if (this._toolbarMode === 'edge') {
-                        this.setToolbarMode(null);
-                    }
-                }
-            };
-            network.on('doubleClick', this._onNetworkDoubleClick);
+            // Double-click on edge/node disabled to avoid unwanted mode switches
+            // this._onNetworkDoubleClick = (params) => {
+            //     const nodeId = params?.nodes?.[0];
+            //     if (nodeId) return;
+            //     const edgeId = params?.edges?.[0];
+            //     if (edgeId && this._toolbarMode === 'node') return;
+            //     if (edgeId) {
+            //         this.toggleEdgeSelectionMode(edgeId);
+            //         if (this.hasActiveEdgeSelection()) {
+            //             this.setToolbarMode('edge', { edgeId, select: true });
+            //         } else if (this._toolbarMode === 'edge') {
+            //             this.setToolbarMode(null);
+            //         }
+            //     }
+            // };
+            // network.on('doubleClick', this._onNetworkDoubleClick);
             this._onNetworkAfterDraw = (ctx) => {
                 const dataset = network?.body?.data?.nodes;
                 if (!dataset) return;
