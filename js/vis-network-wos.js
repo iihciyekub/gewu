@@ -106,7 +106,7 @@
             const rootNodeId = addNode(rootKey, rootKey, {
                 shape: 'dot',
                 size: 16,
-                font: { size: 14, color: '#111', align: 'bottom', vadjust: 12 },
+                font: { size: 14, color: '#111', align: 'center', vadjust: 0 },
                 ...buildNodeCounts(rootCitationsRaw, rootRefRaw)
             });
             const children = payload && payload.page_wosids;
@@ -123,7 +123,7 @@
                 const childNodeId = addNode(childKey, label, {
                     shape: 'dot',
                     size: 12,
-                    font: { size: 11, color: '#111', align: 'bottom', vadjust: 12 },
+                    font: { size: 11, color: '#111', align: 'center', vadjust: 0 },
                     ...buildNodeCounts(citationsRaw, refRaw)
                 });
                 edges.push({
@@ -267,8 +267,8 @@
             nodes: {
                 scaling: { min: 1, max: 1 },
                 font: {
-                    align: 'bottom',
-                    vadjust: 12
+                    align: 'center',
+                    vadjust: 0
                 },
                 color: {
                     background: darkMode ? '#f8fafc' : '#ffffff',
@@ -467,7 +467,7 @@
         const position = network.getPositions([nodeId])[nodeId];
         if (!position) return;
         const domPos = network.canvasToDOM(position);
-        labelEl.style.transform = `translate(${domPos.x}px, ${domPos.y}px)`;
+        labelEl.style.transform = `translate(${domPos.x}px, ${domPos.y}px) translate(-50%, -50%)`;
     }
 
     function renderAllLabels(network, dataset, layer) {
@@ -530,6 +530,10 @@
     function applyLabelStyle(label, node) {
         if (!label || !node) return;
         const style = node.labelStyle || {};
+        label.style.textAlign = 'center';
+        label.style.display = 'flex';
+        label.style.alignItems = 'center';
+        label.style.justifyContent = 'center';
         if (style.fontSize) label.style.fontSize = `${style.fontSize}px`;
         if (style.fontWeight) label.style.fontWeight = String(style.fontWeight);
         if (style.textColor) label.style.color = style.textColor;
