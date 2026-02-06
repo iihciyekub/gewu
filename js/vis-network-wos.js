@@ -705,6 +705,38 @@
         };
     }
 
+    function buildSelectedNodeColor(baseColor, accentColor) {
+        const accent = normalizeVisColor(accentColor);
+        if (!accent) return baseColor;
+        if (!baseColor || typeof baseColor === 'string') {
+            const border = typeof baseColor === 'string' ? baseColor : accent;
+            return {
+                background: accent,
+                border,
+                highlight: { background: accent, border },
+                hover: { background: accent, border }
+            };
+        }
+        const border = baseColor.border || baseColor.background || accent;
+        const highlight = baseColor.highlight || {};
+        const hover = baseColor.hover || {};
+        return {
+            ...baseColor,
+            background: accent,
+            border,
+            highlight: {
+                ...highlight,
+                background: accent,
+                border: highlight.border || border
+            },
+            hover: {
+                ...hover,
+                background: accent,
+                border: hover.border || border
+            }
+        };
+    }
+
     function applyEdgeHoverLabelStyle(label, node) {
         if (!label || !node) return;
         const style = node.labelStyle || {};
@@ -820,7 +852,8 @@
                 modeLabel: options.modeLabelId || 'visModeLabel',
                 modeNodeGroup: options.modeNodeGroupId || 'visModeNodeGroup',
                 modeEdgeGroup: options.modeEdgeGroupId || 'visModeEdgeGroup',
-                modeNodeInput: options.modeNodeInputId || 'visModeNodeInput'
+                modeNodeInput: options.modeNodeInputId || 'visModeNodeInput',
+                modeNodeColorInput: options.modeNodeColorInputId || 'visModeNodeColorInput'
             };
             this.visNetwork = null;
             this.visNetworkData = null;
@@ -884,11 +917,12 @@
             this.exportSvgMargin = 6;
             this.exportSvgIncludeLabels = true;
             this.useNativeNodeBorder = false;
-            this.edgeFocusFadeAlpha = 0.2;
+            this.edgeFocusFadeAlpha = 0.125;
             this.edgeHoverLabelEnabled = false;
             this.edgeLabelEnabled = false;
             this.wosNodeIndex = null;
             this.wosNodeIndexSource = null;
+            this.selectedNodeColor = '#f59e0b';
             this.labelFieldHistory = [];
             this.labelFieldHistoryIndex = -1;
             this.settingsKey = 'vis-network-settings';
@@ -927,6 +961,8 @@
             this._visViewReady = false;
             this._toolbarMode = null;
             this.selectedNodeIds = new Set();
+            this._edgeModeEnabled = false;
+            this._tempToolbarMode = null;
         }
 
         bind() {
@@ -1586,6 +1622,13 @@
                     });
                     global.Coloris({
                         el: '#visNodeColorInput',
+                        alpha: true,
+                        format: 'hex',
+                        formatToggle: false,
+                        forceAlpha: true
+                    });
+                    global.Coloris({
+                        el: '#visModeNodeColorInput',
                         alpha: true,
                         format: 'hex',
                         formatToggle: false,
@@ -2365,11 +2408,15 @@
                 this.updateModeToolbar();
                 return;
             }
+            this._edgeModeEnabled = this._toolbarMode === 'edge';
             this.visNetwork._wosNodeModeActive = this._toolbarMode === 'node';
             if (!this._toolbarMode) {
                 this.visNetwork.unselectAll?.();
                 this.updateModeToolbar();
                 return;
+            }
+            if (this._toolbarMode === 'edge') {
+                this._edgeModeEnabled = true;
             }
             if (select) {
                 if (mode === 'node' && nodeId) {
@@ -2429,6 +2476,21 @@
                     const value = nodeInput.value || '';
                     this.handleModeToolbarNodeInput(value);
                 });
+            }
+            const colorInput = this.getEl(this.ids.modeNodeColorInput);
+            if (colorInput && !colorInput.dataset.visBound) {
+                colorInput.dataset.visBound = '1';
+                colorInput.value = this.selectedNodeColor || colorInput.value;
+                const applyColor = () => {
+                    const next = String(colorInput.value || '').trim();
+                    if (!next) return;
+                    this.selectedNodeColor = next;
+                    if (this.getEdgeFocusState().customFocusActive) {
+                        this.applyEdgeFocusDisplay();
+                    }
+                };
+                colorInput.addEventListener('input', applyColor);
+                colorInput.addEventListener('change', applyColor);
             }
         }
 
@@ -2510,6 +2572,23 @@
             }
         }
 
+        toggleNodeSelectionFromInput(raw) {
+            const parsed = this.parseNodeInputIds(raw);
+            if (!parsed.validIds.length) {
+                this.triggerToolbarShake();
+                this.notify('Node not found', 'info');
+                return;
+            }
+            this.setToolbarMode('node');
+            parsed.validIds.forEach((nodeId) => {
+                this.toggleNodeSelectionMode(nodeId);
+            });
+            if (parsed.missingIds.length) {
+                this.triggerToolbarShake();
+                this.notify(`Missing nodes: ${parsed.missingIds.join(', ')}`, 'info');
+            }
+        }
+
         syncNodeInputFromData(data) {
             const view = this.getEl(this.ids.view);
             if (!view || !view.classList.contains('active')) return;
@@ -2538,7 +2617,12 @@
             const edgeId = this.getSelectedEdgeId();
             if (action === 'selectNodeFocus') {
                 const input = this.getEl(this.ids.modeNodeInput);
-                this.handleModeToolbarNodeInput(input ? input.value : '');
+                this.toggleNodeSelectionFromInput(input ? input.value : '');
+                return;
+            }
+            if (action === 'pickNodeColor') {
+                const input = this.getEl(this.ids.modeNodeColorInput);
+                if (input) input.click();
                 return;
             }
             if (action === 'unselectNode') {
@@ -2554,25 +2638,18 @@
                 this.copyActiveNodeIdsToClipboard();
                 return;
             }
+            if (action === 'selectEdgeFocus') {
+                if (edgeId != null) {
+                    this.toggleEdgeSelectionMode(edgeId);
+                }
+                return;
+            }
+            if (action === 'copyEdgeNodeIds') {
+                this.copyEdgeNodeIdsToClipboard();
+                return;
+            }
             if (action === 'unlockDepthFocus') {
                 this.releaseNodeFocus();
-                return;
-            }
-            if (action === 'toggleEdgeLock') {
-                if (!edgeId) return;
-                this.toggleEdgeLock(edgeId);
-                this.updateModeToolbar();
-                return;
-            }
-            if (action === 'toggleEdgeHoverLabels') {
-                this.edgeHoverLabelEnabled = !this.edgeHoverLabelEnabled;
-                if (edgeId && this.edgeHoverLabelEnabled) {
-                    this.showEdgeHoverLabels(edgeId);
-                } else {
-                    this.hideEdgeHoverLabels();
-                }
-                this.queuePersistSettings();
-                this.updateModeToolbar();
                 return;
             }
             if (action === 'restoreEdgeFocus') {
@@ -2580,6 +2657,9 @@
                 this.resetEdgeFocusState({ keepLocks: false, keepBaseColors: true });
                 this.applyEdgeFocusDisplay();
                 this.queuePersistSettings();
+                this.unlockEdges(Array.from(this.getEdgeFocusState().lockedEdgeIds || []));
+                if (this.visNetwork) this.visNetwork.unselectAll();
+                this.setToolbarMode(null);
                 this.updateModeToolbar();
             }
         }
@@ -2631,6 +2711,7 @@
             const parsed = this.parseNodeInputIds(value);
             return parsed.validIds;
         }
+
 
         addSelectedNodeId(nodeId) {
             if (!nodeId) return;
@@ -2689,8 +2770,63 @@
             }
         }
 
+        getActiveEdgeIdsForCopy() {
+            if (this.visNetwork && typeof this.visNetwork.getSelectedEdges === 'function') {
+                const selected = this.visNetwork.getSelectedEdges() || [];
+                if (selected.length) return selected;
+            }
+            const state = this.getEdgeFocusState();
+            if (state.lockedEdgeIds && state.lockedEdgeIds.size) {
+                return Array.from(state.lockedEdgeIds);
+            }
+            return [];
+        }
+
+        getEdgeRelatedNodeIds(edgeIds) {
+            if (!this.visNetwork || !this.visNetwork?.body?.data?.edges) return [];
+            const dataset = this.visNetwork.body.data;
+            const unique = new Set();
+            edgeIds.forEach((edgeId) => {
+                const edge = dataset.edges.get(edgeId);
+                if (!edge) return;
+                if (edge.from != null) unique.add(edge.from);
+                if (edge.to != null) unique.add(edge.to);
+            });
+            return Array.from(unique);
+        }
+
+        async copyEdgeNodeIdsToClipboard() {
+            const edgeIds = this.getActiveEdgeIdsForCopy();
+            const nodeIds = this.getEdgeRelatedNodeIds(edgeIds);
+            if (!nodeIds.length) {
+                this.notify('No edge nodes to copy', 'info');
+                return;
+            }
+            const text = nodeIds.join('\n');
+            try {
+                if (navigator.clipboard && navigator.clipboard.writeText) {
+                    await navigator.clipboard.writeText(text);
+                } else {
+                    const textarea = document.createElement('textarea');
+                    textarea.value = text;
+                    textarea.style.position = 'fixed';
+                    textarea.style.opacity = '0';
+                    document.body.appendChild(textarea);
+                    textarea.focus();
+                    textarea.select();
+                    document.execCommand('copy');
+                    textarea.remove();
+                }
+                this.notify('Copied edge node IDs', 'success');
+            } catch (err) {
+                console.warn('Failed to copy edge node IDs:', err);
+                this.notify('Failed to copy edge node IDs', 'error');
+            }
+        }
+
         releaseNodeFocus() {
             this.clearCustomFocusLock();
+            if (this.visNetwork) this.visNetwork.unselectAll();
             this.setToolbarMode(null);
         }
 
@@ -2733,6 +2869,71 @@
             }
         }
 
+        toggleEdgeSelectionMode(edgeId) {
+            if (edgeId == null) return;
+            const state = this.getEdgeFocusState();
+            if (state.lockedEdgeIds.has(edgeId)) {
+                state.lockedEdgeIds.delete(edgeId);
+                if (this.visNetwork) {
+                    const selected = this.visNetwork.getSelectedEdges?.() || [];
+                    const next = selected.filter((id) => id !== edgeId);
+                    if (next.length) {
+                        this.visNetwork.selectEdges(next);
+                    } else {
+                        this.visNetwork.unselectAll();
+                    }
+                }
+                this.applyEdgeFocusDisplay();
+                if (!this.hasActiveEdgeSelection()) {
+                    this.setToolbarMode(null);
+                } else {
+                    this.updateModeToolbar();
+                }
+                return;
+            }
+            state.lockedEdgeIds.add(edgeId);
+            if (this.visNetwork) {
+                const selected = this.visNetwork.getSelectedEdges?.() || [];
+                if (!selected.includes(edgeId)) {
+                    this.visNetwork.selectEdges([...selected, edgeId]);
+                }
+            }
+            this.applyEdgeFocusDisplay();
+            this.updateModeToolbar();
+        }
+
+        lockEdges(edgeIds) {
+            if (!edgeIds || !edgeIds.length) return;
+            const state = this.getEdgeFocusState();
+            edgeIds.forEach((id) => {
+                if (id == null) return;
+                state.lockedEdgeIds.add(id);
+            });
+            this.applyEdgeFocusDisplay();
+            this.updateModeToolbar();
+        }
+
+        unlockEdges(edgeIds) {
+            if (!edgeIds || !edgeIds.length) return;
+            const state = this.getEdgeFocusState();
+            edgeIds.forEach((id) => {
+                if (id == null) return;
+                state.lockedEdgeIds.delete(id);
+            });
+            this.applyEdgeFocusDisplay();
+            if (!this.hasActiveEdgeSelection()) {
+                this.setToolbarMode(null);
+            } else {
+                this.updateModeToolbar();
+            }
+        }
+
+        hasActiveEdgeSelection() {
+            const selected = this.visNetwork?.getSelectedEdges?.() || [];
+            const state = this.getEdgeFocusState();
+            return selected.length > 0 || (state.lockedEdgeIds && state.lockedEdgeIds.size > 0);
+        }
+
         handleModeToolbarSlider(action, value) {
             if (action === 'edgeFadeAlpha') {
                 this.edgeFocusFadeAlpha = Math.max(0, Math.min(1, value));
@@ -2752,9 +2953,16 @@
                 return;
             }
             if (action === 'nodeDepth') {
-                const nodeId = this.getSelectedNodeId();
-                if (!nodeId) return;
-                this.applyDepthFocusForNode(nodeId, value);
+                const input = this.getEl(this.ids.modeNodeInput);
+                const parsed = this.parseNodeInputIds(input ? input.value : '');
+                const targetIds = parsed.validIds.length ? parsed.validIds : [];
+                if (!targetIds.length) {
+                    const nodeId = this.getSelectedNodeId();
+                    if (!nodeId) return;
+                    this.applyDepthFocusForNode(nodeId, value);
+                } else {
+                    targetIds.forEach((id) => this.applyDepthFocusForNode(id, value));
+                }
                 this.updateModeToolbar();
             }
         }
@@ -2809,15 +3017,6 @@
                 const fadeValueEl = edgeGroup.querySelector('[data-action="edgeFadeAlpha"] [data-role="value"]');
                 if (fadeInput) fadeInput.value = String(fadeValue);
                 if (fadeValueEl) fadeValueEl.textContent = fadeValue.toFixed(2);
-                const lockBtn = edgeGroup.querySelector('[data-action="toggleEdgeLock"]');
-                const labelBtn = edgeGroup.querySelector('[data-action="toggleEdgeHoverLabels"]');
-                const isLocked = selectedEdge ? this.isEdgeLocked(selectedEdge) : false;
-                const lockIcon = lockBtn ? lockBtn.querySelector('i') : null;
-                if (lockBtn) lockBtn.classList.toggle('is-active', isLocked);
-                if (lockIcon) lockIcon.className = `fas ${isLocked ? 'fa-unlock' : 'fa-lock'}`;
-                if (labelBtn) labelBtn.classList.toggle('is-active', !!this.edgeHoverLabelEnabled);
-                const labelIcon = labelBtn ? labelBtn.querySelector('i') : null;
-                if (labelIcon) labelIcon.className = `fas ${this.edgeHoverLabelEnabled ? 'fa-eye' : 'fa-eye-slash'}`;
             }
         }
 
@@ -4630,14 +4829,20 @@
         applyCustomFocusDisplay(state, nodes, edges, dataset) {
             const activeNodes = state.customFocusNodes || new Set();
             const activeEdges = state.customFocusEdges || new Set();
+            const selectedIds = this.selectedNodeIds || new Set();
             const dimAlpha = Number.isFinite(state.customFocusAlpha)
                 ? Math.max(0, Math.min(1, state.customFocusAlpha))
                 : this.edgeFocusFadeAlpha;
             const nodeUpdates = nodes.map((node) => {
                 const baseColor = state.baseNodeColors.get(node.id) || node.color;
-                const color = activeNodes.has(node.id)
-                    ? fadeNodeColor(baseColor, 1)
-                    : fadeNodeColor(baseColor, dimAlpha);
+                let color = baseColor;
+                if (activeNodes.has(node.id)) {
+                    color = selectedIds.has(node.id)
+                        ? buildSelectedNodeColor(baseColor, this.selectedNodeColor)
+                        : fadeNodeColor(baseColor, 1);
+                } else {
+                    color = fadeNodeColor(baseColor, dimAlpha);
+                }
                 return { id: node.id, color };
             });
             const edgeUpdates = edges.map((edge) => {
@@ -4776,7 +4981,11 @@
                 state.lockedEdgeIds.add(edgeId);
             }
             this.applyEdgeFocusDisplay();
-            this.updateModeToolbar();
+            if (!this.hasActiveEdgeSelection()) {
+                this.setToolbarMode(null);
+            } else {
+                this.updateModeToolbar();
+            }
         }
 
         closeEdgeContextMenu() {
@@ -4787,6 +4996,12 @@
                 menu.remove();
             }
             this._edgeContextMenu = null;
+            if (this._tempToolbarMode === 'edge') {
+                if (!this.hasActiveEdgeSelection()) {
+                    this.setToolbarMode(null);
+                }
+                this._tempToolbarMode = null;
+            }
         }
 
         closeNodeContextMenu() {
@@ -4797,32 +5012,35 @@
                 menu.remove();
             }
             this._nodeContextMenu = null;
+            if (this._tempToolbarMode === 'node') {
+                const state = this.getEdgeFocusState();
+                if (!state.customFocusActive) {
+                    this.setToolbarMode(null);
+                }
+                this._tempToolbarMode = null;
+            }
         }
 
         showEdgeContextMenu(e, edgeId) {
             if (!edgeId || !e) return;
             this.closeNodeContextMenu();
             this.closeEdgeContextMenu();
-            this.setToolbarMode('edge', { edgeId, select: true });
+            if (this._toolbarMode === 'node') return;
+            this._tempToolbarMode = 'edge';
             const menu = document.createElement('div');
             menu.className = 'context-menu';
             menu.style.left = `${e.pageX}px`;
             menu.style.top = `${e.pageY}px`;
             const isLocked = this.isEdgeLocked(edgeId);
-            const isLabelEnabled = !!this.edgeHoverLabelEnabled;
             const fadePercent = Math.round((Number(this.edgeFocusFadeAlpha) || 0) * 100);
             menu.innerHTML = `
                 <div class="context-menu-item" data-action="toggleEdgeLock">
                     <i class="fas ${isLocked ? 'fa-unlock' : 'fa-lock'}"></i>
-                    ${isLocked ? 'Unlock Edge' : 'Lock Edge'}
-                </div>
-                <div class="context-menu-item" data-action="toggleEdgeHoverLabels">
-                    <i class="fas ${isLabelEnabled ? 'fa-eye' : 'fa-eye-slash'}"></i>
-                    ${isLabelEnabled ? 'Hide Edge Labels' : 'Show Edge Labels'}
+                    ${isLocked ? 'Unselect Edge' : 'Select Edge'}
                 </div>
                 <div class="context-menu-item" data-action="restoreEdgeFocus">
                     <i class="fas fa-rotate-left"></i>
-                    Restore Edge Style
+                    Release
                 </div>
                 <div class="context-menu-divider"></div>
                 <div class="context-menu-item context-menu-slider" data-action="edgeFadeAlpha">
@@ -4849,21 +5067,18 @@
                     const action = item.dataset.action;
                     if (action === 'toggleEdgeLock') {
                         this.toggleEdgeLock(edgeId);
-                    }
-                    if (action === 'toggleEdgeHoverLabels') {
-                        this.edgeHoverLabelEnabled = !this.edgeHoverLabelEnabled;
-                        if (this.edgeHoverLabelEnabled) {
-                            this.showEdgeHoverLabels(edgeId);
-                        } else {
-                            this.hideEdgeHoverLabels();
+                        if (this.hasActiveEdgeSelection()) {
+                            this.setToolbarMode('edge', { edgeId, select: true });
+                        } else if (this._toolbarMode === 'edge') {
+                            this.setToolbarMode(null);
                         }
-                        this.queuePersistSettings();
                     }
                     if (action === 'restoreEdgeFocus') {
                         this.restoreEdgeFocusBaseColors();
                         this.resetEdgeFocusState({ keepLocks: false, keepBaseColors: true });
                         this.applyEdgeFocusDisplay();
                         this.queuePersistSettings();
+                        this.setToolbarMode(null);
                     }
                     this.updateModeToolbar();
                     if (action !== 'edgeFadeAlpha') {
@@ -4903,7 +5118,8 @@
             if (!nodeId || !e) return;
             this.closeEdgeContextMenu();
             this.closeNodeContextMenu();
-            this.setToolbarMode('node', { nodeId, select: true });
+            if (this._toolbarMode === 'edge') return;
+            this._tempToolbarMode = 'node';
             const menu = document.createElement('div');
             menu.className = 'context-menu node-menu';
             menu.style.left = `${e.pageX}px`;
@@ -4955,6 +5171,7 @@
                 item.addEventListener('click', () => {
                     const action = item.dataset.action;
                     if (action === 'selectNodeFocus') {
+                        this.setToolbarMode('node', { nodeId, select: true });
                         if (this.visNetwork) {
                             const selected = this.visNetwork.getSelectedNodes?.() || [];
                             if (!selected.includes(nodeId)) {
@@ -5285,7 +5502,6 @@
                 edgeLabelStrokeColor: this.edgeLabelStrokeColor,
                 edgeLabelBgColor: this.edgeLabelBgColor,
                 edgeStyle: this.edgeStyle,
-                edgeHoverLabelEnabled: this.edgeHoverLabelEnabled,
                 edgeLabelEnabled: this.edgeLabelEnabled,
                 edgeFocusFadeAlpha: this.edgeFocusFadeAlpha,
                 customFocusAlpha: state.customFocusAlpha,
@@ -5339,9 +5555,6 @@
             if (typeof payload.edgeLabelStrokeColor === 'string') this.edgeLabelStrokeColor = payload.edgeLabelStrokeColor;
             if (typeof payload.edgeLabelBgColor === 'string') this.edgeLabelBgColor = payload.edgeLabelBgColor;
             if (typeof payload.edgeStyle === 'string') this.edgeStyle = payload.edgeStyle;
-            if (typeof payload.edgeHoverLabelEnabled === 'boolean') {
-                this.edgeHoverLabelEnabled = payload.edgeHoverLabelEnabled;
-            }
             if (typeof payload.edgeLabelEnabled === 'boolean') {
                 this.edgeLabelEnabled = payload.edgeLabelEnabled;
             }
@@ -6716,8 +6929,24 @@
                 if (nodeId && evt && evt.shiftKey) {
                     if (this.removeNodeFromCustomFocus(nodeId)) return;
                 }
+                if (nodeId && this._toolbarMode === 'edge') {
+                    if (this.visNetwork) this.visNetwork.unselectAll();
+                    return;
+                }
                 if (nodeId && this._toolbarMode === 'node') {
                     this.toggleNodeSelectionMode(nodeId);
+                    return;
+                }
+                const edgeId = params?.edges?.[0];
+                if (edgeId && this._toolbarMode === 'edge') {
+                    this.toggleEdgeSelectionMode(edgeId);
+                    return;
+                }
+                if (this._toolbarMode === 'node') {
+                    const keep = Array.from(this.selectedNodeIds || []);
+                    if (keep.length && this.visNetwork) {
+                        this.visNetwork.selectNodes(keep);
+                    }
                     return;
                 }
                 const mod = evt ? (evt.metaKey || evt.ctrlKey) : false;
@@ -6766,14 +6995,16 @@
             network.on('click', this._onNetworkClick);
             this._onNetworkDoubleClick = (params) => {
                 const nodeId = params?.nodes?.[0];
-                if (nodeId) {
-                    this.setToolbarMode('node', { nodeId, select: true });
-                    return;
-                }
+                if (nodeId) return;
                 const edgeId = params?.edges?.[0];
+                if (edgeId && this._toolbarMode === 'node') return;
                 if (edgeId) {
-                    this.toggleEdgeLock(edgeId);
-                    this.setToolbarMode('edge', { edgeId, select: true });
+                    this.toggleEdgeSelectionMode(edgeId);
+                    if (this.hasActiveEdgeSelection()) {
+                        this.setToolbarMode('edge', { edgeId, select: true });
+                    } else if (this._toolbarMode === 'edge') {
+                        this.setToolbarMode(null);
+                    }
                 }
             };
             network.on('doubleClick', this._onNetworkDoubleClick);
@@ -6891,7 +7122,22 @@
             network.on('blurNode', this._onNodeBlur);
             network.on('oncontext', this._onEdgeContext);
             this._onSelectionChange = () => {
-                if (this._toolbarMode === 'edge' && !this.getSelectedEdgeId()) {
+                const hasEdge = this.hasActiveEdgeSelection();
+                const state = this.getEdgeFocusState();
+                const hasNode = !!state.customFocusActive;
+                if (hasEdge && this._toolbarMode !== 'edge' && this._edgeModeEnabled) {
+                    this.setToolbarMode('edge');
+                    return;
+                }
+                if (this._toolbarMode === 'edge' && !hasEdge) {
+                    this.setToolbarMode(null);
+                    return;
+                }
+                if (hasNode && this._toolbarMode !== 'node' && !this._edgeModeEnabled) {
+                    this.setToolbarMode('node');
+                    return;
+                }
+                if (this._toolbarMode === 'node' && !hasNode) {
                     this.setToolbarMode(null);
                     return;
                 }
