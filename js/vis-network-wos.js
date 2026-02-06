@@ -6350,7 +6350,7 @@
             pop.style.left = `${anchorX}px`;
             pop.style.top = `${anchorY}px`;
             pop.innerHTML = `
-                <div class="context-popover-drag-handle" title="Drag to move"></div>
+                <div class="context-popover-drag-handle" title="Drag to move">Node Appearance</div>
                 <button type="button" class="context-popover-close-btn" data-role="closePopover" title="Close (Esc)">&times;</button>
                 <label class="context-popover-toggle">
                     <input type="checkbox" class="context-popover-checkbox" aria-label="Apply to all nodes">
@@ -6741,7 +6741,7 @@
             pop.style.left = `${anchorX}px`;
             pop.style.top = `${anchorY}px`;
             pop.innerHTML = `
-                <div class="context-popover-drag-handle" title="Drag to move"></div>
+                <div class="context-popover-drag-handle" title="Drag to move">Label Typography</div>
                 <button type="button" class="context-popover-close-btn" data-role="closePopover" title="Close (Esc)">&times;</button>
                 <label class="context-popover-toggle">
                     <input type="checkbox" class="context-popover-checkbox" aria-label="Apply to all nodes" checked disabled>

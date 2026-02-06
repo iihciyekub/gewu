@@ -5628,13 +5628,18 @@ ol.json-array {
     margin: -6px -6px 4px -6px;
     border-radius: 3px 3px 0 0;
     user-select: none;
+    font-size: 9px;
+    font-weight: 600;
+    color: #9ca3af;
+    letter-spacing: 0.3px;
+    text-transform: uppercase;
 }
 
 .context-popover-drag-handle:active {
     cursor: grabbing;
 }
 
-.context-popover-drag-handle::after {
+.context-popover-drag-handle:empty::after {
     content: '';
     display: block;
     width: 32px;
