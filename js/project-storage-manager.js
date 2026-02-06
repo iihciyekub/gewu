@@ -27,7 +27,8 @@ class ProjectStorageManager {
             'vis-network-settings': 'vis-network-settings.json',
             'vis-network-label-slots': 'vis-network-label-slots.json',
             'vis-network-input-draft': 'vis-network-input-draft.json',
-            'vis-network-input-history': 'vis-network-input-history.json'
+            'vis-network-input-history': 'vis-network-input-history.json',
+            'vis-mode-state': 'vis-mode-state.json'
         };
     }
     

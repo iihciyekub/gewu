@@ -768,6 +768,202 @@
         return 1;
     }
 
+    class VisModeStateStore {
+        constructor(manager, options = {}) {
+            this.manager = manager;
+            this.key = options.key || 'vis-mode-state';
+            this.state = { modes: {}, settings: null, meta: null };
+            this._loaded = false;
+        }
+
+        async load() {
+            if (this._loaded) return this.state;
+            this._loaded = true;
+            const storage = this.manager?.app?.projectStorage;
+            if (storage) {
+                try {
+                    const data = await storage.load(this.key);
+                    if (data && typeof data === 'object') {
+                        const existing = this.state || {};
+                        this.state = {
+                            ...data,
+                            ...existing,
+                            modes: { ...(data.modes || {}), ...(existing.modes || {}) },
+                            settings: existing.settings ?? data.settings ?? null,
+                            meta: existing.meta ?? data.meta ?? null
+                        };
+                        return this.state;
+                    }
+                } catch (_e) { }
+            }
+            try {
+                const raw = localStorage.getItem(this.key);
+                if (raw) {
+                    const data = JSON.parse(raw);
+                    const existing = this.state || {};
+                    this.state = {
+                        ...data,
+                        ...existing,
+                        modes: { ...(data.modes || {}), ...(existing.modes || {}) },
+                        settings: existing.settings ?? data.settings ?? null,
+                        meta: existing.meta ?? data.meta ?? null
+                    };
+                }
+            } catch (_e) { }
+            return this.state;
+        }
+
+        async save() {
+            const storage = this.manager?.app?.projectStorage;
+            if (storage) {
+                try {
+                    await storage.save(this.key, this.state);
+                } catch (_e) { }
+            }
+            try {
+                localStorage.setItem(this.key, JSON.stringify(this.state));
+            } catch (_e) { }
+        }
+
+        async saveSettings(payload) {
+            this.state.settings = payload || null;
+            await this.save();
+        }
+
+        applySettings() {
+            if (this.state.settings) {
+                this.manager.applyLabelPanelSettingsPayload(this.state.settings);
+            }
+        }
+
+        capture(mode) {
+            const manager = this.manager;
+            if (!manager?.visNetwork) return;
+            const dataset = manager.visNetwork?.body?.data;
+            if (!dataset?.nodes || !dataset?.edges) return;
+            if (!['normal', 'node', 'edge'].includes(mode)) return;
+            const nodes = dataset.nodes.get();
+            const edges = dataset.edges.get();
+            const positions = typeof manager.visNetwork.getPositions === 'function'
+                ? manager.visNetwork.getPositions()
+                : {};
+            const nodeSnapshots = nodes.map((node) => {
+                const pos = positions?.[node.id];
+                return {
+                    id: node.id,
+                    color: cloneVisColor(node.color),
+                    x: pos?.x ?? node.x,
+                    y: pos?.y ?? node.y,
+                    fixed: node.fixed ?? null
+                };
+            });
+            const edgeSnapshots = edges.map((edge) => ({
+                id: edge.id,
+                color: cloneVisColor(edge.color)
+            }));
+            const state = manager.getEdgeFocusState();
+            const focusMapEntries = state.customFocusMap
+                ? Array.from(state.customFocusMap.entries()).map(([key, value]) => ([
+                    key,
+                    value instanceof Set ? Array.from(value) : Array.from(value || [])
+                ]))
+                : [];
+            const depthMapEntries = state.customFocusDepthMap
+                ? Array.from(state.customFocusDepthMap.entries())
+                : [];
+            const lockedEdges = state.lockedEdgeIds ? Array.from(state.lockedEdgeIds) : [];
+            this.state.modes[mode] = {
+                nodes: nodeSnapshots,
+                edges: edgeSnapshots,
+                edgeFocusFadeAlpha: manager.edgeFocusFadeAlpha,
+                customFocusAlpha: state.customFocusAlpha ?? null,
+                customFocusDepth: state.customFocusDepth ?? null,
+                customFocusRootId: state.customFocusRootId ?? null,
+                customFocusMapEntries: focusMapEntries,
+                customFocusDepthMapEntries: depthMapEntries,
+                selectedNodeIds: Array.from(manager.selectedNodeIds || []),
+                lockedEdgeIds: lockedEdges
+            };
+            this.state.meta = { nodeCount: nodes.length, edgeCount: edges.length };
+            this.save();
+        }
+
+        apply(mode) {
+            const manager = this.manager;
+            if (!manager?.visNetwork) return;
+            if (!['normal', 'node', 'edge'].includes(mode)) return;
+            const snapshot = this.state.modes?.[mode];
+            if (!snapshot) return;
+            const dataset = manager.visNetwork?.body?.data;
+            if (!dataset?.nodes || !dataset?.edges) return;
+            const nodes = dataset.nodes.get();
+            const edges = dataset.edges.get();
+            if (this.state.meta) {
+                if (nodes.length !== this.state.meta.nodeCount || edges.length !== this.state.meta.edgeCount) {
+                    return;
+                }
+            }
+            const nodeUpdates = snapshot.nodes.map((node) => {
+                const next = { id: node.id, color: cloneVisColor(node.color) };
+                if (Number.isFinite(node.x) && Number.isFinite(node.y)) {
+                    next.x = node.x;
+                    next.y = node.y;
+                }
+                if (node.fixed != null) next.fixed = node.fixed;
+                return next;
+            });
+            const edgeUpdates = snapshot.edges.map((edge) => ({
+                id: edge.id,
+                color: cloneVisColor(edge.color)
+            }));
+            if (nodeUpdates.length) dataset.nodes.update(nodeUpdates);
+            if (edgeUpdates.length) dataset.edges.update(edgeUpdates);
+            if (Number.isFinite(snapshot.edgeFocusFadeAlpha)) {
+                manager.edgeFocusFadeAlpha = snapshot.edgeFocusFadeAlpha;
+            }
+            const state = manager.getEdgeFocusState();
+            state.baseNodeColors.clear();
+            state.baseEdgeColors.clear();
+            state.dirty = true;
+            if (Number.isFinite(snapshot.customFocusAlpha)) {
+                state.customFocusAlpha = snapshot.customFocusAlpha;
+            }
+            if (Number.isFinite(snapshot.customFocusDepth)) {
+                state.customFocusDepth = snapshot.customFocusDepth;
+            }
+            state.customFocusRootId = snapshot.customFocusRootId ?? null;
+            state.customFocusMap = new Map(
+                (snapshot.customFocusMapEntries || []).map(([key, value]) => [key, new Set(value || [])])
+            );
+            state.customFocusDepthMap = new Map(snapshot.customFocusDepthMapEntries || []);
+            manager.selectedNodeIds = new Set(snapshot.selectedNodeIds || []);
+            state.lockedEdgeIds = new Set(snapshot.lockedEdgeIds || []);
+            if (mode === 'node') {
+                if (state.customFocusMap.size) {
+                    state.customFocusActive = true;
+                    manager.rebuildCustomFocusFromMap();
+                    if (manager.visNetwork && manager.selectedNodeIds.size) {
+                        manager.visNetwork.selectNodes(Array.from(manager.selectedNodeIds));
+                    }
+                } else {
+                    state.customFocusActive = false;
+                    manager.applyEdgeFocusDisplay();
+                }
+            }
+            if (mode === 'edge') {
+                if (manager.visNetwork && state.lockedEdgeIds.size) {
+                    manager.visNetwork.selectEdges(Array.from(state.lockedEdgeIds));
+                }
+                manager.applyEdgeFocusDisplay();
+            }
+            manager.markEdgeFocusDirty();
+            manager.applyEdgeFocusDisplay();
+            manager._labelThresholdBaseDirty = true;
+            manager.applyLabelThresholdDimming();
+            manager.updateModeToolbar();
+        }
+    }
+
     class WosVisManager {
         constructor(options = {}) {
             this.app = options.app || null;
@@ -968,6 +1164,9 @@
             this._nodeModeOriginalColors = new Map();
             this._suspendedEdgeFocus = null;
             this._nodeModeStyleSnapshot = null;
+            this._modeStoreLoaded = false;
+            this.modeStateStore = new VisModeStateStore(this, { key: options.modeStateKey || 'vis-mode-state' });
+            this._modeStoreReady = null;
         }
 
         bind() {
@@ -2408,7 +2607,8 @@
         }
 
         setToolbarMode(mode, { nodeId = null, edgeId = null, select = false } = {}) {
-            const prevMode = this._toolbarMode;
+            const prevMode = this._toolbarMode || 'normal';
+            const nextMode = mode || 'normal';
             this._toolbarMode = mode || null;
             if (!this.visNetwork) {
                 this.updateModeToolbar();
@@ -2416,23 +2616,26 @@
             }
             this._edgeModeEnabled = this._toolbarMode === 'edge';
             this.visNetwork._wosNodeModeActive = this._toolbarMode === 'node';
-            if (prevMode === 'node' && this._toolbarMode !== 'node') {
-                this.captureNodeModeStyleSnapshot();
-            }
-            if (prevMode && this._toolbarMode && prevMode !== this._toolbarMode) {
-                this.restoreModeStyleSnapshot();
+            if (this.modeStateStore) {
+                const applyForMode = () => {
+                    this.modeStateStore.capture(prevMode);
+                    this.modeStateStore.apply(nextMode);
+                };
+                if (this._modeStoreReady) {
+                    this._modeStoreReady.then(() => {
+                        if ((this._toolbarMode || 'normal') !== nextMode) return;
+                        applyForMode();
+                    });
+                } else {
+                    applyForMode();
+                }
             }
             if (!this._toolbarMode) {
-                this.restoreModeStyleSnapshot();
                 if (prevMode !== 'edge') {
                     this.visNetwork.unselectAll?.();
                 }
                 this.updateModeToolbar();
                 return;
-            }
-            this.captureModeStyleSnapshot();
-            if (this._toolbarMode === 'node') {
-                this.restoreNodeModeStyleSnapshot();
             }
             if (this._toolbarMode === 'edge') {
                 this._edgeModeEnabled = true;
@@ -2573,99 +2776,28 @@
         }
 
         captureModeStyleSnapshot() {
-            if (this._modeStyleSnapshot) return;
-            if (!this.visNetwork) return;
-            const dataset = this.visNetwork?.body?.data;
-            if (!dataset?.nodes || !dataset?.edges) return;
-            const nodeColors = new Map();
-            const edgeColors = new Map();
-            dataset.nodes.get().forEach((node) => {
-                nodeColors.set(node.id, cloneVisColor(node.color));
-            });
-            dataset.edges.get().forEach((edge) => {
-                edgeColors.set(edge.id, cloneVisColor(edge.color));
-            });
-            this._modeStyleSnapshot = {
-                nodeColors,
-                edgeColors,
-                edgeFocusFadeAlpha: this.edgeFocusFadeAlpha
-            };
+            if (this.modeStateStore) {
+                this.modeStateStore.capture('normal');
+            }
         }
 
         restoreModeStyleSnapshot() {
-            const snap = this._modeStyleSnapshot;
-            if (!snap || !this.visNetwork) return;
-            const dataset = this.visNetwork?.body?.data;
-            if (!dataset?.nodes || !dataset?.edges) return;
-            const nodeUpdates = [];
-            snap.nodeColors.forEach((color, id) => {
-                nodeUpdates.push({ id, color: cloneVisColor(color) });
-            });
-            const edgeUpdates = [];
-            snap.edgeColors.forEach((color, id) => {
-                edgeUpdates.push({ id, color: cloneVisColor(color) });
-            });
-            if (nodeUpdates.length) dataset.nodes.update(nodeUpdates);
-            if (edgeUpdates.length) dataset.edges.update(edgeUpdates);
-            if (Number.isFinite(snap.edgeFocusFadeAlpha)) {
-                this.edgeFocusFadeAlpha = snap.edgeFocusFadeAlpha;
+            if (this.modeStateStore) {
+                this.modeStateStore.apply('normal');
             }
-            this._modeStyleSnapshot = null;
             this._nodeModeOriginalColors.clear();
-            this.markEdgeFocusDirty();
-            this.applyEdgeFocusDisplay();
-            this._labelThresholdBaseDirty = true;
-            this.applyLabelThresholdDimming();
-            this.updateModeToolbar();
         }
 
         captureNodeModeStyleSnapshot() {
-            if (!this.visNetwork) return;
-            const dataset = this.visNetwork?.body?.data;
-            if (!dataset?.nodes || !dataset?.edges) return;
-            const nodeColors = new Map();
-            const edgeColors = new Map();
-            dataset.nodes.get().forEach((node) => {
-                nodeColors.set(node.id, cloneVisColor(node.color));
-            });
-            dataset.edges.get().forEach((edge) => {
-                edgeColors.set(edge.id, cloneVisColor(edge.color));
-            });
-            const state = this.getEdgeFocusState();
-            this._nodeModeStyleSnapshot = {
-                nodeColors,
-                edgeColors,
-                edgeFocusFadeAlpha: this.edgeFocusFadeAlpha,
-                customFocusAlpha: state.customFocusAlpha ?? null
-            };
+            if (this.modeStateStore) {
+                this.modeStateStore.capture('node');
+            }
         }
 
         restoreNodeModeStyleSnapshot() {
-            const snap = this._nodeModeStyleSnapshot;
-            if (!snap || !this.visNetwork) return;
-            const dataset = this.visNetwork?.body?.data;
-            if (!dataset?.nodes || !dataset?.edges) return;
-            const nodeUpdates = [];
-            snap.nodeColors.forEach((color, id) => {
-                nodeUpdates.push({ id, color: cloneVisColor(color) });
-            });
-            const edgeUpdates = [];
-            snap.edgeColors.forEach((color, id) => {
-                edgeUpdates.push({ id, color: cloneVisColor(color) });
-            });
-            if (nodeUpdates.length) dataset.nodes.update(nodeUpdates);
-            if (edgeUpdates.length) dataset.edges.update(edgeUpdates);
-            if (Number.isFinite(snap.edgeFocusFadeAlpha)) {
-                this.edgeFocusFadeAlpha = snap.edgeFocusFadeAlpha;
+            if (this.modeStateStore) {
+                this.modeStateStore.apply('node');
             }
-            const state = this.getEdgeFocusState();
-            if (Number.isFinite(snap.customFocusAlpha)) {
-                state.customFocusAlpha = snap.customFocusAlpha;
-            }
-            this.markEdgeFocusDirty();
-            this.applyEdgeFocusDisplay();
-            this._labelThresholdBaseDirty = true;
-            this.applyLabelThresholdDimming();
         }
 
         updateVisDataNodeColor(nodeId, color) {
@@ -2701,6 +2833,9 @@
             this.applyEdgeFocusDisplay();
             this._labelThresholdBaseDirty = true;
             this.applyLabelThresholdDimming();
+            if (this.modeStateStore && this._toolbarMode === 'node') {
+                this.modeStateStore.capture('node');
+            }
             if (parsed.missingIds.length) {
                 this.triggerToolbarShake();
                 this.notify(`Missing nodes: ${parsed.missingIds.join(', ')}`, 'info');
@@ -2855,6 +2990,9 @@
             }
             if (action === 'exitEdgeMode') {
                 this.suspendEdgeFocus();
+                if (this.modeStateStore) {
+                    this.modeStateStore.capture('edge');
+                }
                 this.resetEdgeFocusState({ keepLocks: false, keepBaseColors: false });
                 this.queuePersistSettings();
                 this.setToolbarMode(null);
@@ -3139,6 +3277,9 @@
                 this.edgeFocusFadeAlpha = Math.max(0, Math.min(1, value));
                 this.applyEdgeFocusDisplay();
                 this.updateModeToolbar();
+                if (this.modeStateStore && this._toolbarMode === 'edge') {
+                    this.modeStateStore.capture('edge');
+                }
                 return;
             }
             if (action === 'nodeFadeAlpha') {
@@ -3150,6 +3291,9 @@
                 }
                 this.applyEdgeFocusDisplay();
                 this.updateModeToolbar();
+                if (this.modeStateStore && this._toolbarMode === 'node') {
+                    this.modeStateStore.capture('node');
+                }
                 return;
             }
             if (action === 'nodeDepth') {
@@ -3247,6 +3391,16 @@
                 return;
             }
             console[type === 'error' ? 'error' : 'log'](message);
+        }
+
+        async initModeStateStore() {
+            if (this._modeStoreLoaded || !this.modeStateStore) return;
+            this._modeStoreLoaded = true;
+            this._modeStoreReady = this.modeStateStore.load().then(() => {
+                this.modeStateStore.applySettings();
+                this.modeStateStore.apply('normal');
+                return true;
+            });
         }
 
         renderFromJson(raw) {
@@ -3363,6 +3517,7 @@
             this.queuePersistNetworkState();
             this.updateModeToolbar();
             this._visViewReady = true;
+            this.initModeStateStore();
         }
 
         renderFromVisData(raw, options = {}) {
@@ -3466,6 +3621,7 @@
             this.queuePersistNetworkState();
             this.updateModeToolbar();
             this._visViewReady = true;
+            this.initModeStateStore();
         }
 
         wrapLabelToggleButton() {
@@ -6179,6 +6335,9 @@
                 localStorage.setItem(this.settingsKey, JSON.stringify(payload));
             } catch (_e) {
                 // ignore
+            }
+            if (this.modeStateStore) {
+                this.modeStateStore.saveSettings(payload);
             }
         }
 
