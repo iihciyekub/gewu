@@ -467,7 +467,14 @@
         if (!layer) return;
         clearAllLabels(layer, true);
         const nodes = dataset.nodes.get();
+        const customActive = !!network?._wosCustomFocusActive;
+        const customNodes = network?._wosCustomFocusNodes instanceof Set
+            ? network._wosCustomFocusNodes
+            : null;
         nodes.forEach((node) => {
+            if (customActive && customNodes && !customNodes.has(node.id)) {
+                return;
+            }
             const label = document.createElement('div');
             label.className = 'vis-node-label';
             label.dataset.nodeId = node.id;
@@ -743,6 +750,7 @@
                 inputApplyBtn: options.inputApplyBtnId || 'visInputApplyBtn',
                 inputAppendBtn: options.inputAppendBtnId || 'visInputAppendBtn',
                 updateNodeBtn: options.updateNodeBtnId || 'visUpdateNodeBtn',
+                inputDepthFocusBtn: options.inputDepthFocusBtnId || 'visInputDepthFocusBtn',
                 saveBtn: options.saveBtnId || 'visSaveNetworkBtn',
                 restoreBtn: options.restoreBtnId || 'visRestoreNetworkBtn',
                 deleteBtn: options.deleteBtnId || 'visDeleteNetworkBtn',
@@ -928,6 +936,7 @@
             const inputAppendBtn = this.getEl(this.ids.inputAppendBtn);
             const inputTextarea = this.getEl(this.ids.inputTextarea);
             const updateNodeBtn = this.getEl(this.ids.updateNodeBtn);
+            const inputDepthFocusBtn = this.getEl(this.ids.inputDepthFocusBtn);
             const saveBtn = this.getEl(this.ids.saveBtn);
             const restoreBtn = this.getEl(this.ids.restoreBtn);
             const deleteBtn = this.getEl(this.ids.deleteBtn);
@@ -1126,6 +1135,12 @@
                 inputAppendBtn.addEventListener('click', (e) => {
                     e.preventDefault();
                     this.appendInput();
+                });
+            }
+            if (inputDepthFocusBtn) {
+                inputDepthFocusBtn.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    this.applyDepthFocusFromInput();
                 });
             }
             if (saveBtn) {
@@ -3763,6 +3778,8 @@
             const hoverEdgeId = state.hoverEdgeId;
             const lockedEdges = state.lockedEdgeIds || new Set();
             const hasLocked = lockedEdges.size > 0;
+            const customActive = !!state.customFocusActive;
+            const customEdges = state.customFocusEdges || new Set();
             const show = !!this.edgeLabelEnabled;
             const fontSize = Number.isFinite(this.edgeLabelFontSize) ? this.edgeLabelFontSize : 12;
             const fontColor = this.edgeLabelFontColor || '#111111';
@@ -3779,8 +3796,9 @@
                 const alpha = getEdgeColorAlpha(edge);
                 const shouldShowLabel = show
                     && alpha > 0
-                    && (!hasLocked || lockedEdges.has(edge.id))
-                    && (!hoverEdgeId || edge.id === hoverEdgeId);
+                    && (!customActive || customEdges.has(edge.id))
+                    && (customActive || !hasLocked || lockedEdges.has(edge.id))
+                    && (customActive || !hoverEdgeId || edge.id === hoverEdgeId);
                 const label = shouldShowLabel ? this.getEdgeLabelText(edge) : '';
                 const font = shouldShowLabel
                     ? {
@@ -3829,6 +3847,14 @@
                     lastHoverEdgeId: null,
                     hoverNodeId: null,
                     lastHoverNodeId: null,
+                    customFocusActive: false,
+                    customFocusNodes: new Set(),
+                    customFocusEdges: new Set(),
+                    customFocusAlpha: null,
+                    customFocusRootId: null,
+                    customFocusDepth: null,
+                    customFocusMap: new Map(),
+                    customFocusDepthMap: new Map(),
                     lockedEdgeIds: new Set(),
                     baseNodeColors: new Map(),
                     baseEdgeColors: new Map(),
@@ -3849,6 +3875,18 @@
             state.lastHoverEdgeId = null;
             state.hoverNodeId = null;
             state.lastHoverNodeId = null;
+            state.customFocusActive = false;
+            state.customFocusNodes.clear();
+            state.customFocusEdges.clear();
+            state.customFocusAlpha = null;
+            state.customFocusRootId = null;
+            state.customFocusDepth = null;
+            state.customFocusMap.clear();
+            state.customFocusDepthMap.clear();
+            if (this.visNetwork) {
+                this.visNetwork._wosCustomFocusActive = false;
+                this.visNetwork._wosCustomFocusNodes = null;
+            }
             if (!keepLocks) state.lockedEdgeIds.clear();
             if (!keepBaseColors) {
                 state.baseNodeColors.clear();
@@ -3994,30 +4032,60 @@
                 });
                 state.dirty = false;
             }
+            if (state.customFocusActive) {
+                this.applyCustomFocusDisplay(state, nodes, edges, dataset);
+                return;
+            }
             if (nodeFocusActive) {
-                const activeNodes = new Set([hoverNodeId]);
-                const nodeDimAlpha = this.edgeFocusFadeAlpha;
-                const edgeDimAlpha = this.edgeFocusFadeAlpha;
+                const targetDepth = state.customFocusDepthMap && state.customFocusDepthMap.has(hoverNodeId)
+                    ? state.customFocusDepthMap.get(hoverNodeId)
+                    : (Number.isFinite(state.customFocusDepth) ? state.customFocusDepth : 1);
+                const dimAlpha = Number.isFinite(state.customFocusAlpha)
+                    ? Math.max(0, Math.min(1, state.customFocusAlpha))
+                    : this.edgeFocusFadeAlpha;
+                const activeNodes = new Set();
+                const adj = new Map();
+                edges.forEach((edge) => {
+                    if (edge.from == null || edge.to == null) return;
+                    const from = edge.from;
+                    const to = edge.to;
+                    if (!adj.has(from)) adj.set(from, new Set());
+                    if (!adj.has(to)) adj.set(to, new Set());
+                    adj.get(from).add(to);
+                    adj.get(to).add(from);
+                });
+                const visited = new Set([hoverNodeId]);
+                const queue = [{ id: hoverNodeId, depth: 0 }];
+                while (queue.length) {
+                    const { id, depth: d } = queue.shift();
+                    activeNodes.add(id);
+                    if (d >= targetDepth) continue;
+                    const neighbors = adj.get(id);
+                    if (!neighbors) continue;
+                    neighbors.forEach((next) => {
+                        if (visited.has(next)) return;
+                        visited.add(next);
+                        queue.push({ id: next, depth: d + 1 });
+                    });
+                }
                 const focusEdges = new Set();
                 edges.forEach((edge) => {
-                    if (edge.from === hoverNodeId || edge.to === hoverNodeId) {
+                    if (activeNodes.has(edge.from) && activeNodes.has(edge.to)) {
                         focusEdges.add(edge.id);
-                        if (edge.from != null) activeNodes.add(edge.from);
-                        if (edge.to != null) activeNodes.add(edge.to);
                     }
                 });
                 const nodeUpdates = nodes.map((node) => {
                     const baseColor = state.baseNodeColors.get(node.id) || node.color;
                     const color = activeNodes.has(node.id)
                         ? fadeNodeColor(baseColor, 1)
-                        : fadeNodeColor(baseColor, nodeDimAlpha);
+                        : fadeNodeColor(baseColor, dimAlpha);
                     return { id: node.id, color };
                 });
                 const edgeUpdates = edges.map((edge) => {
                     const baseColor = state.baseEdgeColors.get(edge.id) || edge.color;
                     const color = focusEdges.has(edge.id)
                         ? fadeEdgeColor(baseColor, 1)
-                        : fadeEdgeColor(baseColor, edgeDimAlpha);
+                        : fadeEdgeColor(baseColor, dimAlpha);
                     return { id: edge.id, color };
                 });
                 dataset.nodes.update(nodeUpdates);
@@ -4069,6 +4137,32 @@
             this.applyEdgeLabelDisplay();
         }
 
+        applyCustomFocusDisplay(state, nodes, edges, dataset) {
+            const activeNodes = state.customFocusNodes || new Set();
+            const activeEdges = state.customFocusEdges || new Set();
+            const dimAlpha = Number.isFinite(state.customFocusAlpha)
+                ? Math.max(0, Math.min(1, state.customFocusAlpha))
+                : this.edgeFocusFadeAlpha;
+            const nodeUpdates = nodes.map((node) => {
+                const baseColor = state.baseNodeColors.get(node.id) || node.color;
+                const color = activeNodes.has(node.id)
+                    ? fadeNodeColor(baseColor, 1)
+                    : fadeNodeColor(baseColor, dimAlpha);
+                return { id: node.id, color };
+            });
+            const edgeUpdates = edges.map((edge) => {
+                const baseColor = state.baseEdgeColors.get(edge.id) || edge.color;
+                const color = activeEdges.has(edge.id)
+                    ? fadeEdgeColor(baseColor, 1)
+                    : fadeEdgeColor(baseColor, dimAlpha);
+                return { id: edge.id, color };
+            });
+            dataset.nodes.update(nodeUpdates);
+            dataset.edges.update(edgeUpdates);
+            this.applyEdgeFocusLabelDisplay(activeNodes);
+            this.applyEdgeLabelDisplay();
+        }
+
         applyEdgeFocusLabelDisplay(activeNodes) {
             const view = this.getEl(this.ids.view);
             const layer = ensureLabelLayer(view);
@@ -4076,6 +4170,7 @@
             const nodeDataset = this.visNetwork?.body?.data?.nodes;
             const labels = Array.from(layer.querySelectorAll('.vis-node-label'));
             const dimAlpha = this.edgeFocusFadeAlpha;
+            const state = this.getEdgeFocusState();
             labels.forEach((label) => {
                 if (!label) return;
                 if (label.classList.contains('is-edge-hover')) {
@@ -4118,7 +4213,11 @@
                 if (activeNodes.has(nodeId)) {
                     label.style.opacity = label.dataset.baseOpacity || '1';
                 } else {
-                    label.style.opacity = String(dimAlpha);
+                    if (state.customFocusActive) {
+                        label.style.opacity = '0';
+                    } else {
+                        label.style.opacity = String(dimAlpha);
+                    }
                 }
             });
         }
@@ -4148,6 +4247,22 @@
             this.setNodeHover(null);
         }
 
+        clearCustomFocusLock() {
+            const state = this.getEdgeFocusState();
+            if (!state.customFocusActive) return;
+            this.restoreEdgeFocusBaseColors();
+            state.customFocusActive = false;
+            state.customFocusNodes.clear();
+            state.customFocusEdges.clear();
+            state.customFocusRootId = null;
+            if (this.visNetwork) {
+                this.visNetwork._wosCustomFocusActive = false;
+                this.visNetwork._wosCustomFocusNodes = null;
+            }
+            state.dirty = true;
+            this.applyEdgeFocusDisplay();
+        }
+
         isEdgeLocked(edgeId) {
             const state = this.getEdgeFocusState();
             return state.lockedEdgeIds.has(edgeId);
@@ -4174,8 +4289,19 @@
             this._edgeContextMenu = null;
         }
 
+        closeNodeContextMenu() {
+            const menu = this._nodeContextMenu?.menuEl || document.querySelector('.context-menu.node-menu');
+            if (menu) {
+                if (menu._nodeClickHandler) document.removeEventListener('mousedown', menu._nodeClickHandler);
+                if (menu._nodeKeyHandler) document.removeEventListener('keydown', menu._nodeKeyHandler);
+                menu.remove();
+            }
+            this._nodeContextMenu = null;
+        }
+
         showEdgeContextMenu(e, edgeId) {
             if (!edgeId || !e) return;
+            this.closeNodeContextMenu();
             this.closeEdgeContextMenu();
             const menu = document.createElement('div');
             menu.className = 'context-menu';
@@ -4268,6 +4394,133 @@
             document.addEventListener('mousedown', clickOutside);
             document.addEventListener('keydown', keyHandler);
             this._edgeContextMenu = { menuEl: menu, edgeId };
+        }
+
+        showNodeContextMenu(e, nodeId) {
+            if (!nodeId || !e) return;
+            this.closeEdgeContextMenu();
+            this.closeNodeContextMenu();
+            const menu = document.createElement('div');
+            menu.className = 'context-menu node-menu';
+            menu.style.left = `${e.pageX}px`;
+            menu.style.top = `${e.pageY}px`;
+            const state = this.getEdgeFocusState();
+            const depthValue = state.customFocusDepthMap && state.customFocusDepthMap.has(nodeId)
+                ? state.customFocusDepthMap.get(nodeId)
+                : (Number.isFinite(state.customFocusDepth) ? state.customFocusDepth : 1);
+            const fadePercent = Math.round((Number(this.edgeFocusFadeAlpha) || 0) * 100);
+            menu.innerHTML = `
+                <div class="context-menu-item" data-action="selectNodeFocus">
+                    <i class="fas fa-bullseye"></i>
+                    Select Node
+                </div>
+                <div class="context-menu-item" data-action="unselectNode">
+                    <i class="fas fa-circle-xmark"></i>
+                    Unselect Node
+                </div>
+                <div class="context-menu-item" data-action="unlockDepthFocus">
+                    <i class="fas fa-rotate-left"></i>
+                    Release
+                </div>
+                <div class="context-menu-divider"></div>
+                <div class="context-menu-item context-menu-slider" data-action="nodeFadeAlpha">
+                    <span>Opacity</span>
+                    <input type="range" min="0" max="100" step="1" value="${fadePercent}" />
+                    <span class="context-menu-value">${fadePercent}%</span>
+                </div>
+                <div class="context-menu-item context-menu-slider" data-action="nodeDepth">
+                    <span>Depth</span>
+                    <input type="range" min="0" max="10" step="1" value="${depthValue}" />
+                    <span class="context-menu-value">${depthValue}</span>
+                </div>
+            `;
+            document.body.appendChild(menu);
+            const rect = menu.getBoundingClientRect();
+            const margin = 8;
+            let nextLeft = rect.left;
+            let nextTop = rect.top;
+            if (rect.right > window.innerWidth - margin) {
+                nextLeft = window.innerWidth - rect.width - margin;
+            }
+            if (rect.bottom > window.innerHeight - margin) {
+                nextTop = window.innerHeight - rect.height - margin;
+            }
+            menu.style.left = `${Math.max(margin, nextLeft)}px`;
+            menu.style.top = `${Math.max(margin, nextTop)}px`;
+            menu.querySelectorAll('.context-menu-item').forEach((item) => {
+                item.addEventListener('click', () => {
+                    const action = item.dataset.action;
+                    if (action === 'selectNodeFocus') {
+                        if (this.visNetwork) {
+                            const selected = this.visNetwork.getSelectedNodes?.() || [];
+                            if (!selected.includes(nodeId)) {
+                                this.visNetwork.selectNodes([...selected, nodeId]);
+                            }
+                        }
+                        const state = this.getEdgeFocusState();
+                        const depth = state.customFocusDepthMap && state.customFocusDepthMap.has(nodeId)
+                            ? state.customFocusDepthMap.get(nodeId)
+                            : (Number.isFinite(state.customFocusDepth) ? state.customFocusDepth : 1);
+                        this.applyDepthFocusForNode(nodeId, depth, this.edgeFocusFadeAlpha);
+                        this.closeNodeContextMenu();
+                        return;
+                    }
+                    if (action === 'unselectNode') {
+                        if (this.visNetwork) {
+                            const selected = this.visNetwork.getSelectedNodes?.() || [];
+                            const next = selected.filter((id) => id !== nodeId);
+                            if (next.length) {
+                                this.visNetwork.selectNodes(next);
+                            } else {
+                                this.visNetwork.unselectAll();
+                            }
+                        }
+                        this.closeNodeContextMenu();
+                        return;
+                    }
+                    if (action === 'unlockDepthFocus') {
+                        this.clearCustomFocusLock();
+                        this.closeNodeContextMenu();
+                    }
+                });
+            });
+            const sliders = menu.querySelectorAll('.context-menu-item.context-menu-slider');
+            sliders.forEach((wrap) => {
+                const slider = wrap.querySelector('input[type="range"]');
+                const valueEl = wrap.querySelector('.context-menu-value');
+                if (!slider) return;
+                slider.addEventListener('input', (ev) => {
+                    const raw = Number(ev.target.value);
+                    const value = Number.isFinite(raw) ? raw : 0;
+                    if (valueEl) valueEl.textContent = String(value) + (wrap.dataset.action === 'nodeFadeAlpha' ? '%' : '');
+                    if (wrap.dataset.action === 'nodeFadeAlpha') {
+                        const nextAlpha = Math.max(0, Math.min(1, value / 100));
+                        this.edgeFocusFadeAlpha = nextAlpha;
+                        const state = this.getEdgeFocusState();
+                        if (state.customFocusActive) {
+                            state.customFocusAlpha = nextAlpha;
+                        }
+                        this.applyEdgeFocusDisplay();
+                        return;
+                    }
+                    if (wrap.dataset.action === 'nodeDepth') {
+                        this.applyDepthFocusForNode(nodeId, value);
+                    }
+                });
+                slider.addEventListener('mousedown', (ev) => ev.stopPropagation());
+                slider.addEventListener('click', (ev) => ev.stopPropagation());
+            });
+            const clickOutside = (ev) => {
+                if (!menu.contains(ev.target)) this.closeNodeContextMenu();
+            };
+            const keyHandler = (ev) => {
+                if (ev.key === 'Escape') this.closeNodeContextMenu();
+            };
+            menu._nodeClickHandler = clickOutside;
+            menu._nodeKeyHandler = keyHandler;
+            document.addEventListener('mousedown', clickOutside);
+            document.addEventListener('keydown', keyHandler);
+            this._nodeContextMenu = { menuEl: menu, nodeId };
         }
 
         applyLabelShowAll(showAll) {
@@ -4483,6 +4736,10 @@
         }
 
         getPersistedSettingsPayload() {
+            const state = this.getEdgeFocusState();
+            const depthEntries = state.customFocusDepthMap
+                ? Array.from(state.customFocusDepthMap.entries())
+                : [];
             return {
                 labelFade: this.labelFade,
                 labelColor: this.labelColor,
@@ -4522,6 +4779,10 @@
                 edgeStyle: this.edgeStyle,
                 edgeHoverLabelEnabled: this.edgeHoverLabelEnabled,
                 edgeLabelEnabled: this.edgeLabelEnabled,
+                edgeFocusFadeAlpha: this.edgeFocusFadeAlpha,
+                customFocusAlpha: state.customFocusAlpha,
+                customFocusDepth: state.customFocusDepth,
+                customFocusDepthMap: depthEntries,
                 zoomCollapsed: this.zoomCollapsed,
                 exportSvgScale: this.exportSvgScale,
                 exportSvgMargin: this.exportSvgMargin,
@@ -4577,6 +4838,19 @@
                 this.edgeLabelEnabled = payload.edgeLabelEnabled;
             }
             if (typeof payload.depthMode === 'boolean') this.depthMode = payload.depthMode;
+            if (Number.isFinite(payload.edgeFocusFadeAlpha)) this.edgeFocusFadeAlpha = payload.edgeFocusFadeAlpha;
+            if (Number.isFinite(payload.customFocusAlpha)) {
+                const state = this.getEdgeFocusState();
+                state.customFocusAlpha = payload.customFocusAlpha;
+            }
+            if (Number.isFinite(payload.customFocusDepth)) {
+                const state = this.getEdgeFocusState();
+                state.customFocusDepth = payload.customFocusDepth;
+            }
+            if (Array.isArray(payload.customFocusDepthMap)) {
+                const state = this.getEdgeFocusState();
+                state.customFocusDepthMap = new Map(payload.customFocusDepthMap);
+            }
             if (Number.isFinite(payload.exportSvgScale)) this.exportSvgScale = payload.exportSvgScale;
             if (Number.isFinite(payload.exportSvgMargin)) this.exportSvgMargin = payload.exportSvgMargin;
             if (typeof payload.exportSvgIncludeLabels === 'boolean') {
@@ -5078,6 +5352,19 @@
                 if (Number.isFinite(payload.edgeMaxWidth)) this.edgeMaxWidth = payload.edgeMaxWidth;
                 if (typeof payload.edgeColor === 'string') this.edgeColor = payload.edgeColor;
                 if (typeof payload.depthMode === 'boolean') this.depthMode = payload.depthMode;
+                if (Number.isFinite(payload.edgeFocusFadeAlpha)) this.edgeFocusFadeAlpha = payload.edgeFocusFadeAlpha;
+                if (Number.isFinite(payload.customFocusAlpha)) {
+                    const state = this.getEdgeFocusState();
+                    state.customFocusAlpha = payload.customFocusAlpha;
+                }
+                if (Number.isFinite(payload.customFocusDepth)) {
+                    const state = this.getEdgeFocusState();
+                    state.customFocusDepth = payload.customFocusDepth;
+                }
+                if (Array.isArray(payload.customFocusDepthMap)) {
+                    const state = this.getEdgeFocusState();
+                    state.customFocusDepthMap = new Map(payload.customFocusDepthMap);
+                }
                 if (typeof payload.zoomCollapsed === 'boolean') this.zoomCollapsed = payload.zoomCollapsed;
             };
 
@@ -5290,6 +5577,246 @@
                 this.renderFromJson(formatted);
             }
             this.notify('Rendered', 'success');
+        }
+
+        applyDepthFocusFromInput() {
+            const textarea = this.getEl(this.ids.inputTextarea);
+            if (!textarea) return;
+            if (!this.visNetwork || !this.visNetwork?.body?.data?.nodes || !this.visNetwork?.body?.data?.edges) {
+                this.notify('Vis network not ready', 'info');
+                return;
+            }
+            const raw = (textarea.value || '').trim();
+            if (!raw) {
+                this.notify('Input is empty', 'info');
+                return;
+            }
+            const tryParse = (text) => {
+                try {
+                    return JSON.parse(text);
+                } catch (_e) {
+                    return null;
+                }
+            };
+            let parsed = tryParse(raw);
+            if (!parsed && global.JSONRepair && typeof global.JSONRepair.jsonrepair === 'function') {
+                try {
+                    const repaired = global.JSONRepair.jsonrepair(raw);
+                    parsed = tryParse(repaired);
+                } catch (_e) {
+                    parsed = null;
+                }
+            }
+            if (!parsed) {
+                this.notify('Invalid JSON', 'error');
+                return;
+            }
+            const items = Array.isArray(parsed) ? parsed : [parsed];
+            if (!items.length) {
+                this.notify('No focus items found', 'info');
+                return;
+            }
+            const dataset = this.visNetwork.body.data;
+            const nodes = dataset.nodes.get();
+            const edges = dataset.edges.get();
+            const nodeIdByNormalized = new Map();
+            nodes.forEach((node) => {
+                const normalized = this.normalizeWosId(node.id);
+                if (normalized) nodeIdByNormalized.set(normalized, node.id);
+            });
+            const adj = new Map();
+            edges.forEach((edge) => {
+                if (edge.from == null || edge.to == null) return;
+                const from = edge.from;
+                const to = edge.to;
+                if (!adj.has(from)) adj.set(from, new Set());
+                if (!adj.has(to)) adj.set(to, new Set());
+                adj.get(from).add(to);
+                adj.get(to).add(from);
+            });
+            const activeNodes = new Set();
+            const activeEdges = new Set();
+            const missing = [];
+            const opacities = [];
+            const focusMap = new Map();
+            const depthMap = new Map();
+            items.forEach((item) => {
+                if (!item || typeof item !== 'object') return;
+                const rawId = item.id || item.wosid || item.wosId;
+                const depth = Number.isFinite(Number(item.depth)) ? Math.max(0, Number(item.depth)) : 0;
+                if (Number.isFinite(Number(item.opacity))) {
+                    opacities.push(Math.max(0, Math.min(1, Number(item.opacity))));
+                }
+                const normalized = this.normalizeWosId(rawId);
+                if (!normalized) return;
+                const nodeId = nodeIdByNormalized.get(normalized);
+                if (!nodeId) {
+                    missing.push(normalized);
+                    return;
+                }
+                const visited = new Set([nodeId]);
+                const queue = [{ id: nodeId, depth: 0 }];
+                const nextNodes = new Set();
+                while (queue.length) {
+                    const { id, depth: d } = queue.shift();
+                    nextNodes.add(id);
+                    if (d >= depth) continue;
+                    const neighbors = adj.get(id);
+                    if (!neighbors) continue;
+                    neighbors.forEach((next) => {
+                        if (visited.has(next)) return;
+                        visited.add(next);
+                        queue.push({ id: next, depth: d + 1 });
+                    });
+                }
+                focusMap.set(nodeId, nextNodes);
+                depthMap.set(nodeId, depth);
+                nextNodes.forEach((id) => activeNodes.add(id));
+            });
+            if (!activeNodes.size) {
+                this.notify('No matching nodes found', 'info');
+                return;
+            }
+            edges.forEach((edge) => {
+                if (activeNodes.has(edge.from) && activeNodes.has(edge.to)) {
+                    activeEdges.add(edge.id);
+                }
+            });
+            const state = this.getEdgeFocusState();
+            if (state.baseNodeColors.size || state.baseEdgeColors.size) {
+                this.restoreEdgeFocusBaseColors();
+            }
+            state.hoverEdgeId = null;
+            state.hoverNodeId = null;
+            state.lockedEdgeIds.clear();
+            state.dirty = true;
+            state.customFocusActive = true;
+            state.customFocusNodes = activeNodes;
+            state.customFocusEdges = activeEdges;
+            state.customFocusAlpha = opacities.length ? Math.min(...opacities) : null;
+            state.customFocusRootId = null;
+            state.customFocusDepth = null;
+            state.customFocusMap = focusMap;
+            state.customFocusDepthMap = depthMap;
+            if (this.visNetwork) {
+                this.visNetwork._wosCustomFocusActive = true;
+                this.visNetwork._wosCustomFocusNodes = activeNodes;
+            }
+            this.applyEdgeFocusDisplay();
+            if (missing.length) {
+                this.notify(`Missing nodes: ${missing.join(', ')}`, 'info');
+            } else {
+                this.notify('Depth focus applied', 'success');
+            }
+        }
+
+        applyDepthFocusForNode(nodeId, depth = 1, opacity = null) {
+            if (!this.visNetwork || !this.visNetwork?.body?.data?.nodes || !this.visNetwork?.body?.data?.edges) {
+                this.notify('Vis network not ready', 'info');
+                return;
+            }
+            if (!nodeId) return;
+            const dataset = this.visNetwork.body.data;
+            const nodes = dataset.nodes.get();
+            const edges = dataset.edges.get();
+            const adj = new Map();
+            edges.forEach((edge) => {
+                if (edge.from == null || edge.to == null) return;
+                const from = edge.from;
+                const to = edge.to;
+                if (!adj.has(from)) adj.set(from, new Set());
+                if (!adj.has(to)) adj.set(to, new Set());
+                adj.get(from).add(to);
+                adj.get(to).add(from);
+            });
+            const targetDepth = Number.isFinite(Number(depth)) ? Math.max(0, Number(depth)) : 0;
+            const nextNodes = new Set();
+            const activeEdges = new Set();
+            const visited = new Set([nodeId]);
+            const queue = [{ id: nodeId, depth: 0 }];
+            while (queue.length) {
+                const { id, depth: d } = queue.shift();
+                nextNodes.add(id);
+                if (d >= targetDepth) continue;
+                const neighbors = adj.get(id);
+                if (!neighbors) continue;
+                neighbors.forEach((next) => {
+                    if (visited.has(next)) return;
+                    visited.add(next);
+                    queue.push({ id: next, depth: d + 1 });
+                });
+            }
+            const state = this.getEdgeFocusState();
+            if (!state.customFocusMap) state.customFocusMap = new Map();
+            if (!state.customFocusDepthMap) state.customFocusDepthMap = new Map();
+            state.customFocusMap.set(nodeId, nextNodes);
+            state.customFocusDepthMap.set(nodeId, targetDepth);
+            const activeNodes = new Set();
+            state.customFocusMap.forEach((set) => {
+                if (!set) return;
+                set.forEach((id) => activeNodes.add(id));
+            });
+            edges.forEach((edge) => {
+                if (activeNodes.has(edge.from) && activeNodes.has(edge.to)) {
+                    activeEdges.add(edge.id);
+                }
+            });
+            if (state.baseNodeColors.size || state.baseEdgeColors.size) {
+                this.restoreEdgeFocusBaseColors();
+            }
+            state.hoverEdgeId = null;
+            state.hoverNodeId = null;
+            state.lockedEdgeIds.clear();
+            state.dirty = true;
+            state.customFocusActive = true;
+            state.customFocusNodes = activeNodes;
+            state.customFocusEdges = activeEdges;
+            if (opacity != null && Number.isFinite(Number(opacity))) {
+                state.customFocusAlpha = Math.max(0, Math.min(1, Number(opacity)));
+            }
+            state.customFocusRootId = nodeId;
+            state.customFocusDepth = targetDepth;
+            if (this.visNetwork) {
+                this.visNetwork._wosCustomFocusActive = true;
+                this.visNetwork._wosCustomFocusNodes = activeNodes;
+            }
+            this.applyEdgeFocusDisplay();
+        }
+
+        rebuildCustomFocusFromMap() {
+            if (!this.visNetwork || !this.visNetwork?.body?.data?.nodes || !this.visNetwork?.body?.data?.edges) {
+                return;
+            }
+            const state = this.getEdgeFocusState();
+            if (!state.customFocusMap || !state.customFocusMap.size) {
+                this.clearCustomFocusLock();
+                return;
+            }
+            const dataset = this.visNetwork.body.data;
+            const edges = dataset.edges.get();
+            const activeNodes = new Set();
+            state.customFocusMap.forEach((set) => {
+                if (!set) return;
+                set.forEach((id) => activeNodes.add(id));
+            });
+            const activeEdges = new Set();
+            edges.forEach((edge) => {
+                if (activeNodes.has(edge.from) && activeNodes.has(edge.to)) {
+                    activeEdges.add(edge.id);
+                }
+            });
+            if (state.baseNodeColors.size || state.baseEdgeColors.size) {
+                this.restoreEdgeFocusBaseColors();
+            }
+            state.dirty = true;
+            state.customFocusActive = true;
+            state.customFocusNodes = activeNodes;
+            state.customFocusEdges = activeEdges;
+            if (this.visNetwork) {
+                this.visNetwork._wosCustomFocusActive = true;
+                this.visNetwork._wosCustomFocusNodes = activeNodes;
+            }
+            this.applyEdgeFocusDisplay();
         }
 
         appendInput() {
@@ -5664,9 +6191,18 @@
             }
             this._onNetworkClick = (params) => {
                 const evt = params?.event?.event || params?.event?.srcEvent;
+                const nodeId = params?.nodes?.[0];
+                if (nodeId && evt && evt.shiftKey) {
+                    const state = this.getEdgeFocusState();
+                    if (state.customFocusActive && state.customFocusMap && state.customFocusMap.has(nodeId)) {
+                        state.customFocusMap.delete(nodeId);
+                        if (state.customFocusDepthMap) state.customFocusDepthMap.delete(nodeId);
+                        this.rebuildCustomFocusFromMap();
+                        return;
+                    }
+                }
                 const mod = evt ? (evt.metaKey || evt.ctrlKey) : false;
                 if (mod) {
-                    const nodeId = params?.nodes?.[0];
                     if (nodeId) {
                         const wosId = this.normalizeWosId(nodeId);
                         if (wosId) {
@@ -5684,7 +6220,6 @@
                 if (!textarea || payload == null) return;
                 textarea.value = JSON.stringify(payload, null, 2);
             };
-            const nodeId = params?.nodes?.[0];
             if (nodeId) {
                     const dataset = network?.body?.data?.nodes;
                     if (dataset && typeof dataset.get === 'function') {
@@ -5710,6 +6245,8 @@
             };
             network.on('click', this._onNetworkClick);
             this._onNetworkDoubleClick = (params) => {
+                const nodeId = params?.nodes?.[0];
+                if (nodeId) return;
                 const edgeId = params?.edges?.[0];
                 if (edgeId) {
                     this.toggleEdgeLock(edgeId);
@@ -5804,13 +6341,24 @@
             };
             this._onEdgeContext = (params) => {
                 const evt = params?.event?.event || params?.event?.srcEvent || params?.event;
+                const pointer = params?.pointer?.DOM;
+                if (!pointer) return;
+                const nodeId = network.getNodeAt(pointer);
+                if (nodeId) {
+                    if (evt && typeof evt.preventDefault === 'function') {
+                        evt.preventDefault();
+                    }
+                    if (this.visNetwork) {
+                        this.visNetwork.unselectAll();
+                    }
+                    this.showNodeContextMenu(evt, nodeId);
+                    return;
+                }
+                const edgeId = network.getEdgeAt(pointer);
+                if (!edgeId) return;
                 if (evt && typeof evt.preventDefault === 'function') {
                     evt.preventDefault();
                 }
-                const pointer = params?.pointer?.DOM;
-                if (!pointer) return;
-                const edgeId = network.getEdgeAt(pointer);
-                if (!edgeId) return;
                 this.showEdgeContextMenu(evt, edgeId);
             };
             network.on('hoverEdge', this._onEdgeHover);
