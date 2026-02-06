@@ -13467,8 +13467,10 @@ class PaperStatsApp {
                 let text = '';
                 let exists = false;
                 try {
-                    text = await this.readProjectFile(mdFilename);
-                    exists = true;
+                    exists = await this.projectFileExists(mdFilename);
+                    if (exists) {
+                        text = await this.readProjectFile(mdFilename);
+                    }
                 } catch (err) {
                     exists = false;
                     text = '';
@@ -13504,8 +13506,14 @@ class PaperStatsApp {
         try {
             let text = '';
             try {
-                text = await this.readProjectFile(mdFilename);
-                this.currentMarkdownExists = true;
+                const exists = await this.projectFileExists(mdFilename);
+                if (exists) {
+                    text = await this.readProjectFile(mdFilename);
+                    this.currentMarkdownExists = true;
+                } else {
+                    this.currentMarkdownExists = false;
+                    text = '';
+                }
             } catch (err) {
                 // 404或读取失败：不自动创建文件
                 this.currentMarkdownExists = false;
