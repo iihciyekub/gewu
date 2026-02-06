@@ -5803,6 +5803,130 @@
             }
         }
 
+        closePhysicsPopover() {
+            const pop = this._physicsPopover?.el;
+            if (pop) {
+                if (pop._physicsKeyHandler) document.removeEventListener('keydown', pop._physicsKeyHandler);
+                pop.remove();
+            }
+            this._physicsPopover = null;
+        }
+
+        openPhysicsPopover({ x, y }) {
+            this.closePhysicsPopover();
+            const springLength = Number(this.physicsSpringLength || 120);
+            const springConstant = Number(this.physicsSpringConstant || 0.05);
+            const gravity = Number(this.physicsGravity || -9000);
+
+            const pop = document.createElement('div');
+            pop.className = 'context-style-popover';
+            const anchorX = Number(x) || 0;
+            const anchorY = Number(y) || 0;
+            pop.style.left = `${anchorX}px`;
+            pop.style.top = `${anchorY}px`;
+            pop.innerHTML = `
+                <div class="context-popover-drag-handle" title="Drag to move">Physics Layout</div>
+                <button type="button" class="context-popover-close-btn" data-role="closePopover" title="Close (Esc)">&times;</button>
+                <div class="context-input-row">
+                    <span class="context-slider-label">Link Distance</span>
+                    <input class="context-number-input" data-role="springLength" type="number" min="10" max="1000" step="5" value="${springLength}" aria-label="Link distance">
+                </div>
+                <div class="context-input-row">
+                    <span class="context-slider-label">Link Strength</span>
+                    <input class="context-number-input" data-role="springConstant" type="number" min="0.001" max="1" step="0.01" value="${springConstant}" aria-label="Link strength">
+                </div>
+                <div class="context-input-row">
+                    <span class="context-slider-label">Gravity</span>
+                    <input class="context-number-input" data-role="gravity" type="number" min="-50000" max="0" step="100" value="${gravity}" aria-label="Gravity">
+                </div>
+            `;
+            document.body.appendChild(pop);
+            this._makePopoverDraggable(pop);
+            const closeBtn = pop.querySelector('[data-role="closePopover"]');
+            if (closeBtn) {
+                closeBtn.addEventListener('click', (ev) => {
+                    ev.stopPropagation();
+                    this.closePhysicsPopover();
+                });
+            }
+
+            const rect = pop.getBoundingClientRect();
+            const margin = 8;
+            let nextLeft = anchorX;
+            let nextTop = anchorY;
+            if (anchorX + rect.width > window.innerWidth - margin) {
+                nextLeft = anchorX - rect.width - 12;
+            }
+            if (nextLeft < margin) nextLeft = margin;
+            if (rect.bottom > window.innerHeight - margin) {
+                nextTop = window.innerHeight - rect.height - margin;
+            }
+            pop.style.left = `${Math.max(margin, nextLeft)}px`;
+            pop.style.top = `${Math.max(margin, nextTop)}px`;
+
+            const bindNumberInput = (role, onChange) => {
+                const input = pop.querySelector(`input[data-role="${role}"]`);
+                if (!input) return;
+                const applyValue = (raw) => {
+                    const next = Number(raw);
+                    if (!Number.isFinite(next)) return;
+                    const min = Number(input.min);
+                    const max = Number(input.max);
+                    const clamped = Math.max(min, Math.min(max, next));
+                    input.value = String(clamped);
+                    onChange(clamped);
+                };
+                input.addEventListener('input', (ev) => {
+                    ev.stopPropagation();
+                    applyValue(input.value);
+                });
+                input.addEventListener('change', (ev) => {
+                    ev.stopPropagation();
+                    applyValue(input.value);
+                });
+                input.addEventListener('wheel', (ev) => {
+                    ev.preventDefault();
+                    const step = Number(input.step) || 1;
+                    const delta = ev.deltaY < 0 ? step : -step;
+                    const currentVal = Number(input.value) || 0;
+                    const min = Number(input.min);
+                    const max = Number(input.max);
+                    const nextVal = Math.max(min, Math.min(max, currentVal + delta));
+                    applyValue(nextVal);
+                }, { passive: false });
+                input.addEventListener('click', (ev) => ev.stopPropagation());
+            };
+
+            bindNumberInput('springLength', (val) => {
+                this.physicsSpringLength = val;
+                this.applyPhysicsSettings();
+                this.queuePersistSettings();
+                const sidebar = this.getEl(this.ids.physicsSpringSlider);
+                if (sidebar) sidebar.value = String(val);
+            });
+            bindNumberInput('springConstant', (val) => {
+                this.physicsSpringConstant = val;
+                this.applyPhysicsSettings();
+                this.queuePersistSettings();
+                const sidebar = this.getEl(this.ids.physicsStrengthSlider);
+                if (sidebar) sidebar.value = String(val);
+            });
+            bindNumberInput('gravity', (val) => {
+                this.physicsGravity = val;
+                this.applyPhysicsSettings();
+                this.queuePersistSettings();
+                const sidebar = this.getEl(this.ids.physicsGravitySlider);
+                if (sidebar) sidebar.value = String(val);
+            });
+
+            const keyHandler = (ev) => {
+                if (ev.key === 'Escape') this.closePhysicsPopover();
+            };
+            pop._physicsKeyHandler = keyHandler;
+            document.addEventListener('keydown', keyHandler);
+            this._physicsPopover = { el: pop };
+        }
+
         scheduleCloseEdgePopovers(delay = 180) {
             if (this._edgePopoverCloseTimer) {
                 clearTimeout(this._edgePopoverCloseTimer);
@@ -6064,6 +6188,10 @@
                     <i class="fas fa-font"></i>
                     Edge Label Style
                 </div>
+                <div class="context-menu-item" data-action="pickPhysics">
+                    <i class="fas fa-atom"></i>
+                    Physics
+                </div>
             `;
             document.body.appendChild(menu);
             const rect = menu.getBoundingClientRect();
@@ -6094,6 +6222,11 @@
                     }
                     if (action === 'pickEdgeLabelStyle') {
                         this.openEdgeLabelStylePopover({ edgeId, x: ev.pageX, y: ev.pageY });
+                        this.closeEdgeContextMenu();
+                        return;
+                    }
+                    if (action === 'pickPhysics') {
+                        this.openPhysicsPopover({ x: ev.pageX, y: ev.pageY });
                         this.closeEdgeContextMenu();
                         return;
                     }
