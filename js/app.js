@@ -5564,7 +5564,47 @@ class PaperStatsApp {
         this.lastFileSelectionAnchor = filename;
         this.updateFileSelectionDom();
         this.setLastSelectedFile(filename);
+        void this.syncVisNodeInputFromSelection();
         this.loadFile(filename, fileItem);
+    }
+
+    async syncVisNodeInputFromSelection() {
+        if (!this.visManager || typeof this.visManager.syncNodeInputFromSelection !== 'function') return;
+        const selected = this.getSelectedFilesArray ? this.getSelectedFilesArray() : Array.from(this.selectedFiles || []);
+        if (!selected.length) return;
+        const ids = await this.collectWosIdsForBases(selected);
+        this.visManager.syncNodeInputFromSelection(ids);
+    }
+
+    async collectWosIdsForBases(bases) {
+        const result = [];
+        const seen = new Set();
+        for (const base of bases || []) {
+            const paths = this.getPathsForBase(base);
+            const filename = paths?.json;
+            if (!filename) continue;
+            let data = null;
+            if (this.tempDataCache && this.tempDataCache[filename]) {
+                data = this.tempDataCache[filename];
+            } else if (this.currentFile === filename && this.currentData) {
+                data = this.currentData;
+            } else {
+                try {
+                    data = await this.readProjectFile(filename, { allowNotFound: true });
+                } catch (_e) {
+                    data = null;
+                }
+            }
+            const raw = data?.wos_data?.wos_id || data?.wos_data?.wosid || data?.wos_id || data?.wosid;
+            if (!raw) continue;
+            const normalized = (this.visManager && typeof this.visManager.normalizeWosId === 'function')
+                ? this.visManager.normalizeWosId(raw)
+                : String(raw).trim();
+            if (!normalized || seen.has(normalized)) continue;
+            seen.add(normalized);
+            result.push(normalized);
+        }
+        return result;
     }
 
     renameGroup(groupId) {
@@ -7420,6 +7460,9 @@ class PaperStatsApp {
             this.runMdChatFieldQuery();
             if (this.visManager) {
                 this.visManager.applyLabelField(this.visManager.labelField);
+            }
+            if (this.visManager && typeof this.visManager.syncNodeInputFromData === 'function') {
+                this.visManager.syncNodeInputFromData(this.currentData);
             }
             // 再次确认未切换文件
             if (loadId !== this.currentLoadToken) return;
