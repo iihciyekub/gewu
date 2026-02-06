@@ -6198,14 +6198,6 @@
                     <div class="context-color-slot" data-role="edgeColor"></div>
                 </div>
                 <div class="context-input-row">
-                    <span class="context-slider-label">Opacity</span>
-                    <input class="context-number-input" data-role="opacity" type="number" min="0" max="1" step="0.05" value="1.00" aria-label="Edge Opacity">
-                </div>
-                <div class="context-input-row">
-                    <span class="context-slider-label">Self Loop Size</span>
-                    <input class="context-number-input" data-role="selfRefSize" type="number" min="10" max="100" step="5" value="20" aria-label="Self Reference Size">
-                </div>
-                <div class="context-input-row">
                     <label class="context-input-label" style="width: 100%;">Line Style
                         <select class="context-select-input" data-role="smoothType" aria-label="Smooth Type" style="width: 100%; margin-top: 3px;">
                             <option value="straight">Straight</option>
@@ -6217,9 +6209,14 @@
                     </label>
                 </div>
                 <div class="context-input-row">
-                    <label class="context-popover-toggle" style="margin: 0;">
-                        <input type="checkbox" class="context-popover-checkbox" data-role="dashed" aria-label="Dashed">
-                        <span>Dashed</span>
+                    <label class="context-input-label" style="width: 100%;">Line Pattern
+                        <select class="context-select-input" data-role="dashPattern" aria-label="Dash Pattern" style="width: 100%; margin-top: 3px;">
+                            <option value="solid">Solid</option>
+                            <option value="dashed">Dashed</option>
+                            <option value="dotted">Dotted</option>
+                            <option value="dash-dot">Dash Dot</option>
+                            <option value="long-dash">Long Dash</option>
+                        </select>
                     </label>
                 </div>
                 <div class="context-input-row">
@@ -6485,7 +6482,7 @@
 
             // Setup style controls
             const smoothTypeSelect = pop.querySelector('[data-role="smoothType"]');
-            const dashedCheckbox = pop.querySelector('[data-role="dashed"]');
+            const dashPatternSelect = pop.querySelector('[data-role="dashPattern"]');
             const edgeLengthInput = pop.querySelector('[data-role="edgeLength"]');
 
             // Arrow controls
@@ -6500,7 +6497,7 @@
 
             // Initialize with current edge style or defaults
             const currentSmooth = edge?.smooth;
-            const currentDashed = edge?.dashes ? true : false;
+            const currentDashes = edge?.dashes;
             const currentArrows = edge?.arrows || false;
 
             // Set initial values
@@ -6516,7 +6513,26 @@
                 smoothTypeSelect.value = 'curve-bezier';
             }
 
-            if (dashedCheckbox) dashedCheckbox.checked = currentDashed;
+            if (dashPatternSelect) {
+                if (!currentDashes || currentDashes === false) {
+                    dashPatternSelect.value = 'solid';
+                } else if (Array.isArray(currentDashes)) {
+                    const key = currentDashes.join(',');
+                    if (key === '6,6') {
+                        dashPatternSelect.value = 'dashed';
+                    } else if (key === '2,6') {
+                        dashPatternSelect.value = 'dotted';
+                    } else if (key === '8,4,2,4') {
+                        dashPatternSelect.value = 'dash-dot';
+                    } else if (key === '12,6') {
+                        dashPatternSelect.value = 'long-dash';
+                    } else {
+                        dashPatternSelect.value = 'dashed';
+                    }
+                } else {
+                    dashPatternSelect.value = 'dashed';
+                }
+            }
 
             // Initialize edge length
             const currentLength = edge?.length ?? 100;
@@ -6544,71 +6560,73 @@
                 arrowFromScaleInput.value = (edge?.arrows?.from?.scaleFactor ?? 1.0).toFixed(1);
             }
 
-            // Helper to apply combined style
-            const applyStyle = () => {
+            // Apply only the specific field that changed.
+            const applySmooth = () => {
                 const smoothType = smoothTypeSelect.value;
-                const dashed = dashedCheckbox.checked;
-                const length = edgeLengthInput ? Number(edgeLengthInput.value) : 100;
+                let smooth = false;
+                if (smoothType === 'curve-dynamic') {
+                    smooth = { type: 'dynamic', roundness: 0.25 };
+                } else if (smoothType === 'curve-cw') {
+                    smooth = { type: 'curvedCW', roundness: 0.25 };
+                } else if (smoothType === 'curve-ccw') {
+                    smooth = { type: 'curvedCCW', roundness: 0.25 };
+                } else if (smoothType === 'curve-bezier') {
+                    smooth = { type: 'continuous', roundness: 0.35 };
+                }
+                applyEdgeStyle({ smooth });
+            };
 
-                // Arrow configuration
+            const applyDashPattern = () => {
+                const pattern = dashPatternSelect ? dashPatternSelect.value : 'solid';
+                let dashes = false;
+                if (pattern === 'dashed') dashes = [6, 6];
+                else if (pattern === 'dotted') dashes = [2, 6];
+                else if (pattern === 'dash-dot') dashes = [8, 4, 2, 4];
+                else if (pattern === 'long-dash') dashes = [12, 6];
+                applyEdgeStyle({ dashes });
+            };
+
+            const applyLength = () => {
+                const length = edgeLengthInput ? Number(edgeLengthInput.value) : 100;
+                applyEdgeStyle({ length });
+            };
+
+            const applyArrows = () => {
                 const hasArrowTo = arrowToCheckbox ? arrowToCheckbox.checked : false;
                 const hasArrowFrom = arrowFromCheckbox ? arrowFromCheckbox.checked : false;
                 const arrowToShape = arrowToShapeSelect ? arrowToShapeSelect.value : 'arrow';
                 const arrowFromShape = arrowFromShapeSelect ? arrowFromShapeSelect.value : 'arrow';
                 const arrowToScale = arrowToScaleInput ? Number(arrowToScaleInput.value) : 1.0;
                 const arrowFromScale = arrowFromScaleInput ? Number(arrowFromScaleInput.value) : 1.0;
-
-                const updates = {};
-
-                // Apply smooth type
-                if (smoothType === 'straight') {
-                    updates.smooth = false;
-                } else if (smoothType === 'curve-dynamic') {
-                    updates.smooth = { type: 'dynamic', roundness: 0.25 };
-                } else if (smoothType === 'curve-cw') {
-                    updates.smooth = { type: 'curvedCW', roundness: 0.25 };
-                } else if (smoothType === 'curve-ccw') {
-                    updates.smooth = { type: 'curvedCCW', roundness: 0.25 };
-                } else if (smoothType === 'curve-bezier') {
-                    updates.smooth = { type: 'continuous', roundness: 0.35 };
-                }
-
-                // Apply dashed
-                updates.dashes = dashed ? [6, 6] : false;
-
-                // Apply edge length
-                updates.length = length;
-
-                // Apply arrows with separate to/from configuration
-                updates.arrows = {
-                    to: {
-                        enabled: hasArrowTo,
-                        type: arrowToShape,
-                        scaleFactor: arrowToScale
-                    },
-                    from: {
-                        enabled: hasArrowFrom,
-                        type: arrowFromShape,
-                        scaleFactor: arrowFromScale
-                    },
-                    middle: { enabled: false }
-                };
-
-                applyEdgeStyle(updates);
+                applyEdgeStyle({
+                    arrows: {
+                        to: {
+                            enabled: hasArrowTo,
+                            type: arrowToShape,
+                            scaleFactor: arrowToScale
+                        },
+                        from: {
+                            enabled: hasArrowFrom,
+                            type: arrowFromShape,
+                            scaleFactor: arrowFromScale
+                        },
+                        middle: { enabled: false }
+                    }
+                });
             };
 
             // Event listeners
             if (smoothTypeSelect) {
                 smoothTypeSelect.addEventListener('change', (ev) => {
                     ev.stopPropagation();
-                    applyStyle();
+                    applySmooth();
                 });
             }
 
-            if (dashedCheckbox) {
-                dashedCheckbox.addEventListener('change', (ev) => {
+            if (dashPatternSelect) {
+                dashPatternSelect.addEventListener('change', (ev) => {
                     ev.stopPropagation();
-                    applyStyle();
+                    applyDashPattern();
                 });
             }
 
@@ -6618,7 +6636,7 @@
                     ev.stopPropagation();
                     const enabled = arrowToCheckbox.checked;
                     if (arrowToConfig) arrowToConfig.style.display = enabled ? 'block' : 'none';
-                    applyStyle();
+                    applyArrows();
                 });
             }
 
@@ -6628,7 +6646,7 @@
                     ev.stopPropagation();
                     const enabled = arrowFromCheckbox.checked;
                     if (arrowFromConfig) arrowFromConfig.style.display = enabled ? 'block' : 'none';
-                    applyStyle();
+                    applyArrows();
                 });
             }
 
@@ -6636,13 +6654,13 @@
             if (arrowToShapeSelect) {
                 arrowToShapeSelect.addEventListener('change', (ev) => {
                     ev.stopPropagation();
-                    applyStyle();
+                    applyArrows();
                 });
             }
             if (arrowToScaleInput) {
                 arrowToScaleInput.addEventListener('input', (ev) => {
                     ev.stopPropagation();
-                    applyStyle();
+                    applyArrows();
                 });
             }
 
@@ -6650,48 +6668,19 @@
             if (arrowFromShapeSelect) {
                 arrowFromShapeSelect.addEventListener('change', (ev) => {
                     ev.stopPropagation();
-                    applyStyle();
+                    applyArrows();
                 });
             }
             if (arrowFromScaleInput) {
                 arrowFromScaleInput.addEventListener('input', (ev) => {
                     ev.stopPropagation();
-                    applyStyle();
+                    applyArrows();
                 });
             }
 
             // Edge length
             bindNumberInput('edgeLength', (val) => {
-                applyStyle();
-            });
-
-            // Setup opacity and selfReference controls
-            const opacityInput = pop.querySelector('[data-role="opacity"]');
-            const selfRefSizeInput = pop.querySelector('[data-role="selfRefSize"]');
-
-            // Initialize opacity from edge
-            const currentOpacity = edge?.opacity ?? 1.0;
-            if (opacityInput) opacityInput.value = currentOpacity.toFixed(2);
-
-            // Initialize selfReference size
-            const currentSelfRefSize = edge?.selfReference?.size ?? 20;
-            if (selfRefSizeInput) selfRefSizeInput.value = String(currentSelfRefSize);
-
-            // Bind opacity control
-            bindNumberInput('opacity', (val) => {
-                const updates = { opacity: val };
-                applyEdgeStyle(updates);
-            });
-
-            // Bind selfReference control using new API
-            bindNumberInput('selfRefSize', (val) => {
-                const updates = {
-                    selfReference: {
-                        size: val,
-                        angle: Math.PI / 4
-                    }
-                };
-                applyEdgeStyle(updates);
+                applyLength();
             });
 
             const keyHandler = (ev) => {
