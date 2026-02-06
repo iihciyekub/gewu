@@ -7808,29 +7808,52 @@
                         model.buildVisData();
                     }
                     const sourceJson = JSON.stringify(model.source || {}, null, 2);
+                    // Prevent global applyNodeColor/applyNodeBorderColor from wiping
+                    // per-node colors during renderFromVisData – they will be properly
+                    // restored by restoreVisDataStyles below.
+                    this._skipNodeColorApply = true;
                     this.renderFromVisData(model.visData || {}, { sourceJson });
+                    // Restore saved viewport immediately without animation so the
+                    // user never sees the default auto-fit scale.  Also register a
+                    // one-shot handler for stabilizationIterationsDone: vis-network
+                    // calls fit() internally after stabilization finishes (fit is
+                    // true by default) which would override our moveTo.  Because
+                    // vis-network's emitter fires listeners in registration order
+                    // and the internal fit() listener was registered first, our
+                    // handler runs right after fit() and corrects the viewport.
                     if (item.state && this.visNetwork) {
                         const zoom = Number.isFinite(item.state.zoom) ? item.state.zoom : null;
                         const pan = item.state.pan && Number.isFinite(item.state.pan.x) && Number.isFinite(item.state.pan.y)
                             ? item.state.pan
                             : null;
                         if (zoom != null || pan) {
-                            this.visNetwork.moveTo({
+                            const moveOpts = {
                                 position: pan || undefined,
                                 scale: zoom != null ? zoom : undefined,
-                                animation: { duration: 420, easingFunction: this.zoomAnimEasing }
+                                animation: false
+                            };
+                            this.visNetwork.moveTo(moveOpts);
+                            this.visNetwork.once('stabilizationIterationsDone', () => {
+                                this.visNetwork.moveTo(moveOpts);
                             });
                         }
                         if (item.state.labelMode) {
                             this.applyLabelShowAll(item.state.labelMode === 'all');
                         }
                     }
+                    // Wait for the async mode-state-store initialisation that was
+                    // kicked off at the end of renderFromVisData.  If we don't wait,
+                    // its applySettings() / apply('normal') callbacks fire *after*
+                    // restoreVisDataStyles and overwrite the correct per-node/edge
+                    // colours with stale snapshot values.
+                    if (this._modeStoreReady) {
+                        await this._modeStoreReady;
+                    }
                     if (item.settings) {
-                        this._skipNodeColorApply = true;
                         this.applyLabelPanelSettingsPayload(item.settings);
                         this.restoreVisDataStyles(model.visData);
-                        this._skipNodeColorApply = false;
                     }
+                    this._skipNodeColorApply = false;
                 } else {
                     this.notify('Saved payload missing model support', 'error');
                     return;
