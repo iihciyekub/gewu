@@ -3128,13 +3128,6 @@ body.theme-dark .vis-settings-panel.is-open .vis-label-panel .vis-section-toggle
     align-items: center;
 }
 
-.vis-physics {
-    display: grid;
-    grid-template-columns: 140px 1fr;
-    gap: 6px 10px;
-    align-items: center;
-}
-
 .vis-edge-fade {
     display: grid;
     grid-template-columns: 140px 1fr;

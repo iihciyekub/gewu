@@ -1060,9 +1060,6 @@
                 edgeLabelStrokeWidthInput: options.edgeLabelStrokeWidthInputId || 'visEdgeLabelStrokeWidthInput',
                 edgeLabelStrokeColorInput: options.edgeLabelStrokeColorInputId || 'visEdgeLabelStrokeColorInput',
                 edgeLabelBgColorInput: options.edgeLabelBgColorInputId || 'visEdgeLabelBgColorInput',
-                physicsSpringSlider: options.physicsSpringSliderId || 'visPhysicsSpringSlider',
-                physicsStrengthSlider: options.physicsStrengthSliderId || 'visPhysicsStrengthSlider',
-                physicsGravitySlider: options.physicsGravitySliderId || 'visPhysicsGravitySlider',
                 edgeFadeSlider: options.edgeFadeSliderId || 'visEdgeFadeSlider',
                 edgeMinWidthSlider: options.edgeMinWidthSliderId || 'visEdgeMinWidthSlider',
                 edgeMaxWidthSlider: options.edgeMaxWidthSliderId || 'visEdgeMaxWidthSlider',
@@ -1155,6 +1152,9 @@
             this.edgeFocusFadeAlpha = 0.125;
             this.edgeHoverLabelEnabled = false;
             this.edgeLabelEnabled = false;
+            this._edgeCustomFonts = new Map();
+            this._edgeCustomColors = new Map();
+            this._edgeCustomWidths = new Set();
             this.wosNodeIndex = null;
             this.wosNodeIndexSource = null;
             this.selectedNodeColor = '#f59e0b';
@@ -1256,9 +1256,6 @@
             const nodeContextColorInput = this.getEl(this.ids.nodeContextColorInput);
             const nodeContextBorderColorInput = this.getEl(this.ids.nodeContextBorderColorInput);
             const nodeContextStrokeColorInput = this.getEl(this.ids.nodeContextStrokeColorInput);
-            const physicsSpringSlider = this.getEl(this.ids.physicsSpringSlider);
-            const physicsStrengthSlider = this.getEl(this.ids.physicsStrengthSlider);
-            const physicsGravitySlider = this.getEl(this.ids.physicsGravitySlider);
             const edgeFadeSlider = this.getEl(this.ids.edgeFadeSlider);
             const edgeMinWidthSlider = this.getEl(this.ids.edgeMinWidthSlider);
             const edgeMaxWidthSlider = this.getEl(this.ids.edgeMaxWidthSlider);
@@ -1728,21 +1725,6 @@
                 const clamped = Math.max(0, Math.min(1, Number.isFinite(next) ? next : 0.2));
                 this.relatedMinDimAlpha = clamped;
                 this.applyLabelThresholdDimming();
-                this.queuePersistSettings();
-            });
-            bindNumberInput(physicsSpringSlider, (next) => {
-                this.physicsSpringLength = next;
-                this.applyPhysicsSettings();
-                this.queuePersistSettings();
-            });
-            bindNumberInput(physicsStrengthSlider, (next) => {
-                this.physicsSpringConstant = next;
-                this.applyPhysicsSettings();
-                this.queuePersistSettings();
-            });
-            bindNumberInput(physicsGravitySlider, (next) => {
-                this.physicsGravity = next;
-                this.applyPhysicsSettings();
                 this.queuePersistSettings();
             });
             bindNumberInput(edgeFadeSlider, (next) => {
@@ -4050,9 +4032,6 @@
                 const edgeLabelStrokeWidthInput = this.getEl(this.ids.edgeLabelStrokeWidthInput);
                 const edgeLabelStrokeColorInput = this.getEl(this.ids.edgeLabelStrokeColorInput);
                 const edgeLabelBgColorInput = this.getEl(this.ids.edgeLabelBgColorInput);
-                const physicsSpringSlider = this.getEl(this.ids.physicsSpringSlider);
-                const physicsStrengthSlider = this.getEl(this.ids.physicsStrengthSlider);
-                const physicsGravitySlider = this.getEl(this.ids.physicsGravitySlider);
                 const edgeFadeSlider = this.getEl(this.ids.edgeFadeSlider);
                 const edgeMinWidthSlider = this.getEl(this.ids.edgeMinWidthSlider);
                 const edgeMaxWidthSlider = this.getEl(this.ids.edgeMaxWidthSlider);
@@ -4062,9 +4041,6 @@
                 if (edgeLabelStrokeWidthInput) edgeLabelStrokeWidthInput.value = String(this.edgeLabelStrokeWidth ?? 0);
                 this.setColorInputValue(edgeLabelStrokeColorInput, this.edgeLabelStrokeColor || '#ffffff');
                 this.setColorInputValue(edgeLabelBgColorInput, this.edgeLabelBgColor || 'rgba(255,255,255,0.85)');
-                if (physicsSpringSlider) physicsSpringSlider.value = String(this.physicsSpringLength || 120);
-                if (physicsStrengthSlider) physicsStrengthSlider.value = String(this.physicsSpringConstant || 0.05);
-                if (physicsGravitySlider) physicsGravitySlider.value = String(this.physicsGravity || -9000);
                 if (edgeFadeSlider) edgeFadeSlider.value = String(this.edgeFade || 100);
                 if (edgeMinWidthSlider) edgeMinWidthSlider.value = String(this.edgeMinWidth || 1);
                 if (edgeMaxWidthSlider) edgeMaxWidthSlider.value = String(this.edgeMaxWidth || 6);
@@ -4984,13 +4960,16 @@
             const minW = Number.isFinite(Number(this.edgeMinWidth)) ? Number(this.edgeMinWidth) : 1;
             const maxW = Number.isFinite(Number(this.edgeMaxWidth)) ? Number(this.edgeMaxWidth) : 6;
             const scale = Number.isFinite(Number(this.edgeWidthScale)) ? Number(this.edgeWidthScale) : 1.0;
-            const updates = dataset.get().map((edge) => {
-                const related = getRelatedCount(edge);
-                const t = maxRelated > minRelated ? (related - minRelated) / (maxRelated - minRelated) : 0;
-                const baseWidth = minW + Math.max(0, Math.min(1, t)) * (maxW - minW);
-                const width = baseWidth * scale;
-                return { id: edge.id, width: Number(width.toFixed(2)) };
-            });
+            const customWidths = this._edgeCustomWidths || new Set();
+            const updates = dataset.get()
+                .filter((edge) => !customWidths.has(edge.id))
+                .map((edge) => {
+                    const related = getRelatedCount(edge);
+                    const t = maxRelated > minRelated ? (related - minRelated) / (maxRelated - minRelated) : 0;
+                    const baseWidth = minW + Math.max(0, Math.min(1, t)) * (maxW - minW);
+                    const width = baseWidth * scale;
+                    return { id: edge.id, width: Number(width.toFixed(2)) };
+                });
             dataset.update(updates);
         }
 
@@ -5070,6 +5049,7 @@
             const strokeWidth = Number.isFinite(this.edgeLabelStrokeWidth) ? this.edgeLabelStrokeWidth : 0;
             const strokeColor = this.edgeLabelStrokeColor || '#ffffff';
             const bgColor = this.edgeLabelBgColor || 'rgba(255,255,255,0.85)';
+            const customFonts = this._edgeCustomFonts || new Map();
             const updates = dataset.get().map((edge) => {
                 if (!this._edgeBaseLabels.has(edge.id)) {
                     this._edgeBaseLabels.set(edge.id, edge.label || '');
@@ -5084,16 +5064,17 @@
                     && (customActive || !hasLocked || lockedEdges.has(edge.id))
                     && (customActive || !hoverEdgeId || edge.id === hoverEdgeId);
                 const label = shouldShowLabel ? this.getEdgeLabelText(edge) : '';
+                const custom = customFonts.get(edge.id);
                 const font = shouldShowLabel
                     ? {
                         ...(edge.font || {}),
-                        size: fontSize,
+                        size: custom?.size ?? fontSize,
                         face: 'Times New Roman, Times, serif',
                         align: 'middle',
-                        color: fontColor,
-                        background: bgColor,
-                        strokeWidth,
-                        strokeColor
+                        color: custom?.color ?? fontColor,
+                        background: custom?.background ?? bgColor,
+                        strokeWidth: custom?.strokeWidth ?? strokeWidth,
+                        strokeColor: custom?.strokeColor ?? strokeColor
                     }
                     : {
                         ...(this._edgeBaseFonts.get(edge.id) || edge.font || {}),
@@ -5901,22 +5882,16 @@
                 this.physicsSpringLength = val;
                 this.applyPhysicsSettings();
                 this.queuePersistSettings();
-                const sidebar = this.getEl(this.ids.physicsSpringSlider);
-                if (sidebar) sidebar.value = String(val);
             });
             bindNumberInput('springConstant', (val) => {
                 this.physicsSpringConstant = val;
                 this.applyPhysicsSettings();
                 this.queuePersistSettings();
-                const sidebar = this.getEl(this.ids.physicsStrengthSlider);
-                if (sidebar) sidebar.value = String(val);
             });
             bindNumberInput('gravity', (val) => {
                 this.physicsGravity = val;
                 this.applyPhysicsSettings();
                 this.queuePersistSettings();
-                const sidebar = this.getEl(this.ids.physicsGravitySlider);
-                if (sidebar) sidebar.value = String(val);
             });
 
             const keyHandler = (ev) => {
@@ -6078,48 +6053,68 @@
                 input.addEventListener('click', (ev) => ev.stopPropagation());
             };
             
+            // Helper to calculate and apply width for single edge or all edges
+            const applyWidth = () => {
+                if (getApplyToAll()) {
+                    // Apply globally: update globals, clear custom widths, recalculate all
+                    this._edgeCustomWidths.clear();
+                    this.applyEdgeWidthRange();
+                    this.queuePersistSettings();
+                } else {
+                    // Apply to single edge: calculate its width and set directly
+                    const meta = this.visNetworkData?.meta || {};
+                    const minRelated = Number.isFinite(meta.minRelated) ? meta.minRelated : 0;
+                    const maxRelated = Number.isFinite(meta.maxRelated) ? meta.maxRelated : minRelated;
+                    const related = edge?.related || 0;
+                    const t = maxRelated > minRelated ? (related - minRelated) / (maxRelated - minRelated) : 0;
+                    const minW = Number(this.edgeMinWidth ?? 1);
+                    const maxW = Number(this.edgeMaxWidth ?? 6);
+                    const scale = Number(this.edgeWidthScale ?? 1.0);
+                    const baseWidth = minW + Math.max(0, Math.min(1, t)) * (maxW - minW);
+                    const width = Number((baseWidth * scale).toFixed(2));
+                    this._edgeCustomWidths.add(edgeId);
+                    dataset.edges.update({ id: edgeId, width });
+                    if (this.visNetwork) this.visNetwork.redraw();
+                }
+            };
+
             bindNumberInput('minWidth', (val) => {
                 this.edgeMinWidth = val;
-                this.applyEdgeWidthRange();
-                this.queuePersistSettings();
+                applyWidth();
             });
-            
+
             bindNumberInput('maxWidth', (val) => {
                 this.edgeMaxWidth = val;
-                this.applyEdgeWidthRange();
-                this.queuePersistSettings();
+                applyWidth();
             });
-            
+
             bindNumberInput('scale', (val) => {
                 this.edgeWidthScale = val;
-                this.applyEdgeWidthRange();
-                this.queuePersistSettings();
+                applyWidth();
             });
             
             // Setup color picker
             const setupColorPicker = (slotRole, property, defaultColor, applyGlobal) => {
                 const slot = pop.querySelector(`[data-role="${slotRole}"]`);
                 if (!slot) return;
-                
-                const currentColor = edge?.color || defaultColor;
-                let initialColor = defaultColor;
-                if (currentColor && currentColor !== 'transparent' && currentColor !== 'none') {
-                    initialColor = currentColor;
-                }
-                
+
+                const rawColor = edge?.color;
+                const edgeColorStr = typeof rawColor === 'string' ? rawColor : (rawColor?.color || null);
+                const initialColor = edgeColorStr || this.edgeColor || defaultColor;
+
                 const colorDisplay = document.createElement('div');
                 colorDisplay.className = 'context-color-display';
                 colorDisplay.style.backgroundColor = initialColor;
-                
+
                 const colorInput = document.createElement('input');
                 colorInput.type = 'text';
                 colorInput.className = 'context-color-input';
                 colorInput.setAttribute('data-coloris', '');
                 colorInput.value = initialColor;
-                
+
                 slot.appendChild(colorDisplay);
                 slot.appendChild(colorInput);
-                
+
                 const updateColor = (val) => {
                     colorDisplay.style.backgroundColor = val;
                     colorInput.value = val;
@@ -6129,22 +6124,23 @@
                         applyEdgeStyle({ color: val });
                     }
                 };
-                
+
                 colorInput.addEventListener('input', () => updateColor(colorInput.value));
                 colorInput.addEventListener('change', () => updateColor(colorInput.value));
-                
+
                 slot.addEventListener('click', () => {
                     colorInput.dispatchEvent(new Event('click', { bubbles: true }));
                 });
-                
+
                 if (typeof global.Coloris !== 'undefined') {
                     try {
                         global.Coloris({
                             el: colorInput,
-                            alpha: false,
+                            alpha: true,
                             format: 'hex',
                             formatToggle: false,
-                            wrap: false
+                            wrap: false,
+                            forceAlpha: true
                         });
                     } catch (e) {
                         // Coloris initialization failed
@@ -7340,6 +7336,8 @@
                 const dataset = this.visNetwork.body.data;
 
                 if (getApplyToAll()) {
+                    // Clear per-edge overrides and apply globally
+                    this._edgeCustomFonts.clear();
                     const edges = dataset.edges.get();
                     const edgeUpdates = edges.map((e) => {
                         const currentEdge = dataset.edges.get(e.id);
@@ -7347,6 +7345,9 @@
                     });
                     dataset.edges.update(edgeUpdates);
                 } else {
+                    // Store per-edge override so applyEdgeLabelDisplay() respects it
+                    const prev = this._edgeCustomFonts.get(edgeId) || {};
+                    this._edgeCustomFonts.set(edgeId, { ...prev, ...updates });
                     const currentEdge = dataset.edges.get(edgeId);
                     dataset.edges.update({ id: edgeId, font: { ...currentEdge?.font, ...updates } });
                 }
@@ -7388,15 +7389,19 @@
             };
 
             bindNumberInput('fontSize', (val) => {
-                this.edgeLabelFontSize = val;
+                if (getApplyToAll()) {
+                    this.edgeLabelFontSize = val;
+                    this.queuePersistSettings();
+                }
                 applyEdgeLabelStyle({ size: val });
-                this.queuePersistSettings();
             });
 
             bindNumberInput('strokeWidth', (val) => {
-                this.edgeLabelStrokeWidth = val;
+                if (getApplyToAll()) {
+                    this.edgeLabelStrokeWidth = val;
+                    this.queuePersistSettings();
+                }
                 applyEdgeLabelStyle({ strokeWidth: val });
-                this.queuePersistSettings();
             });
 
             // Setup color pickers
@@ -7448,10 +7453,11 @@
                     try {
                         global.Coloris({
                             el: colorInput,
-                            alpha: false,
+                            alpha: true,
                             format: 'hex',
                             formatToggle: false,
-                            wrap: false
+                            wrap: false,
+                            forceAlpha: true
                         });
                     } catch (e) {
                         // Coloris initialization failed
@@ -7617,9 +7623,6 @@
             const labelMinDimSlider = this.getEl(this.ids.labelMinDimSlider);
             const relatedMinSlider = this.getEl(this.ids.relatedMinSlider);
             const relatedMinDimSlider = this.getEl(this.ids.relatedMinDimSlider);
-            const physicsSpringSlider = this.getEl(this.ids.physicsSpringSlider);
-            const physicsStrengthSlider = this.getEl(this.ids.physicsStrengthSlider);
-            const physicsGravitySlider = this.getEl(this.ids.physicsGravitySlider);
             const edgeFadeSlider = this.getEl(this.ids.edgeFadeSlider);
             const edgeMinWidthSlider = this.getEl(this.ids.edgeMinWidthSlider);
             const edgeMaxWidthSlider = this.getEl(this.ids.edgeMaxWidthSlider);
@@ -7629,9 +7632,6 @@
             if (labelMinDimSlider) labelMinDimSlider.value = String(this.labelMinDimAlpha ?? 0.2);
             if (relatedMinSlider) relatedMinSlider.value = String(this.relatedMinValue || 0);
             if (relatedMinDimSlider) relatedMinDimSlider.value = String(this.relatedMinDimAlpha ?? 0.2);
-            if (physicsSpringSlider) physicsSpringSlider.value = String(this.physicsSpringLength);
-            if (physicsStrengthSlider) physicsStrengthSlider.value = String(this.physicsSpringConstant);
-            if (physicsGravitySlider) physicsGravitySlider.value = String(this.physicsGravity);
             if (edgeFadeSlider) edgeFadeSlider.value = String(this.edgeFade);
             if (edgeMinWidthSlider) edgeMinWidthSlider.value = String(this.edgeMinWidth);
             if (edgeMaxWidthSlider) edgeMaxWidthSlider.value = String(this.edgeMaxWidth);
@@ -8397,9 +8397,6 @@
             const labelMinDimSlider = this.getEl(this.ids.labelMinDimSlider);
             const relatedMinSlider = this.getEl(this.ids.relatedMinSlider);
             const relatedMinDimSlider = this.getEl(this.ids.relatedMinDimSlider);
-            const physicsSpringSlider = this.getEl(this.ids.physicsSpringSlider);
-            const physicsStrengthSlider = this.getEl(this.ids.physicsStrengthSlider);
-            const physicsGravitySlider = this.getEl(this.ids.physicsGravitySlider);
             const edgeFadeSlider = this.getEl(this.ids.edgeFadeSlider);
             const edgeMinWidthSlider = this.getEl(this.ids.edgeMinWidthSlider);
             const edgeMaxWidthSlider = this.getEl(this.ids.edgeMaxWidthSlider);
@@ -8414,9 +8411,6 @@
             if (labelMinDimSlider) labelMinDimSlider.value = String(this.labelMinDimAlpha ?? 0.2);
             if (relatedMinSlider) relatedMinSlider.value = String(this.relatedMinValue || 0);
             if (relatedMinDimSlider) relatedMinDimSlider.value = String(this.relatedMinDimAlpha ?? 0.2);
-            if (physicsSpringSlider) physicsSpringSlider.value = String(this.physicsSpringLength || 120);
-            if (physicsStrengthSlider) physicsStrengthSlider.value = String(this.physicsSpringConstant || 0.05);
-            if (physicsGravitySlider) physicsGravitySlider.value = String(this.physicsGravity || -9000);
             if (edgeFadeSlider) edgeFadeSlider.value = String(this.edgeFade || 100);
             if (edgeMinWidthSlider) edgeMinWidthSlider.value = String(this.edgeMinWidth || 1);
             if (edgeMaxWidthSlider) edgeMaxWidthSlider.value = String(this.edgeMaxWidth || 6);
@@ -9214,6 +9208,9 @@
                     return;
                 }
                 const edgeId = params?.edges?.[0];
+                if (edgeId) {
+                    this.switchEdgePopoverTarget(edgeId);
+                }
                 if (edgeId && this._toolbarMode === 'edge') {
                     this.toggleEdgeSelectionMode(edgeId);
                     return;
