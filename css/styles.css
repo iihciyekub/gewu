@@ -5945,6 +5945,26 @@ ol.json-array {
     border-color: #3b82f6;
 }
 
+.context-select-input {
+    height: 24px;
+    padding: 2px 6px;
+    border: 1px solid #d1d5db;
+    border-radius: 3px;
+    font-size: 11px;
+    transition: border-color 0.15s ease;
+    background: white;
+    cursor: pointer;
+}
+
+.context-select-input:hover {
+    border-color: #9ca3af;
+}
+
+.context-select-input:focus {
+    outline: none;
+    border-color: #3b82f6;
+}
+
 .context-input-row .context-color-slot {
     flex: 1;
     min-width: 80px;

@@ -5960,6 +5960,37 @@
                     <span class="context-slider-label">Color</span>
                     <div class="context-color-slot" data-role="edgeColor"></div>
                 </div>
+                <div class="context-input-row">
+                    <label class="context-input-label" style="width: 100%;">Line Style
+                        <select class="context-select-input" data-role="smoothType" aria-label="Smooth Type" style="width: 100%; margin-top: 3px;">
+                            <option value="straight">Straight</option>
+                            <option value="curve-dynamic" selected>Curve Dynamic</option>
+                            <option value="curve-cw">Curve CW</option>
+                            <option value="curve-ccw">Curve CCW</option>
+                            <option value="curve-bezier">Curve Bezier</option>
+                        </select>
+                    </label>
+                </div>
+                <div class="context-input-row" style="display: flex; gap: 10px;">
+                    <label class="context-popover-toggle" style="flex: 1; margin: 0;">
+                        <input type="checkbox" class="context-popover-checkbox" data-role="dashed" aria-label="Dashed">
+                        <span>Dashed</span>
+                    </label>
+                    <label class="context-popover-toggle" style="flex: 1; margin: 0;">
+                        <input type="checkbox" class="context-popover-checkbox" data-role="arrows" aria-label="Arrows">
+                        <span>Arrows</span>
+                    </label>
+                </div>
+                <div class="context-input-row" data-role="arrowTypeRow" style="display: none;">
+                    <label class="context-input-label" style="width: 100%;">Arrow Type
+                        <select class="context-select-input" data-role="arrowType" aria-label="Arrow Type" style="width: 100%; margin-top: 3px;">
+                            <option value="to">To (→)</option>
+                            <option value="from">From (←)</option>
+                            <option value="to;from">Both (↔)</option>
+                            <option value="middle">Middle</option>
+                        </select>
+                    </label>
+                </div>
             `;
             document.body.appendChild(pop);
             this._makePopoverDraggable(pop);
@@ -6157,6 +6188,102 @@
                 this.edgeColor = val;
                 this.queuePersistSettings();
             });
+
+            // Setup style controls
+            const smoothTypeSelect = pop.querySelector('[data-role="smoothType"]');
+            const dashedCheckbox = pop.querySelector('[data-role="dashed"]');
+            const arrowsCheckbox = pop.querySelector('[data-role="arrows"]');
+            const arrowTypeRow = pop.querySelector('[data-role="arrowTypeRow"]');
+            const arrowTypeSelect = pop.querySelector('[data-role="arrowType"]');
+
+            // Initialize with current edge style or defaults
+            const currentSmooth = edge?.smooth;
+            const currentDashed = edge?.dashes ? true : false;
+            const currentArrows = edge?.arrows || false;
+
+            // Set initial values
+            if (currentSmooth === false) {
+                smoothTypeSelect.value = 'straight';
+            } else if (currentSmooth?.type === 'dynamic') {
+                smoothTypeSelect.value = 'curve-dynamic';
+            } else if (currentSmooth?.type === 'curvedCW') {
+                smoothTypeSelect.value = 'curve-cw';
+            } else if (currentSmooth?.type === 'curvedCCW') {
+                smoothTypeSelect.value = 'curve-ccw';
+            } else if (currentSmooth?.type === 'continuous') {
+                smoothTypeSelect.value = 'curve-bezier';
+            }
+
+            if (dashedCheckbox) dashedCheckbox.checked = currentDashed;
+            if (arrowsCheckbox) arrowsCheckbox.checked = !!currentArrows;
+            if (arrowTypeSelect && currentArrows) arrowTypeSelect.value = currentArrows;
+            if (arrowTypeRow) arrowTypeRow.style.display = currentArrows ? 'block' : 'none';
+
+            // Helper to apply combined style
+            const applyStyle = () => {
+                const smoothType = smoothTypeSelect.value;
+                const dashed = dashedCheckbox.checked;
+                const hasArrows = arrowsCheckbox.checked;
+                const arrowType = hasArrows ? arrowTypeSelect.value : false;
+
+                const updates = {};
+
+                // Apply smooth type
+                if (smoothType === 'straight') {
+                    updates.smooth = false;
+                } else if (smoothType === 'curve-dynamic') {
+                    updates.smooth = { type: 'dynamic', roundness: 0.25 };
+                } else if (smoothType === 'curve-cw') {
+                    updates.smooth = { type: 'curvedCW', roundness: 0.25 };
+                } else if (smoothType === 'curve-ccw') {
+                    updates.smooth = { type: 'curvedCCW', roundness: 0.25 };
+                } else if (smoothType === 'curve-bezier') {
+                    updates.smooth = { type: 'continuous', roundness: 0.35 };
+                }
+
+                // Apply dashed
+                updates.dashes = dashed ? [6, 6] : false;
+
+                // Apply arrows
+                if (arrowType) {
+                    updates.arrows = arrowType;
+                } else {
+                    updates.arrows = undefined;
+                }
+
+                applyEdgeStyle(updates);
+            };
+
+            // Event listeners
+            if (smoothTypeSelect) {
+                smoothTypeSelect.addEventListener('change', (ev) => {
+                    ev.stopPropagation();
+                    applyStyle();
+                });
+            }
+
+            if (dashedCheckbox) {
+                dashedCheckbox.addEventListener('change', (ev) => {
+                    ev.stopPropagation();
+                    applyStyle();
+                });
+            }
+
+            if (arrowsCheckbox) {
+                arrowsCheckbox.addEventListener('change', (ev) => {
+                    ev.stopPropagation();
+                    const hasArrows = arrowsCheckbox.checked;
+                    if (arrowTypeRow) arrowTypeRow.style.display = hasArrows ? 'block' : 'none';
+                    applyStyle();
+                });
+            }
+
+            if (arrowTypeSelect) {
+                arrowTypeSelect.addEventListener('change', (ev) => {
+                    ev.stopPropagation();
+                    applyStyle();
+                });
+            }
 
             const keyHandler = (ev) => {
                 if (ev.key === 'Escape') this.closeEdgeStylePopover();
