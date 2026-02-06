@@ -1046,13 +1046,6 @@
                 labelSuggest: options.labelSuggestId || 'visLabelSuggest',
                 labelFields: options.labelFieldsId || 'visLabelFields',
                 labelSlots: options.labelSlotsId || 'visLabelSlots',
-                labelFadeSlider: options.labelFadeSliderId || 'visLabelFadeSlider',
-                labelColorInput: options.labelColorInputId || 'visLabelColorInput',
-                labelBgColorInput: options.labelBgColorInputId || 'visLabelBgColorInput',
-                labelBorderColorInput: options.labelBorderColorInputId || 'visLabelBorderColorInput',
-                labelStrokeWidthInput: options.labelStrokeWidthInputId || 'visLabelStrokeWidthInput',
-                labelStrokeColorInput: options.labelStrokeColorInputId || 'visLabelStrokeColorInput',
-                labelSizeSlider: options.labelSizeSliderId || 'visLabelSizeSlider',
                 labelMinSlider: options.labelMinSliderId || 'visLabelMinSlider',
                 labelMinDimSlider: options.labelMinDimSliderId || 'visLabelMinDimSlider',
                 relatedMinSlider: options.relatedMinSliderId || 'visRelatedMinSlider',
@@ -1067,9 +1060,6 @@
                 edgeLabelStrokeWidthInput: options.edgeLabelStrokeWidthInputId || 'visEdgeLabelStrokeWidthInput',
                 edgeLabelStrokeColorInput: options.edgeLabelStrokeColorInputId || 'visEdgeLabelStrokeColorInput',
                 edgeLabelBgColorInput: options.edgeLabelBgColorInputId || 'visEdgeLabelBgColorInput',
-                labelWeightSlider: options.labelWeightSliderId || 'visLabelWeightSlider',
-                labelFontMinInput: options.labelFontMinInputId || 'visLabelFontMinInput',
-                labelFontMaxInput: options.labelFontMaxInputId || 'visLabelFontMaxInput',
                 physicsSpringSlider: options.physicsSpringSliderId || 'visPhysicsSpringSlider',
                 physicsStrengthSlider: options.physicsStrengthSliderId || 'visPhysicsStrengthSlider',
                 physicsGravitySlider: options.physicsGravitySliderId || 'visPhysicsGravitySlider',
@@ -1119,7 +1109,7 @@
             this.labelBorderColor = '#00000021';
             this.labelStrokeWidth = 0;
             this.labelStrokeColor = '#ffffff';
-            this.labelSizeScale = 1;
+            this.labelSizeScale = 0.5;
             this.labelMinCitations = 0;
             this.labelFieldOptions = [];
             this.labelSuggestIndex = -1;
@@ -1128,8 +1118,8 @@
             this.wosDataIndexSource = null;
             this.labelFieldsSelected = [];
             this.labelWeight = 500;
-            this.labelFontMin = 9;
-            this.labelFontMax = 30;
+            this.labelFontMin = 5;
+            this.labelFontMax = 20;
             this.labelMinDimAlpha = 0.2;
             this.relatedMinValue = 0;
             this.relatedMinDimAlpha = 0.2;
@@ -1257,13 +1247,6 @@
             const labelSuggest = this.getEl(this.ids.labelSuggest);
             const labelFields = this.getEl(this.ids.labelFields);
             const labelSlots = this.getEl(this.ids.labelSlots);
-            const labelFadeSlider = this.getEl(this.ids.labelFadeSlider);
-            const labelColorInput = this.getEl(this.ids.labelColorInput);
-            const labelBgColorInput = this.getEl(this.ids.labelBgColorInput);
-            const labelBorderColorInput = this.getEl(this.ids.labelBorderColorInput);
-            const labelStrokeWidthInput = this.getEl(this.ids.labelStrokeWidthInput);
-            const labelStrokeColorInput = this.getEl(this.ids.labelStrokeColorInput);
-            const labelSizeSlider = this.getEl(this.ids.labelSizeSlider);
             const labelMinSlider = this.getEl(this.ids.labelMinSlider);
             const labelMinDimSlider = this.getEl(this.ids.labelMinDimSlider);
             const relatedMinSlider = this.getEl(this.ids.relatedMinSlider);
@@ -1271,9 +1254,6 @@
             const nodeContextColorInput = this.getEl(this.ids.nodeContextColorInput);
             const nodeContextBorderColorInput = this.getEl(this.ids.nodeContextBorderColorInput);
             const nodeContextStrokeColorInput = this.getEl(this.ids.nodeContextStrokeColorInput);
-            const labelWeightSlider = this.getEl(this.ids.labelWeightSlider);
-            const labelFontMinInput = this.getEl(this.ids.labelFontMinInput);
-            const labelFontMaxInput = this.getEl(this.ids.labelFontMaxInput);
             const physicsSpringSlider = this.getEl(this.ids.physicsSpringSlider);
             const physicsStrengthSlider = this.getEl(this.ids.physicsStrengthSlider);
             const physicsGravitySlider = this.getEl(this.ids.physicsGravitySlider);
@@ -1726,48 +1706,6 @@
                 }, { passive: false });
             };
 
-            bindNumberInput(labelFadeSlider, (next) => {
-                this.labelFade = next;
-                this.applyLabelFade();
-                this.queuePersistSettings();
-            });
-            if (labelColorInput && !labelColorInput.dataset.visBound) {
-                labelColorInput.dataset.visBound = '1';
-                labelColorInput.addEventListener('input', () => {
-                    this.labelColor = labelColorInput.value || '#000000';
-                    this.applyLabelColor();
-                    this.queuePersistSettings();
-                });
-            }
-            if (labelBgColorInput && !labelBgColorInput.dataset.visBound) {
-                labelBgColorInput.dataset.visBound = '1';
-                labelBgColorInput.addEventListener('input', () => {
-                    this.labelBgColor = labelBgColorInput.value || '#f2f2f2f1';
-                    this.applyLabelBgColor();
-                    this.queuePersistSettings();
-                });
-            }
-            if (labelBorderColorInput && !labelBorderColorInput.dataset.visBound) {
-                labelBorderColorInput.dataset.visBound = '1';
-                labelBorderColorInput.addEventListener('input', () => {
-                    this.labelBorderColor = labelBorderColorInput.value || '#00000021';
-                    this.applyLabelBorderColor();
-                    this.queuePersistSettings();
-                });
-            }
-            bindNumberInput(labelStrokeWidthInput, (next) => {
-                this.labelStrokeWidth = Math.max(0, Number.isFinite(next) ? next : 0);
-                this.applyLabelStrokeWidth();
-                this.queuePersistSettings();
-            });
-            if (labelStrokeColorInput && !labelStrokeColorInput.dataset.visBound) {
-                labelStrokeColorInput.dataset.visBound = '1';
-                labelStrokeColorInput.addEventListener('input', () => {
-                    this.labelStrokeColor = labelStrokeColorInput.value || '#ffffff';
-                    this.applyLabelStrokeColor();
-                    this.queuePersistSettings();
-                });
-            }
             bindNumberInput(labelMinSlider, (next) => {
                 this.labelMinCitations = next;
                 this.applyLabelThreshold();
@@ -1788,21 +1726,6 @@
                 const clamped = Math.max(0, Math.min(1, Number.isFinite(next) ? next : 0.2));
                 this.relatedMinDimAlpha = clamped;
                 this.applyLabelThresholdDimming();
-                this.queuePersistSettings();
-            });
-            bindNumberInput(labelWeightSlider, (next) => {
-                this.labelWeight = next;
-                this.applyLabelWeight();
-                this.queuePersistSettings();
-            });
-            bindNumberInput(labelFontMinInput, (next) => {
-                this.labelFontMin = next;
-                this.applyLabelSizeScale();
-                this.queuePersistSettings();
-            });
-            bindNumberInput(labelFontMaxInput, (next) => {
-                this.labelFontMax = next;
-                this.applyLabelSizeScale();
                 this.queuePersistSettings();
             });
             bindNumberInput(physicsSpringSlider, (next) => {
@@ -1907,34 +1830,6 @@
                         formatToggle: false,
                         forceAlpha: true
                     });
-                    global.Coloris({
-                        el: '#visLabelColorInput',
-                        alpha: true,
-                        format: 'hex',
-                        formatToggle: false,
-                        forceAlpha: true
-                    });
-                    global.Coloris({
-                        el: '#visLabelBgColorInput',
-                        alpha: true,
-                        format: 'hex',
-                        formatToggle: false,
-                        forceAlpha: true
-                    });
-                    global.Coloris({
-                        el: '#visLabelBorderColorInput',
-                        alpha: true,
-                        format: 'hex',
-                        formatToggle: false,
-                        forceAlpha: true
-                    });
-                    global.Coloris({
-                        el: '#visLabelStrokeColorInput',
-                        alpha: true,
-                        format: 'hex',
-                        formatToggle: false,
-                        forceAlpha: true
-                    });
                 } catch (_e) {
                     // ignore color picker init issues
                 }
@@ -2025,12 +1920,6 @@
                     this.queuePersistSettings();
                 });
             }
-            bindNumberInput(labelSizeSlider, (next) => {
-                const scale = Number.isFinite(next) ? next / 100 : 1;
-                this.labelSizeScale = Math.max(0.6, Math.min(2.2, scale));
-                this.applyLabelSizeScale();
-                this.queuePersistSettings();
-            });
             if (labelFields && !labelFields.dataset.visBound) {
                 labelFields.dataset.visBound = '1';
                 labelFields.addEventListener('click', (e) => {
@@ -4145,8 +4034,6 @@
                     }
                 }
                 this.renderLabelFieldChips();
-                const slider = this.getEl(this.ids.labelFadeSlider);
-                if (slider) slider.value = String(this.labelFade || 0);
                 const minSlider = this.getEl(this.ids.labelMinSlider);
                 if (minSlider) minSlider.value = String(this.labelMinCitations || 0);
                 const minDimSlider = this.getEl(this.ids.labelMinDimSlider);
@@ -4155,42 +4042,24 @@
                 if (relatedMinSlider) relatedMinSlider.value = String(this.relatedMinValue || 0);
                 const relatedMinDimSlider = this.getEl(this.ids.relatedMinDimSlider);
                 if (relatedMinDimSlider) relatedMinDimSlider.value = String(this.relatedMinDimAlpha ?? 0.2);
-                const sizeSlider = this.getEl(this.ids.labelSizeSlider);
-                if (sizeSlider) sizeSlider.value = String(Math.round((this.labelSizeScale || 1) * 100));
-                const labelFontMinInput = this.getEl(this.ids.labelFontMinInput);
-                const labelFontMaxInput = this.getEl(this.ids.labelFontMaxInput);
-                const labelColorInput = this.getEl(this.ids.labelColorInput);
-                const labelBgColorInput = this.getEl(this.ids.labelBgColorInput);
-                const labelBorderColorInput = this.getEl(this.ids.labelBorderColorInput);
-                const labelStrokeWidthInput = this.getEl(this.ids.labelStrokeWidthInput);
-                const labelStrokeColorInput = this.getEl(this.ids.labelStrokeColorInput);
                 const edgeColorInput = this.getEl(this.ids.edgeColorInput);
                 const edgeLabelFontSizeInput = this.getEl(this.ids.edgeLabelFontSizeInput);
                 const edgeLabelColorInput = this.getEl(this.ids.edgeLabelColorInput);
                 const edgeLabelStrokeWidthInput = this.getEl(this.ids.edgeLabelStrokeWidthInput);
                 const edgeLabelStrokeColorInput = this.getEl(this.ids.edgeLabelStrokeColorInput);
                 const edgeLabelBgColorInput = this.getEl(this.ids.edgeLabelBgColorInput);
-                const labelWeightSlider = this.getEl(this.ids.labelWeightSlider);
                 const physicsSpringSlider = this.getEl(this.ids.physicsSpringSlider);
                 const physicsStrengthSlider = this.getEl(this.ids.physicsStrengthSlider);
                 const physicsGravitySlider = this.getEl(this.ids.physicsGravitySlider);
                 const edgeFadeSlider = this.getEl(this.ids.edgeFadeSlider);
                 const edgeMinWidthSlider = this.getEl(this.ids.edgeMinWidthSlider);
                 const edgeMaxWidthSlider = this.getEl(this.ids.edgeMaxWidthSlider);
-                if (labelFontMinInput) labelFontMinInput.value = String(this.labelFontMin ?? 9);
-                if (labelFontMaxInput) labelFontMaxInput.value = String(this.labelFontMax ?? 30);
-                this.setColorInputValue(labelColorInput, this.labelColor || '#000000');
-                this.setColorInputValue(labelBgColorInput, this.labelBgColor || '#f2f2f2f1');
-                this.setColorInputValue(labelBorderColorInput, this.labelBorderColor || '#00000021');
-                if (labelStrokeWidthInput) labelStrokeWidthInput.value = String(this.labelStrokeWidth ?? 0);
-                this.setColorInputValue(labelStrokeColorInput, this.labelStrokeColor || '#ffffff');
                 this.setColorInputValue(edgeColorInput, this.edgeColor || '#111111');
                 if (edgeLabelFontSizeInput) edgeLabelFontSizeInput.value = String(this.edgeLabelFontSize ?? 12);
                 this.setColorInputValue(edgeLabelColorInput, this.edgeLabelFontColor || '#111111');
                 if (edgeLabelStrokeWidthInput) edgeLabelStrokeWidthInput.value = String(this.edgeLabelStrokeWidth ?? 0);
                 this.setColorInputValue(edgeLabelStrokeColorInput, this.edgeLabelStrokeColor || '#ffffff');
                 this.setColorInputValue(edgeLabelBgColorInput, this.edgeLabelBgColor || 'rgba(255,255,255,0.85)');
-                if (labelWeightSlider) labelWeightSlider.value = String(this.labelWeight || 500);
                 if (physicsSpringSlider) physicsSpringSlider.value = String(this.physicsSpringLength || 120);
                 if (physicsStrengthSlider) physicsStrengthSlider.value = String(this.physicsSpringConstant || 0.05);
                 if (physicsGravitySlider) physicsGravitySlider.value = String(this.physicsGravity || -9000);
@@ -4708,39 +4577,20 @@
         applyLabelSizeScale() {
             const dataset = this.getNetworkNodesDataSet();
             if (!dataset) return;
-            const scale = Number.isFinite(this.labelSizeScale) ? this.labelSizeScale : 1;
-            const range = scale - 1;
-            const meta = this.visNetworkData?.meta || {};
-            const minCitation = Number.isFinite(meta.minCitation) ? meta.minCitation : 0;
-            const maxCitation = Number.isFinite(meta.maxCitation) ? meta.maxCitation : minCitation;
-            let minFont = Number.isFinite(this.labelFontMin) ? this.labelFontMin : null;
-            let maxFont = Number.isFinite(this.labelFontMax) ? this.labelFontMax : null;
-            if (minFont != null && maxFont != null && maxFont < minFont) {
-                const swap = minFont;
-                minFont = maxFont;
-                maxFont = swap;
-            }
+            const scale = Number.isFinite(this.labelSizeScale) ? this.labelSizeScale : 0.5;
+            const minFontSize = Number.isFinite(this.labelFontMin) ? this.labelFontMin : 5;
+            const maxFontSize = Number.isFinite(this.labelFontMax) ? this.labelFontMax : 20;
+            
             const updates = dataset.get().map((node) => {
-                const base = node.labelBaseSize
-                    || node.labelStyle?.fontSize
-                    || node.labelFontSize
-                    || 12;
-            const citations = Number.isFinite(parseNumber(node.citations_count))
-                ? parseNumber(node.citations_count)
-                : null;
-                let factor = 1;
-                if (citations != null && maxCitation > minCitation) {
-                    const t = (citations - minCitation) / (maxCitation - minCitation);
-                    const delta = (t - 0.5) * 2 * range;
-                    factor = 1 + delta;
-                }
-                let next = Math.max(1, base * factor);
-                if (minFont != null) next = Math.max(minFont, next);
-                if (maxFont != null) next = Math.min(maxFont, next);
+                const nodeSize = node.size || 30;
+                // Calculate font size as a proportion of node size
+                const baseFontSize = nodeSize * scale;
+                // Clamp font size between absolute min and max pixel values
+                let fontSize = Math.max(minFontSize, Math.min(maxFontSize, baseFontSize));
+                
                 return {
                     id: node.id,
-                    labelBaseSize: base,
-                    labelStyle: { ...(node.labelStyle || {}), fontSize: Number(next.toFixed(2)) }
+                    labelStyle: { ...(node.labelStyle || {}), fontSize: Number(fontSize.toFixed(2)), scaleFont: scale, scaleMin: minFontSize, scaleMax: maxFontSize }
                 };
             });
             dataset.update(updates);
@@ -6253,8 +6103,13 @@
             const margin = 8;
             let nextLeft = anchorX;
             let nextTop = anchorY;
-            if (rect.right > window.innerWidth - margin) {
-                nextLeft = window.innerWidth - rect.width - margin;
+            // Check if would overflow on the right, if so display on the left
+            if (anchorX + rect.width > window.innerWidth - margin) {
+                nextLeft = anchorX - rect.width - 12;
+            }
+            // Ensure not overflow on the left
+            if (nextLeft < margin) {
+                nextLeft = margin;
             }
             if (rect.bottom > window.innerHeight - margin) {
                 nextTop = window.innerHeight - rect.height - margin;
@@ -6534,12 +6389,12 @@
             const node = dataset && typeof dataset.get === 'function' ? dataset.get(nodeId) : null;
 
             // Get current values from node or global settings
-            const currentFontSize = Number(node?.font?.size || this.labelFontMin || 14);
+            const currentLabelScale = Number(node?.labelStyle?.scaleFont || this.labelSizeScale || 0.5);
             const currentStrokeWidth = Number(node?.labelStyle?.strokeWidth || this.labelStrokeWidth || 0);
             const currentBorderWidth = Number(node?.labelStyle?.borderWidth || this.labelBorderWidth || 0);
             const currentWeight = Number(node?.font?.weight || this.labelWeight || 500);
-            const currentMinSize = Number(this.labelFontMin || 9);
-            const currentMaxSize = Number(this.labelFontMax || 30);
+            const currentMaxScale = Number(this.labelFontMax || 20);
+            const currentMinScale = Number(this.labelFontMin || 5);
             const currentFade = Number(this.labelFade || 0);
 
             const formatValue = (value, decimals = 1) => {
@@ -6568,11 +6423,11 @@
                 <div class="context-input-row context-input-group-row">
                     <div class="context-input-group">
                         <label class="context-input-label">Min</label>
-                        <input class="context-number-input" data-role="minSize" type="number" min="6" max="50" step="0.5" value="${currentMinSize}" aria-label="Min Size">
+                        <input class="context-number-input" data-role="minScale" type="number" min="1" max="10" step="1" value="${Math.round(currentMinScale)}" aria-label="Min Font Size">
                     </div>
                     <div class="context-input-group">
-                        <label class="context-input-label">Size</label>
-                        <input class="context-number-input" data-role="fontSize" type="number" min="6" max="72" step="0.5" value="${currentFontSize}" aria-label="Font Size">
+                        <label class="context-input-label">Scale</label>
+                        <input class="context-number-input" data-role="scale" type="number" min="0.1" max="2" step="0.01" value="${currentLabelScale.toFixed(2)}" aria-label="Label Scale">
                     </div>
                     <div class="context-input-group">
                         <label class="context-input-label">Weight</label>
@@ -6580,7 +6435,7 @@
                     </div>
                     <div class="context-input-group">
                         <label class="context-input-label">Max</label>
-                        <input class="context-number-input" data-role="maxSize" type="number" min="10" max="100" step="0.5" value="${currentMaxSize}" aria-label="Max Size">
+                        <input class="context-number-input" data-role="maxScale" type="number" min="5" max="30" step="1" value="${Math.round(currentMaxScale)}" aria-label="Max Font Size">
                     </div>
                 </div>
                 <div class="context-color-row">
@@ -6619,8 +6474,13 @@
             const margin = 8;
             let nextLeft = anchorX;
             let nextTop = anchorY;
-            if (rect.right > window.innerWidth - margin) {
-                nextLeft = window.innerWidth - rect.width - margin;
+            // Check if would overflow on the right, if so display on the left
+            if (anchorX + rect.width > window.innerWidth - margin) {
+                nextLeft = anchorX - rect.width - 12;
+            }
+            // Ensure not overflow on the left
+            if (nextLeft < margin) {
+                nextLeft = margin;
             }
             if (rect.bottom > window.innerHeight - margin) {
                 nextTop = window.innerHeight - rect.height - margin;
@@ -6641,22 +6501,23 @@
                     const nodes = dataset.nodes.get();
                     const nodeUpdates = nodes.map((n) => {
                         const currentNode = dataset.nodes.get(n.id);
-                        const existingFont = currentNode?.font || {};
+                        const existingLabelStyle = currentNode?.labelStyle || {};
                         return {
                             id: n.id,
-                            font: { ...existingFont, ...updates }
+                            labelStyle: { ...existingLabelStyle, ...updates }
                         };
                     });
                     dataset.nodes.update(nodeUpdates);
                 } else {
                     // Apply to single node
                     const currentNode = dataset.nodes.get(nodeId);
-                    const existingFont = currentNode?.font || {};
+                    const existingLabelStyle = currentNode?.labelStyle || {};
                     dataset.nodes.update({
                         id: nodeId,
-                        font: { ...existingFont, ...updates }
+                        labelStyle: { ...existingLabelStyle, ...updates }
                     });
                 }
+                this.updateLabelLayer();
             };
 
             // Bind number inputs
@@ -6693,10 +6554,50 @@
                 input.addEventListener('click', (ev) => ev.stopPropagation());
             };
 
-            bindNumberInput('fontSize', (val) => {
-                this.labelFontMin = val;
-                this.labelFontMax = val;
-                this.applyLabelSizeScale();
+            // Helper for scale-related updates with smooth recalculation
+            const applySizeScaleUpdates = () => {
+                if (!this.visNetwork || !this.visNetwork.body?.data?.nodes) return;
+                const dataset = this.visNetwork.body.data;
+                const scale = Number.isFinite(this.labelSizeScale) ? this.labelSizeScale : 0.5;
+                const minFontSize = Number.isFinite(this.labelFontMin) ? this.labelFontMin : 5;
+                const maxFontSize = Number.isFinite(this.labelFontMax) ? this.labelFontMax : 20;
+
+                if (getApplyToAll()) {
+                    // Apply to all nodes
+                    const nodes = dataset.nodes.get();
+                    const updates = nodes.map((node) => {
+                        const nodeSize = node.size || 30;
+                        const baseFontSize = nodeSize * scale;
+                        // Clamp font size between absolute min and max values
+                        let fontSize = Math.max(minFontSize, Math.min(maxFontSize, baseFontSize));
+                        
+                        return {
+                            id: node.id,
+                            labelStyle: { ...(node.labelStyle || {}), fontSize: Number(fontSize.toFixed(2)), scaleFont: scale, scaleMin: minFontSize, scaleMax: maxFontSize }
+                        };
+                    });
+                    dataset.nodes.update(updates);
+                } else {
+                    // Apply to single node
+                    const currentNode = dataset.nodes.get(nodeId);
+                    if (!currentNode) return;
+                    
+                    const nodeSize = currentNode.size || 30;
+                    const baseFontSize = nodeSize * scale;
+                    // Clamp font size between absolute min and max values
+                    let fontSize = Math.max(minFontSize, Math.min(maxFontSize, baseFontSize));
+                    
+                    dataset.nodes.update({
+                        id: nodeId,
+                        labelStyle: { ...(currentNode.labelStyle || {}), fontSize: Number(fontSize.toFixed(2)), scaleFont: scale, scaleMin: minFontSize, scaleMax: maxFontSize }
+                    });
+                }
+                this.updateLabelLayer();
+            };
+
+            bindNumberInput('scale', (val) => {
+                this.labelSizeScale = val;
+                applySizeScaleUpdates();
                 this.queuePersistSettings();
             });
 
@@ -6712,15 +6613,15 @@
                 this.queuePersistSettings();
             });
 
-            bindNumberInput('minSize', (val) => {
+            bindNumberInput('minScale', (val) => {
                 this.labelFontMin = val;
-                this.applyLabelSizeScale();
+                applySizeScaleUpdates();
                 this.queuePersistSettings();
             });
 
-            bindNumberInput('maxSize', (val) => {
+            bindNumberInput('maxScale', (val) => {
                 this.labelFontMax = val;
-                this.applyLabelSizeScale();
+                applySizeScaleUpdates();
                 this.queuePersistSettings();
             });
 
@@ -6919,9 +6820,9 @@
             this.edgeLabelStrokeWidth = 0;
             this.edgeLabelStrokeColor = '#ffffff';
             this.edgeLabelBgColor = 'rgba(255,255,255,0.85)';
-            this.labelFontMin = 5;
-            this.labelFontMax = 23;
-            this.labelSizeScale = 1.37;
+            this.labelFontMin = 8;
+            this.labelFontMax = 25;
+            this.labelSizeScale = 0.6;
             this.labelWeight = 1300;
             this.labelFade = 0;
             this.labelColor = '#000000ff';
@@ -6999,15 +6900,10 @@
             this.edgeMinWidth = Number(clamp(1 - 0.25 * dense, 0.6, 1.2).toFixed(2));
             this.edgeMaxWidth = Number(clamp(6 - 1.8 * dense - 0.8 * degree, 3.5, 7).toFixed(2));
 
-            const labelSizeSlider = this.getEl(this.ids.labelSizeSlider);
-            const labelFadeSlider = this.getEl(this.ids.labelFadeSlider);
             const labelMinSlider = this.getEl(this.ids.labelMinSlider);
             const labelMinDimSlider = this.getEl(this.ids.labelMinDimSlider);
             const relatedMinSlider = this.getEl(this.ids.relatedMinSlider);
             const relatedMinDimSlider = this.getEl(this.ids.relatedMinDimSlider);
-            const labelWeightSlider = this.getEl(this.ids.labelWeightSlider);
-            const labelBgColorInput = this.getEl(this.ids.labelBgColorInput);
-            const labelBorderColorInput = this.getEl(this.ids.labelBorderColorInput);
             const physicsSpringSlider = this.getEl(this.ids.physicsSpringSlider);
             const physicsStrengthSlider = this.getEl(this.ids.physicsStrengthSlider);
             const physicsGravitySlider = this.getEl(this.ids.physicsGravitySlider);
@@ -7016,16 +6912,10 @@
             const edgeMaxWidthSlider = this.getEl(this.ids.edgeMaxWidthSlider);
             const edgeColorInput = this.getEl(this.ids.edgeColorInput);
 
-            if (labelSizeSlider) labelSizeSlider.value = String(Math.round(labelScale * 100));
-            if (labelFadeSlider) labelFadeSlider.value = String(fade);
-            if (labelColorInput) labelColorInput.value = this.labelColor || '#000000';
-            if (labelBgColorInput) labelBgColorInput.value = this.labelBgColor || '#f2f2f2f1';
-            if (labelBorderColorInput) labelBorderColorInput.value = this.labelBorderColor || '#00000021';
             if (labelMinSlider) labelMinSlider.value = String(minCite);
             if (labelMinDimSlider) labelMinDimSlider.value = String(this.labelMinDimAlpha ?? 0.2);
             if (relatedMinSlider) relatedMinSlider.value = String(this.relatedMinValue || 0);
             if (relatedMinDimSlider) relatedMinDimSlider.value = String(this.relatedMinDimAlpha ?? 0.2);
-            if (labelWeightSlider) labelWeightSlider.value = String(this.labelWeight || 500);
             if (physicsSpringSlider) physicsSpringSlider.value = String(this.physicsSpringLength);
             if (physicsStrengthSlider) physicsStrengthSlider.value = String(this.physicsSpringConstant);
             if (physicsGravitySlider) physicsGravitySlider.value = String(this.physicsGravity);
@@ -7784,20 +7674,10 @@
         }
 
         syncSettingsSliders() {
-            const labelFadeSlider = this.getEl(this.ids.labelFadeSlider);
-            const labelColorInput = this.getEl(this.ids.labelColorInput);
-            const labelBgColorInput = this.getEl(this.ids.labelBgColorInput);
-            const labelBorderColorInput = this.getEl(this.ids.labelBorderColorInput);
-            const labelStrokeWidthInput = this.getEl(this.ids.labelStrokeWidthInput);
-            const labelStrokeColorInput = this.getEl(this.ids.labelStrokeColorInput);
-            const labelSizeSlider = this.getEl(this.ids.labelSizeSlider);
             const labelMinSlider = this.getEl(this.ids.labelMinSlider);
             const labelMinDimSlider = this.getEl(this.ids.labelMinDimSlider);
             const relatedMinSlider = this.getEl(this.ids.relatedMinSlider);
             const relatedMinDimSlider = this.getEl(this.ids.relatedMinDimSlider);
-            const labelWeightSlider = this.getEl(this.ids.labelWeightSlider);
-            const labelFontMinInput = this.getEl(this.ids.labelFontMinInput);
-            const labelFontMaxInput = this.getEl(this.ids.labelFontMaxInput);
             const physicsSpringSlider = this.getEl(this.ids.physicsSpringSlider);
             const physicsStrengthSlider = this.getEl(this.ids.physicsStrengthSlider);
             const physicsGravitySlider = this.getEl(this.ids.physicsGravitySlider);
@@ -7811,20 +7691,10 @@
             const edgeLabelStrokeColorInput = this.getEl(this.ids.edgeLabelStrokeColorInput);
             const edgeLabelBgColorInput = this.getEl(this.ids.edgeLabelBgColorInput);
 
-            if (labelFadeSlider) labelFadeSlider.value = String(this.labelFade || 0);
-            this.setColorInputValue(labelColorInput, this.labelColor || '#000000');
-            this.setColorInputValue(labelBgColorInput, this.labelBgColor || '#f2f2f2f1');
-            this.setColorInputValue(labelBorderColorInput, this.labelBorderColor || '#00000021');
-            if (labelStrokeWidthInput) labelStrokeWidthInput.value = String(this.labelStrokeWidth ?? 0);
-            this.setColorInputValue(labelStrokeColorInput, this.labelStrokeColor || '#ffffff');
-            if (labelSizeSlider) labelSizeSlider.value = String(Math.round((this.labelSizeScale || 1) * 100));
             if (labelMinSlider) labelMinSlider.value = String(this.labelMinCitations || 0);
             if (labelMinDimSlider) labelMinDimSlider.value = String(this.labelMinDimAlpha ?? 0.2);
             if (relatedMinSlider) relatedMinSlider.value = String(this.relatedMinValue || 0);
             if (relatedMinDimSlider) relatedMinDimSlider.value = String(this.relatedMinDimAlpha ?? 0.2);
-            if (labelWeightSlider) labelWeightSlider.value = String(this.labelWeight || 500);
-            if (labelFontMinInput) labelFontMinInput.value = String(this.labelFontMin ?? 9);
-            if (labelFontMaxInput) labelFontMaxInput.value = String(this.labelFontMax ?? 30);
             if (physicsSpringSlider) physicsSpringSlider.value = String(this.physicsSpringLength || 120);
             if (physicsStrengthSlider) physicsStrengthSlider.value = String(this.physicsSpringConstant || 0.05);
             if (physicsGravitySlider) physicsGravitySlider.value = String(this.physicsGravity || -9000);
