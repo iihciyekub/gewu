@@ -5741,6 +5741,28 @@
             return switched;
         }
 
+        switchEdgePopoverTarget(newEdgeId) {
+            if (!newEdgeId) return false;
+            let switched = false;
+            if (this._edgeStylePopover?.el) {
+                const el = this._edgeStylePopover.el;
+                const x = parseFloat(el.style.left) || 0;
+                const y = parseFloat(el.style.top) || 0;
+                this.closeEdgeStylePopover();
+                this.openEdgeStylePopover({ edgeId: newEdgeId, x, y });
+                switched = true;
+            }
+            if (this._edgeLabelStylePopover?.el) {
+                const el = this._edgeLabelStylePopover.el;
+                const x = parseFloat(el.style.left) || 0;
+                const y = parseFloat(el.style.top) || 0;
+                this.closeEdgeLabelStylePopover();
+                this.openEdgeLabelStylePopover({ edgeId: newEdgeId, x, y });
+                switched = true;
+            }
+            return switched;
+        }
+
         scheduleCloseNodePopovers(delay = 180) {
             if (this._nodePopoverCloseTimer) {
                 clearTimeout(this._nodePopoverCloseTimer);
@@ -5756,7 +5778,6 @@
         closeEdgeStylePopover() {
             const pop = this._edgeStylePopover?.el || document.querySelector('.context-edge-style-popover');
             if (pop) {
-                if (pop._edgeStyleClickHandler) document.removeEventListener('mousedown', pop._edgeStyleClickHandler);
                 if (pop._edgeStyleKeyHandler) document.removeEventListener('keydown', pop._edgeStyleKeyHandler);
                 pop.remove();
             }
@@ -5771,7 +5792,6 @@
         closeEdgeLabelStylePopover() {
             const pop = this._edgeLabelStylePopover?.el || document.querySelector('.context-edge-label-style-popover');
             if (pop) {
-                if (pop._edgeLabelStyleClickHandler) document.removeEventListener('mousedown', pop._edgeLabelStyleClickHandler);
                 if (pop._edgeLabelStyleKeyHandler) document.removeEventListener('keydown', pop._edgeLabelStyleKeyHandler);
                 pop.remove();
             }
@@ -5797,7 +5817,6 @@
         openEdgeStylePopover({ edgeId, x, y }) {
             if (!edgeId) return;
             this.closeEdgeStylePopover();
-            this.closeEdgeLabelStylePopover();
             const dataset = this.visNetwork?.body?.data?.edges;
             const edge = dataset && typeof dataset.get === 'function' ? dataset.get(edgeId) : null;
             const step = 0.1;
@@ -5818,6 +5837,8 @@
             pop.style.left = `${anchorX}px`;
             pop.style.top = `${anchorY}px`;
             pop.innerHTML = `
+                <div class="context-popover-drag-handle" title="Drag to move">Edge Appearance</div>
+                <button type="button" class="context-popover-close-btn" data-role="closePopover" title="Close (Esc)">&times;</button>
                 <label class="context-popover-toggle">
                     <input type="checkbox" class="context-popover-checkbox" aria-label="Apply to all edges">
                     <span>Apply to all edges</span>
@@ -5842,7 +5863,15 @@
                 </div>
             `;
             document.body.appendChild(pop);
-            
+            this._makePopoverDraggable(pop);
+            const closeBtn = pop.querySelector('[data-role="closePopover"]');
+            if (closeBtn) {
+                closeBtn.addEventListener('click', (ev) => {
+                    ev.stopPropagation();
+                    this.closeEdgeStylePopover();
+                });
+            }
+
             pop.addEventListener('mouseenter', () => {
                 this._edgePopoverHover = true;
                 if (this._edgePopoverCloseTimer) {
@@ -5853,7 +5882,7 @@
             pop.addEventListener('mouseleave', () => {
                 this._edgePopoverHover = false;
             });
-            
+
             const rect = pop.getBoundingClientRect();
             const margin = 8;
             let nextLeft = anchorX;
@@ -5869,10 +5898,10 @@
             }
             pop.style.left = `${Math.max(margin, nextLeft)}px`;
             pop.style.top = `${Math.max(margin, nextTop)}px`;
-            
+
             const toggle = pop.querySelector('.context-popover-checkbox');
             const getApplyToAll = () => toggle ? toggle.checked : false;
-            
+
             // Helper to apply to all edges or single edge
             const applyEdgeStyle = (updates) => {
                 if (!this.visNetwork || !this.visNetwork.body?.data?.edges) return;
@@ -6003,16 +6032,11 @@
                 this.edgeColor = val;
                 this.queuePersistSettings();
             });
-            
-            const clickOutside = (ev) => {
-                if (!pop.contains(ev.target)) this.closeEdgeStylePopover();
-            };
+
             const keyHandler = (ev) => {
                 if (ev.key === 'Escape') this.closeEdgeStylePopover();
             };
-            pop._edgeStyleClickHandler = clickOutside;
             pop._edgeStyleKeyHandler = keyHandler;
-            document.addEventListener('mousedown', clickOutside);
             document.addEventListener('keydown', keyHandler);
             this._edgeStylePopover = { el: pop, edgeId };
         }
@@ -6055,30 +6079,23 @@
             menu.style.left = `${Math.max(margin, nextLeft)}px`;
             menu.style.top = `${Math.max(margin, nextTop)}px`;
             menu.querySelectorAll('.context-menu-item').forEach((item) => {
-                item.addEventListener('mouseenter', (ev) => {
-                    const action = item.dataset.action;
-                    const menuRect = menu.getBoundingClientRect();
-                    const anchor = {
-                        x: menuRect.right + 6,
-                        y: menuRect.top
-                    };
-                    if (action === 'pickEdgeStyle') {
-                        this.openEdgeStylePopover({ edgeId, x: anchor.x, y: anchor.y });
-                    } else if (action === 'pickEdgeLabelStyle') {
-                        this.openEdgeLabelStylePopover({ edgeId, x: anchor.x, y: anchor.y });
-                    }
-                });
-                item.addEventListener('mouseleave', () => {
-                    if (item.dataset.action === 'pickEdgeStyle' || item.dataset.action === 'pickEdgeLabelStyle') {
-                        this.scheduleCloseEdgePopovers();
-                    }
-                });
-                item.addEventListener('click', () => {
+                item.addEventListener('click', (ev) => {
                     const action = item.dataset.action;
                     if (action === 'enterEdgeMode') {
                         this.setToolbarMode('edge');
                         this.updateModeToolbar();
                         this.closeEdgeContextMenu();
+                        return;
+                    }
+                    if (action === 'pickEdgeStyle') {
+                        this.openEdgeStylePopover({ edgeId, x: ev.pageX, y: ev.pageY });
+                        this.closeEdgeContextMenu();
+                        return;
+                    }
+                    if (action === 'pickEdgeLabelStyle') {
+                        this.openEdgeLabelStylePopover({ edgeId, x: ev.pageX, y: ev.pageY });
+                        this.closeEdgeContextMenu();
+                        return;
                     }
                 });
             });
@@ -7099,7 +7116,6 @@
         openEdgeLabelStylePopover({ edgeId, x, y }) {
             if (!edgeId) return;
             this.closeEdgeLabelStylePopover();
-            this.closeEdgeStylePopover();
             const dataset = this.visNetwork?.body?.data?.edges;
             const edge = dataset && typeof dataset.get === 'function' ? dataset.get(edgeId) : null;
 
@@ -7119,6 +7135,8 @@
             pop.style.left = `${anchorX}px`;
             pop.style.top = `${anchorY}px`;
             pop.innerHTML = `
+                <div class="context-popover-drag-handle" title="Drag to move">Edge Label Typography</div>
+                <button type="button" class="context-popover-close-btn" data-role="closePopover" title="Close (Esc)">&times;</button>
                 <label class="context-popover-toggle">
                     <input type="checkbox" class="context-popover-checkbox" aria-label="Apply to all edges">
                     <span>Apply to all edges</span>
@@ -7144,6 +7162,14 @@
                 </div>
             `;
             document.body.appendChild(pop);
+            this._makePopoverDraggable(pop);
+            const closeBtn = pop.querySelector('[data-role="closePopover"]');
+            if (closeBtn) {
+                closeBtn.addEventListener('click', (ev) => {
+                    ev.stopPropagation();
+                    this.closeEdgeLabelStylePopover();
+                });
+            }
 
             pop.addEventListener('mouseenter', () => {
                 this._edgePopoverHover = true;
@@ -7304,15 +7330,10 @@
             setupColorPicker('strokeColor', 'strokeColor', '#ffffff', 'edgeLabelStrokeColor');
             setupColorPicker('bgColor', 'background', 'rgba(255,255,255,0.85)', 'edgeLabelBgColor');
 
-            const clickOutside = (ev) => {
-                if (!pop.contains(ev.target)) this.closeEdgeLabelStylePopover();
-            };
             const keyHandler = (ev) => {
                 if (ev.key === 'Escape') this.closeEdgeLabelStylePopover();
             };
-            pop._edgeLabelStyleClickHandler = clickOutside;
             pop._edgeLabelStyleKeyHandler = keyHandler;
-            document.addEventListener('mousedown', clickOutside);
             document.addEventListener('keydown', keyHandler);
             this._edgeLabelStylePopover = { el: pop, edgeId };
         }
@@ -9245,6 +9266,7 @@
                 if (evt && typeof evt.preventDefault === 'function') {
                     evt.preventDefault();
                 }
+                this.switchEdgePopoverTarget(edgeId);
                 this.showEdgeContextMenu(evt, edgeId);
             };
             network.on('hoverEdge', this._onEdgeHover);
