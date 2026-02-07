@@ -1074,7 +1074,6 @@
                 inputAppendBtn: options.inputAppendBtnId || 'visInputAppendBtn',
                 updateNodeBtn: options.updateNodeBtnId || 'visUpdateNodeBtn',
                 updateStyleBtn: options.updateStyleBtnId || 'visUpdateStyleBtn',
-                inputDepthFocusBtn: options.inputDepthFocusBtnId || 'visInputDepthFocusBtn',
                 saveBtn: options.saveBtnId || 'visSaveNetworkBtn',
                 restoreBtn: options.restoreBtnId || 'visRestoreNetworkBtn',
                 deleteBtn: options.deleteBtnId || 'visDeleteNetworkBtn',
@@ -1110,8 +1109,6 @@
                 exportSvgScaleInput: options.exportSvgScaleInputId || 'visSvgScaleInput',
                 exportSvgMarginInput: options.exportSvgMarginInputId || 'visSvgMarginInput',
                 exportSvgIncludeLabelsInput: options.exportSvgIncludeLabelsInputId || 'visSvgIncludeLabels',
-                importBtn: options.importBtnId || 'visImportJsonBtn',
-                importJsonFileInput: options.importJsonFileInputId || 'importJsonFileInput',
                 zoomInBtn: options.zoomInBtnId || 'visZoomInBtn',
                 zoomOutBtn: options.zoomOutBtnId || 'visZoomOutBtn',
                 zoomFitBtn: options.zoomFitBtnId || 'visZoomFitBtn',
@@ -1279,14 +1276,11 @@
             const inputTextarea = this.getEl(this.ids.inputTextarea);
             const updateNodeBtn = this.getEl(this.ids.updateNodeBtn);
             const updateStyleBtn = this.getEl(this.ids.updateStyleBtn);
-            const inputDepthFocusBtn = this.getEl(this.ids.inputDepthFocusBtn);
             const saveBtn = this.getEl(this.ids.saveBtn);
             const restoreBtn = this.getEl(this.ids.restoreBtn);
             const deleteBtn = this.getEl(this.ids.deleteBtn);
             const viewBtn = this.getEl(this.ids.viewBtn);
             const savedSelect = this.getEl(this.ids.savedSelect);
-            const importBtn = this.getEl(this.ids.importBtn);
-            const importInput = this.getEl(this.ids.importJsonFileInput);
             const labelPanelBtn = this.getEl(this.ids.labelPanelBtn);
             const labelCloseBtn = this.getEl(this.ids.labelCloseBtn);
             const labelAutoBtn = this.getEl(this.ids.labelAutoBtn);
@@ -1471,12 +1465,6 @@
                     this.appendInput();
                 });
             }
-            if (inputDepthFocusBtn) {
-                inputDepthFocusBtn.addEventListener('click', (e) => {
-                    e.preventDefault();
-                    this.applyDepthFocusFromInput();
-                });
-            }
             if (saveBtn) {
                 saveBtn.addEventListener('click', (e) => {
                     e.preventDefault();
@@ -1510,31 +1498,6 @@
                 viewBtn.addEventListener('click', (e) => {
                     e.preventDefault();
                     this.viewVisDataJson();
-                });
-            }
-            if (importBtn && importInput) {
-                importBtn.addEventListener('click', (e) => {
-                    e.preventDefault();
-                    importInput.click();
-                });
-            }
-            if (importInput && !importInput.dataset.visBound) {
-                importInput.dataset.visBound = '1';
-                importInput.addEventListener('change', async (e) => {
-                    const file = e.target.files && e.target.files[0];
-                    if (!file) return;
-                    try {
-                        const text = await file.text();
-                        const textarea = this.getEl(this.ids.inputTextarea);
-                        if (textarea) {
-                            textarea.value = text;
-                        }
-                        this.visInputText = text;
-                    } catch (err) {
-                        this.notify(`Failed to read JSON: ${err.message}`, 'error');
-                    } finally {
-                        e.target.value = '';
-                    }
                 });
             }
             if (zoomInBtn) {
@@ -9138,138 +9101,6 @@
                 this.renderFromJson(formatted);
             }
             this.notify('Rendered', 'success');
-        }
-
-        applyDepthFocusFromInput() {
-            const textarea = this.getEl(this.ids.inputTextarea);
-            if (!textarea) return;
-            if (!this.visNetwork || !this.visNetwork?.body?.data?.nodes || !this.visNetwork?.body?.data?.edges) {
-                this.notify('Vis network not ready', 'info');
-                return;
-            }
-            const raw = (textarea.value || '').trim();
-            if (!raw) {
-                this.notify('Input is empty', 'info');
-                return;
-            }
-            const tryParse = (text) => {
-                try {
-                    return JSON.parse(text);
-                } catch (_e) {
-                    return null;
-                }
-            };
-            let parsed = tryParse(raw);
-            if (!parsed && global.JSONRepair && typeof global.JSONRepair.jsonrepair === 'function') {
-                try {
-                    const repaired = global.JSONRepair.jsonrepair(raw);
-                    parsed = tryParse(repaired);
-                } catch (_e) {
-                    parsed = null;
-                }
-            }
-            if (!parsed) {
-                this.notify('Invalid JSON', 'error');
-                return;
-            }
-            const items = Array.isArray(parsed) ? parsed : [parsed];
-            if (!items.length) {
-                this.notify('No focus items found', 'info');
-                return;
-            }
-            const dataset = this.visNetwork.body.data;
-            const nodes = dataset.nodes.get();
-            const edges = dataset.edges.get();
-            const nodeIdByNormalized = new Map();
-            nodes.forEach((node) => {
-                const normalized = this.normalizeWosId(node.id);
-                if (normalized) nodeIdByNormalized.set(normalized, node.id);
-            });
-            const adj = new Map();
-            edges.forEach((edge) => {
-                if (edge.from == null || edge.to == null) return;
-                const from = edge.from;
-                const to = edge.to;
-                if (!adj.has(from)) adj.set(from, new Set());
-                if (!adj.has(to)) adj.set(to, new Set());
-                adj.get(from).add(to);
-                adj.get(to).add(from);
-            });
-            const activeNodes = new Set();
-            const activeEdges = new Set();
-            const missing = [];
-            const opacities = [];
-            const focusMap = new Map();
-            const depthMap = new Map();
-            items.forEach((item) => {
-                if (!item || typeof item !== 'object') return;
-                const rawId = item.id || item.wosid || item.wosId;
-                const depth = Number.isFinite(Number(item.depth)) ? Math.max(0, Number(item.depth)) : 0;
-                if (Number.isFinite(Number(item.opacity))) {
-                    opacities.push(Math.max(0, Math.min(1, Number(item.opacity))));
-                }
-                const normalized = this.normalizeWosId(rawId);
-                if (!normalized) return;
-                const nodeId = nodeIdByNormalized.get(normalized);
-                if (!nodeId) {
-                    missing.push(normalized);
-                    return;
-                }
-                const visited = new Set([nodeId]);
-                const queue = [{ id: nodeId, depth: 0 }];
-                const nextNodes = new Set();
-                while (queue.length) {
-                    const { id, depth: d } = queue.shift();
-                    nextNodes.add(id);
-                    if (d >= depth) continue;
-                    const neighbors = adj.get(id);
-                    if (!neighbors) continue;
-                    neighbors.forEach((next) => {
-                        if (visited.has(next)) return;
-                        visited.add(next);
-                        queue.push({ id: next, depth: d + 1 });
-                    });
-                }
-                focusMap.set(nodeId, nextNodes);
-                depthMap.set(nodeId, depth);
-                nextNodes.forEach((id) => activeNodes.add(id));
-            });
-            if (!activeNodes.size) {
-                this.notify('No matching nodes found', 'info');
-                return;
-            }
-            edges.forEach((edge) => {
-                if (activeNodes.has(edge.from) && activeNodes.has(edge.to)) {
-                    activeEdges.add(edge.id);
-                }
-            });
-            const state = this.getEdgeFocusState();
-            if (state.baseNodeColors.size || state.baseEdgeColors.size) {
-                this.restoreEdgeFocusBaseColors();
-            }
-            state.hoverEdgeId = null;
-            state.hoverNodeId = null;
-            state.lockedEdgeIds.clear();
-            state.dirty = true;
-            state.customFocusActive = true;
-            state.customFocusNodes = activeNodes;
-            state.customFocusEdges = activeEdges;
-            state.customFocusAlpha = opacities.length ? Math.min(...opacities) : null;
-            state.customFocusRootId = null;
-            state.customFocusDepth = null;
-            state.customFocusMap = focusMap;
-            state.customFocusDepthMap = depthMap;
-            this.selectedNodeIds = new Set(focusMap ? Array.from(focusMap.keys()) : []);
-            if (this.visNetwork) {
-                this.visNetwork._wosCustomFocusActive = true;
-                this.visNetwork._wosCustomFocusNodes = activeNodes;
-            }
-            this.applyEdgeFocusDisplay();
-            if (missing.length) {
-                this.notify(`Missing nodes: ${missing.join(', ')}`, 'info');
-            } else {
-                this.notify('Depth focus applied', 'success');
-            }
         }
 
         applyDepthFocusForNode(nodeId, depth = 1, opacity = null) {
