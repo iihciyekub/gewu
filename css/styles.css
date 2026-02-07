@@ -2444,6 +2444,161 @@ body.theme-dark .vis-mode-slider input[type="range"] {
     accent-color: #e2e8f0;
 }
 
+/* Data Manager Toolbar */
+.vis-data-toolbar {
+    position: absolute;
+    top: 12px;
+    left: 50%;
+    transform: translate(-50%, -8px);
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 8px 16px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.94);
+    border: 1px solid rgba(15, 23, 42, 0.12);
+    box-shadow: 0 8px 18px rgba(15, 23, 42, 0.12);
+    z-index: 4;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 160ms ease, transform 160ms ease;
+    max-width: calc(100% - 32px);
+}
+
+.vis-data-toolbar.is-visible {
+    opacity: 1;
+    pointer-events: auto;
+    transform: translate(-50%, 0);
+}
+
+.vis-data-label {
+    font-size: 13px;
+    font-weight: 600;
+    color: #111827;
+    white-space: nowrap;
+    padding-right: 4px;
+    border-right: 1px solid rgba(15, 23, 42, 0.12);
+}
+
+.vis-data-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.vis-data-action {
+    height: 32px;
+    padding: 0 12px;
+    border-radius: 999px;
+    border: 1px solid rgba(15, 23, 42, 0.12);
+    background: #ffffff;
+    color: #111827;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    cursor: pointer;
+    transition: background 120ms ease, border-color 120ms ease, color 120ms ease;
+    font-size: 13px;
+    font-weight: 500;
+    white-space: nowrap;
+}
+
+.vis-data-action:hover {
+    background: rgba(15, 23, 42, 0.06);
+    border-color: rgba(15, 23, 42, 0.2);
+}
+
+.vis-data-action:active {
+    transform: scale(0.97);
+}
+
+.vis-data-action i {
+    font-size: 14px;
+}
+
+.vis-data-action-danger:hover {
+    background: rgba(239, 68, 68, 0.1);
+    border-color: rgba(239, 68, 68, 0.3);
+    color: #dc2626;
+}
+
+.vis-data-select {
+    height: 32px;
+    padding: 0 32px 0 12px;
+    border-radius: 999px;
+    border: 1px solid rgba(15, 23, 42, 0.12);
+    background: #ffffff;
+    color: #111827;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 120ms ease, border-color 120ms ease;
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23111827' d='M6 8L2 4h8z'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 10px center;
+    min-width: 180px;
+    max-width: 280px;
+}
+
+.vis-data-select:hover {
+    background-color: rgba(15, 23, 42, 0.04);
+    border-color: rgba(15, 23, 42, 0.2);
+}
+
+.vis-data-select:focus {
+    outline: none;
+    border-color: rgba(15, 23, 42, 0.3);
+    box-shadow: 0 0 0 2px rgba(15, 23, 42, 0.08);
+}
+
+/* Dark theme for data toolbar */
+body.theme-dark .vis-data-toolbar {
+    background: rgba(15, 23, 42, 0.88);
+    border-color: rgba(148, 163, 184, 0.28);
+    box-shadow: 0 10px 24px rgba(2, 6, 23, 0.35);
+}
+
+body.theme-dark .vis-data-label {
+    color: #e2e8f0;
+    border-right-color: rgba(148, 163, 184, 0.28);
+}
+
+body.theme-dark .vis-data-action {
+    background: rgba(30, 41, 59, 0.92);
+    border-color: rgba(148, 163, 184, 0.35);
+    color: #e2e8f0;
+}
+
+body.theme-dark .vis-data-action:hover {
+    background: rgba(51, 65, 85, 0.92);
+    border-color: rgba(148, 163, 184, 0.55);
+}
+
+body.theme-dark .vis-data-action-danger:hover {
+    background: rgba(239, 68, 68, 0.15);
+    border-color: rgba(239, 68, 68, 0.4);
+    color: #f87171;
+}
+
+body.theme-dark .vis-data-select {
+    background-color: rgba(30, 41, 59, 0.92);
+    border-color: rgba(148, 163, 184, 0.35);
+    color: #e2e8f0;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23e2e8f0' d='M6 8L2 4h8z'/%3E%3C/svg%3E");
+}
+
+body.theme-dark .vis-data-select:hover {
+    background-color: rgba(51, 65, 85, 0.92);
+    border-color: rgba(148, 163, 184, 0.55);
+}
+
+body.theme-dark .vis-data-select:focus {
+    border-color: rgba(226, 232, 240, 0.55);
+    box-shadow: 0 0 0 2px rgba(226, 232, 240, 0.15);
+}
+
 .vis-network-zoom {
     position: absolute;
     right: 16px;
@@ -2627,7 +2782,7 @@ body.theme-dark .vis-network-view {
 
 .vis-settings-panel {
     position: absolute;
-    top: 0;
+    top: 80px;
     right: 0;
     bottom: 0;
     width: var(--drawer-width, min(380px, 92%));
@@ -2818,16 +2973,6 @@ body.theme-dark .vis-input-drawer .btn {
 body.theme-dark .vis-input-drawer .btn:hover {
     background: rgba(55, 65, 81, 0.95);
     border-color: rgba(148, 163, 184, 0.45);
-}
-
-body.theme-dark .vis-input-drawer .vis-input-restore {
-    border-top-color: rgba(148, 163, 184, 0.25);
-}
-
-body.theme-dark .vis-input-drawer .vis-input-restore-row select {
-    background: #0b1220;
-    color: #e2e8f0;
-    border-color: rgba(148, 163, 184, 0.3);
 }
 
 body.theme-dark .vis-label-suggest {
@@ -3344,36 +3489,6 @@ body.theme-dark .vis-settings-panel.is-open .vis-label-panel .vis-section-toggle
 }
 
 
-.vis-input-restore {
-    padding: 10px 14px;
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-}
-
-.vis-input-restore label {
-    font-size: 11px;
-    color: #374151;
-}
-
-.vis-input-restore-row {
-    display: flex;
-    gap: 8px;
-    align-items: center;
-}
-
-.vis-input-restore-row select {
-    flex: 1;
-    padding: 6px 8px;
-    font-size: 12px;
-    border: 1px solid #d7dce3;
-    border-radius: 8px;
-}
-
-.vis-input-restore-row .btn {
-    white-space: nowrap;
-}
-
 #visInputTextarea {
     width: 100%;
     min-height: 100%;
@@ -3389,7 +3504,7 @@ body.theme-dark .vis-settings-panel.is-open .vis-label-panel .vis-section-toggle
 }
 
 .vis-input-actions {
-    padding: 2px 8px;
+    padding: 12px 8px;
     display: flex;
     gap: 8px;
     justify-content: flex-end;

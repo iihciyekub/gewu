@@ -1074,11 +1074,14 @@
                 inputAppendBtn: options.inputAppendBtnId || 'visInputAppendBtn',
                 updateNodeBtn: options.updateNodeBtnId || 'visUpdateNodeBtn',
                 updateStyleBtn: options.updateStyleBtnId || 'visUpdateStyleBtn',
-                saveBtn: options.saveBtnId || 'visSaveNetworkBtn',
-                restoreBtn: options.restoreBtnId || 'visRestoreNetworkBtn',
-                deleteBtn: options.deleteBtnId || 'visDeleteNetworkBtn',
-                viewBtn: options.viewBtnId || 'visViewNetworkBtn',
                 savedSelect: options.savedSelectId || 'visSavedSelect',
+                dataManagerBtn: options.dataManagerBtnId || 'visDataManagerBtn',
+                dataToolbar: options.dataToolbarId || 'visDataToolbar',
+                saveNetworkToolbarBtn: options.saveNetworkToolbarBtnId || 'visSaveNetworkToolbarBtn',
+                restoreNetworkToolbarBtn: options.restoreNetworkToolbarBtnId || 'visRestoreNetworkToolbarBtn',
+                deleteNetworkToolbarBtn: options.deleteNetworkToolbarBtnId || 'visDeleteNetworkToolbarBtn',
+                viewNetworkToolbarBtn: options.viewNetworkToolbarBtnId || 'visViewNetworkToolbarBtn',
+                savedSelectToolbar: options.savedSelectToolbarId || 'visSavedSelectToolbar',
                 labelPanelBtn: options.labelPanelBtnId || 'visToggleLabelsBtn',
                 labelPanel: options.labelPanelId || 'visSettingsLabelPanel',
                 labelToggleBtn: options.labelToggleBtnId || 'visLabelToggleAllBtn',
@@ -1276,11 +1279,13 @@
             const inputTextarea = this.getEl(this.ids.inputTextarea);
             const updateNodeBtn = this.getEl(this.ids.updateNodeBtn);
             const updateStyleBtn = this.getEl(this.ids.updateStyleBtn);
-            const saveBtn = this.getEl(this.ids.saveBtn);
-            const restoreBtn = this.getEl(this.ids.restoreBtn);
-            const deleteBtn = this.getEl(this.ids.deleteBtn);
-            const viewBtn = this.getEl(this.ids.viewBtn);
-            const savedSelect = this.getEl(this.ids.savedSelect);
+            const dataManagerBtn = this.getEl(this.ids.dataManagerBtn);
+            const dataToolbar = this.getEl(this.ids.dataToolbar);
+            const saveNetworkToolbarBtn = this.getEl(this.ids.saveNetworkToolbarBtn);
+            const restoreNetworkToolbarBtn = this.getEl(this.ids.restoreNetworkToolbarBtn);
+            const deleteNetworkToolbarBtn = this.getEl(this.ids.deleteNetworkToolbarBtn);
+            const viewNetworkToolbarBtn = this.getEl(this.ids.viewNetworkToolbarBtn);
+            const savedSelectToolbar = this.getEl(this.ids.savedSelectToolbar);
             const labelPanelBtn = this.getEl(this.ids.labelPanelBtn);
             const labelCloseBtn = this.getEl(this.ids.labelCloseBtn);
             const labelAutoBtn = this.getEl(this.ids.labelAutoBtn);
@@ -1465,39 +1470,43 @@
                     this.appendInput();
                 });
             }
-            if (saveBtn) {
-                saveBtn.addEventListener('click', (e) => {
+            // Data Manager Toolbar
+            if (dataManagerBtn) {
+                dataManagerBtn.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    this.toggleDataToolbar();
+                });
+            }
+            if (saveNetworkToolbarBtn) {
+                saveNetworkToolbarBtn.addEventListener('click', (e) => {
                     e.preventDefault();
                     this.saveNetworkJson();
                 });
             }
-            if (restoreBtn) {
-                restoreBtn.addEventListener('click', (e) => {
+            if (restoreNetworkToolbarBtn) {
+                restoreNetworkToolbarBtn.addEventListener('click', (e) => {
                     e.preventDefault();
                     this.restoreNetworkJson();
                 });
             }
-            if (savedSelect) {
-                savedSelect.addEventListener('change', () => {
-                    if (savedSelect.disabled) return;
-                    const next = Number.parseInt(savedSelect.value, 10);
-                    const idx = Number.isFinite(next) ? next : null;
-                    this.pendingSavedIndex = idx;
-                    if (idx != null) {
-                        this.persistSavedSelect(idx);
-                    }
-                });
-            }
-            if (deleteBtn) {
-                deleteBtn.addEventListener('click', (e) => {
+            if (deleteNetworkToolbarBtn) {
+                deleteNetworkToolbarBtn.addEventListener('click', (e) => {
                     e.preventDefault();
                     this.deleteNetworkJson();
                 });
             }
-            if (viewBtn) {
-                viewBtn.addEventListener('click', (e) => {
+            if (viewNetworkToolbarBtn) {
+                viewNetworkToolbarBtn.addEventListener('click', (e) => {
                     e.preventDefault();
                     this.viewVisDataJson();
+                });
+            }
+            if (savedSelectToolbar) {
+                savedSelectToolbar.addEventListener('change', (e) => {
+                    const key = e.target.value;
+                    if (key) {
+                        this.restoreNetworkJson(key);
+                    }
                 });
             }
             if (zoomInBtn) {
@@ -3667,6 +3676,31 @@
                 return;
             }
             console[type === 'error' ? 'error' : 'log'](message);
+        }
+
+        toggleDataToolbar() {
+            const toolbar = this.getEl(this.ids.dataToolbar);
+            const btn = this.getEl(this.ids.dataManagerBtn);
+            if (!toolbar) return;
+
+            const isVisible = toolbar.classList.contains('is-visible');
+
+            if (isVisible) {
+                // Hide toolbar
+                toolbar.classList.remove('is-visible');
+                toolbar.setAttribute('aria-hidden', 'true');
+                toolbar.setAttribute('inert', '');
+                if (btn) btn.classList.remove('is-active');
+            } else {
+                // Show toolbar and sync saved networks
+                this.loadSavedList().then((list) => {
+                    this.renderSavedSelect(list || []);
+                });
+                toolbar.classList.add('is-visible');
+                toolbar.setAttribute('aria-hidden', 'false');
+                toolbar.removeAttribute('inert');
+                if (btn) btn.classList.add('is-active');
+            }
         }
 
         async initModeStateStore() {
@@ -8738,9 +8772,16 @@
         setSavedSelectValue(idx, options = {}) {
             const list = options.list || null;
             const select = this.getEl(this.ids.savedSelect);
+            const selectToolbar = this.getEl(this.ids.savedSelectToolbar);
+            const value = String(idx);
+
             if (select) {
-                select.value = String(idx);
+                select.value = value;
             }
+            if (selectToolbar) {
+                selectToolbar.value = value;
+            }
+
             this.pendingSavedIndex = idx;
             if (list && Array.isArray(list) && idx >= 0 && idx < list.length) {
                 this.renderSavedSelect(list, idx);
@@ -9321,28 +9362,35 @@
 
         renderSavedSelect(list) {
             const select = this.getEl(this.ids.savedSelect);
-            if (!select) return;
-            const currentValue = select.value;
-            select.innerHTML = '';
-            if (!list.length) {
-                const opt = document.createElement('option');
-                opt.value = '';
-                opt.textContent = 'No saved items';
-                select.appendChild(opt);
-                select.disabled = true;
-                return;
-            }
-            select.disabled = false;
-            list.forEach((item, idx) => {
-                const opt = document.createElement('option');
-                opt.value = String(idx);
-                opt.textContent = item?.name || `Record ${idx + 1}`;
-                select.appendChild(opt);
-            });
-            const currentIdx = Number.parseInt(currentValue, 10);
-            if (Number.isFinite(currentIdx) && currentIdx >= 0 && currentIdx < list.length) {
-                select.value = String(currentIdx);
-            }
+            const selectToolbar = this.getEl(this.ids.savedSelectToolbar);
+
+            const updateSelect = (sel) => {
+                if (!sel) return;
+                const currentValue = sel.value;
+                sel.innerHTML = '';
+                if (!list.length) {
+                    const opt = document.createElement('option');
+                    opt.value = '';
+                    opt.textContent = 'No saved items';
+                    sel.appendChild(opt);
+                    sel.disabled = true;
+                    return;
+                }
+                sel.disabled = false;
+                list.forEach((item, idx) => {
+                    const opt = document.createElement('option');
+                    opt.value = String(idx);
+                    opt.textContent = item?.name || `Record ${idx + 1}`;
+                    sel.appendChild(opt);
+                });
+                const currentIdx = Number.parseInt(currentValue, 10);
+                if (Number.isFinite(currentIdx) && currentIdx >= 0 && currentIdx < list.length) {
+                    sel.value = String(currentIdx);
+                }
+            };
+
+            updateSelect(select);
+            updateSelect(selectToolbar);
         }
 
         // 直接序列化保存 visData 到本地（完整全样式保存）
