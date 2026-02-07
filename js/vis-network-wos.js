@@ -299,6 +299,13 @@
                     size: 6,
                     x: 1,
                     y: 2
+                },
+                chosen: {
+                    edge: (values, id, selected, hovering) => {
+                        if (selected || hovering) {
+                            values.arrowStrikethrough = false;
+                        }
+                    }
                 }
             }
         };
@@ -5902,6 +5909,38 @@
             }
         }
 
+        _adjustPopoverPosition(pop, anchorX, anchorY) {
+            const rect = pop.getBoundingClientRect();
+            const margin = 8;
+            let nextLeft = anchorX;
+            let nextTop = anchorY;
+
+            // Check right edge overflow - try to display on the left of anchor
+            if (anchorX + rect.width > window.innerWidth - margin) {
+                nextLeft = anchorX - rect.width - 12;
+            }
+            // Ensure not overflow on the left
+            if (nextLeft < margin) {
+                nextLeft = margin;
+            }
+            // If still overflows on right, clamp to window width
+            if (nextLeft + rect.width > window.innerWidth - margin) {
+                nextLeft = window.innerWidth - rect.width - margin;
+            }
+
+            // Check bottom edge overflow
+            if (anchorY + rect.height > window.innerHeight - margin) {
+                nextTop = window.innerHeight - rect.height - margin;
+            }
+            // Check top edge overflow
+            if (nextTop < margin) {
+                nextTop = margin;
+            }
+
+            pop.style.left = `${Math.max(margin, nextLeft)}px`;
+            pop.style.top = `${Math.max(margin, nextTop)}px`;
+        }
+
         _makePopoverDraggable(pop) {
             const handle = pop.querySelector('.context-popover-drag-handle');
             if (!handle) return;
@@ -5963,6 +6002,12 @@
             if (!newEdgeId) return false;
             let switched = false;
             if (this._edgeStylePopover?.el) {
+                const currentEdgeId = this._edgeStylePopover.edgeId;
+                // Prevent reopening the same edge's popover if it's still being edited
+                // This prevents arrowStrikethrough from being reset
+                if (currentEdgeId === newEdgeId && this._edgeStylePopover.el.parentNode) {
+                    return false; // Already open for this edge, don't reopen
+                }
                 const el = this._edgeStylePopover.el;
                 const x = parseFloat(el.style.left) || 0;
                 const y = parseFloat(el.style.top) || 0;
@@ -6068,19 +6113,7 @@
                 });
             }
 
-            const rect = pop.getBoundingClientRect();
-            const margin = 8;
-            let nextLeft = anchorX;
-            let nextTop = anchorY;
-            if (anchorX + rect.width > window.innerWidth - margin) {
-                nextLeft = anchorX - rect.width - 12;
-            }
-            if (nextLeft < margin) nextLeft = margin;
-            if (rect.bottom > window.innerHeight - margin) {
-                nextTop = window.innerHeight - rect.height - margin;
-            }
-            pop.style.left = `${Math.max(margin, nextLeft)}px`;
-            pop.style.top = `${Math.max(margin, nextTop)}px`;
+            this._adjustPopoverPosition(pop, anchorX, anchorY);
 
             const bindNumberInput = (role, onChange) => {
                 const input = pop.querySelector(`input[data-role="${role}"]`);
@@ -6233,6 +6266,12 @@
                         <span>Arrow From ←</span>
                     </label>
                 </div>
+                <div class="context-input-row">
+                    <label class="context-popover-toggle">
+                        <input type="checkbox" class="context-popover-checkbox" data-role="arrowStrikethrough" aria-label="Arrow Strikethrough">
+                        <span>Arrow Strikethrough (Line stops at arrow)</span>
+                    </label>
+                </div>
                 <div data-role="arrowToConfig" style="display: none;">
                     <div class="context-input-row">
                         <label class="context-input-label" style="width: 100%;">To Arrow Shape
@@ -6252,8 +6291,14 @@
                         </label>
                     </div>
                     <div class="context-input-row">
-                        <span class="context-slider-label">To Arrow Scale</span>
-                        <input class="context-number-input" data-role="arrowToScale" type="number" min="0.1" max="3" step="0.1" value="1.0">
+                        <div class="context-input-group" style="flex: 1;">
+                            <label class="context-input-label">To Scale</label>
+                            <input class="context-number-input" data-role="arrowToScale" type="number" min="0.1" max="3" step="0.1" value="1.0">
+                        </div>
+                        <div class="context-input-group" style="flex: 1; margin-left: 8px;">
+                            <label class="context-input-label">Offset</label>
+                            <input class="context-number-input" data-role="arrowToOffset" type="number" min="-50" max="50" step="1" value="0">
+                        </div>
                     </div>
                 </div>
                 <div data-role="arrowFromConfig" style="display: none;">
@@ -6275,8 +6320,14 @@
                         </label>
                     </div>
                     <div class="context-input-row">
-                        <span class="context-slider-label">From Arrow Scale</span>
-                        <input class="context-number-input" data-role="arrowFromScale" type="number" min="0.1" max="3" step="0.1" value="1.0">
+                        <div class="context-input-group" style="flex: 1;">
+                            <label class="context-input-label">From Scale</label>
+                            <input class="context-number-input" data-role="arrowFromScale" type="number" min="0.1" max="3" step="0.1" value="1.0">
+                        </div>
+                        <div class="context-input-group" style="flex: 1; margin-left: 8px;">
+                            <label class="context-input-label">Offset</label>
+                            <input class="context-number-input" data-role="arrowFromOffset" type="number" min="-50" max="50" step="1" value="0">
+                        </div>
                     </div>
                 </div>
             `;
@@ -6301,23 +6352,16 @@
                 this._edgePopoverHover = false;
             });
 
-            const rect = pop.getBoundingClientRect();
-            const margin = 8;
-            let nextLeft = anchorX;
-            let nextTop = anchorY;
-            if (anchorX + rect.width > window.innerWidth - margin) {
-                nextLeft = anchorX - rect.width - 12;
-            }
-            if (nextLeft < margin) {
-                nextLeft = margin;
-            }
-            if (rect.bottom > window.innerHeight - margin) {
-                nextTop = window.innerHeight - rect.height - margin;
-            }
-            pop.style.left = `${Math.max(margin, nextLeft)}px`;
-            pop.style.top = `${Math.max(margin, nextTop)}px`;
+            this._adjustPopoverPosition(pop, anchorX, anchorY);
 
             const toggle = pop.querySelector('.context-popover-checkbox');
+            // Initialize toggle state from saved preference
+            if (toggle) {
+                toggle.checked = !!this._edgeStyleApplyAll;
+                toggle.addEventListener('change', () => {
+                    this._edgeStyleApplyAll = toggle.checked;
+                });
+            }
             const getApplyToAll = () => toggle ? toggle.checked : false;
 
             // Helper to apply to all edges or single edge
@@ -6476,9 +6520,20 @@
             };
             
             setupColorPicker('edgeColor', 'color', this.edgeColor || '#1a1a1aff', (val) => {
+                // Update global edge color setting
                 this.edgeColor = val;
                 this.queuePersistSettings();
+                // Apply to all edges when in global mode
+                if (getApplyToAll()) {
+                    const dataset = this.visNetwork.body.data;
+                    const edges = dataset.edges.get();
+                    const edgeUpdates = edges.map((e) => ({ id: e.id, color: val }));
+                    dataset.edges.update(edgeUpdates);
+                    if (this.visNetwork) this.visNetwork.redraw();
+                }
             });
+
+
 
             // Setup style controls
             const smoothTypeSelect = pop.querySelector('[data-role="smoothType"]');
@@ -6488,12 +6543,15 @@
             // Arrow controls
             const arrowToCheckbox = pop.querySelector('[data-role="arrowTo"]');
             const arrowFromCheckbox = pop.querySelector('[data-role="arrowFrom"]');
+            const arrowStrikethroughCheckbox = pop.querySelector('[data-role="arrowStrikethrough"]');
             const arrowToConfig = pop.querySelector('[data-role="arrowToConfig"]');
             const arrowFromConfig = pop.querySelector('[data-role="arrowFromConfig"]');
             const arrowToShapeSelect = pop.querySelector('[data-role="arrowToShape"]');
             const arrowFromShapeSelect = pop.querySelector('[data-role="arrowFromShape"]');
             const arrowToScaleInput = pop.querySelector('[data-role="arrowToScale"]');
             const arrowFromScaleInput = pop.querySelector('[data-role="arrowFromScale"]');
+            const arrowToOffsetInput = pop.querySelector('[data-role="arrowToOffset"]');
+            const arrowFromOffsetInput = pop.querySelector('[data-role="arrowFromOffset"]');
 
             // Initialize with current edge style or defaults
             const currentSmooth = edge?.smooth;
@@ -6546,7 +6604,7 @@
             if (arrowToConfig) arrowToConfig.style.display = hasArrowTo ? 'block' : 'none';
             if (arrowFromConfig) arrowFromConfig.style.display = hasArrowFrom ? 'block' : 'none';
 
-            // Initialize arrow shapes and scales
+            // Initialize arrow shapes, scales and offsets
             if (arrowToShapeSelect && edge?.arrows?.to?.type) {
                 arrowToShapeSelect.value = edge.arrows.to.type;
             }
@@ -6558,6 +6616,17 @@
             }
             if (arrowFromScaleInput) {
                 arrowFromScaleInput.value = (edge?.arrows?.from?.scaleFactor ?? 1.0).toFixed(1);
+            }
+            if (arrowToOffsetInput) {
+                arrowToOffsetInput.value = String(edge?.endPointOffset?.to ?? 0);
+            }
+            if (arrowFromOffsetInput) {
+                arrowFromOffsetInput.value = String(edge?.endPointOffset?.from ?? 0);
+            }
+
+            // Initialize arrowStrikethrough
+            if (arrowStrikethroughCheckbox) {
+                arrowStrikethroughCheckbox.checked = edge?.arrowStrikethrough !== false;
             }
 
             // Apply only the specific field that changed.
@@ -6598,6 +6667,10 @@
                 const arrowFromShape = arrowFromShapeSelect ? arrowFromShapeSelect.value : 'arrow';
                 const arrowToScale = arrowToScaleInput ? Number(arrowToScaleInput.value) : 1.0;
                 const arrowFromScale = arrowFromScaleInput ? Number(arrowFromScaleInput.value) : 1.0;
+                const toOffset = arrowToOffsetInput ? Number(arrowToOffsetInput.value) : 0;
+                const fromOffset = arrowFromOffsetInput ? Number(arrowFromOffsetInput.value) : 0;
+                const arrowStrikethrough = arrowStrikethroughCheckbox ? arrowStrikethroughCheckbox.checked : true;
+
                 applyEdgeStyle({
                     arrows: {
                         to: {
@@ -6611,6 +6684,11 @@
                             scaleFactor: arrowFromScale
                         },
                         middle: { enabled: false }
+                    },
+                    arrowStrikethrough: arrowStrikethrough,
+                    endPointOffset: {
+                        to: toOffset,
+                        from: fromOffset
                     }
                 });
             };
@@ -6650,33 +6728,45 @@
                 });
             }
 
-            // Arrow To shape and scale
+            // Arrow Strikethrough checkbox
+            if (arrowStrikethroughCheckbox) {
+                arrowStrikethroughCheckbox.addEventListener('change', (ev) => {
+                    ev.stopPropagation();
+                    applyArrows();
+                });
+            }
+
+            // Arrow To shape, scale and offset
             if (arrowToShapeSelect) {
                 arrowToShapeSelect.addEventListener('change', (ev) => {
                     ev.stopPropagation();
                     applyArrows();
                 });
             }
-            if (arrowToScaleInput) {
-                arrowToScaleInput.addEventListener('input', (ev) => {
-                    ev.stopPropagation();
-                    applyArrows();
-                });
-            }
 
-            // Arrow From shape and scale
+            bindNumberInput('arrowToScale', (val) => {
+                applyArrows();
+            });
+
+            bindNumberInput('arrowToOffset', (val) => {
+                applyArrows();
+            });
+
+            // Arrow From shape, scale and offset
             if (arrowFromShapeSelect) {
                 arrowFromShapeSelect.addEventListener('change', (ev) => {
                     ev.stopPropagation();
                     applyArrows();
                 });
             }
-            if (arrowFromScaleInput) {
-                arrowFromScaleInput.addEventListener('input', (ev) => {
-                    ev.stopPropagation();
-                    applyArrows();
-                });
-            }
+
+            bindNumberInput('arrowFromScale', (val) => {
+                applyArrows();
+            });
+
+            bindNumberInput('arrowFromOffset', (val) => {
+                applyArrows();
+            });
 
             // Edge length
             bindNumberInput('edgeLength', (val) => {
@@ -6724,11 +6814,19 @@
             const margin = 8;
             let nextLeft = rect.left;
             let nextTop = rect.top;
+            // Adjust horizontal position
             if (rect.right > window.innerWidth - margin) {
                 nextLeft = window.innerWidth - rect.width - margin;
             }
+            if (nextLeft < margin) {
+                nextLeft = margin;
+            }
+            // Adjust vertical position
             if (rect.bottom > window.innerHeight - margin) {
                 nextTop = window.innerHeight - rect.height - margin;
+            }
+            if (nextTop < margin) {
+                nextTop = margin;
             }
             menu.style.left = `${Math.max(margin, nextLeft)}px`;
             menu.style.top = `${Math.max(margin, nextTop)}px`;
@@ -6800,11 +6898,19 @@
             const margin = 8;
             let nextLeft = rect.left;
             let nextTop = rect.top;
+            // Adjust horizontal position
             if (rect.right > window.innerWidth - margin) {
                 nextLeft = window.innerWidth - rect.width - margin;
             }
+            if (nextLeft < margin) {
+                nextLeft = margin;
+            }
+            // Adjust vertical position
             if (rect.bottom > window.innerHeight - margin) {
                 nextTop = window.innerHeight - rect.height - margin;
+            }
+            if (nextTop < margin) {
+                nextTop = margin;
             }
             menu.style.left = `${Math.max(margin, nextLeft)}px`;
             menu.style.top = `${Math.max(margin, nextTop)}px`;
@@ -6905,18 +7011,7 @@
             pop.addEventListener('mouseleave', () => {
                 this._nodePopoverHover = false;
             });
-            const rect = pop.getBoundingClientRect();
-            const margin = 8;
-            let nextLeft = anchorX;
-            let nextTop = anchorY;
-            if (rect.right > window.innerWidth - margin) {
-                nextLeft = window.innerWidth - rect.width - margin;
-            }
-            if (rect.bottom > window.innerHeight - margin) {
-                nextTop = window.innerHeight - rect.height - margin;
-            }
-            pop.style.left = `${Math.max(margin, nextLeft)}px`;
-            pop.style.top = `${Math.max(margin, nextTop)}px`;
+            this._adjustPopoverPosition(pop, anchorX, anchorY);
 
             const colorSlot = pop.querySelector('.context-color-slot');
             const colorInput = isStroke
@@ -7115,23 +7210,7 @@
             pop.addEventListener('mouseleave', () => {
                 this._nodePopoverHover = false;
             });
-            const rect = pop.getBoundingClientRect();
-            const margin = 8;
-            let nextLeft = anchorX;
-            let nextTop = anchorY;
-            // Check if would overflow on the right, if so display on the left
-            if (anchorX + rect.width > window.innerWidth - margin) {
-                nextLeft = anchorX - rect.width - 12;
-            }
-            // Ensure not overflow on the left
-            if (nextLeft < margin) {
-                nextLeft = margin;
-            }
-            if (rect.bottom > window.innerHeight - margin) {
-                nextTop = window.innerHeight - rect.height - margin;
-            }
-            pop.style.left = `${Math.max(margin, nextLeft)}px`;
-            pop.style.top = `${Math.max(margin, nextTop)}px`;
+            this._adjustPopoverPosition(pop, anchorX, anchorY);
 
             const toggle = pop.querySelector('.context-popover-checkbox');
             if (toggle) {
@@ -7492,23 +7571,7 @@
                 this._nodePopoverHover = false;
             });
 
-            const rect = pop.getBoundingClientRect();
-            const margin = 8;
-            let nextLeft = anchorX;
-            let nextTop = anchorY;
-            // Check if would overflow on the right, if so display on the left
-            if (anchorX + rect.width > window.innerWidth - margin) {
-                nextLeft = anchorX - rect.width - 12;
-            }
-            // Ensure not overflow on the left
-            if (nextLeft < margin) {
-                nextLeft = margin;
-            }
-            if (rect.bottom > window.innerHeight - margin) {
-                nextTop = window.innerHeight - rect.height - margin;
-            }
-            pop.style.left = `${Math.max(margin, nextLeft)}px`;
-            pop.style.top = `${Math.max(margin, nextTop)}px`;
+            this._adjustPopoverPosition(pop, anchorX, anchorY);
 
             const toggle = pop.querySelector('.context-popover-checkbox');
             const getApplyToAll = () => toggle ? toggle.checked : false;
@@ -7852,21 +7915,7 @@
                 this._edgePopoverHover = false;
             });
 
-            const rect = pop.getBoundingClientRect();
-            const margin = 8;
-            let nextLeft = anchorX;
-            let nextTop = anchorY;
-            if (anchorX + rect.width > window.innerWidth - margin) {
-                nextLeft = anchorX - rect.width - 12;
-            }
-            if (nextLeft < margin) {
-                nextLeft = margin;
-            }
-            if (rect.bottom > window.innerHeight - margin) {
-                nextTop = window.innerHeight - rect.height - margin;
-            }
-            pop.style.left = `${Math.max(margin, nextLeft)}px`;
-            pop.style.top = `${Math.max(margin, nextTop)}px`;
+            this._adjustPopoverPosition(pop, anchorX, anchorY);
 
             // Setup edge label visibility toggle button
             const edgeLabelToggleBtn = pop.querySelector('[data-role="edgeLabelToggle"]');
@@ -7890,6 +7939,13 @@
             }
 
             const applyToAllToggle = pop.querySelector('.context-popover-checkbox');
+            // Initialize toggle state from saved preference
+            if (applyToAllToggle) {
+                applyToAllToggle.checked = !!this._edgeLabelStyleApplyAll;
+                applyToAllToggle.addEventListener('change', () => {
+                    this._edgeLabelStyleApplyAll = applyToAllToggle.checked;
+                });
+            }
             const getApplyToAll = () => applyToAllToggle ? applyToAllToggle.checked : false;
 
             // Helper to apply styles
