@@ -501,26 +501,26 @@
                         </div>
                     </div>
                     <div class="vis-data-toolbar is-visible" id="visDataToolbar" aria-hidden="false">
-                        <div class="vis-data-label">Data Manager</div>
                         <div class="vis-data-actions">
-                            <button class="vis-data-action" type="button" id="visSaveNetworkToolbarBtn" title="Save current network" aria-label="Save">
+                            <button class="vis-data-action" type="button" id="visOverwriteNetworkToolbarBtn" title="Save to current file" aria-label="Save">
                                 <i class="fas fa-floppy-disk"></i>
                                 <span>Save</span>
+                            </button>
+                            <button class="vis-data-action" type="button" id="visSaveNetworkToolbarBtn" title="Save as new network" aria-label="Save As">
+                                <i class="fas fa-file-export"></i>
+                                <span>Save As</span>
                             </button>
                             <select class="vis-data-select" id="visSavedSelectToolbar" aria-label="Saved networks">
                                 <option value="">No saved networks</option>
                             </select>
                             <button class="vis-data-action" type="button" id="visRestoreNetworkToolbarBtn" title="Restore selected network" aria-label="Restore">
                                 <i class="fas fa-rotate-left"></i>
-                                <span>Restore</span>
                             </button>
                             <button class="vis-data-action" type="button" id="visViewNetworkToolbarBtn" title="View network data" aria-label="View">
                                 <i class="fas fa-eye"></i>
-                                <span>View</span>
                             </button>
                             <button class="vis-data-action vis-data-action-danger" type="button" id="visDeleteNetworkToolbarBtn" title="Delete selected network" aria-label="Delete">
                                 <i class="fas fa-trash"></i>
-                                <span>Delete</span>
                             </button>
                         </div>
                     </div>
@@ -641,38 +641,6 @@
                                                             max="1" value="0" inputmode="decimal">
                                                     </div>
                                                 </div>
-                                            </div>
-                                        </div>
-                                        <div class="vis-label-slots">
-                                            <div class="vis-label-slots-grid" id="visLabelSlots">
-                                                <button class="btn btn-secondary" type="button" data-slot="1" aria-label="Slot 1">
-                                                    <i class="fa-regular fa-circle"></i>
-                                                </button>
-                                                <button class="btn btn-secondary" type="button" data-slot="2" aria-label="Slot 2">
-                                                    <i class="fa-regular fa-circle"></i>
-                                                </button>
-                                                <button class="btn btn-secondary" type="button" data-slot="3" aria-label="Slot 3">
-                                                    <i class="fa-regular fa-circle"></i>
-                                                </button>
-                                                <button class="btn btn-secondary" type="button" data-slot="4" aria-label="Slot 4">
-                                                    <i class="fa-regular fa-circle"></i>
-                                                </button>
-                                                <button class="btn btn-secondary" type="button" data-slot="5" aria-label="Slot 5">
-                                                    <i class="fa-regular fa-circle"></i>
-                                                </button>
-                                                <button class="btn btn-secondary" type="button" data-slot="6" aria-label="Slot 6">
-                                                    <i class="fa-regular fa-circle"></i>
-                                                </button>
-                                                <button class="btn btn-secondary" type="button" data-slot="7" aria-label="Slot 7">
-                                                    <i class="fa-regular fa-circle"></i>
-                                                </button>
-                                                <button class="btn btn-secondary" type="button" data-slot="8" aria-label="Slot 8">
-                                                    <i class="fa-regular fa-circle"></i>
-                                                </button>
-                                                <button class="btn btn-secondary vis-label-slot-action" id="visLabelAutoBtn" type="button"
-                                                    aria-label="Restore defaults" title="Restore defaults">
-                                                    <i class="fas fa-rotate-left"></i>
-                                                </button>
                                             </div>
                                         </div>
                                         <div class="vis-label-field-group">

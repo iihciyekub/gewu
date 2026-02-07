@@ -3328,63 +3328,6 @@ body.theme-dark .vis-settings-panel.is-open .vis-label-panel .vis-section-toggle
     margin-top: 4px;
 }
 
-.vis-label-slots {
-    padding: 2px 10px;
-    border-top: 1px dashed var(--gray-200);
-}
-
-.vis-label-slots-title {
-    font-size: 11px;
-    font-weight: 600;
-    text-transform: uppercase;
-    color: var(--gray-600, #4b5563);
-}
-
-.vis-label-slots-grid {
-    display: flex;
-    gap: 2px;
-    flex-wrap: nowrap;
-    overflow-x: auto;
-    padding-bottom: 2px;
-}
-
-.vis-label-slots-grid .btn {
-    min-width: 28px;
-    height: 28px;
-    padding: 0;
-    font-size: 16px;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    background: none;
-    box-shadow: none;
-    margin: 0;
-}
-
-.vis-label-slot-action {
-    min-width: 28px;
-    height: 28px;
-    font-size: 14px;
-    color: #6b7280;
-}
-
-.vis-label-slots-grid .btn.is-filled {
-    border-color: var(--wos-blue, #2563eb);
-    color: var(--wos-blue, #2563eb);
-}
-
-.vis-label-slots-grid .btn.is-active {
-    color: var(--wos-tag-text, #111111);
-    border-color: var(--wos-tag, #E5E7EB);
-}
-
-.vis-label-slots-actions {
-    margin-top: 8px;
-    display: flex;
-    gap: 8px;
-    flex-wrap: wrap;
-}
-
 .vis-label-threshold,
 .vis-related-threshold {
     display: grid;

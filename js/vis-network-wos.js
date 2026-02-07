@@ -1078,6 +1078,7 @@
                 dataManagerBtn: options.dataManagerBtnId || 'visDataManagerBtn',
                 dataToolbar: options.dataToolbarId || 'visDataToolbar',
                 saveNetworkToolbarBtn: options.saveNetworkToolbarBtnId || 'visSaveNetworkToolbarBtn',
+                overwriteNetworkToolbarBtn: options.overwriteNetworkToolbarBtnId || 'visOverwriteNetworkToolbarBtn',
                 restoreNetworkToolbarBtn: options.restoreNetworkToolbarBtnId || 'visRestoreNetworkToolbarBtn',
                 deleteNetworkToolbarBtn: options.deleteNetworkToolbarBtnId || 'visDeleteNetworkToolbarBtn',
                 viewNetworkToolbarBtn: options.viewNetworkToolbarBtnId || 'visViewNetworkToolbarBtn',
@@ -1086,12 +1087,10 @@
                 labelPanel: options.labelPanelId || 'visSettingsLabelPanel',
                 labelToggleBtn: options.labelToggleBtnId || 'visLabelToggleAllBtn',
                 edgeLabelToggleBtn: options.edgeLabelToggleBtnId || 'visEdgeLabelToggleBtn',
-                labelAutoBtn: options.labelAutoBtnId || 'visLabelAutoBtn',
                 labelCloseBtn: options.labelCloseBtnId || 'visLabelCloseBtn',
                 labelFieldInput: options.labelFieldInputId || 'visLabelFieldInput',
                 labelSuggest: options.labelSuggestId || 'visLabelSuggest',
                 labelFields: options.labelFieldsId || 'visLabelFields',
-                labelSlots: options.labelSlotsId || 'visLabelSlots',
                 labelMinSlider: options.labelMinSliderId || 'visLabelMinSlider',
                 labelMinDimSlider: options.labelMinDimSliderId || 'visLabelMinDimSlider',
                 relatedMinSlider: options.relatedMinSliderId || 'visRelatedMinSlider',
@@ -1205,8 +1204,6 @@
             this.labelFieldHistory = [];
             this.labelFieldHistoryIndex = -1;
             this.settingsKey = 'vis-network-settings';
-            this.settingsSlotsKey = 'vis-network-settings-slots';
-            this.settingsSlots = Array.from({ length: 10 }, () => null);
             this._settingsSaveTimer = null;
             this._settingsLoaded = false;
             this.networkStateKey = 'vis-network-last';
@@ -1267,7 +1264,6 @@
             this.mountDrawer();
             this.mountLabelDrawer();
             this.disableVisSettingsTabFocus();
-            this.loadSettingsSlots();
             this.loadPersistedSettings();
             this.loadInputDraft();
             this.loadInputHistory();
@@ -1282,19 +1278,18 @@
             const dataManagerBtn = this.getEl(this.ids.dataManagerBtn);
             const dataToolbar = this.getEl(this.ids.dataToolbar);
             const saveNetworkToolbarBtn = this.getEl(this.ids.saveNetworkToolbarBtn);
+            const overwriteNetworkToolbarBtn = this.getEl(this.ids.overwriteNetworkToolbarBtn);
             const restoreNetworkToolbarBtn = this.getEl(this.ids.restoreNetworkToolbarBtn);
             const deleteNetworkToolbarBtn = this.getEl(this.ids.deleteNetworkToolbarBtn);
             const viewNetworkToolbarBtn = this.getEl(this.ids.viewNetworkToolbarBtn);
             const savedSelectToolbar = this.getEl(this.ids.savedSelectToolbar);
             const labelPanelBtn = this.getEl(this.ids.labelPanelBtn);
             const labelCloseBtn = this.getEl(this.ids.labelCloseBtn);
-            const labelAutoBtn = this.getEl(this.ids.labelAutoBtn);
             const edgeLabelToggleBtn = this.getEl(this.ids.edgeLabelToggleBtn);
             const settingsCloseBtn = this.getEl(this.ids.settingsCloseBtn);
             const labelFieldInput = this.getEl(this.ids.labelFieldInput);
             const labelSuggest = this.getEl(this.ids.labelSuggest);
             const labelFields = this.getEl(this.ids.labelFields);
-            const labelSlots = this.getEl(this.ids.labelSlots);
             const labelMinSlider = this.getEl(this.ids.labelMinSlider);
             const labelMinDimSlider = this.getEl(this.ids.labelMinDimSlider);
             const relatedMinSlider = this.getEl(this.ids.relatedMinSlider);
@@ -1367,12 +1362,6 @@
                     e.preventDefault();
                     this.toggleInputDrawer(false);
                     this.toggleLabelDrawer(false);
-                });
-            }
-            if (labelAutoBtn) {
-                labelAutoBtn.addEventListener('click', (e) => {
-                    e.preventDefault();
-                    this.restoreLabelDefaults();
                 });
             }
             if (edgeLabelToggleBtn) {
@@ -1480,7 +1469,13 @@
             if (saveNetworkToolbarBtn) {
                 saveNetworkToolbarBtn.addEventListener('click', (e) => {
                     e.preventDefault();
-                    this.saveNetworkJson();
+                    this.saveNetworkJsonAs();
+                });
+            }
+            if (overwriteNetworkToolbarBtn) {
+                overwriteNetworkToolbarBtn.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    this.overwriteNetworkJson();
                 });
             }
             if (restoreNetworkToolbarBtn) {
@@ -1498,14 +1493,23 @@
             if (viewNetworkToolbarBtn) {
                 viewNetworkToolbarBtn.addEventListener('click', (e) => {
                     e.preventDefault();
-                    this.viewVisDataJson();
+                    const settingsPanel = this.getEl(this.ids.settingsPanel);
+                    const inputPanel = this.getEl(this.ids.inputPanel);
+                    const isOpen = settingsPanel ? settingsPanel.classList.contains('is-open') : false;
+                    const isActive = inputPanel ? inputPanel.classList.contains('is-active') : false;
+                    const shouldOpen = !(isOpen && isActive);
+                    this.toggleLabelDrawer(false);
+                    if (shouldOpen) {
+                        this.viewVisDataJson();
+                    }
+                    this.toggleInputDrawer(shouldOpen);
                 });
             }
             if (savedSelectToolbar) {
                 savedSelectToolbar.addEventListener('change', (e) => {
-                    const key = e.target.value;
-                    if (key) {
-                        this.restoreNetworkJson(key);
+                    const idx = Number.parseInt(e.target.value, 10);
+                    if (Number.isFinite(idx) && idx >= 0) {
+                        this.restoreNetworkJson({ idx });
                     }
                 });
             }
@@ -1524,15 +1528,7 @@
             if (zoomFitBtn) {
                 zoomFitBtn.addEventListener('click', (e) => {
                     e.preventDefault();
-                    if (this.visNetwork) {
-                        this.visNetwork.fit({
-                            animation: {
-                                duration: 420,
-                                easingFunction: this.zoomAnimEasing
-                            }
-                        });
-                        this.syncZoomSlider();
-                    }
+                    this.fitToView({ duration: 420 });
                 });
             }
             if (zoomSlider) {
@@ -1941,17 +1937,6 @@
                     this.removeLabelField(field);
                 });
             }
-            if (labelSlots && !labelSlots.dataset.visBound) {
-                labelSlots.dataset.visBound = '1';
-                labelSlots.addEventListener('click', (e) => {
-                    const btn = e.target.closest('[data-slot]');
-                    if (!btn) return;
-                    e.preventDefault();
-                    const idx = Number(btn.dataset.slot) - 1;
-                    if (!Number.isFinite(idx) || idx < 0) return;
-                    this.showSettingsSlotMenu(e, idx, btn);
-                });
-            }
             if (exportSvgScaleInput && !exportSvgScaleInput.dataset.visBound) {
                 exportSvgScaleInput.dataset.visBound = '1';
                 exportSvgScaleInput.addEventListener('input', () => {
@@ -2120,9 +2105,22 @@
             });
         }
 
-        fitToView() {
+        fitToView(options = {}) {
             if (!this.visNetwork) return;
-            this.visNetwork.fit({ animation: { duration: 250 } });
+            const duration = options.duration || 250;
+            const ratio = 0.7;
+            this.visNetwork.fit({ animation: false });
+            const fitScale = this.visNetwork.getScale();
+            const targetScale = fitScale * ratio;
+            const pos = this.visNetwork.getViewPosition();
+            this.visNetwork.moveTo({
+                position: pos,
+                scale: targetScale,
+                animation: {
+                    duration,
+                    easingFunction: this.zoomAnimEasing
+                }
+            });
             this.syncZoomSlider();
         }
 
@@ -3620,6 +3618,8 @@
                 edgeGroup.classList.remove('is-active');
                 return;
             }
+            // Hide data toolbar when mode toolbar becomes visible
+            this.hideDataToolbar();
             toolbar.classList.add('is-visible');
             toolbar.setAttribute('aria-hidden', 'false');
             toolbar.removeAttribute('inert');
@@ -3678,6 +3678,16 @@
             console[type === 'error' ? 'error' : 'log'](message);
         }
 
+        hideDataToolbar() {
+            const toolbar = this.getEl(this.ids.dataToolbar);
+            const btn = this.getEl(this.ids.dataManagerBtn);
+            if (!toolbar || !toolbar.classList.contains('is-visible')) return;
+            toolbar.classList.remove('is-visible');
+            toolbar.setAttribute('aria-hidden', 'true');
+            toolbar.setAttribute('inert', '');
+            if (btn) btn.classList.remove('is-active');
+        }
+
         toggleDataToolbar() {
             const toolbar = this.getEl(this.ids.dataToolbar);
             const btn = this.getEl(this.ids.dataManagerBtn);
@@ -3686,12 +3696,12 @@
             const isVisible = toolbar.classList.contains('is-visible');
 
             if (isVisible) {
-                // Hide toolbar
-                toolbar.classList.remove('is-visible');
-                toolbar.setAttribute('aria-hidden', 'true');
-                toolbar.setAttribute('inert', '');
-                if (btn) btn.classList.remove('is-active');
+                this.hideDataToolbar();
             } else {
+                // Exit mode toolbar when data toolbar opens
+                if (this._toolbarMode) {
+                    this.setToolbarMode(null);
+                }
                 // Show toolbar and sync saved networks
                 this.loadSavedList().then((list) => {
                     this.renderSavedSelect(list || []);
@@ -4069,6 +4079,11 @@
                 if (labelPanel) labelPanel.classList.remove('is-active');
             }
             this.updateDrawerLayout();
+            const viewBtn = this.getEl(this.ids.viewNetworkToolbarBtn);
+            if (viewBtn) {
+                const icon = viewBtn.querySelector('i');
+                if (icon) icon.className = next ? 'fas fa-eye-slash' : 'fas fa-eye';
+            }
             if (next && shouldFocus) {
                 const textarea = this.getEl(this.ids.inputTextarea);
                 if (textarea) {
@@ -6889,6 +6904,10 @@
                     <i class="fas fa-font"></i>
                     Node Label Style
                 </div>
+                <div class="context-menu-item" data-action="restoreDefaultStyle">
+                    <i class="fas fa-rotate-left"></i>
+                    Default Style
+                </div>
             `;
             document.body.appendChild(menu);
             const rect = menu.getBoundingClientRect();
@@ -6935,6 +6954,11 @@
                             x: ev.pageX,
                             y: ev.pageY
                         });
+                        this.closeNodeContextMenu();
+                        return;
+                    }
+                    if (action === 'restoreDefaultStyle') {
+                        this.restoreLabelDefaults();
                         this.closeNodeContextMenu();
                         return;
                     }
@@ -8493,166 +8517,6 @@
         }
 
 
-        loadSettingsSlots() {
-            if (this._settingsSlotsLoaded) return;
-            this._settingsSlotsLoaded = true;
-            try {
-                const raw = localStorage.getItem(this.settingsSlotsKey);
-                if (raw) {
-                    const payload = JSON.parse(raw);
-                    if (Array.isArray(payload)) {
-                        this.settingsSlots = payload.slice(0, 10);
-                        while (this.settingsSlots.length < 10) this.settingsSlots.push(null);
-                    }
-                }
-            } catch (_e) {
-                // ignore
-            }
-            this.updateSettingsSlotButtons();
-        }
-
-        persistSettingsSlots() {
-            try {
-                localStorage.setItem(this.settingsSlotsKey, JSON.stringify(this.settingsSlots));
-            } catch (_e) {
-                // ignore
-            }
-            this.updateSettingsSlotButtons();
-        }
-
-        updateSettingsSlotButtons() {
-            const wrap = this.getEl(this.ids.labelSlots);
-            if (!wrap) return;
-            const buttons = Array.from(wrap.querySelectorAll('[data-slot]'));
-            buttons.forEach((btn) => {
-                const idx = Number(btn.dataset.slot) - 1;
-                const filled = !!this.settingsSlots[idx];
-                btn.classList.toggle('is-active', filled);
-                const icon = btn.querySelector('i');
-                if (icon) {
-                    icon.className = filled ? 'fa-solid fa-circle' : 'fa-regular fa-circle';
-                    icon.style.color = filled ? '#111111' : '';
-                }
-            });
-        }
-
-        getVisSettingsSnapshot() {
-            const panel = this.getEl(this.ids.settingsPanel);
-            const body = panel ? panel.querySelector('.vis-settings-body') : null;
-            if (!body) return [];
-            const controls = Array.from(body.querySelectorAll('input, select, textarea'));
-            return controls
-                .filter((el) => el.id)
-                .map((el) => {
-                    const type = el.type || el.tagName.toLowerCase();
-                    if (type === 'checkbox') {
-                        return { id: el.id, type, checked: el.checked };
-                    }
-                    return { id: el.id, type, value: el.value };
-                });
-        }
-
-        applyVisSettingsSnapshot(snapshot = []) {
-            if (!Array.isArray(snapshot)) return;
-            snapshot.forEach((item) => {
-                if (!item || !item.id) return;
-                const el = document.getElementById(item.id);
-                if (!el) return;
-                const type = el.type || el.tagName.toLowerCase();
-                if (type === 'checkbox') {
-                    el.checked = !!item.checked;
-                } else {
-                    let next = item.value ?? '';
-                    if (type === 'number') {
-                        const num = Number(next);
-                        if (Number.isFinite(num)) {
-                            next = num.toFixed(4);
-                        }
-                    }
-                    el.value = String(next);
-                }
-                el.dispatchEvent(new Event('input', { bubbles: true }));
-                el.dispatchEvent(new Event('change', { bubbles: true }));
-            });
-        }
-
-        showSettingsSlotMenu(e, idx, anchorEl) {
-            this.loadSettingsSlots();
-            this.closeSettingsSlotMenu();
-            const menu = document.createElement('div');
-            menu.className = 'context-menu';
-            const label = `Slot ${idx + 1}`;
-            menu.innerHTML = `
-                <div class="context-menu-item" data-action="save">
-                    <i class="fa-solid fa-floppy-disk"></i>
-                    Save ${label}
-                </div>
-                <div class="context-menu-item" data-action="load">
-                    <i class="fas fa-folder-open"></i>
-                    Load ${label}
-                </div>
-                <div class="context-menu-item" data-action="clear">
-                    <i class="fa-regular fa-trash-can"></i>
-                    Clear ${label}
-                </div>
-            `;
-            document.body.appendChild(menu);
-            const rect = anchorEl.getBoundingClientRect();
-            menu.style.left = `${rect.right + 8}px`;
-            menu.style.top = `${rect.top}px`;
-            const onAction = (action) => {
-                if (action === 'save') {
-                    this.settingsSlots[idx] = {
-                        savedAt: Date.now(),
-                        data: this.getVisSettingsSnapshot()
-                    };
-                    this.persistSettingsSlots();
-                    this.notify(`Saved ${label}`, 'success');
-                }
-                if (action === 'load') {
-                    const payload = this.settingsSlots[idx];
-                    if (payload?.data) {
-                        this.applyVisSettingsSnapshot(payload.data);
-                        this.notify(`Loaded ${label}`, 'success');
-                    } else {
-                        this.notify(`Slot ${idx + 1} is empty`, 'info');
-                    }
-                }
-                if (action === 'clear') {
-                    this.settingsSlots[idx] = null;
-                    this.persistSettingsSlots();
-                    this.notify(`Cleared ${label}`, 'info');
-                }
-                this.closeSettingsSlotMenu();
-            };
-            menu.querySelectorAll('.context-menu-item').forEach((item) => {
-                item.addEventListener('click', () => {
-                    const action = item.dataset.action;
-                    onAction(action);
-                });
-            });
-            const clickOutside = (ev) => {
-                if (!menu.contains(ev.target)) this.closeSettingsSlotMenu();
-            };
-            const keyHandler = (ev) => {
-                if (ev.key === 'Escape') this.closeSettingsSlotMenu();
-            };
-            menu._slotClickHandler = clickOutside;
-            menu._slotKeyHandler = keyHandler;
-            document.addEventListener('mousedown', clickOutside);
-            document.addEventListener('keydown', keyHandler);
-            this._settingsSlotMenu = menu;
-        }
-
-        closeSettingsSlotMenu() {
-            const menu = this._settingsSlotMenu;
-            if (!menu) return;
-            if (menu._slotClickHandler) document.removeEventListener('mousedown', menu._slotClickHandler);
-            if (menu._slotKeyHandler) document.removeEventListener('keydown', menu._slotKeyHandler);
-            menu.remove();
-            this._settingsSlotMenu = null;
-        }
-
         queuePersistSettings() {
             if (!this.settingsAutoSave) return;
             if (this._settingsSaveTimer) clearTimeout(this._settingsSaveTimer);
@@ -9479,12 +9343,12 @@
             return this.restoreVisDataSerialized(latest.name);
         }
 
-        async saveNetworkJson() {
+        _prepareSaveData() {
             this.persistSettings();
             const visData = this.getCurrentVisDataSnapshot() || this.visNetworkData;
             if (!visData || !Array.isArray(visData.nodes) || !Array.isArray(visData.edges)) {
                 this.notify('No vis data to save', 'info');
-                return;
+                return null;
             }
             if (!this.graphModel && global.WosGraphModel) {
                 this.graphModel = new global.WosGraphModel({ source: null });
@@ -9496,15 +9360,6 @@
                 }
                 this.graphModel.visData = visData;
             }
-            const list = await this.loadSavedList();
-            const select = this.getEl(this.ids.savedSelect);
-            const selectedIdx = select ? Number.parseInt(select.value, 10) : -1;
-            const hasSelection = Number.isFinite(selectedIdx) && selectedIdx >= 0 && selectedIdx < list.length;
-            const existingName = hasSelection ? (list[selectedIdx]?.name || '') : '';
-            const name = hasSelection
-                ? existingName || `network-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, '')}`
-                : prompt('Save name', `network-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, '')}`);
-            if (!name) return;
             const showAll = !!this.visNetwork?._wosLabelState?.showAll;
             const state = this.visNetwork
                 ? {
@@ -9514,6 +9369,11 @@
                 }
                 : null;
             const settings = this.getPersistedSettingsPayload();
+            return { visData, state, settings };
+        }
+
+        _buildSaveItem(name, saveData, createdAt) {
+            const { visData, state, settings } = saveData;
             const payload = this.graphModel
                 ? this.graphModel.getSavedPayload({ name, state })
                 : {
@@ -9523,21 +9383,46 @@
                     visData,
                     state
                 };
-            const nextItem = {
+            return {
                 ...payload,
                 settings,
-                createdAt: hasSelection ? (list[selectedIdx]?.createdAt || Date.now()) : Date.now(),
+                createdAt: createdAt || Date.now(),
                 updatedAt: Date.now(),
                 type: 'wos-graph'
             };
-            if (hasSelection) {
-                list[selectedIdx] = nextItem;
-                await this.persistSavedList(list);
-                this.renderSavedSelect(list);
-                this.setSavedSelectValue(selectedIdx, { persist: true, list });
-                this.notify('Network JSON updated', 'success');
+        }
+
+        async saveNetworkJson() {
+            return this.saveNetworkJsonAs();
+        }
+
+        async overwriteNetworkJson() {
+            const saveData = this._prepareSaveData();
+            if (!saveData) return;
+            const list = await this.loadSavedList();
+            const select = this.getEl(this.ids.savedSelectToolbar) || this.getEl(this.ids.savedSelect);
+            const selectedIdx = select ? Number.parseInt(select.value, 10) : -1;
+            const hasSelection = Number.isFinite(selectedIdx) && selectedIdx >= 0 && selectedIdx < list.length;
+            if (!hasSelection) {
+                this.notify('No selected network to overwrite, use Save As instead', 'info');
                 return;
             }
+            const existingName = list[selectedIdx]?.name || `network-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, '')}`;
+            const nextItem = this._buildSaveItem(existingName, saveData, list[selectedIdx]?.createdAt);
+            list[selectedIdx] = nextItem;
+            await this.persistSavedList(list);
+            this.renderSavedSelect(list);
+            this.setSavedSelectValue(selectedIdx, { persist: true, list });
+            this.notify('Network JSON updated', 'success');
+        }
+
+        async saveNetworkJsonAs() {
+            const saveData = this._prepareSaveData();
+            if (!saveData) return;
+            const name = prompt('Save name', `network-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, '')}`);
+            if (!name) return;
+            const list = await this.loadSavedList();
+            const nextItem = this._buildSaveItem(name, saveData);
             list.unshift(nextItem);
             const trimmed = list.slice(0, 50);
             await this.persistSavedList(trimmed);
@@ -9548,6 +9433,7 @@
 
         async restoreNetworkJson(options = {}) {
             const list = options.list || await this.loadSavedList();
+            const selectToolbar = this.getEl(this.ids.savedSelectToolbar);
             const select = this.getEl(this.ids.savedSelect);
             if (!list.length || (select && select.disabled)) {
                 if (!options.silent) {
@@ -9555,7 +9441,9 @@
                 }
                 return;
             }
-            const fallbackIdx = select ? Number.parseInt(select.value, 10) : 0;
+            const toolbarIdx = selectToolbar ? Number.parseInt(selectToolbar.value, 10) : NaN;
+            const panelIdx = select ? Number.parseInt(select.value, 10) : NaN;
+            const fallbackIdx = Number.isFinite(toolbarIdx) ? toolbarIdx : (Number.isFinite(panelIdx) ? panelIdx : 0);
             const idx = Number.isFinite(options.idx)
                 ? options.idx
                 : (Number.isFinite(this.pendingSavedIndex) ? this.pendingSavedIndex : fallbackIdx);
