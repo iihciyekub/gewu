@@ -901,6 +901,17 @@
             this.save();
         }
 
+        /**
+         * Auto-capture current mode state after data modifications.
+         * Call this after any dataset.nodes.update() or dataset.edges.update().
+         */
+        autoCaptureCurrentMode() {
+            const mode = this.manager?._toolbarMode;
+            if (mode && ['normal', 'node', 'edge'].includes(mode)) {
+                this.capture(mode);
+            }
+        }
+
         apply(mode) {
             const manager = this.manager;
             if (!manager?.visNetwork) return;
@@ -2994,23 +3005,23 @@
             }
             const dataset = this.visNetwork?.body?.data?.nodes;
             if (!dataset || typeof dataset.get !== 'function') return;
+            const nodeUpdates = [];
             parsed.validIds.forEach((nodeId) => {
                 const node = dataset.get(nodeId);
                 if (!node) return;
                 if (!this._nodeModeOriginalColors.has(nodeId)) {
                     this._nodeModeOriginalColors.set(nodeId, cloneVisColor(node.color));
                 }
-                const nextColor = buildSelectedNodeColor(node.color, color);
-                dataset.update({ id: nodeId, color: nextColor });
+                nodeUpdates.push({ id: nodeId, color: buildSelectedNodeColor(node.color, color) });
             });
-            this.selectedNodeColor = color;
-            this.markEdgeFocusDirty();
-            this.applyEdgeFocusDisplay();
-            this._labelThresholdBaseDirty = true;
-            this.applyLabelThresholdDimming();
-            if (this.modeStateStore && this._toolbarMode === 'node') {
-                this.modeStateStore.capture('node');
-            }
+            this.batchNetworkUpdate(() => {
+                this.updateNetworkNodes(nodeUpdates);
+                this.selectedNodeColor = color;
+                this.markEdgeFocusDirty();
+                this.applyEdgeFocusDisplay();
+                this._labelThresholdBaseDirty = true;
+                this.applyLabelThresholdDimming();
+            });
             if (parsed.missingIds.length) {
                 this.triggerToolbarShake();
                 this.notify(`Missing nodes: ${parsed.missingIds.join(', ')}`, 'info');
@@ -3131,8 +3142,8 @@
                 this.toggleNodeSelectionFromInput(input ? input.value : '');
                 return;
             }
-            if (action === 'pickNodeColor') {
-                // Copy normal mode styles and reset all node selections
+            if (action === 'syncFromNormal') {
+                // Copy the CURRENT normal mode snapshot into this mode, clear all selections
                 if (!this.modeStateStore) {
                     this.notify('Mode state store not ready', 'info');
                     return;
@@ -3146,8 +3157,6 @@
                     this.notify('Vis network not ready', 'info');
                     return;
                 }
-                const dataset = this.visNetwork.body.data;
-                // Apply normal mode node styles to current view
                 const nodeUpdates = (normalSnapshot.nodes || []).map((node) => {
                     const update = { id: node.id, color: cloneVisColor(node.color) };
                     if (Number.isFinite(node.x) && Number.isFinite(node.y)) {
@@ -3157,35 +3166,30 @@
                     if (node.fixed != null) update.fixed = node.fixed;
                     return update;
                 });
-                // Apply normal mode edge styles to current view
                 const edgeUpdates = (normalSnapshot.edges || []).map((edge) => ({
                     id: edge.id,
                     color: cloneVisColor(edge.color)
                 }));
-                if (nodeUpdates.length) dataset.nodes.update(nodeUpdates);
-                if (edgeUpdates.length) dataset.edges.update(edgeUpdates);
-                // Clear all node selections and custom focus state
-                this.visNetwork.unselectAll();
-                this.clearSelectedNodeIds();
-                const state = this.getEdgeFocusState();
-                state.customFocusActive = false;
-                state.customFocusMap?.clear();
-                state.customFocusDepthMap?.clear();
-                state.customFocusNodes?.clear();
-                state.customFocusEdges?.clear();
-                state.customFocusRootId = null;
-                // Update base colors so the new colors are preserved
-                state.baseNodeColors.clear();
-                state.baseEdgeColors.clear();
-                state.dirty = true;
-                this.markEdgeFocusDirty();
-                this.applyEdgeFocusDisplay();
-                // Capture the updated state to node mode
-                if (this._toolbarMode === 'node') {
-                    this.modeStateStore.capture('node');
-                }
+                this.batchNetworkUpdate(() => {
+                    this.updateNetworkData(nodeUpdates, edgeUpdates);
+                    this.visNetwork.unselectAll();
+                    this.clearSelectedNodeIds();
+                    const state = this.getEdgeFocusState();
+                    state.customFocusActive = false;
+                    state.customFocusMap?.clear();
+                    state.customFocusDepthMap?.clear();
+                    state.customFocusNodes?.clear();
+                    state.customFocusEdges?.clear();
+                    state.customFocusRootId = null;
+                    state.lockedEdgeIds?.clear();
+                    state.baseNodeColors.clear();
+                    state.baseEdgeColors.clear();
+                    state.dirty = true;
+                    this.markEdgeFocusDirty();
+                    this.applyEdgeFocusDisplay();
+                });
                 this.updateModeToolbar();
-                this.notify('Normal mode styles applied, all selections cleared', 'success');
+                this.notify('Copied from normal mode, all selections cleared', 'success');
                 return;
             }
             if (action === 'unselectNode') {
@@ -3213,57 +3217,6 @@
             }
             if (action === 'unlockDepthFocus') {
                 this.releaseNodeFocus();
-                return;
-            }
-            if (action === 'applyNormalStyleToEdge') {
-                // Copy normal mode styles and reset all edge selections
-                if (!this.modeStateStore) {
-                    this.notify('Mode state store not ready', 'info');
-                    return;
-                }
-                const normalSnapshot = this.modeStateStore.state.modes?.['normal'];
-                if (!normalSnapshot) {
-                    this.notify('Normal mode snapshot not found', 'info');
-                    return;
-                }
-                if (!this.visNetwork || !this.visNetwork.body?.data?.nodes || !this.visNetwork.body?.data?.edges) {
-                    this.notify('Vis network not ready', 'info');
-                    return;
-                }
-                const dataset = this.visNetwork.body.data;
-                // Apply normal mode node styles to current view
-                const nodeUpdates = (normalSnapshot.nodes || []).map((node) => {
-                    const update = { id: node.id, color: cloneVisColor(node.color) };
-                    if (Number.isFinite(node.x) && Number.isFinite(node.y)) {
-                        update.x = node.x;
-                        update.y = node.y;
-                    }
-                    if (node.fixed != null) update.fixed = node.fixed;
-                    return update;
-                });
-                // Apply normal mode edge styles to current view
-                const edgeUpdates = (normalSnapshot.edges || []).map((edge) => ({
-                    id: edge.id,
-                    color: cloneVisColor(edge.color)
-                }));
-                if (nodeUpdates.length) dataset.nodes.update(nodeUpdates);
-                if (edgeUpdates.length) dataset.edges.update(edgeUpdates);
-                // Clear all edge selections and edge focus state
-                this.visNetwork.unselectAll();
-                const state = this.getEdgeFocusState();
-                state.lockedEdgeIds?.clear();
-                // Update base colors so the new colors are preserved
-                state.baseNodeColors.clear();
-                state.baseEdgeColors.clear();
-                state.dirty = true;
-                this.markEdgeFocusDirty();
-                this.applyEdgeFocusDisplay();
-                // Capture the updated state to edge mode
-                if (this._toolbarMode === 'edge') {
-                    this.modeStateStore.capture('edge');
-                }
-                this.updateModeToolbar();
-                this.notify('Normal mode styles applied, all selections cleared', 'success');
                 return;
             }
             if (action === 'exitEdgeMode') {
@@ -3555,8 +3508,8 @@
                 this.edgeFocusFadeAlpha = Math.max(0, Math.min(1, value));
                 this.applyEdgeFocusDisplay();
                 this.updateModeToolbar();
-                if (this.modeStateStore && this._toolbarMode === 'edge') {
-                    this.modeStateStore.capture('edge');
+                if (this.modeStateStore) {
+                    this.modeStateStore.autoCaptureCurrentMode();
                 }
                 this.queuePersistSettings();
                 return;
@@ -3570,8 +3523,8 @@
                 state.customFocusAlpha = nextAlpha;
                 this.applyEdgeFocusDisplay();
                 this.updateModeToolbar();
-                if (this.modeStateStore && this._toolbarMode === 'node') {
-                    this.modeStateStore.capture('node');
+                if (this.modeStateStore) {
+                    this.modeStateStore.autoCaptureCurrentMode();
                 }
                 this.queuePersistSettings();
                 return;
@@ -4172,6 +4125,66 @@
             return this.visNetwork?.body?.data?.nodes || null;
         }
 
+        /**
+         * Unified node update wrapper. Calls dataset.nodes.update() and auto-captures mode state.
+         * Respects _suppressCapture flag for batch operations.
+         * @param {Array|Object} updates - Node update(s) to apply
+         */
+        updateNetworkNodes(updates) {
+            const dataset = this.visNetwork?.body?.data?.nodes;
+            if (!dataset) return;
+            dataset.update(updates);
+            if (!this._suppressCapture && this.modeStateStore) {
+                this.modeStateStore.autoCaptureCurrentMode();
+            }
+        }
+
+        /**
+         * Unified edge update wrapper. Calls dataset.edges.update() and auto-captures mode state.
+         * Respects _suppressCapture flag for batch operations.
+         * @param {Array|Object} updates - Edge update(s) to apply
+         */
+        updateNetworkEdges(updates) {
+            const dataset = this.visNetwork?.body?.data?.edges;
+            if (!dataset) return;
+            dataset.update(updates);
+            if (!this._suppressCapture && this.modeStateStore) {
+                this.modeStateStore.autoCaptureCurrentMode();
+            }
+        }
+
+        /**
+         * Unified batch update wrapper. Updates both nodes and edges, auto-captures once.
+         * @param {Array} nodeUpdates - Node updates (can be empty)
+         * @param {Array} edgeUpdates - Edge updates (can be empty)
+         */
+        updateNetworkData(nodeUpdates, edgeUpdates) {
+            const dataset = this.visNetwork?.body?.data;
+            if (!dataset) return;
+            if (nodeUpdates?.length) dataset.nodes.update(nodeUpdates);
+            if (edgeUpdates?.length) dataset.edges.update(edgeUpdates);
+            if ((nodeUpdates?.length || edgeUpdates?.length) && !this._suppressCapture && this.modeStateStore) {
+                this.modeStateStore.autoCaptureCurrentMode();
+            }
+        }
+
+        /**
+         * Execute a callback with capture suppressed, then capture once at the end.
+         * Use this for complex operations that trigger multiple sub-updates.
+         * @param {Function} fn - The operations to batch
+         */
+        batchNetworkUpdate(fn) {
+            this._suppressCapture = true;
+            try {
+                fn();
+            } finally {
+                this._suppressCapture = false;
+                if (this.modeStateStore) {
+                    this.modeStateStore.autoCaptureCurrentMode();
+                }
+            }
+        }
+
         refreshLabelFieldOptions() {
             const data = this.getCurrentViewData();
             if (this.app && typeof this.app.updateMdChatFieldOptionsFromCurrentData === 'function') {
@@ -4621,18 +4634,12 @@
                 console.warn('[WosVisManager] No node or edge found with id:', id);
             });
             
-            let updateCount = 0;
-            if (nodeUpdates.length) {
-                dataset.nodes.update(nodeUpdates);
-                updateCount += nodeUpdates.length;
-                console.log('[WosVisManager] Updated nodes:', nodeUpdates.length);
+            const updateCount = nodeUpdates.length + edgeUpdates.length;
+            if (updateCount > 0) {
+                console.log('[WosVisManager] Updated nodes:', nodeUpdates.length, 'edges:', edgeUpdates.length);
+                this.updateNetworkData(nodeUpdates, edgeUpdates);
             }
-            if (edgeUpdates.length) {
-                dataset.edges.update(edgeUpdates);
-                updateCount += edgeUpdates.length;
-                console.log('[WosVisManager] Updated edges:', edgeUpdates.length);
-            }
-            
+
             if (updateCount > 0) {
                 this.notify(`Style updated: ${updateCount} item(s)`, 'success');
                 
@@ -4965,8 +4972,7 @@
                         id: edge.id,
                         color: state.baseEdgeColors.get(edge.id) || edge.color
                     }));
-                    dataset.nodes.update(nodeUpdates);
-                    dataset.edges.update(edgeUpdates);
+                    this.updateNetworkData(nodeUpdates, edgeUpdates);
                     state.baseNodeColors.clear();
                     state.baseEdgeColors.clear();
                     this.markEdgeFocusDirty();
@@ -5034,8 +5040,7 @@
                 const color = alpha < 1 ? fadeEdgeColor(baseColor, alpha) : baseColor;
                 return { id: edge.id, color };
             });
-            dataset.nodes.update(nodeUpdates);
-            dataset.edges.update(edgeUpdates);
+            this.updateNetworkData(nodeUpdates, edgeUpdates);
             this.markEdgeFocusDirty();
             this.applyEdgeFocusDisplay();
         }
@@ -5057,7 +5062,7 @@
                 const size = minSize + eased * (maxSize - minSize);
                 return { id: node.id, size };
             });
-            dataset.update(updates);
+            this.updateNetworkNodes(updates);
         }
 
         applyNodeBorderWidth() {
@@ -5081,99 +5086,105 @@
                     borderWidthSelected: Number(selected.toFixed(2))
                 };
             });
-            dataset.update(updates);
+            this.updateNetworkNodes(updates);
         }
 
         applyNodeColor() {
             if (this._skipNodeColorApply) return;
             const dataset = this.getNetworkNodesDataSet();
             if (!dataset) return;
-            this.restoreEdgeFocusBaseColors();
-            const base = normalizeVisColor(this.nodeColor || '#ffffff');
-            const border = normalizeVisColor(this.nodeBorderColor || base);
-            const highlight = adjustColorAlpha(base, 0.12);
-            const hover = adjustColorAlpha(base, 0.2);
-            const updates = dataset.get().map((node) => ({
-                id: node.id,
-                color: {
-                    background: base,
-                    border,
-                    highlight: { background: highlight, border },
-                    hover: { background: hover, border }
-                }
-            }));
-            dataset.update(updates);
-            this.markEdgeFocusDirty();
-            this.applyEdgeFocusDisplay();
-            this._labelThresholdBaseDirty = true;
-            this.applyLabelThresholdDimming();
+            this.batchNetworkUpdate(() => {
+                this.restoreEdgeFocusBaseColors();
+                const base = normalizeVisColor(this.nodeColor || '#ffffff');
+                const border = normalizeVisColor(this.nodeBorderColor || base);
+                const highlight = adjustColorAlpha(base, 0.12);
+                const hover = adjustColorAlpha(base, 0.2);
+                const updates = dataset.get().map((node) => ({
+                    id: node.id,
+                    color: {
+                        background: base,
+                        border,
+                        highlight: { background: highlight, border },
+                        hover: { background: hover, border }
+                    }
+                }));
+                this.updateNetworkNodes(updates);
+                this.markEdgeFocusDirty();
+                this.applyEdgeFocusDisplay();
+                this._labelThresholdBaseDirty = true;
+                this.applyLabelThresholdDimming();
+            });
         }
 
         applyNodeBorderColor() {
             if (this._skipNodeColorApply) return;
             const dataset = this.getNetworkNodesDataSet();
             if (!dataset) return;
-            this.restoreEdgeFocusBaseColors();
-            const border = normalizeVisColor(this.nodeBorderColor || '#111111');
-            const updates = dataset.get().map((node) => ({
-                id: node.id,
-                color: { ...(node.color || {}), border }
-            }));
-            dataset.update(updates);
-            this.markEdgeFocusDirty();
-            this.applyEdgeFocusDisplay();
-            this._labelThresholdBaseDirty = true;
-            this.applyLabelThresholdDimming();
+            this.batchNetworkUpdate(() => {
+                this.restoreEdgeFocusBaseColors();
+                const border = normalizeVisColor(this.nodeBorderColor || '#111111');
+                const updates = dataset.get().map((node) => ({
+                    id: node.id,
+                    color: { ...(node.color || {}), border }
+                }));
+                this.updateNetworkNodes(updates);
+                this.markEdgeFocusDirty();
+                this.applyEdgeFocusDisplay();
+                this._labelThresholdBaseDirty = true;
+                this.applyLabelThresholdDimming();
+            });
         }
 
         applyEdgeFade() {
             if (!this.visNetwork) return;
-            const dataset = this.visNetwork?.body?.data?.edges;
-            if (!dataset) return;
-            this.restoreEdgeFocusBaseColors();
-            const meta = this.visNetworkData?.meta || {};
-            const minRelated = Number.isFinite(meta.minRelated) ? meta.minRelated : 0;
-            const maxRelated = Number.isFinite(meta.maxRelated) ? meta.maxRelated : minRelated;
-            const contrast = (Number(this.edgeFade) || 0) / 100;
-            const minAlpha = 0.15 + (1 - contrast) * 0.2;
-            const maxAlpha = 0.85 - (1 - contrast) * 0.2;
-            const baseColor = normalizeVisColor(this.edgeColor);
-            const darkMode = isDarkTheme();
-            const updates = dataset.get().map((edge) => {
-                const related = getRelatedCount(edge);
-                const t = maxRelated > minRelated ? (related - minRelated) / (maxRelated - minRelated) : 0;
-                const alphaRaw = minAlpha + Math.max(0, Math.min(1, t)) * (maxAlpha - minAlpha);
-                const alpha = Math.max(0, Math.min(1, alphaRaw));
-                if (baseColor) {
+            const edgeDataset = this.visNetwork?.body?.data?.edges;
+            if (!edgeDataset) return;
+            this.batchNetworkUpdate(() => {
+                this.restoreEdgeFocusBaseColors();
+                const meta = this.visNetworkData?.meta || {};
+                const minRelated = Number.isFinite(meta.minRelated) ? meta.minRelated : 0;
+                const maxRelated = Number.isFinite(meta.maxRelated) ? meta.maxRelated : minRelated;
+                const contrast = (Number(this.edgeFade) || 0) / 100;
+                const minAlpha = 0.15 + (1 - contrast) * 0.2;
+                const maxAlpha = 0.85 - (1 - contrast) * 0.2;
+                const baseColor = normalizeVisColor(this.edgeColor);
+                const darkMode = isDarkTheme();
+                const updates = edgeDataset.get().map((edge) => {
+                    const related = getRelatedCount(edge);
+                    const t = maxRelated > minRelated ? (related - minRelated) / (maxRelated - minRelated) : 0;
+                    const alphaRaw = minAlpha + Math.max(0, Math.min(1, t)) * (maxAlpha - minAlpha);
+                    const alpha = Math.max(0, Math.min(1, alphaRaw));
+                    if (baseColor) {
+                        return {
+                            id: edge.id,
+                            color: {
+                                color: applyAlphaToColor(baseColor, alpha),
+                                highlight: applyAlphaToColor(baseColor, Math.min(1, alpha + 0.1)),
+                                hover: applyAlphaToColor(baseColor, Math.min(1, alpha + 0.15))
+                            }
+                        };
+                    }
                     return {
                         id: edge.id,
                         color: {
-                            color: applyAlphaToColor(baseColor, alpha),
-                            highlight: applyAlphaToColor(baseColor, Math.min(1, alpha + 0.1)),
-                            hover: applyAlphaToColor(baseColor, Math.min(1, alpha + 0.15))
+                            color: darkMode
+                                ? `rgba(255,255,255,${alpha.toFixed(3)})`
+                                : `rgba(0,0,0,${alpha.toFixed(3)})`,
+                            highlight: darkMode
+                                ? `rgba(255,255,255,${Math.min(1, alpha + 0.1).toFixed(3)})`
+                                : `rgba(0,0,0,${Math.min(1, alpha + 0.1).toFixed(3)})`,
+                            hover: darkMode
+                                ? `rgba(255,255,255,${Math.min(1, alpha + 0.15).toFixed(3)})`
+                                : `rgba(0,0,0,${Math.min(1, alpha + 0.15).toFixed(3)})`
                         }
                     };
-                }
-                return {
-                    id: edge.id,
-                    color: {
-                        color: darkMode
-                            ? `rgba(255,255,255,${alpha.toFixed(3)})`
-                            : `rgba(0,0,0,${alpha.toFixed(3)})`,
-                        highlight: darkMode
-                            ? `rgba(255,255,255,${Math.min(1, alpha + 0.1).toFixed(3)})`
-                            : `rgba(0,0,0,${Math.min(1, alpha + 0.1).toFixed(3)})`,
-                        hover: darkMode
-                            ? `rgba(255,255,255,${Math.min(1, alpha + 0.15).toFixed(3)})`
-                            : `rgba(0,0,0,${Math.min(1, alpha + 0.15).toFixed(3)})`
-                    }
-                };
+                });
+                this.updateNetworkEdges(updates);
+                this.markEdgeFocusDirty();
+                this.applyEdgeFocusDisplay();
+                this._labelThresholdBaseDirty = true;
+                this.applyLabelThresholdDimming();
             });
-            dataset.update(updates);
-            this.markEdgeFocusDirty();
-            this.applyEdgeFocusDisplay();
-            this._labelThresholdBaseDirty = true;
-            this.applyLabelThresholdDimming();
         }
 
         applyEdgeWidthRange() {
@@ -5196,7 +5207,7 @@
                     const width = baseWidth * scale;
                     return { id: edge.id, width: Number(width.toFixed(2)) };
                 });
-            dataset.update(updates);
+            this.updateNetworkEdges(updates);
         }
 
         applyEdgeStyle() {
@@ -5262,7 +5273,7 @@
                 }
                 return next;
             });
-            dataset.update(updates);
+            this.updateNetworkEdges(updates);
             const edgesOptions = {
                 smooth: isStraight
                     ? false
@@ -5516,8 +5527,7 @@
                 id: edge.id,
                 color: state.baseEdgeColors.get(edge.id) || edge.color
             }));
-            dataset.nodes.update(nodeUpdates);
-            dataset.edges.update(edgeUpdates);
+            this.updateNetworkData(nodeUpdates, edgeUpdates);
         }
 
         applyEdgeFocusDisplay() {
@@ -6380,16 +6390,11 @@
             const applyEdgeStyle = (updates) => {
                 if (!this.visNetwork || !this.visNetwork.body?.data?.edges) return;
                 const dataset = this.visNetwork.body.data;
-                
                 if (getApplyToAll()) {
-                    const edges = dataset.edges.get();
-                    const edgeUpdates = edges.map((e) => {
-                        const currentEdge = dataset.edges.get(e.id);
-                        return { id: e.id, ...updates };
-                    });
-                    dataset.edges.update(edgeUpdates);
+                    const edgeUpdates = dataset.edges.get().map((e) => ({ id: e.id, ...updates }));
+                    this.updateNetworkEdges(edgeUpdates);
                 } else {
-                    dataset.edges.update({ id: edgeId, ...updates });
+                    this.updateNetworkEdges({ id: edgeId, ...updates });
                 }
                 if (this.visNetwork) this.visNetwork.redraw();
             };
@@ -6537,10 +6542,9 @@
                 this.queuePersistSettings();
                 // Apply to all edges when in global mode
                 if (getApplyToAll()) {
-                    const dataset = this.visNetwork.body.data;
-                    const edges = dataset.edges.get();
+                    const edges = this.visNetwork.body.data.edges.get();
                     const edgeUpdates = edges.map((e) => ({ id: e.id, color: val }));
-                    dataset.edges.update(edgeUpdates);
+                    this.updateNetworkEdges(edgeUpdates);
                     if (this.visNetwork) this.visNetwork.redraw();
                 }
             });
@@ -7600,28 +7604,17 @@
             // Helper to apply to single node or all nodes
             const applyLabelStyle = (updates) => {
                 if (!this.visNetwork || !this.visNetwork.body?.data?.nodes) return;
-                const dataset = this.visNetwork.body.data;
-
+                const nodeDataset = this.visNetwork.body.data.nodes;
                 if (getApplyToAll()) {
-                    // Apply to all nodes
-                    const nodes = dataset.nodes.get();
-                    const nodeUpdates = nodes.map((n) => {
-                        const currentNode = dataset.nodes.get(n.id);
-                        const existingLabelStyle = currentNode?.labelStyle || {};
-                        return {
-                            id: n.id,
-                            labelStyle: { ...existingLabelStyle, ...updates }
-                        };
+                    const nodeUpdates = nodeDataset.get().map((n) => {
+                        const existingLabelStyle = n?.labelStyle || {};
+                        return { id: n.id, labelStyle: { ...existingLabelStyle, ...updates } };
                     });
-                    dataset.nodes.update(nodeUpdates);
+                    this.updateNetworkNodes(nodeUpdates);
                 } else {
-                    // Apply to single node
-                    const currentNode = dataset.nodes.get(nodeId);
+                    const currentNode = nodeDataset.get(nodeId);
                     const existingLabelStyle = currentNode?.labelStyle || {};
-                    dataset.nodes.update({
-                        id: nodeId,
-                        labelStyle: { ...existingLabelStyle, ...updates }
-                    });
+                    this.updateNetworkNodes({ id: nodeId, labelStyle: { ...existingLabelStyle, ...updates } });
                 }
                 this.updateLabelLayer();
             };
@@ -7663,40 +7656,20 @@
             // Helper for scale-related updates with smooth recalculation
             const applySizeScaleUpdates = () => {
                 if (!this.visNetwork || !this.visNetwork.body?.data?.nodes) return;
-                const dataset = this.visNetwork.body.data;
+                const nodeDataset = this.visNetwork.body.data.nodes;
                 const scale = Number.isFinite(this.labelSizeScale) ? this.labelSizeScale : 0.5;
                 const minFontSize = Number.isFinite(this.labelFontMin) ? this.labelFontMin : 5;
                 const maxFontSize = Number.isFinite(this.labelFontMax) ? this.labelFontMax : 20;
-
+                const calcUpdate = (node) => {
+                    const fontSize = Math.max(minFontSize, Math.min(maxFontSize, (node.size || 30) * scale));
+                    return { id: node.id, labelStyle: { ...(node.labelStyle || {}), fontSize: Number(fontSize.toFixed(2)), scaleFont: scale, scaleMin: minFontSize, scaleMax: maxFontSize } };
+                };
                 if (getApplyToAll()) {
-                    // Apply to all nodes
-                    const nodes = dataset.nodes.get();
-                    const updates = nodes.map((node) => {
-                        const nodeSize = node.size || 30;
-                        const baseFontSize = nodeSize * scale;
-                        // Clamp font size between absolute min and max values
-                        let fontSize = Math.max(minFontSize, Math.min(maxFontSize, baseFontSize));
-                        
-                        return {
-                            id: node.id,
-                            labelStyle: { ...(node.labelStyle || {}), fontSize: Number(fontSize.toFixed(2)), scaleFont: scale, scaleMin: minFontSize, scaleMax: maxFontSize }
-                        };
-                    });
-                    dataset.nodes.update(updates);
+                    this.updateNetworkNodes(nodeDataset.get().map(calcUpdate));
                 } else {
-                    // Apply to single node
-                    const currentNode = dataset.nodes.get(nodeId);
+                    const currentNode = nodeDataset.get(nodeId);
                     if (!currentNode) return;
-                    
-                    const nodeSize = currentNode.size || 30;
-                    const baseFontSize = nodeSize * scale;
-                    // Clamp font size between absolute min and max values
-                    let fontSize = Math.max(minFontSize, Math.min(maxFontSize, baseFontSize));
-                    
-                    dataset.nodes.update({
-                        id: nodeId,
-                        labelStyle: { ...(currentNode.labelStyle || {}), fontSize: Number(fontSize.toFixed(2)), scaleFont: scale, scaleMin: minFontSize, scaleMax: maxFontSize }
-                    });
+                    this.updateNetworkNodes(calcUpdate(currentNode));
                 }
                 this.updateLabelLayer();
             };
@@ -7977,18 +7950,14 @@
                 if (getApplyToAll()) {
                     // Clear per-edge overrides and apply globally
                     this._edgeCustomFonts.clear();
-                    const edges = dataset.edges.get();
-                    const edgeUpdates = edges.map((e) => {
-                        const currentEdge = dataset.edges.get(e.id);
-                        return { id: e.id, font: { ...currentEdge?.font, ...updates } };
-                    });
-                    dataset.edges.update(edgeUpdates);
+                    const edgeUpdates = dataset.edges.get().map((e) => ({ id: e.id, font: { ...e.font, ...updates } }));
+                    this.updateNetworkEdges(edgeUpdates);
                 } else {
                     // Store per-edge override so applyEdgeLabelDisplay() respects it
                     const prev = this._edgeCustomFonts.get(edgeId) || {};
                     this._edgeCustomFonts.set(edgeId, { ...prev, ...updates });
                     const currentEdge = dataset.edges.get(edgeId);
-                    dataset.edges.update({ id: edgeId, font: { ...currentEdge?.font, ...updates } });
+                    this.updateNetworkEdges({ id: edgeId, font: { ...currentEdge?.font, ...updates } });
                 }
                 if (this.visNetwork) this.visNetwork.redraw();
             };
@@ -8480,8 +8449,6 @@
 
         restoreVisDataStyles(visData) {
             if (!this.visNetwork || !this.visNetwork?.body?.data || !visData) return;
-            const dataset = this.visNetwork.body.data;
-            
             // 全样式恢复：直接使用保存的完整数据，不做任何字段过滤或特殊处理
             const nodeUpdates = Array.isArray(visData.nodes)
                 ? visData.nodes.filter((node) => node && node.id != null)
@@ -8492,27 +8459,16 @@
                 : [];
             
             // 直接批量更新到 vis-network（所有属性原样恢复）
-            if (nodeUpdates.length) {
-                dataset.nodes.update(nodeUpdates);
-                console.log(`[WosVisManager] 已恢复 ${nodeUpdates.length} 个节点的全部样式`);
-                if (nodeUpdates.length > 0) {
-                    console.log('[WosVisManager] 节点样例:', nodeUpdates[0]);
-                }
-            }
-            
-            if (edgeUpdates.length) {
-                dataset.edges.update(edgeUpdates);
-                console.log(`[WosVisManager] 已恢复 ${edgeUpdates.length} 条边的全部样式`);
-                if (edgeUpdates.length > 0) {
-                    console.log('[WosVisManager] 边样例:', edgeUpdates[0]);
-                }
-            }
-            
+            if (nodeUpdates.length) console.log(`[WosVisManager] 已恢复 ${nodeUpdates.length} 个节点的全部样式`);
+            if (edgeUpdates.length) console.log(`[WosVisManager] 已恢复 ${edgeUpdates.length} 条边的全部样式`);
             if (nodeUpdates.length || edgeUpdates.length) {
-                this.markEdgeFocusDirty();
-                this.applyEdgeFocusDisplay();
-                this._labelThresholdBaseDirty = true;
-                this.applyLabelThresholdDimming();
+                this.batchNetworkUpdate(() => {
+                    this.updateNetworkData(nodeUpdates, edgeUpdates);
+                    this.markEdgeFocusDirty();
+                    this.applyEdgeFocusDisplay();
+                    this._labelThresholdBaseDirty = true;
+                    this.applyLabelThresholdDimming();
+                });
             }
         }
 
@@ -9059,27 +9015,29 @@
                     activeEdges.add(edge.id);
                 }
             });
-            if (state.baseNodeColors.size || state.baseEdgeColors.size) {
-                this.restoreEdgeFocusBaseColors();
-            }
-            state.hoverEdgeId = null;
-            state.hoverNodeId = null;
-            state.lockedEdgeIds.clear();
-            state.dirty = true;
-            state.customFocusActive = true;
-            state.customFocusNodes = activeNodes;
-            state.customFocusEdges = activeEdges;
-            if (opacity != null && Number.isFinite(Number(opacity))) {
-                state.customFocusAlpha = Math.max(0, Math.min(1, Number(opacity)));
-            }
-            state.customFocusRootId = nodeId;
-            state.customFocusDepth = targetDepth;
-            if (this.visNetwork) {
-                this.visNetwork._wosCustomFocusActive = true;
-                this.visNetwork._wosCustomFocusNodes = activeNodes;
-            }
-            this.addSelectedNodeId(nodeId);
-            this.applyEdgeFocusDisplay();
+            this.batchNetworkUpdate(() => {
+                if (state.baseNodeColors.size || state.baseEdgeColors.size) {
+                    this.restoreEdgeFocusBaseColors();
+                }
+                state.hoverEdgeId = null;
+                state.hoverNodeId = null;
+                state.lockedEdgeIds.clear();
+                state.dirty = true;
+                state.customFocusActive = true;
+                state.customFocusNodes = activeNodes;
+                state.customFocusEdges = activeEdges;
+                if (opacity != null && Number.isFinite(Number(opacity))) {
+                    state.customFocusAlpha = Math.max(0, Math.min(1, Number(opacity)));
+                }
+                state.customFocusRootId = nodeId;
+                state.customFocusDepth = targetDepth;
+                if (this.visNetwork) {
+                    this.visNetwork._wosCustomFocusActive = true;
+                    this.visNetwork._wosCustomFocusNodes = activeNodes;
+                }
+                this.addSelectedNodeId(nodeId);
+                this.applyEdgeFocusDisplay();
+            });
             this.updateModeToolbar();
         }
 
