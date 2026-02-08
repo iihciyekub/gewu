@@ -1,4 +1,38 @@
 @import url('panel-collapsed.css');
+
+/* Fira Code Font */
+@font-face {
+    font-family: 'Fira Code';
+    src: url('../fonts/Fira_Code_v6.2/woff2/FiraCode-Regular.woff2') format('woff2');
+    font-weight: 400;
+    font-style: normal;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: 'Fira Code';
+    src: url('../fonts/Fira_Code_v6.2/woff2/FiraCode-Medium.woff2') format('woff2');
+    font-weight: 500;
+    font-style: normal;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: 'Fira Code';
+    src: url('../fonts/Fira_Code_v6.2/woff2/FiraCode-SemiBold.woff2') format('woff2');
+    font-weight: 600;
+    font-style: normal;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: 'Fira Code';
+    src: url('../fonts/Fira_Code_v6.2/woff2/FiraCode-Bold.woff2') format('woff2');
+    font-weight: 700;
+    font-style: normal;
+    font-display: swap;
+}
+
 /* GEWU - Web of Science Academic Style */
 
 :root {
@@ -2452,8 +2486,9 @@ body.theme-dark .vis-mode-slider input[type="range"] {
     transform: translate(-50%, -8px);
     display: flex;
     align-items: center;
-    gap: 12px;
-    padding: 8px 16px;
+    gap: 6px;
+    padding: 4px 10px;
+    font-size: 10px;
     border-radius: 999px;
     background: rgba(255, 255, 255, 0.94);
     border: 1px solid rgba(15, 23, 42, 0.12);
@@ -2472,7 +2507,7 @@ body.theme-dark .vis-mode-slider input[type="range"] {
 }
 
 .vis-data-label {
-    font-size: 13px;
+    font-size: 10px;
     font-weight: 600;
     color: #111827;
     white-space: nowrap;
@@ -2483,12 +2518,12 @@ body.theme-dark .vis-mode-slider input[type="range"] {
 .vis-data-actions {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 4px;
 }
 
 .vis-data-action {
-    height: 32px;
-    padding: 0 12px;
+    height: 22px;
+    padding: 0 8px;
     border-radius: 999px;
     border: 1px solid rgba(15, 23, 42, 0.12);
     background: #ffffff;
@@ -2496,10 +2531,10 @@ body.theme-dark .vis-mode-slider input[type="range"] {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    gap: 6px;
+    gap: 4px;
     cursor: pointer;
     transition: background 120ms ease, border-color 120ms ease, color 120ms ease;
-    font-size: 13px;
+    font-size: 10px;
     font-weight: 500;
     white-space: nowrap;
 }
@@ -2514,7 +2549,7 @@ body.theme-dark .vis-mode-slider input[type="range"] {
 }
 
 .vis-data-action i {
-    font-size: 14px;
+    font-size: 10px;
 }
 
 .vis-data-action-danger:hover {
@@ -2524,22 +2559,25 @@ body.theme-dark .vis-mode-slider input[type="range"] {
 }
 
 .vis-data-select {
-    height: 32px;
-    padding: 0 32px 0 12px;
+    height: 22px;
+    padding: 0 22px 0 8px;
     border-radius: 999px;
     border: 1px solid rgba(15, 23, 42, 0.12);
     background: #ffffff;
+    font-size: 10px;
+    text-overflow: ellipsis;
+    overflow: hidden;
+    white-space: nowrap;
     color: #111827;
-    font-size: 13px;
     font-weight: 500;
     cursor: pointer;
     transition: background 120ms ease, border-color 120ms ease;
     appearance: none;
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23111827' d='M6 8L2 4h8z'/%3E%3C/svg%3E");
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 12 12'%3E%3Cpath fill='%23111827' d='M6 8L2 4h8z'/%3E%3C/svg%3E");
     background-repeat: no-repeat;
-    background-position: right 10px center;
-    min-width: 180px;
-    max-width: 280px;
+    background-position: right 6px center;
+    min-width: 100px;
+    max-width: 160px;
 }
 
 .vis-data-select:hover {
@@ -2586,7 +2624,7 @@ body.theme-dark .vis-data-select {
     background-color: rgba(30, 41, 59, 0.92);
     border-color: rgba(148, 163, 184, 0.35);
     color: #e2e8f0;
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23e2e8f0' d='M6 8L2 4h8z'/%3E%3C/svg%3E");
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 12 12'%3E%3Cpath fill='%23e2e8f0' d='M6 8L2 4h8z'/%3E%3C/svg%3E");
 }
 
 body.theme-dark .vis-data-select:hover {
@@ -3582,7 +3620,7 @@ body.theme-dark .settings-field-row .doi-index-count {
 }
 
 #jsonViewer {
-    font-family: 'Source Code Pro', 'Menlo', 'Monaco', 'Consolas', 'DejaVu Sans Mono', 'Courier New', monospace;
+    font-family: 'Fira Code', 'Menlo', 'Monaco', 'Consolas', 'DejaVu Sans Mono', 'Courier New', monospace;
     font-size: 11px;
 }
 
@@ -3599,7 +3637,7 @@ body.theme-dark .settings-field-row .doi-index-count {
     width: 100%;
     min-height: 0;
     padding: 10px;
-    font-family: 'Source Code Pro', 'Menlo', 'Monaco', 'Consolas', 'DejaVu Sans Mono', 'Courier New', monospace;
+    font-family: 'Fira Code', 'Menlo', 'Monaco', 'Consolas', 'DejaVu Sans Mono', 'Courier New', monospace;
     font-size: 12px;
     line-height: 1.8;
     border: none;
@@ -3693,7 +3731,7 @@ body.theme-dark .settings-field-row .doi-index-count {
     background: var(--gray-100);
     padding: 1px 4px;
     border-radius: 3px;
-    font-family: 'Courier New', monospace;
+    font-family: 'Fira Code', 'Courier New', monospace;
     font-size: 12px;
 }
 
@@ -4183,29 +4221,21 @@ body.theme-vscode .qa-bubble {
 }
 
 .code-copy-btn {
-    position: absolute;
-    top: 6px;
-    right: 6px;
-    border: none;
-    background: rgba(0, 0, 0, 0.55);
-    color: #fff;
-    border-radius: 4px;
-    padding: 2px 6px;
-    font-size: 11px;
+    display: none; /* 隐藏复制按钮，改用双击复制 */
+}
+
+/* 代码块双击复制提示 */
+.markdown-body pre {
     cursor: pointer;
-    display: flex;
-    align-items: center;
-    gap: 4px;
-    opacity: 0;
-    transition: opacity 0.15s ease;
+    user-select: none;
 }
 
-.code-copy-btn i {
-    font-size: 10px;
+.markdown-body pre code {
+    user-select: text;
 }
 
-.markdown-body pre:hover .code-copy-btn {
-    opacity: 1;
+.markdown-body pre:active {
+    background: var(--gray-200);
 }
 
 .markdown-editor {
@@ -4221,7 +4251,7 @@ body.theme-vscode .qa-bubble {
     min-height: 0;
     height: 100%;
     padding: 10px;
-    font-family: 'Source Code Pro', 'Menlo', 'Monaco', 'Consolas', 'DejaVu Sans Mono', 'Courier New', monospace;
+    font-family: 'Fira Code', 'Menlo', 'Monaco', 'Consolas', 'DejaVu Sans Mono', 'Courier New', monospace;
     font-size: 12px;
     line-height: 1.8;
     border: none;
@@ -5156,7 +5186,7 @@ body.theme-vscode .md-chat-input-text {
     padding: 6px 8px;
     border: 1px solid var(--gray-300);
     border-radius: 2px;
-    font-family: 'Courier New', monospace;
+    font-family: 'Fira Code', 'Courier New', monospace;
     font-size: 10px;
     resize: vertical;
     line-height: 1.4;
@@ -6161,7 +6191,7 @@ ol.json-array {
     border: 1px solid #d0d7de;
     border-radius: 6px;
     overflow-x: auto;
-    font-family: 'Courier New', monospace;
+    font-family: 'Fira Code', 'Courier New', monospace;
     font-size: 13px;
     line-height: 1.5;
     max-height: 400px;
@@ -6386,7 +6416,7 @@ body.theme-vscode .bib-collapse-btn:hover {
 .recent-project-path {
     font-size: 9px;
     color: var(--wos-text-light);
-    font-family: 'Courier New', monospace;
+    font-family: 'Fira Code', 'Courier New', monospace;
     display: inline-block;
     margin-top: 2px;
     word-break: break-all;
@@ -6604,7 +6634,7 @@ body.theme-vscode .bib-collapse-btn:hover {
 }
 
 .detail-path {
-    font-family: 'Courier New', monospace;
+    font-family: 'Fira Code', 'Courier New', monospace;
     font-size: 11px;
     background: var(--wos-active);
     padding: 4px 6px;

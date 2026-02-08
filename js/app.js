@@ -12186,7 +12186,7 @@ class PaperStatsApp {
         if (!body || this.thirdPartyInfoLoaded) return;
         body.textContent = 'Loading...';
         try {
-            const res = await fetch('/js-info.md');
+            const res = await fetch('/LICENSES.md');
             if (!res.ok) throw new Error(`HTTP ${res.status}`);
             const text = await res.text();
             const parser = this.getMarkdownParser();
@@ -12194,7 +12194,7 @@ class PaperStatsApp {
             this.applyProjectInfoIcons(body);
             this.thirdPartyInfoLoaded = true;
         } catch (err) {
-            console.error('Failed to load third-party JS info', err);
+            console.error('Failed to load LICENSES.md', err);
             body.textContent = `Load failed: ${err.message}`;
         }
     }
@@ -15597,26 +15597,32 @@ class PaperStatsApp {
 
     injectCopyButton(codeBlock) {
         const pre = codeBlock.closest('pre');
-        if (!pre || pre.querySelector('.code-copy-btn')) return;
+        if (!pre || pre.dataset.dblclickCopyEnabled) return;
 
-        const btn = document.createElement('button');
-        btn.className = 'code-copy-btn';
-        btn.innerHTML = '<i class="fas fa-copy"></i> Copy';
-        btn.title = 'Copy code';
-        btn.addEventListener('click', (e) => {
+        // 标记已添加双击复制功能
+        pre.dataset.dblclickCopyEnabled = 'true';
+
+        // 添加双击复制事件
+        pre.addEventListener('dblclick', (e) => {
             e.preventDefault();
             e.stopPropagation();
             const text = codeBlock.innerText;
             navigator.clipboard.writeText(text).then(() => {
-                this.showNotification('Code copied', 'success');
+                this.showNotification('Code copied to clipboard', 'success');
+                // 添加视觉反馈
+                pre.style.background = 'var(--gray-200)';
+                setTimeout(() => {
+                    pre.style.background = '';
+                }, 200);
             }).catch((err) => {
                 console.warn('Copy failed:', err);
                 this.showNotification('Failed to copy code', 'error');
             });
         });
 
+        // 添加提示标题
+        pre.title = 'Double-click to copy code';
         pre.style.position = 'relative';
-        pre.appendChild(btn);
     }
 
 

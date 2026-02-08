@@ -1837,7 +1837,7 @@ const server = http.createServer((req, res) => {
                         });
                     });
                 } else {
-                    console.log(`   ✗ PDF目录不存在`);
+                    console.log('      (No pdf directory found)');
                 }
 
                 res.writeHead(200, { 'Content-Type': 'application/json' });
