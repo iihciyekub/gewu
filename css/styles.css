@@ -3248,6 +3248,56 @@ body.theme-dark .vis-settings-panel.is-open .vis-label-panel .vis-section-toggle
     display: flex;
 }
 
+.vis-label-field-group.is-fixed {
+    position: fixed;
+    bottom: auto;
+    left: auto;
+    transform: none;
+    z-index: 20001;
+}
+
+.vis-label-field-group.is-fixed::after,
+.vis-label-field-group.is-fixed::before {
+    content: '';
+    position: absolute;
+}
+
+.vis-label-field-group.is-fixed::after {
+    top: 50%;
+    left: auto;
+    right: 100%;
+    transform: translateY(-50%);
+    border: 6px solid transparent;
+    border-right-color: #e5e7eb;
+}
+
+.vis-label-field-group.is-fixed::before {
+    top: calc(50% - 1px);
+    left: auto;
+    right: calc(100% - 1px);
+    transform: translateY(-50%);
+    border: 6px solid transparent;
+    border-right-color: var(--surface-elevated, #ffffff);
+}
+
+.vis-label-field-group.is-fixed::after {
+    top: 50%;
+    left: auto;
+    right: 100%;
+    transform: translateY(-50%);
+    border: 6px solid transparent;
+    border-right-color: #e5e7eb;
+}
+
+.vis-label-field-group.is-fixed::before {
+    top: calc(50% - 1px);
+    left: auto;
+    right: calc(100% - 1px);
+    transform: translateY(-50%);
+    border: 6px solid transparent;
+    border-right-color: var(--surface-elevated, #ffffff);
+}
+
 /* 气泡小箭头 */
 .vis-label-field-group::after {
     content: '';

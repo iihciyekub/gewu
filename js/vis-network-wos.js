@@ -1161,6 +1161,7 @@
             this.labelStrokeWidth = 0;
             this.labelStrokeColor = '#ffffff';
             this.labelSizeScale = 0.5;
+            this.labelStyleApplyAll = true;
             this.labelMinCitations = 0;
             this.labelFieldOptions = [];
             this.labelSuggestIndex = -1;
@@ -3936,21 +3937,8 @@
             if (!btn || btn.dataset.visWrapped) return;
             const original = btn.onclick;
             btn.onclick = async (e) => {
-                await this.ensureLabelDataReady();
-                const input = this.getEl(this.ids.labelFieldInput);
-                const currentField = input && input.value ? input.value.trim() : this.labelField;
-                await this.applyLabelField(currentField);
-                this.applyLabelFade();
-                this.applyLabelSizeScale();
-                this.applyLabelWeight();
-                this.applyLabelColor();
-                this.applyLabelBgColor();
-                this.applyLabelBorderColor();
-                this.applyLabelThreshold();
-                this.applyPhysicsSettings();
-                this.applyEdgeFade();
-                this.applyEdgeWidthRange();
-                this.queuePersistNetworkState();
+                // Only toggle label visibility. Do not re-apply or mutate label settings.
+                this.updateLabelLayer();
                 if (typeof original === 'function') {
                     original.call(btn, e);
                 }
@@ -3963,13 +3951,19 @@
             const anchor = btn.closest('.vis-label-popup-anchor') || btn.parentElement;
 
             const showPopup = () => popup.classList.add('is-open');
-            const hidePopup = () => popup.classList.remove('is-open');
+            const hidePopup = () => {
+                if (popup.classList.contains('is-fixed')) return;
+                popup.classList.remove('is-open', 'is-fixed');
+                popup.style.removeProperty('left');
+                popup.style.removeProperty('top');
+            };
 
             btn.addEventListener('mouseenter', showPopup);
             anchor.addEventListener('mouseleave', hidePopup);
 
             // Click outside to hide
             document.addEventListener('click', (e) => {
+                if (popup.classList.contains('is-fixed')) return;
                 if (!anchor.contains(e.target)) hidePopup();
             }, true);
         }
@@ -6011,8 +6005,15 @@
             const onMouseMove = (e) => {
                 const dx = e.clientX - startX;
                 const dy = e.clientY - startY;
-                pop.style.left = `${origLeft + dx}px`;
-                pop.style.top = `${origTop + dy}px`;
+                const margin = 8;
+                const width = pop.offsetWidth || 0;
+                const height = pop.offsetHeight || 0;
+                let nextLeft = origLeft + dx;
+                let nextTop = origTop + dy;
+                nextLeft = Math.max(margin, Math.min(window.innerWidth - width - margin, nextLeft));
+                nextTop = Math.max(margin, Math.min(window.innerHeight - height - margin, nextTop));
+                pop.style.left = `${nextLeft}px`;
+                pop.style.top = `${nextTop}px`;
             };
             const onMouseUp = () => {
                 document.removeEventListener('mousemove', onMouseMove);
@@ -7599,6 +7600,10 @@
                         <i class="fa-solid fa-eye"></i>
                         <span>Toggle Labels</span>
                     </button>
+                    <button type="button" class="context-toggle-button" data-role="openLabelPanel" title="Open label fields panel">
+                        <i class="fa-solid fa-sliders"></i>
+                        <span>Label Panel</span>
+                    </button>
                 </div>
                 <div class="context-divider"></div>
                 <div class="context-input-row context-input-group-row">
@@ -7666,10 +7671,15 @@
             this._adjustPopoverPosition(pop, anchorX, anchorY);
 
             const toggle = pop.querySelector('.context-popover-checkbox');
+            if (toggle) {
+                toggle.checked = this.labelStyleApplyAll !== false;
+            }
             const getApplyToAll = () => toggle ? toggle.checked : false;
             if (toggle) {
                 toggle.addEventListener('change', (ev) => {
                     ev.stopPropagation();
+                    this.labelStyleApplyAll = toggle.checked;
+                    this.queuePersistSettings();
                 });
             }
 
@@ -7907,6 +7917,70 @@
                     const newState = !labelState.showAll;
                     this.applyLabelShowAll(newState);
                     updateToggleButton();
+                });
+            }
+
+            const openPanelBtn = pop.querySelector('button[data-role="openLabelPanel"]');
+            if (openPanelBtn) {
+                let followRaf = null;
+                const positionGroup = () => {
+                    const group = document.getElementById('visLabelFieldGroup');
+                    if (!group || !group.classList.contains('is-open') || !group.classList.contains('is-fixed')) {
+                        return;
+                    }
+                    const rect = openPanelBtn.getBoundingClientRect();
+                    const gw = group.offsetWidth || 240;
+                    const gh = group.offsetHeight || 120;
+                    const left = Math.min(window.innerWidth - gw - 8, rect.right + 10);
+                    const top = Math.min(window.innerHeight - gh - 8, rect.top + rect.height / 2 - gh / 2);
+                    group.style.left = `${Math.max(8, left)}px`;
+                    group.style.top = `${Math.max(8, top)}px`;
+                    group.style.setProperty('--popover-anchor-y', `${rect.top + rect.height / 2}px`);
+                };
+                const startFollow = () => {
+                    if (followRaf) return;
+                    const tick = () => {
+                        positionGroup();
+                        followRaf = requestAnimationFrame(tick);
+                    };
+                    followRaf = requestAnimationFrame(tick);
+                };
+                const stopFollow = () => {
+                    if (!followRaf) return;
+                    cancelAnimationFrame(followRaf);
+                    followRaf = null;
+                };
+                const toggleGroup = () => {
+                    const group = document.getElementById('visLabelFieldGroup');
+                    if (!group) return;
+                    const isOpen = group.classList.contains('is-open') && group.classList.contains('is-fixed');
+                    if (isOpen) {
+                        group.classList.remove('is-open', 'is-fixed');
+                        group.style.removeProperty('left');
+                        group.style.removeProperty('top');
+                        group.style.removeProperty('--popover-anchor-y');
+                        window.removeEventListener('resize', positionGroup);
+                        window.removeEventListener('scroll', positionGroup, true);
+                        stopFollow();
+                        return;
+                    }
+                    group.classList.add('is-open', 'is-fixed');
+                    group.style.left = '0px';
+                    group.style.top = '0px';
+                    requestAnimationFrame(() => {
+                        positionGroup();
+                    });
+                    window.addEventListener('resize', positionGroup);
+                    window.addEventListener('scroll', positionGroup, true);
+                    startFollow();
+                    const input = this.getEl(this.ids.labelFieldInput);
+                    if (input) {
+                        input.focus();
+                        input.setSelectionRange(input.value.length, input.value.length);
+                    }
+                };
+                openPanelBtn.addEventListener('click', () => {
+                    toggleGroup();
                 });
             }
 
@@ -8480,6 +8554,7 @@
                 customFocusAlpha: state.customFocusAlpha,
                 customFocusDepth: state.customFocusDepth,
                 customFocusDepthMap: depthEntries,
+                labelStyleApplyAll: this.labelStyleApplyAll !== false,
                 zoomCollapsed: this.zoomCollapsed,
                 exportSvgScale: this.exportSvgScale,
                 exportSvgMargin: this.exportSvgMargin,
@@ -8952,6 +9027,9 @@
                 if (Array.isArray(payload.customFocusDepthMap)) {
                     const state = this.getEdgeFocusState();
                     state.customFocusDepthMap = new Map(payload.customFocusDepthMap);
+                }
+                if (typeof payload.labelStyleApplyAll === 'boolean') {
+                    this.labelStyleApplyAll = payload.labelStyleApplyAll;
                 }
                 if (typeof payload.zoomCollapsed === 'boolean') this.zoomCollapsed = payload.zoomCollapsed;
             };
