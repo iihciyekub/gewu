@@ -453,9 +453,15 @@
                         <div class="vis-mode-label" id="visModeLabel">Node Selection Mode</div>
                         <div class="vis-mode-actions" id="visModeActions">
                             <div class="vis-mode-group vis-mode-node" id="visModeNodeGroup">
-                                <button class="vis-mode-action" type="button" data-action="selectNodeFocus" title="Select Node" aria-label="Select Node">
-                                    <i class="fas fa-bullseye"></i>
-                                </button>
+                                <div class="vis-mode-node-input-anchor">
+                                    <button class="vis-mode-action" type="button" data-action="selectNodeFocus" title="Select Node" aria-label="Select Node">
+                                        <i class="fas fa-bullseye"></i>
+                                    </button>
+                                    <div class="vis-mode-node-input-popup" id="visModeNodeInputPopup">
+                                        <textarea class="vis-mode-input vis-mode-input-multiline" id="visModeNodeInput" rows="1" spellcheck="false"
+                                            placeholder="Node ID" aria-label="Node ID"></textarea>
+                                    </div>
+                                </div>
                                 <button class="vis-mode-action" type="button" data-action="syncFromNormal" title="Copy from Normal Mode" aria-label="Copy from Normal Mode">
                                     <i class="fas fa-copy"></i>
                                 </button>
@@ -467,8 +473,6 @@
                                 </button>
                                 <input class="vis-mode-color-input" id="visModeNodeColorInput" type="text" value="#f59e0b" data-coloris
                                     aria-label="Node selection color">
-                                <textarea class="vis-mode-input vis-mode-input-multiline" id="visModeNodeInput" rows="1" spellcheck="false"
-                                    placeholder="Node ID" aria-label="Node ID"></textarea>
                                 <div class="vis-mode-slider" data-action="nodeFadeAlpha" title="Opacity">
                                     <span class="vis-mode-slider-value" data-role="value">0.125</span>
                                     <input type="range" min="0" max="1" step="0.005" value="0.125" aria-label="Opacity">
@@ -551,13 +555,23 @@
                             aria-label="Data Manager">
                             <i class="fas fa-database"></i>
                         </button>
-                        <button class="btn btn-secondary" id="visToggleLabelsBtn" type="button" title="Labels" tabindex="-1">
-                            <i class="fas fa-palette"></i>
+                        <button class="btn btn-secondary" id="visToggleLabelsBtn" type="button" title="Label Filter" tabindex="-1">
+                            <i class="fas fa-filter"></i>
                         </button>
-                        <button class="btn btn-secondary" id="visLabelToggleAllBtn" type="button" title="Show labels" tabindex="-1"
-                            aria-label="Show labels">
-                            <i class="fa-solid fa-eye"></i>
-                        </button>
+                        <div class="vis-label-popup-anchor" id="visLabelPopupAnchor">
+                            <button class="btn btn-secondary" id="visLabelToggleAllBtn" type="button" title="Show labels" tabindex="-1"
+                                aria-label="Show labels">
+                                <i class="fa-solid fa-eye"></i>
+                            </button>
+                            <div class="vis-label-field-group" id="visLabelFieldGroup" role="dialog" aria-label="Label fields">
+                                <div class="vis-label-fields" id="visLabelFields"></div>
+                                <div class="vis-label-suggest" id="visLabelSuggest"></div>
+                                <div class="vis-label-input-row">
+                                    <input id="visLabelFieldInput" class="vis-label-input-full" type="text"
+                                        placeholder="Label field (default: wosid)" autocomplete="off">
+                                </div>
+                            </div>
+                        </div>
                         <button class="btn btn-secondary" id="visEdgeLabelToggleBtn" type="button" title="Show edge labels" tabindex="-1"
                             aria-label="Show edge labels">
                             <i class="fa-solid fa-link"></i>
@@ -580,79 +594,18 @@
                         </button>
                     </div>
                     <div class="vis-settings-panel" id="visSettingsPanel" aria-hidden="true">
-                        <div class="md-chat-shell vis-settings-shell">
-                            <div class="md-chat-main">
-                                <div class="md-chat-top vis-settings-top">
-                                    <div class="vis-settings-title">Vis Settings</div>
-                                    <div class="vis-settings-actions">
-                                        <button class="md-chat-btn" type="button" id="visSettingsCloseBtn" title="Close">
-                                            <i class="fa-regular fa-eye-slash"></i>
-                                        </button>
-                                    </div>
-                                </div>
-                                <div class="md-chat-body vis-settings-body">
-                                    <div class="vis-settings-section is-active" id="visSettingsInputPanel">
-                                        <div class="vis-input-body">
-                                            <textarea id="visInputTextarea" spellcheck="false" placeholder="Enter content here, e.g.,&#10;{&#10;  &quot;WOS: 000333220900011&quot;: {&#10;    &quot;page_wosids&quot;: [&#10;      {&#10;        &quot;wosid&quot;: &quot;WOS:001473846100001&quot;,&#10;        &quot;citations_count&quot;: &quot;90&quot;,&#10;        &quot;related_count&quot;: &quot;20&quot;,&#10;        &quot;ref_count&quot;: &quot;40&quot;&#10;      }&#10;    ]&#10;  }&#10;}&#10;Obtain JSON data from WOS through the Chrome extension GEWU AIDE."></textarea>
-                                        </div>
-
-                                        <div class="vis-input-actions">
-                                            <button class="btn btn-secondary" id="visInputAppendBtn"
-                                                type="button">Add more node</button>
-                                            <button class="btn btn-secondary" id="visUpdateNodeBtn"
-                                                type="button">Update node</button>
-                                            <button class="btn btn-secondary" id="visUpdateStyleBtn"
-                                                type="button" title="Update node/edge style by ID">Update Style</button>
-                                            <button class="btn btn-primary" id="visInputApplyBtn"
-                                                type="button">Run</button>
-                                        </div>
-                                    </div>
-                                    <div class="vis-settings-section" id="visSettingsLabelPanel">
-                                        <div class="vis-input-body">
-                                            <div class="vis-label-panel">
-                                                <!-- vis settings -->
-
-                                                <!--  -->
-                                                <div class="vis-label-threshold vis-label-section" data-section="Label threshold">
-                                                    <button type="button" class="vis-section-toggle" aria-expanded="true" title="Collapse">
-                                                        <i class="fa-solid fa-chevron-up"></i>
-                                                        <span class="vis-toggle-text">Filter</span>
-                                                    </button>
-                                                    <label for="visLabelMinSlider"># of Citations</label>
-                                                    <div class="vis-label-threshold-row">
-                                                        <input id="visLabelMinSlider" type="number" step="1" value="0"
-                                                            inputmode="decimal">
-                                                    </div>
-                                                    <label for="visLabelMinDimSlider">Dim alpha</label>
-                                                    <div class="vis-label-threshold-row">
-                                                        <input id="visLabelMinDimSlider" type="number" step="0.01" min="0"
-                                                            max="1" value="0" inputmode="decimal">
-                                                    </div>
-                                                    <label for="visRelatedMinSlider"># of Related</label>
-                                                    <div class="vis-label-threshold-row">
-                                                        <input id="visRelatedMinSlider" type="number" step="1" value="0"
-                                                            inputmode="decimal">
-                                                    </div>
-                                                    <label for="visRelatedMinDimSlider">Dim alpha</label>
-                                                    <div class="vis-label-threshold-row">
-                                                        <input id="visRelatedMinDimSlider" type="number" step="0.01" min="0"
-                                                            max="1" value="0" inputmode="decimal">
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </div>
-                                        <div class="vis-label-field-group">
-                                            <div class="vis-label-fields" id="visLabelFields"></div>
-                                            <div class="vis-label-suggest" id="visLabelSuggest"></div>
-                                            <div class="vis-label-input-row">
-                                                <input id="visLabelFieldInput" class="vis-label-input-full" type="text"
-                                                    placeholder="Label field (default: wosid)" autocomplete="off">
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
+                        <div class="context-popover-drag-handle" title="Drag to move">Edit Style</div>
+                        <button class="context-popover-close-btn" type="button" id="visSettingsCloseBtn" title="Close">&times;</button>
+                        <div id="visSettingsInputPanel">
+                            <textarea id="visInputTextarea" spellcheck="false" placeholder="Enter content here, e.g.,&#10;{&#10;  &quot;WOS: 000333220900011&quot;: {&#10;    &quot;page_wosids&quot;: [&#10;      {&#10;        &quot;wosid&quot;: &quot;WOS:001473846100001&quot;,&#10;        &quot;citations_count&quot;: &quot;90&quot;,&#10;        &quot;related_count&quot;: &quot;20&quot;,&#10;        &quot;ref_count&quot;: &quot;40&quot;&#10;      }&#10;    ]&#10;  }&#10;}&#10;Obtain JSON data from WOS through the Chrome extension GEWU AIDE."></textarea>
+                            <div class="vis-input-actions">
+                                <button class="btn btn-secondary" id="visInputAppendBtn" type="button">Add more node</button>
+                                <button class="btn btn-secondary" id="visUpdateNodeBtn" type="button">Update node</button>
+                                <button class="btn btn-secondary" id="visUpdateStyleBtn" type="button" title="Update node/edge style by ID">Update Style</button>
+                                <button class="btn btn-primary" id="visInputApplyBtn" type="button">Run</button>
                             </div>
                         </div>
+                        <div id="visSettingsLabelPanel"></div>
                     </div>
                 </div>
                 <div class="settings-view" id="settingsView">
@@ -1295,6 +1248,27 @@
     </div>
 
     <!-- Scripts -->
+    <!-- Label Filter floating panel -->
+    <div class="context-style-popover" id="visLabelFilterPopover" style="display: none; left: 80px; top: 100px;">
+        <div class="context-popover-drag-handle" title="Drag to move">Label Filter</div>
+        <button type="button" class="context-popover-close-btn" data-role="closePopover" title="Close">&times;</button>
+        <div class="context-input-row">
+            <span class="context-slider-label"># of Citations</span>
+            <input class="context-number-input" id="visLabelMinSlider" type="number" step="1" value="0" inputmode="decimal" aria-label="Minimum citations">
+        </div>
+        <div class="context-input-row">
+            <span class="context-slider-label">Dim alpha</span>
+            <input class="context-number-input" id="visLabelMinDimSlider" type="number" step="0.01" min="0" max="1" value="0" inputmode="decimal" aria-label="Dim alpha for citations">
+        </div>
+        <div class="context-input-row">
+            <span class="context-slider-label"># of Related</span>
+            <input class="context-number-input" id="visRelatedMinSlider" type="number" step="1" value="0" inputmode="decimal" aria-label="Minimum related">
+        </div>
+        <div class="context-input-row">
+            <span class="context-slider-label">Dim alpha</span>
+            <input class="context-number-input" id="visRelatedMinDimSlider" type="number" step="0.01" min="0" max="1" value="0" inputmode="decimal" aria-label="Related dim alpha">
+        </div>
+    </div>
     <script src="js/core/jquery-3.7.0.js"></script>
     <script src="js/core/jquery.json-viewer.js"></script>
     <script src="js/core/coloris.min.js"></script>

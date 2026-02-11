@@ -1354,12 +1354,7 @@
             if (labelPanelBtn) {
                 labelPanelBtn.addEventListener('click', (e) => {
                     e.preventDefault();
-                    const settingsPanel = this.getEl(this.ids.settingsPanel);
-                    const labelPanel = this.getEl(this.ids.labelPanel);
-                    const isOpen = settingsPanel ? settingsPanel.classList.contains('is-open') : false;
-                    const isActive = labelPanel ? labelPanel.classList.contains('is-active') : false;
-                    this.toggleInputDrawer(false);
-                    this.toggleLabelDrawer(!(isOpen && isActive));
+                    this.toggleLabelFilterPanel();
                 });
             }
             if (labelCloseBtn) {
@@ -2683,13 +2678,41 @@
             const nodeInput = this.getEl(this.ids.modeNodeInput);
             if (nodeInput && !nodeInput.dataset.visBound) {
                 nodeInput.dataset.visBound = '1';
+                const autoResize = () => {
+                    nodeInput.style.height = 'auto';
+                    nodeInput.style.height = `${Math.min(nodeInput.scrollHeight, 500)}px`;
+                };
+                nodeInput.addEventListener('input', autoResize);
                 nodeInput.addEventListener('keydown', (e) => {
                     if (e.key !== 'Enter') return;
                     if (e.shiftKey) return;
                     e.preventDefault();
                     const value = nodeInput.value || '';
                     this.handleModeToolbarNodeInput(value);
+                    nodeInput.value = '';
+                    autoResize();
                 });
+            }
+            // Click-toggle popup for node focus input
+            const nodeInputPopup = document.getElementById('visModeNodeInputPopup');
+            const selectFocusBtn = toolbar.querySelector('[data-action="selectNodeFocus"]');
+            if (nodeInputPopup && selectFocusBtn && !nodeInputPopup.dataset.visBound) {
+                nodeInputPopup.dataset.visBound = '1';
+                const anchor = selectFocusBtn.closest('.vis-mode-node-input-anchor') || selectFocusBtn.parentElement;
+                const hidePopup = () => nodeInputPopup.classList.remove('is-open');
+                document.addEventListener('click', (e) => {
+                    if (!anchor.contains(e.target)) hidePopup();
+                }, true);
+                const input = this.getEl(this.ids.modeNodeInput);
+                if (input && !input.dataset.visBoundEscape) {
+                    input.dataset.visBoundEscape = '1';
+                    input.addEventListener('keydown', (e) => {
+                        if (e.key === 'Escape') {
+                            e.preventDefault();
+                            hidePopup();
+                        }
+                    });
+                }
             }
             const colorInput = this.getEl(this.ids.modeNodeColorInput);
             if (colorInput && !colorInput.dataset.visBound) {
@@ -3111,35 +3134,26 @@
             }
         }
 
-        syncNodeInputFromData(data) {
-            const view = this.getEl(this.ids.view);
-            if (!view || !view.classList.contains('active')) return;
-            if (this._toolbarMode !== 'node') return;
-            const input = this.getEl(this.ids.modeNodeInput);
-            if (!input) return;
-            const raw = data?.wos_data?.wos_id || data?.wos_data?.wosid || data?.wos_id || data?.wosid;
-            if (!raw) return;
-            const normalized = this.normalizeWosId(raw);
-            input.value = normalized || String(raw);
-        }
+        syncNodeInputFromData() {}
 
-        syncNodeInputFromSelection(ids = []) {
-            const view = this.getEl(this.ids.view);
-            if (!view || !view.classList.contains('active')) return;
-            if (this._toolbarMode !== 'node') return;
-            const input = this.getEl(this.ids.modeNodeInput);
-            if (!input) return;
-            const unique = Array.from(new Set((ids || []).map(id => String(id).trim()).filter(Boolean)));
-            if (!unique.length) return;
-            input.value = unique.join('\n');
-        }
+        syncNodeInputFromSelection() {}
 
         handleModeToolbarAction(action) {
             const nodeId = this.getSelectedNodeId();
             const edgeId = this.getSelectedEdgeId();
             if (action === 'selectNodeFocus') {
+                const popup = document.getElementById('visModeNodeInputPopup');
                 const input = this.getEl(this.ids.modeNodeInput);
-                this.toggleNodeSelectionFromInput(input ? input.value : '');
+                if (!popup) return;
+                if (popup.classList.contains('is-open')) {
+                    popup.classList.remove('is-open');
+                    return;
+                }
+                popup.classList.add('is-open');
+                if (input) {
+                    input.focus();
+                    if (typeof input.select === 'function') input.select();
+                }
                 return;
             }
             if (action === 'syncFromNormal') {
@@ -3963,6 +3977,22 @@
                 }
             };
             btn.dataset.visWrapped = '1';
+
+            // Popup show/hide behavior
+            const popup = document.getElementById('visLabelFieldGroup');
+            if (!popup) return;
+            const anchor = btn.closest('.vis-label-popup-anchor') || btn.parentElement;
+
+            const showPopup = () => popup.classList.add('is-open');
+            const hidePopup = () => popup.classList.remove('is-open');
+
+            btn.addEventListener('mouseenter', showPopup);
+            anchor.addEventListener('mouseleave', hidePopup);
+
+            // Click outside to hide
+            document.addEventListener('click', (e) => {
+                if (!anchor.contains(e.target)) hidePopup();
+            }, true);
         }
 
         async ensureLabelDataReady() {
@@ -4022,6 +4052,22 @@
                 const active = document.activeElement;
                 if (active && panel.contains(active)) {
                     active.blur();
+                }
+            }
+            // Init draggability once
+            if (!panel._draggableInit) {
+                panel._draggableInit = true;
+                this._makePopoverDraggable(panel);
+                if (!panel.style.left) {
+                    panel.style.left = `${Math.max(8, window.innerWidth - 400)}px`;
+                    panel.style.top = '80px';
+                }
+                const closeBtn = panel.querySelector('#visSettingsCloseBtn');
+                if (closeBtn) {
+                    closeBtn.addEventListener('click', (ev) => {
+                        ev.stopPropagation();
+                        this.toggleInputDrawer(false);
+                    });
                 }
             }
             panel.classList.toggle('is-open', next);
@@ -4110,6 +4156,22 @@
                 if (edgeFadeSlider) edgeFadeSlider.value = String(this.edgeFade || 100);
                 if (edgeMinWidthSlider) edgeMinWidthSlider.value = String(this.edgeMinWidth || 1);
                 if (edgeMaxWidthSlider) edgeMaxWidthSlider.value = String(this.edgeMaxWidth || 6);
+            }
+        }
+
+        toggleLabelFilterPanel(forceVisible) {
+            const pop = document.getElementById('visLabelFilterPopover');
+            if (!pop) return;
+            const isVisible = pop.style.display !== 'none' && pop.style.display !== '';
+            const next = typeof forceVisible === 'boolean' ? forceVisible : !isVisible;
+            pop.style.display = next ? '' : 'none';
+            if (next && !pop._draggableInit) {
+                this._makePopoverDraggable(pop);
+                const closeBtn = pop.querySelector('[data-role="closePopover"]');
+                if (closeBtn) {
+                    closeBtn.addEventListener('click', () => { pop.style.display = 'none'; });
+                }
+                pop._draggableInit = true;
             }
         }
 
@@ -6824,6 +6886,10 @@
                     <i class="fas fa-atom"></i>
                     Physics
                 </div>
+                <div class="context-menu-item" data-action="editStyle">
+                    <i class="fas fa-pen"></i>
+                    Custom Style
+                </div>
             `;
             document.body.appendChild(menu);
             const rect = menu.getBoundingClientRect();
@@ -6870,6 +6936,11 @@
                         this.closeEdgeContextMenu();
                         return;
                     }
+                    if (action === 'editStyle') {
+                        this.toggleInputDrawer(true);
+                        this.closeEdgeContextMenu();
+                        return;
+                    }
                 });
             });
             const clickOutside = (ev) => {
@@ -6911,6 +6982,10 @@
                 <div class="context-menu-item" data-action="restoreDefaultStyle">
                     <i class="fas fa-rotate-left"></i>
                     Default Style
+                </div>
+                <div class="context-menu-item" data-action="editStyle">
+                    <i class="fas fa-pen"></i>
+                    Custom Style
                 </div>
             `;
             document.body.appendChild(menu);
@@ -6963,6 +7038,11 @@
                     }
                     if (action === 'restoreDefaultStyle') {
                         this.restoreLabelDefaults();
+                        this.closeNodeContextMenu();
+                        return;
+                    }
+                    if (action === 'editStyle') {
+                        this.toggleInputDrawer(true);
                         this.closeNodeContextMenu();
                         return;
                     }
@@ -9672,11 +9752,8 @@
                 }
                 return;
             }
-            const inputPanel = this.getEl(this.ids.inputPanel);
-            const inputVisible = inputPanel ? inputPanel.classList.contains('is-active') : false;
             const textarea = this.getEl(this.ids.inputTextarea);
             const writeToTextarea = (payload) => {
-                if (!inputVisible) return;
                 if (!textarea || payload == null) return;
                 textarea.value = JSON.stringify(payload, null, 2);
             };
