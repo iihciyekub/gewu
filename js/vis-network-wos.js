@@ -454,8 +454,6 @@
         } else {
             layer.classList.remove('is-show-all');
             layer.classList.add('is-hide-all');
-            const labels = Array.from(layer.querySelectorAll('.vis-node-label'));
-            labels.forEach((label) => label.classList.remove('is-force-visible'));
         }
     }
 
@@ -3827,6 +3825,7 @@
             this.queuePersistNetworkState();
             this.updateModeToolbar();
             this._visViewReady = true;
+            this.applySavedLabelState();
             this.initModeStateStore();
         }
 
@@ -3947,6 +3946,7 @@
             this.queuePersistNetworkState();
             this.updateModeToolbar();
             this._visViewReady = true;
+            this.applySavedLabelState();
             console.debug('[DEBUG] renderFromVisData ending, calling initModeStateStore');
             this.initModeStateStore();
         }
@@ -7621,13 +7621,13 @@
             const node = dataset && typeof dataset.get === 'function' ? dataset.get(nodeId) : null;
 
             // Get current values from node or global settings
-            const currentLabelScale = Number(node?.labelStyle?.scaleFont || this.labelSizeScale || 0.5);
-            const currentStrokeWidth = Number(node?.labelStyle?.strokeWidth || this.labelStrokeWidth || 0);
-            const currentBorderWidth = Number(node?.labelStyle?.borderWidth || this.labelBorderWidth || 0);
-            const currentWeight = Number(node?.font?.weight || this.labelWeight || 500);
-            const currentMaxScale = Number(this.labelFontMax || 20);
-            const currentMinScale = Number(this.labelFontMin || 5);
-            const currentFade = Number(this.labelFade || 0);
+            const currentLabelScale = Number(node?.labelStyle?.scaleFont ?? this.labelSizeScale ?? 0.5);
+            const currentStrokeWidth = Number(node?.labelStyle?.strokeWidth ?? this.labelStrokeWidth ?? 0);
+            const currentBorderWidth = Number(node?.labelStyle?.borderWidth ?? this.labelBorderWidth ?? 0);
+            const currentWeight = Number(node?.font?.weight ?? this.labelWeight ?? 500);
+            const currentMaxScale = Number(this.labelFontMax ?? 20);
+            const currentMinScale = Number(this.labelFontMin ?? 5);
+            const currentFade = Number(this.labelFade ?? 0);
 
             const formatValue = (value, decimals = 1) => {
                 const next = Number(value);
@@ -7665,7 +7665,7 @@
                 <div class="context-input-row context-input-group-row">
                     <div class="context-input-group">
                         <label class="context-input-label">Min</label>
-                        <input class="context-number-input" data-role="minScale" type="number" min="1" max="10" step="0.1" value="${Number.isFinite(currentMinScale) ? currentMinScale.toFixed(2) : '5'}" aria-label="Min Font Size">
+                        <input class="context-number-input" data-role="minScale" type="number" step="0.1" value="${Number.isFinite(currentMinScale) ? currentMinScale.toFixed(2) : '5'}" aria-label="Min Font Size">
                     </div>
                     <div class="context-input-group">
                         <label class="context-input-label">Scale</label>
@@ -7677,7 +7677,7 @@
                     </div>
                     <div class="context-input-group">
                         <label class="context-input-label">Max</label>
-                        <input class="context-number-input" data-role="maxScale" type="number" min="5" max="30" step="0.1" value="${Number.isFinite(currentMaxScale) ? currentMaxScale.toFixed(2) : '20'}" aria-label="Max Font Size">
+                        <input class="context-number-input" data-role="maxScale" type="number" step="0.1" value="${Number.isFinite(currentMaxScale) ? currentMaxScale.toFixed(2) : '20'}" aria-label="Max Font Size">
                     </div>
                 </div>
                 <div class="context-color-row">
@@ -8023,6 +8023,7 @@
                         });
                         applyLabelStyle(nodeLabel, { ...node, labelHidden: !nextVisible });
                     }
+                    this.queuePersistNetworkState();
                     updateToggleButton();
                 });
             }
@@ -8454,6 +8455,7 @@
             state.hideAll = !state.showAll;
             this.visNetwork._wosLabelState = state;
             applyLabelVisibility(dataset, state.showAll, this.visNetwork, ensureLabelLayer(view));
+            this.queuePersistNetworkState();
             const btn = this.getEl(this.ids.labelToggleBtn);
             if (btn) {
                 const icon = btn.querySelector('i');
@@ -8847,6 +8849,32 @@
                 labelFieldsSelected: Array.from(this.labelFieldsSelected || []),
                 labelField: this.labelField || 'wosid'
             };
+            const dataset = this.getNetworkNodesDataSet();
+            if (dataset) {
+                const nodes = dataset.get();
+                const overrides = nodes
+                    .filter((node) => node && node.id != null && (node.labelHidden || node.labelManualValue != null))
+                    .map((node) => ({
+                        id: node.id,
+                        labelHidden: !!node.labelHidden,
+                        labelManualValue: node.labelManualValue ?? null
+                    }));
+                payload.labelNodeOverrides = overrides;
+            }
+            if (this.visNetwork) {
+                const state = this.visNetwork._wosLabelState || { showAll: false, hideAll: true };
+                payload.labelShowAll = !!state.showAll;
+            }
+            const view = this.getEl(this.ids.view);
+            if (view) {
+                const layer = ensureLabelLayer(view);
+                if (layer) {
+                    const forceVisibleIds = Array.from(layer.querySelectorAll('.vis-node-label.is-force-visible'))
+                        .map((el) => el.dataset.nodeId)
+                        .filter(Boolean);
+                    payload.labelForceVisibleIds = forceVisibleIds;
+                }
+            }
             if (this.app && this.app.projectStorage && this.app.currentProject) {
                 this.app.projectStorage.update(this.networkStateKey, payload);
             }
@@ -8869,6 +8897,11 @@
                 if (!this.labelFieldsSelected.length && this.labelField) {
                     this.labelFieldsSelected = this.parseLabelFields(this.labelField);
                 }
+                this._savedLabelState = {
+                    labelShowAll: typeof payload.labelShowAll === 'boolean' ? payload.labelShowAll : null,
+                    labelNodeOverrides: Array.isArray(payload.labelNodeOverrides) ? payload.labelNodeOverrides : [],
+                    labelForceVisibleIds: Array.isArray(payload.labelForceVisibleIds) ? payload.labelForceVisibleIds : []
+                };
                 this.renderLabelFieldChips();
             };
 
@@ -9288,6 +9321,77 @@
                 label.textContent = node?.hiddenLabel || '';
                 if (node) applyLabelStyle(label, node);
             });
+        }
+
+        applySavedLabelState() {
+            const saved = this._savedLabelState;
+            const dataset = this.getNetworkNodesDataSet();
+            if (!saved || !dataset) return;
+            const updates = [];
+            if (Array.isArray(saved.labelNodeOverrides) && saved.labelNodeOverrides.length) {
+                const nodeMap = new Map(dataset.get().map((n) => [n.id, n]));
+                saved.labelNodeOverrides.forEach((item) => {
+                    if (!item || item.id == null) return;
+                    if (!nodeMap.has(item.id)) return;
+                    const manualValue = item.labelManualValue != null ? String(item.labelManualValue) : null;
+                    const hidden = !!item.labelHidden;
+                    const base = nodeMap.get(item.id);
+                    updates.push({
+                        id: item.id,
+                        labelManualValue: manualValue,
+                        hiddenLabel: manualValue != null ? manualValue : (base?.hiddenLabel ?? ''),
+                        labelHidden: hidden,
+                        labelMissingField: false
+                    });
+                });
+            }
+            if (updates.length) {
+                dataset.update(updates);
+            }
+            const view = this.getEl(this.ids.view);
+            const layer = view ? ensureLabelLayer(view) : null;
+            if (typeof saved.labelShowAll === 'boolean') {
+                this.applyLabelShowAll(saved.labelShowAll);
+            }
+            const ensurePositionUpdater = () => {
+                if (!layer || !this.visNetwork) return;
+                if (this.visNetwork._wosLabelUpdate) return;
+                const updatePositions = () => {
+                    const labels = Array.from(layer.querySelectorAll('.vis-node-label'));
+                    labels.forEach((label) => {
+                        const id = label.dataset.nodeId;
+                        if (id) positionLabel(this.visNetwork, label, id);
+                    });
+                };
+                this.visNetwork._wosLabelUpdate = updatePositions;
+                this.visNetwork.on('afterDrawing', updatePositions);
+            };
+            if (Array.isArray(saved.labelForceVisibleIds) && saved.labelForceVisibleIds.length && layer) {
+                saved.labelForceVisibleIds.forEach((id) => {
+                    let label = layer.querySelector(`.vis-node-label[data-node-id="${id}"]`);
+                    const node = dataset.get(id);
+                    if (!label && node) {
+                        label = document.createElement('div');
+                        label.className = 'vis-node-label';
+                        label.dataset.nodeId = id;
+                        label.textContent = node.labelManualValue ?? node.hiddenLabel ?? '';
+                        applyLabelStyle(label, node);
+                        layer.appendChild(label);
+                    }
+                    if (label) {
+                        label.classList.add('is-force-visible');
+                    }
+                });
+                ensurePositionUpdater();
+                requestAnimationFrame(() => {
+                    saved.labelForceVisibleIds.forEach((id) => {
+                        const label = layer.querySelector(`.vis-node-label[data-node-id="${id}"]`);
+                        if (label) positionLabel(this.visNetwork, label, id);
+                    });
+                });
+            }
+            this.updateLabelLayer();
+            this._savedLabelState = null;
         }
 
         applyInput() {
