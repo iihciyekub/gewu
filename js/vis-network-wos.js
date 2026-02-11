@@ -7640,6 +7640,10 @@
                     <span class="context-slider-label">Text</span>
                     <div class="context-color-slot" data-role="fontColor"></div>
                 </div>
+                <div class="context-color-row">
+                    <span class="context-slider-label">Background</span>
+                    <div class="context-color-slot" data-role="fontBackground"></div>
+                </div>
                 <div class="context-input-row">
                     <span class="context-slider-label">Fade</span>
                     <input class="context-number-input" data-role="fade" type="number" min="0" max="100" step="1" value="${currentFade}" aria-label="Fade">
@@ -7824,7 +7828,7 @@
                 const slot = pop.querySelector(`[data-role="${slotRole}"]`);
                 if (!slot) return;
 
-                const currentColor = node?.font?.[property];
+                const currentColor = node?.labelStyle?.[property] ?? node?.font?.[property];
                 let initialColor = defaultColor;
                 if (currentColor && currentColor !== 'transparent' && currentColor !== 'none') {
                     initialColor = currentColor;
@@ -7884,13 +7888,13 @@
                 }
             };
 
-            setupColorPicker('fontColor', 'color', this.labelColor || '#343434', (val) => {
+            setupColorPicker('fontColor', 'textColor', this.labelColor || '#343434', (val) => {
                 this.labelColor = val;
                 this.applyLabelColor();
                 this.queuePersistSettings();
             });
 
-            setupColorPicker('fontBackground', 'background', this.labelBgColor || '#ffffff', (val) => {
+            setupColorPicker('fontBackground', 'backgroundColor', this.labelBgColor || '#f2f2f2f1', (val) => {
                 this.labelBgColor = val;
                 this.applyLabelBgColor();
                 this.queuePersistSettings();
