@@ -2037,16 +2037,8 @@
                     e.preventDefault();
                     const panel = this.getEl(this.ids.settingsPanel);
                     const inputPanel = this.getEl(this.ids.inputPanel);
-                    const labelPanel = this.getEl(this.ids.labelPanel);
                     const isOpen = panel ? panel.classList.contains('is-open') : false;
-                    const inputActive = inputPanel ? inputPanel.classList.contains('is-active') : false;
-                    if (!isOpen) {
-                        this.toggleInputDrawer(true, { focus: false });
-                    } else if (inputActive) {
-                        this.toggleLabelDrawer(true, { focus: false });
-                    } else {
-                        this.toggleInputDrawer(true, { focus: false });
-                    }
+                    this.toggleInputDrawer(!isOpen, { focus: false });
                     const active = document.activeElement;
                     if (active && active !== document.body) active.blur();
                     return;
@@ -3157,7 +3149,7 @@
                 return;
             }
             if (action === 'syncFromNormal') {
-                // Copy the CURRENT normal mode snapshot into this mode, clear all selections
+                // Deep copy the CURRENT normal mode snapshot into this mode, clear all selections
                 if (!this.modeStateStore) {
                     this.notify('Mode state store not ready', 'info');
                     return;
@@ -3171,39 +3163,26 @@
                     this.notify('Vis network not ready', 'info');
                     return;
                 }
-                const nodeUpdates = (normalSnapshot.nodes || []).map((node) => {
-                    const update = { id: node.id, color: cloneVisColor(node.color) };
-                    if (Number.isFinite(node.x) && Number.isFinite(node.y)) {
-                        update.x = node.x;
-                        update.y = node.y;
-                    }
-                    if (node.fixed != null) update.fixed = node.fixed;
-                    return update;
-                });
-                const edgeUpdates = (normalSnapshot.edges || []).map((edge) => ({
-                    id: edge.id,
-                    color: cloneVisColor(edge.color)
-                }));
-                this.batchNetworkUpdate(() => {
-                    this.updateNetworkData(nodeUpdates, edgeUpdates);
-                    this.visNetwork.unselectAll();
-                    this.clearSelectedNodeIds();
-                    const state = this.getEdgeFocusState();
-                    state.customFocusActive = false;
-                    state.customFocusMap?.clear();
-                    state.customFocusDepthMap?.clear();
-                    state.customFocusNodes?.clear();
-                    state.customFocusEdges?.clear();
-                    state.customFocusRootId = null;
-                    state.lockedEdgeIds?.clear();
-                    state.baseNodeColors.clear();
-                    state.baseEdgeColors.clear();
-                    state.dirty = true;
-                    this.markEdgeFocusDirty();
-                    this.applyEdgeFocusDisplay();
-                });
+                const targetMode = this._toolbarMode === 'edge' ? 'edge' : 'node';
+                const clonedSnapshot = {
+                    ...normalSnapshot,
+                    nodes: (normalSnapshot.nodes || []).map((node) => JSON.parse(JSON.stringify(node))),
+                    edges: (normalSnapshot.edges || []).map((edge) => JSON.parse(JSON.stringify(edge))),
+                    selectedNodeIds: [],
+                    lockedEdgeIds: [],
+                    customFocusAlpha: null,
+                    customFocusDepth: null,
+                    customFocusRootId: null,
+                    customFocusMapEntries: [],
+                    customFocusDepthMapEntries: []
+                };
+                this.modeStateStore.state.modes[targetMode] = clonedSnapshot;
+                this.modeStateStore.save();
+                this.modeStateStore.apply(targetMode);
+                this.visNetwork.unselectAll?.();
+                this.clearSelectedNodeIds();
                 this.updateModeToolbar();
-                this.notify('Copied from normal mode, all selections cleared', 'success');
+                this.notify('Copied from normal mode to current mode', 'success');
                 return;
             }
             if (action === 'unselectNode') {
@@ -7607,9 +7586,13 @@
             pop.innerHTML = `
                 <div class="context-popover-drag-handle" title="Drag to move">Label Typography</div>
                 <button type="button" class="context-popover-close-btn" data-role="closePopover" title="Close (Esc)">&times;</button>
+                <div class="context-input-row">
+                    <span class="context-slider-label">Label</span>
+                    <input class="context-text-input" data-role="labelText" type="text" value="${(node?.hiddenLabel ?? node?.label ?? nodeId) || ''}" aria-label="Node label">
+                </div>
                 <label class="context-popover-toggle">
-                    <input type="checkbox" class="context-popover-checkbox" aria-label="Apply to all nodes" checked disabled>
-                    <span>Apply to all nodes (only)</span>
+                    <input type="checkbox" class="context-popover-checkbox" aria-label="Apply to all nodes" checked>
+                    <span>Apply to all nodes</span>
                 </label>
                 <div class="context-button-row">
                     <button type="button" class="context-toggle-button" data-role="toggleLabels" title="Toggle all labels visibility">
@@ -7621,7 +7604,7 @@
                 <div class="context-input-row context-input-group-row">
                     <div class="context-input-group">
                         <label class="context-input-label">Min</label>
-                        <input class="context-number-input" data-role="minScale" type="number" min="1" max="10" step="1" value="${Math.round(currentMinScale)}" aria-label="Min Font Size">
+                        <input class="context-number-input" data-role="minScale" type="number" min="1" max="10" step="0.1" value="${Number.isFinite(currentMinScale) ? currentMinScale.toFixed(2) : '5'}" aria-label="Min Font Size">
                     </div>
                     <div class="context-input-group">
                         <label class="context-input-label">Scale</label>
@@ -7633,7 +7616,7 @@
                     </div>
                     <div class="context-input-group">
                         <label class="context-input-label">Max</label>
-                        <input class="context-number-input" data-role="maxScale" type="number" min="5" max="30" step="1" value="${Math.round(currentMaxScale)}" aria-label="Max Font Size">
+                        <input class="context-number-input" data-role="maxScale" type="number" min="5" max="30" step="0.1" value="${Number.isFinite(currentMaxScale) ? currentMaxScale.toFixed(2) : '20'}" aria-label="Max Font Size">
                     </div>
                 </div>
                 <div class="context-color-row">
@@ -7684,6 +7667,36 @@
 
             const toggle = pop.querySelector('.context-popover-checkbox');
             const getApplyToAll = () => toggle ? toggle.checked : false;
+            if (toggle) {
+                toggle.addEventListener('change', (ev) => {
+                    ev.stopPropagation();
+                });
+            }
+
+            const applyLabelText = (text) => {
+                if (!this.visNetwork || !this.visNetwork.body?.data?.nodes) return;
+                const nodeDataset = this.visNetwork.body.data.nodes;
+                const safeText = String(text ?? '').trim();
+                if (getApplyToAll()) {
+                    const nodeUpdates = nodeDataset.get().map((n) => ({
+                        id: n.id,
+                        hiddenLabel: safeText,
+                        labelHidden: false,
+                        labelMissingField: false
+                    }));
+                    this.updateNetworkNodes(nodeUpdates);
+                    nodeUpdates.forEach((u) => this.labelValueMap?.set?.(u.id, safeText));
+                } else {
+                    this.updateNetworkNodes({
+                        id: nodeId,
+                        hiddenLabel: safeText,
+                        labelHidden: false,
+                        labelMissingField: false
+                    });
+                    this.labelValueMap?.set?.(nodeId, safeText);
+                }
+                this.updateLabelLayer();
+            };
 
             // Helper to apply to single node or all nodes
             const applyLabelStyle = (updates) => {
@@ -7737,13 +7750,38 @@
                 input.addEventListener('click', (ev) => ev.stopPropagation());
             };
 
+            const labelTextInput = pop.querySelector('input[data-role="labelText"]');
+            if (labelTextInput) {
+                labelTextInput.addEventListener('input', (ev) => {
+                    ev.stopPropagation();
+                    applyLabelText(labelTextInput.value);
+                });
+                labelTextInput.addEventListener('change', (ev) => {
+                    ev.stopPropagation();
+                    applyLabelText(labelTextInput.value);
+                });
+            }
+
             // Helper for scale-related updates with smooth recalculation
+            let localScale = currentLabelScale;
+            let localMinScale = currentMinScale;
+            let localMaxScale = currentMaxScale;
+            let localWeight = currentWeight;
+            let localFade = currentFade;
+            let localBorderWidth = currentBorderWidth;
+            let localStrokeWidth = currentStrokeWidth;
             const applySizeScaleUpdates = () => {
                 if (!this.visNetwork || !this.visNetwork.body?.data?.nodes) return;
                 const nodeDataset = this.visNetwork.body.data.nodes;
-                const scale = Number.isFinite(this.labelSizeScale) ? this.labelSizeScale : 0.5;
-                const minFontSize = Number.isFinite(this.labelFontMin) ? this.labelFontMin : 5;
-                const maxFontSize = Number.isFinite(this.labelFontMax) ? this.labelFontMax : 20;
+                const scale = getApplyToAll()
+                    ? (Number.isFinite(this.labelSizeScale) ? this.labelSizeScale : 0.5)
+                    : localScale;
+                const minFontSize = getApplyToAll()
+                    ? (Number.isFinite(this.labelFontMin) ? this.labelFontMin : 5)
+                    : localMinScale;
+                const maxFontSize = getApplyToAll()
+                    ? (Number.isFinite(this.labelFontMax) ? this.labelFontMax : 20)
+                    : localMaxScale;
                 const calcUpdate = (node) => {
                     const fontSize = Math.max(minFontSize, Math.min(maxFontSize, (node.size || 30) * scale));
                     return { id: node.id, labelStyle: { ...(node.labelStyle || {}), fontSize: Number(fontSize.toFixed(2)), scaleFont: scale, scaleMin: minFontSize, scaleMax: maxFontSize } };
@@ -7759,47 +7797,96 @@
             };
 
             bindNumberInput('scale', (val) => {
-                this.labelSizeScale = val;
+                localScale = val;
+                if (getApplyToAll()) {
+                    this.labelSizeScale = val;
+                }
                 applySizeScaleUpdates();
-                this.queuePersistSettings();
+                if (getApplyToAll()) {
+                    this.queuePersistSettings();
+                }
             });
 
             bindNumberInput('fontWeight', (val) => {
-                this.labelWeight = val;
-                this.applyLabelWeight();
-                this.queuePersistSettings();
+                localWeight = val;
+                if (getApplyToAll()) {
+                    this.labelWeight = val;
+                    this.applyLabelWeight();
+                    this.queuePersistSettings();
+                } else {
+                    applyLabelStyle({ fontWeight: val });
+                }
             });
 
             bindNumberInput('strokeWidth', (val) => {
-                this.labelStrokeWidth = val;
-                this.applyLabelStrokeWidth();
-                this.queuePersistSettings();
+                localStrokeWidth = val;
+                if (getApplyToAll()) {
+                    this.labelStrokeWidth = val;
+                    this.applyLabelStrokeWidth();
+                    this.queuePersistSettings();
+                } else {
+                    applyLabelStyle({ strokeWidth: val });
+                }
             });
 
             bindNumberInput('minScale', (val) => {
-                this.labelFontMin = val;
+                localMinScale = val;
+                if (getApplyToAll()) {
+                    this.labelFontMin = val;
+                }
                 applySizeScaleUpdates();
-                this.queuePersistSettings();
+                if (getApplyToAll()) {
+                    this.queuePersistSettings();
+                }
             });
 
             bindNumberInput('maxScale', (val) => {
-                this.labelFontMax = val;
+                localMaxScale = val;
+                if (getApplyToAll()) {
+                    this.labelFontMax = val;
+                }
                 applySizeScaleUpdates();
-                this.queuePersistSettings();
+                if (getApplyToAll()) {
+                    this.queuePersistSettings();
+                }
             });
 
             bindNumberInput('fade', (val) => {
-                this.labelFade = val;
-                this.applyLabelFade();
-                this.queuePersistSettings();
+                localFade = val;
+                if (getApplyToAll()) {
+                    this.labelFade = val;
+                    this.applyLabelFade();
+                    this.queuePersistSettings();
+                } else {
+                    const meta = this.visNetworkData?.meta || {};
+                    const minCitation = Number.isFinite(meta.minCitation) ? meta.minCitation : 0;
+                    const maxCitation = Number.isFinite(meta.maxCitation) ? meta.maxCitation : minCitation;
+                    const fade = (Number(localFade) || 0) / 100;
+                    const lightRange = Math.round(60 + fade * 120);
+                    const darkMode = isDarkTheme();
+                    const citations = parseNumber(node?.citations_count);
+                    const t = maxCitation > minCitation ? (citations - minCitation) / (maxCitation - minCitation) : 1;
+                    const k = Math.max(0, Math.min(1, t));
+                    const grayRaw = darkMode
+                        ? Math.round(210 + (1 - k) * Math.min(50, lightRange * 0.4))
+                        : Math.round(30 + (1 - k) * lightRange);
+                    const gray = Math.max(0, Math.min(255, grayRaw));
+                    const color = `rgb(${gray}, ${gray}, ${gray})`;
+                    applyLabelStyle({ textColor: color });
+                }
             });
 
             bindNumberInput('borderWidth', (val) => {
-                this.labelBorderWidth = val;
-                if (this.applyLabelBorderWidth) {
-                    this.applyLabelBorderWidth();
+                localBorderWidth = val;
+                if (getApplyToAll()) {
+                    this.labelBorderWidth = val;
+                    if (this.applyLabelBorderWidth) {
+                        this.applyLabelBorderWidth();
+                    }
+                    this.queuePersistSettings();
+                } else {
+                    applyLabelStyle({ borderWidth: val });
                 }
-                this.queuePersistSettings();
             });
 
             // Setup toggle labels button

@@ -3084,17 +3084,6 @@ body.theme-dark .vis-label-suggest .vis-label-suggest-item.active {
     --drawer-width: min(380px, 92%);
 }
 
-.vis-network-view.drawer-open .vis-network-canvas {
-    right: var(--drawer-width, 380px);
-}
-
-.vis-network-view.drawer-open .vis-network-zoom {
-    right: var(--drawer-width, 380px);
-}
-
-.vis-network-view.drawer-open .empty-state {
-    right: var(--drawer-width, 380px);
-}
 
 .vis-input-body {
     padding: 2px 12px;
@@ -5997,6 +5986,17 @@ ol.json-array {
     border-bottom: 1px solid #e5e7eb;
 }
 
+.context-node-id {
+    flex: 1;
+    font-size: 11px;
+    color: #111827;
+    font-weight: 600;
+    text-align: left;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
 .context-popover-checkbox {
     width: 13px;
     height: 13px;
@@ -6109,6 +6109,26 @@ ol.json-array {
     font-size: 11px;
     transition: border-color 0.15s ease;
     min-width: 0;
+}
+
+.context-text-input {
+    flex: 1;
+    height: 24px;
+    padding: 2px 6px;
+    border: 1px solid #d1d5db;
+    border-radius: 3px;
+    font-size: 11px;
+    transition: border-color 0.15s ease;
+    min-width: 0;
+}
+
+.context-text-input:hover {
+    border-color: #9ca3af;
+}
+
+.context-text-input:focus {
+    outline: none;
+    border-color: #3b82f6;
 }
 
 .context-number-input:hover {
