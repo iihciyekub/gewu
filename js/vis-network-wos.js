@@ -379,6 +379,7 @@
         const layer = ensureLabelLayer(view);
         const hoverLabel = ensureHoverLabel(layer);
         const showLabel = (nodeId) => {
+            if (labelState.hideAll) return;
             if (labelState.showAll) return;
             if (network?._wosNodeModeActive) return;
             const node = dataset.nodes.get(nodeId);
@@ -390,6 +391,10 @@
             hoverLabel.classList.add('is-visible');
         };
         const hideLabel = () => {
+            if (labelState.hideAll) {
+                hoverLabel.classList.remove('is-visible');
+                return;
+            }
             if (labelState.showAll) return;
             hoverLabel.classList.remove('is-visible');
         };
@@ -419,6 +424,7 @@
         buttonEl.onclick = () => {
             const labelState = getLabelState(network);
             labelState.showAll = !labelState.showAll;
+            labelState.hideAll = !labelState.showAll;
             applyLabelVisibility(dataset, labelState.showAll, network, ensureLabelLayer(view));
             updateButtonText(labelState.showAll);
         };
@@ -426,23 +432,36 @@
 
     function applyLabelVisibility(dataset, showAll, network, layer) {
         if (!dataset || !dataset.nodes) return;
-        const updates = dataset.nodes.get().map((node) => ({
-            id: node.id,
-            label: '',
-            font: { ...(node.font || {}), size: 0 }
-        }));
-        dataset.nodes.update(updates);
         if (!layer || !network) return;
+        if (!layer.dataset.baseHidden) {
+            const updates = dataset.nodes.get().map((node) => ({
+                id: node.id,
+                label: '',
+                font: { ...(node.font || {}), size: 0 }
+            }));
+            dataset.nodes.update(updates);
+            layer.dataset.baseHidden = '1';
+        }
         if (showAll) {
-            renderAllLabels(network, dataset, layer);
+            const labelCount = layer.querySelectorAll('.vis-node-label').length;
+            const nodeCount = dataset.nodes.get().length;
+            if (!layer.dataset.renderedAll || labelCount !== nodeCount) {
+                renderAllLabels(network, dataset, layer);
+                layer.dataset.renderedAll = '1';
+            }
+            layer.classList.add('is-show-all');
+            layer.classList.remove('is-hide-all');
         } else {
-            clearAllLabels(layer);
+            layer.classList.remove('is-show-all');
+            layer.classList.add('is-hide-all');
+            const labels = Array.from(layer.querySelectorAll('.vis-node-label'));
+            labels.forEach((label) => label.classList.remove('is-force-visible'));
         }
     }
 
     function getLabelState(network) {
         if (!network._wosLabelState) {
-            network._wosLabelState = { showAll: false };
+            network._wosLabelState = { showAll: false, hideAll: true };
         }
         return network._wosLabelState;
     }
@@ -3956,6 +3975,7 @@
                 popup.classList.remove('is-open', 'is-fixed');
                 popup.style.removeProperty('left');
                 popup.style.removeProperty('top');
+                this._labelPanelTargetNodeId = null;
             };
 
             btn.addEventListener('mouseenter', showPopup);
@@ -4739,6 +4759,42 @@
             const dataset = this.getNetworkNodesDataSet();
             if (!dataset) return;
             const nodes = dataset.get();
+            const targetNodeId = this.labelStyleApplyAll === false ? this._labelPanelTargetNodeId : null;
+            if (targetNodeId) {
+                const node = dataset.get(targetNodeId);
+                if (!node) return;
+                const manualValue = node?.labelManualValue;
+                if (manualValue != null) {
+                    const manualText = String(manualValue);
+                    this.labelValueMap.set(targetNodeId, manualText);
+                    dataset.update([{
+                        id: targetNodeId,
+                        labelValue: manualText,
+                        hiddenLabel: manualText,
+                        labelHidden: manualText.trim() === '',
+                        labelMissingField: false
+                    }]);
+                    this.applyLabelThreshold();
+                    this.updateLabelLayer();
+                    return;
+                }
+                const nodeKey = this.normalizeWosId(node.id);
+                const nodeData = nodeKey ? nodeMap.get(nodeKey) : null;
+                const values = this.resolveLabelValues(nodeData, fields, node.id);
+                const labelText = values.join(' | ');
+                const hasValue = labelText.trim() !== '';
+                this.labelValueMap.set(node.id, hasValue ? labelText : '');
+                dataset.update([{
+                    id: node.id,
+                    labelValue: hasValue ? labelText : '',
+                    hiddenLabel: hasValue ? labelText : '',
+                    labelHidden: !hasValue,
+                    labelMissingField: !hasValue
+                }]);
+                this.applyLabelThreshold();
+                this.updateLabelLayer();
+                return;
+            }
             const updates = nodes.map((node, idx) => {
                 const nodeKey = this.normalizeWosId(node.id);
                 const nodeData = nodeKey ? nodeMap.get(nodeKey) : null;
@@ -7589,7 +7645,7 @@
                 <button type="button" class="context-popover-close-btn" data-role="closePopover" title="Close (Esc)">&times;</button>
                 <div class="context-input-row">
                     <span class="context-slider-label">Label</span>
-                    <input class="context-text-input" data-role="labelText" type="text" value="${(node?.hiddenLabel ?? node?.label ?? nodeId) || ''}" aria-label="Node label">
+                    <input class="context-text-input" data-role="labelText" type="text" value="${(node?.labelManualValue ?? node?.hiddenLabel ?? node?.label ?? nodeId) || ''}" aria-label="Node label">
                 </div>
                 <label class="context-popover-toggle">
                     <input type="checkbox" class="context-popover-checkbox" aria-label="Apply to all nodes" checked>
@@ -7680,6 +7736,9 @@
                     ev.stopPropagation();
                     this.labelStyleApplyAll = toggle.checked;
                     this.queuePersistSettings();
+                    if (!toggle.checked) {
+                        this.applyLabelShowAll(false);
+                    }
                 });
             }
 
@@ -7905,17 +7964,65 @@
                 const icon = toggleBtn.querySelector('i');
                 const updateToggleButton = () => {
                     const labelState = this.visNetwork?._wosLabelState || { showAll: false };
+                    const view = this.getEl(this.ids.view);
+                    const layer = view ? ensureLabelLayer(view) : null;
+                    const nodeLabel = layer ? layer.querySelector(`.vis-node-label[data-node-id="${nodeId}"]`) : null;
+                    const nodeVisible = !!(nodeLabel && nodeLabel.classList.contains('is-force-visible'));
                     if (icon) {
-                        icon.className = labelState.showAll ? 'fa-solid fa-eye-slash' : 'fa-solid fa-eye';
+                        icon.className = (getApplyToAll() ? labelState.showAll : nodeVisible)
+                            ? 'fa-solid fa-eye-slash'
+                            : 'fa-solid fa-eye';
                     }
-                    const label = labelState.showAll ? 'Hide Labels' : 'Show Labels';
+                    const label = getApplyToAll()
+                        ? (labelState.showAll ? 'Hide Labels' : 'Show Labels')
+                        : (nodeVisible ? 'Hide Label' : 'Show Label');
                     toggleBtn.setAttribute('title', label);
                 };
                 updateToggleButton();
                 toggleBtn.addEventListener('click', () => {
-                    const labelState = this.visNetwork?._wosLabelState || { showAll: false };
-                    const newState = !labelState.showAll;
-                    this.applyLabelShowAll(newState);
+                    if (getApplyToAll()) {
+                        const labelState = this.visNetwork?._wosLabelState || { showAll: false };
+                        const newState = !labelState.showAll;
+                        this.applyLabelShowAll(newState);
+                        updateToggleButton();
+                        return;
+                    }
+                    const view = this.getEl(this.ids.view);
+                    const layer = view ? ensureLabelLayer(view) : null;
+                    if (!layer) return;
+                    let nodeLabel = layer.querySelector(`.vis-node-label[data-node-id="${nodeId}"]`);
+                    const dataset = this.visNetwork?.body?.data?.nodes;
+                    const node = dataset && typeof dataset.get === 'function' ? dataset.get(nodeId) : null;
+                    if (!nodeLabel && node) {
+                        nodeLabel = document.createElement('div');
+                        nodeLabel.className = 'vis-node-label';
+                        nodeLabel.dataset.nodeId = nodeId;
+                        nodeLabel.textContent = node.labelManualValue ?? node.hiddenLabel ?? '';
+                        applyLabelStyle(nodeLabel, node);
+                        layer.appendChild(nodeLabel);
+                        positionLabel(this.visNetwork, nodeLabel, nodeId);
+                        if (!this.visNetwork._wosLabelUpdate) {
+                            const updatePositions = () => {
+                                const labels = Array.from(layer.querySelectorAll('.vis-node-label'));
+                                labels.forEach((label) => {
+                                    const id = label.dataset.nodeId;
+                                    positionLabel(this.visNetwork, label, id);
+                                });
+                            };
+                            this.visNetwork._wosLabelUpdate = updatePositions;
+                            this.visNetwork.on('afterDrawing', updatePositions);
+                        }
+                    }
+                    if (!nodeLabel) return;
+                    const nextVisible = !nodeLabel.classList.contains('is-force-visible');
+                    nodeLabel.classList.toggle('is-force-visible', nextVisible);
+                    if (node) {
+                        this.updateNetworkNodes({
+                            id: nodeId,
+                            labelHidden: !nextVisible
+                        });
+                        applyLabelStyle(nodeLabel, { ...node, labelHidden: !nextVisible });
+                    }
                     updateToggleButton();
                 });
             }
@@ -7962,8 +8069,10 @@
                         window.removeEventListener('resize', positionGroup);
                         window.removeEventListener('scroll', positionGroup, true);
                         stopFollow();
+                        this._labelPanelTargetNodeId = null;
                         return;
                     }
+                    this._labelPanelTargetNodeId = nodeId;
                     group.classList.add('is-open', 'is-fixed');
                     group.style.left = '0px';
                     group.style.top = '0px';
@@ -8338,24 +8447,23 @@
                 return;
             }
             const state = this.visNetwork._wosLabelState || { showAll: false };
-            if (state.showAll === showAll) {
-                if (showAll) {
-                    const dataset = this.visNetwork?.body?.data;
-                    const view = this.getEl(this.ids.view);
-                    if (dataset && view) {
-                        applyLabelVisibility(dataset, true, this.visNetwork, ensureLabelLayer(view));
-                    }
-                }
-                return;
-            }
+            const dataset = this.visNetwork?.body?.data;
+            const view = this.getEl(this.ids.view);
+            if (!dataset || !view) return;
+            state.showAll = !!showAll;
+            state.hideAll = !state.showAll;
+            this.visNetwork._wosLabelState = state;
+            applyLabelVisibility(dataset, state.showAll, this.visNetwork, ensureLabelLayer(view));
             const btn = this.getEl(this.ids.labelToggleBtn);
             if (btn) {
-                btn.click();
-                return;
+                const icon = btn.querySelector('i');
+                const label = state.showAll ? 'Hide labels' : 'Show labels';
+                if (icon) {
+                    icon.className = state.showAll ? 'fa-solid fa-eye-slash' : 'fa-solid fa-eye';
+                }
+                btn.setAttribute('aria-label', label);
+                btn.setAttribute('title', label);
             }
-            // fallback: mark state and refresh labels on next toggle
-            state.showAll = showAll;
-            this.visNetwork._wosLabelState = state;
         }
 
         applyPhysicsSettings() {

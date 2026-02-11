@@ -2848,6 +2848,28 @@ body.theme-dark .vis-network-zoom input[type="range"] {
     white-space: nowrap;
 }
 
+.vis-network-label-layer .vis-node-label {
+    display: none;
+}
+
+.vis-network-label-layer.is-show-all .vis-node-label {
+    display: flex;
+}
+
+.vis-network-label-layer.is-show-all .vis-node-label {
+    opacity: 1 !important;
+}
+
+.vis-network-label-layer .vis-node-label.is-hover,
+.vis-network-label-layer .vis-node-label.is-edge-hover,
+.vis-network-label-layer .vis-node-label.is-force-visible {
+    display: flex;
+}
+
+.vis-network-label-layer.is-hide-all .vis-node-label:not(.is-force-visible) {
+    display: none !important;
+}
+
 .vis-network-view {
     --vis-label-bg: #f2f2f2f1;
     --vis-label-color: #000000;
