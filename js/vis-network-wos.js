@@ -1225,6 +1225,7 @@
             this.edgeHoverLabelEnabled = false;
             this.edgeLabelEnabled = false;
             this._edgeCustomFonts = new Map();
+            this._edgeCustomLabelVisibility = new Map();
             this._edgeCustomColors = new Map();
             this._edgeCustomWidths = new Set();
             this.wosNodeIndex = null;
@@ -5408,6 +5409,7 @@
             const strokeColor = this.edgeLabelStrokeColor || '#ffffff';
             const bgColor = this.edgeLabelBgColor || 'rgba(255,255,255,0.85)';
             const customFonts = this._edgeCustomFonts || new Map();
+            const customLabelVisibility = this._edgeCustomLabelVisibility || new Map();
             const updates = dataset.get().map((edge) => {
                 if (!this._edgeBaseLabels.has(edge.id)) {
                     this._edgeBaseLabels.set(edge.id, edge.label || '');
@@ -5416,7 +5418,9 @@
                     this._edgeBaseFonts.set(edge.id, edge.font || null);
                 }
                 const alpha = getEdgeColorAlpha(edge);
-                const shouldShowLabel = show
+                const override = customLabelVisibility.get(edge.id);
+                const baseShow = typeof override === 'boolean' ? override : show;
+                const shouldShowLabel = baseShow
                     && alpha > 0
                     && (!customActive || customEdges.has(edge.id))
                     && (customActive || !hasLocked || lockedEdges.has(edge.id))
@@ -8223,24 +8227,30 @@
                     <i class="fa-solid ${this.edgeLabelEnabled ? 'fa-eye' : 'fa-eye-slash'}"></i>
                     <span>${this.edgeLabelEnabled ? 'Hide Labels' : 'Show Labels'}</span>
                 </button>
-                <div class="context-input-row context-input-group-row">
-                    <div class="context-input-group">
-                        <label class="context-input-label">Size</label>
+                <div class="context-input-row">
+                    <span class="context-slider-label">Size</span>
+                    <div class="context-value-cell">
                         <input class="context-number-input" data-role="fontSize" type="number" min="8" max="72" step="1" value="${Math.round(currentFontSize)}" aria-label="Font Size">
                     </div>
                 </div>
                 <div class="context-color-row">
                     <span class="context-slider-label">Text Color</span>
-                    <div class="context-color-slot" data-role="fontColor"></div>
+                    <div class="context-value-cell">
+                        <div class="context-color-slot" data-role="fontColor"></div>
+                    </div>
                 </div>
                 <div class="context-input-row">
                     <span class="context-slider-label">Stroke</span>
-                    <input class="context-number-input" data-role="strokeWidth" type="number" min="0" max="10" step="0.1" value="${currentStrokeWidth.toFixed(2)}" aria-label="Stroke Width">
-                    <div class="context-color-slot" data-role="strokeColor"></div>
+                    <div class="context-value-cell">
+                        <input class="context-number-input" data-role="strokeWidth" type="number" min="0" max="10" step="0.1" value="${currentStrokeWidth.toFixed(2)}" aria-label="Stroke Width">
+                        <div class="context-color-slot" data-role="strokeColor"></div>
+                    </div>
                 </div>
                 <div class="context-color-row">
                     <span class="context-slider-label">Background</span>
-                    <div class="context-color-slot" data-role="bgColor"></div>
+                    <div class="context-value-cell">
+                        <div class="context-color-slot" data-role="bgColor"></div>
+                    </div>
                 </div>
             `;
             document.body.appendChild(pop);
@@ -8266,24 +8276,47 @@
 
             this._adjustPopoverPosition(pop, anchorX, anchorY);
 
+            const getEdgeLabelOverride = () => {
+                if (!this._edgeCustomLabelVisibility) return undefined;
+                return this._edgeCustomLabelVisibility.get(edgeId);
+            };
+            const getEdgeLabelEnabled = () => {
+                if (getApplyToAll()) return !!this.edgeLabelEnabled;
+                const override = getEdgeLabelOverride();
+                return typeof override === 'boolean' ? override : !!this.edgeLabelEnabled;
+            };
+            const updateEdgeLabelToggleUi = () => {
+                const edgeLabelToggleBtn = pop.querySelector('[data-role="edgeLabelToggle"]');
+                if (!edgeLabelToggleBtn) return;
+                const icon = edgeLabelToggleBtn.querySelector('i');
+                const span = edgeLabelToggleBtn.querySelector('span');
+                const enabled = getEdgeLabelEnabled();
+                if (icon) icon.className = enabled ? 'fa-solid fa-eye' : 'fa-solid fa-eye-slash';
+                if (span) span.textContent = enabled ? 'Hide Labels' : 'Show Labels';
+                edgeLabelToggleBtn.title = enabled ? 'Hide edge labels' : 'Show edge labels';
+            };
+
             // Setup edge label visibility toggle button
             const edgeLabelToggleBtn = pop.querySelector('[data-role="edgeLabelToggle"]');
             if (edgeLabelToggleBtn) {
                 edgeLabelToggleBtn.addEventListener('click', (ev) => {
                     ev.stopPropagation();
-                    this.toggleEdgeLabels();
-                    // Update button appearance
-                    const icon = edgeLabelToggleBtn.querySelector('i');
-                    const span = edgeLabelToggleBtn.querySelector('span');
-                    if (this.edgeLabelEnabled) {
-                        icon.className = 'fa-solid fa-eye';
-                        span.textContent = 'Hide Labels';
-                        edgeLabelToggleBtn.title = 'Hide edge labels';
+                    if (getApplyToAll()) {
+                        if (this._edgeCustomLabelVisibility) this._edgeCustomLabelVisibility.clear();
+                        this.toggleEdgeLabels();
                     } else {
-                        icon.className = 'fa-solid fa-eye-slash';
-                        span.textContent = 'Show Labels';
-                        edgeLabelToggleBtn.title = 'Show edge labels';
+                        const current = getEdgeLabelEnabled();
+                        const next = !current;
+                        if (!this._edgeCustomLabelVisibility) this._edgeCustomLabelVisibility = new Map();
+                        if (next === !!this.edgeLabelEnabled) {
+                            this._edgeCustomLabelVisibility.delete(edgeId);
+                        } else {
+                            this._edgeCustomLabelVisibility.set(edgeId, next);
+                        }
+                        this.applyEdgeLabelDisplay();
+                        this.queuePersistSettings();
                     }
+                    updateEdgeLabelToggleUi();
                 });
             }
 
@@ -8293,9 +8326,11 @@
                 applyToAllToggle.checked = !!this._edgeLabelStyleApplyAll;
                 applyToAllToggle.addEventListener('change', () => {
                     this._edgeLabelStyleApplyAll = applyToAllToggle.checked;
+                    updateEdgeLabelToggleUi();
                 });
             }
             const getApplyToAll = () => applyToAllToggle ? applyToAllToggle.checked : false;
+            updateEdgeLabelToggleUi();
 
             // Helper to apply styles
             const applyEdgeLabelStyle = (updates) => {

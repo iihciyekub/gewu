@@ -4372,6 +4372,38 @@ body.theme-vscode .qa-bubble {
     display: none; /* 隐藏复制按钮，改用双击复制 */
 }
 
+/* Markdown code format button */
+.code-format-btn {
+    position: absolute;
+    right: 6px;
+    bottom: 6px;
+    width: 22px;
+    height: 22px;
+    border: 1px solid #d1d5db;
+    border-radius: 4px;
+    background: #ffffff;
+    color: #374151;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    font-size: 11px;
+    line-height: 1;
+    opacity: 0.7;
+    transition: opacity 0.15s ease, border-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.markdown-body pre:hover .code-format-btn,
+.code-format-btn:focus-visible {
+    opacity: 1;
+}
+
+.code-format-btn:hover {
+    border-color: #9ca3af;
+    color: #111827;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.08);
+}
+
 /* 代码块双击复制提示 */
 .markdown-body pre {
     cursor: pointer;
@@ -5995,6 +6027,42 @@ ol.json-array {
     align-items: center;
     gap: 8px;
     margin-top: 5px;
+}
+
+/* Edge Label Typography: strict two-column alignment */
+.context-edge-label-style-popover .context-input-row {
+    display: grid;
+    grid-template-columns: max-content minmax(0, 1fr);
+    align-items: center;
+    column-gap: 8px;
+}
+
+.context-edge-label-style-popover .context-color-row {
+    display: grid;
+    grid-template-columns: max-content minmax(0, 1fr);
+    align-items: center;
+    column-gap: 8px;
+}
+
+.context-edge-label-style-popover .context-slider-label {
+    min-width: 0;
+    text-align: left;
+    padding-right: 0;
+}
+
+/* Value column: distribute children evenly */
+.context-edge-label-style-popover .context-value-cell {
+    display: grid;
+    grid-auto-flow: column;
+    grid-auto-columns: minmax(0, 1fr);
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+}
+
+.context-edge-label-style-popover .context-value-cell > * {
+    min-width: 0;
+    width: 100%;
 }
 
 .context-color-label {

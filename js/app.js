@@ -15547,6 +15547,7 @@ class PaperStatsApp {
 
                     window.hljs.highlightElement(block);
                     this.injectCopyButton(block);
+                    this.injectFormatButton(block);
                 });
             }
         } catch (err) {
@@ -15623,6 +15624,78 @@ class PaperStatsApp {
         // 添加提示标题
         pre.title = 'Double-click to copy code';
         pre.style.position = 'relative';
+    }
+
+    injectFormatButton(codeBlock) {
+        const pre = codeBlock.closest('pre');
+        if (!pre || pre.dataset.formatButtonInjected) return;
+
+        pre.dataset.formatButtonInjected = 'true';
+        pre.style.position = 'relative';
+
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'code-format-btn';
+        btn.title = 'Format code';
+        btn.setAttribute('aria-label', 'Format code');
+        btn.innerHTML = '<i class="fa-solid fa-wand-magic-sparkles"></i>';
+        pre.appendChild(btn);
+
+        btn.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            this.formatCodeBlock(codeBlock);
+        });
+    }
+
+    formatCodeBlock(codeBlock) {
+        if (!codeBlock) return;
+        const raw = codeBlock.textContent || '';
+        const lang = this.getCodeBlockLanguage(codeBlock);
+        const formatted = this.tryFormatCode(raw, lang);
+        if (formatted == null) {
+            this.showNotification(`Formatter not available for "${lang || 'plain'}"`, 'info');
+            return;
+        }
+        codeBlock.textContent = formatted;
+        if (window.hljs) {
+            window.hljs.highlightElement(codeBlock);
+        }
+        this.showNotification('Code formatted', 'success');
+    }
+
+    getCodeBlockLanguage(codeBlock) {
+        const className = codeBlock.className || '';
+        const match = className.match(/language-([a-z0-9_-]+)/i);
+        return match ? match[1].toLowerCase() : '';
+    }
+
+    tryFormatCode(raw, lang = '') {
+        const text = String(raw || '').trimEnd();
+        const normalized = String(lang || '').toLowerCase();
+
+        const tryJson = () => {
+            const cleaned = text.trim();
+            if (!cleaned) return '';
+            if (!(cleaned.startsWith('{') || cleaned.startsWith('['))) return null;
+            try {
+                const parsed = JSON.parse(cleaned);
+                return JSON.stringify(parsed, null, 2);
+            } catch (err) {
+                return null;
+            }
+        };
+
+        if (normalized === 'json') {
+            return tryJson();
+        }
+
+        if (!normalized) {
+            const jsonGuess = tryJson();
+            if (jsonGuess != null) return jsonGuess;
+        }
+
+        return null;
     }
 
 
@@ -20071,11 +20144,9 @@ document.addEventListener('DOMContentLoaded', () => {
         slider.addEventListener('focus', showSlider);
         slider.addEventListener('blur', scheduleHide);
 
-        // 监听滑杆变化
-        slider.addEventListener('input', (e) => {
-            const fontSize = Number.parseFloat(e.target.value);
+        const applyFontSize = (fontSize) => {
             if (!Number.isFinite(fontSize)) return;
-            valueDisplay.textContent = `${fontSize.toFixed(1)}px`;
+            valueDisplay.textContent = `${fontSize.toFixed(2)}px`;
             chatBodies.forEach((body) => {
                 body.style.fontSize = `${fontSize}px`;
             });
@@ -20086,7 +20157,40 @@ document.addEventListener('DOMContentLoaded', () => {
             } catch (err) {
                 console.warn('无法保存字体大小设置:', err);
             }
+        };
+
+        const clampFontSize = (val) => {
+            const min = Number.parseFloat(slider.min) || 0;
+            const max = Number.parseFloat(slider.max) || 100;
+            return Math.min(max, Math.max(min, val));
+        };
+
+        const getStep = () => {
+            const step = Number.parseFloat(slider.step);
+            return Number.isFinite(step) && step > 0 ? step : 0.1;
+        };
+
+        // 监听滑杆变化
+        slider.addEventListener('input', (e) => {
+            const fontSize = Number.parseFloat(e.target.value);
+            if (!Number.isFinite(fontSize)) return;
+            applyFontSize(fontSize);
         });
+
+        // 支持滚轮微调
+        const onWheelAdjust = (e) => {
+            e.preventDefault();
+            showSlider();
+            const current = Number.parseFloat(slider.value);
+            if (!Number.isFinite(current)) return;
+            const step = getStep();
+            const next = e.deltaY < 0 ? current + step : current - step;
+            const clamped = clampFontSize(next);
+            slider.value = String(clamped);
+            applyFontSize(clamped);
+        };
+        slider.addEventListener('wheel', onWheelAdjust, { passive: false });
+        control.addEventListener('wheel', onWheelAdjust, { passive: false });
     })();
 
     // 页面关闭/刷新前提示保存
