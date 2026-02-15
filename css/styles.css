@@ -1508,6 +1508,18 @@ body.theme-vscode .tab-btn.active {
     table-layout: fixed;
 }
 
+.json-table col.col-toggle {
+    width: 25px;
+}
+
+.json-table col.col-key {
+    width: 160px;
+}
+
+.json-table.index-table col.col-key {
+    width: 45px;
+}
+
 .json-table.nested-table {
     margin-top: 0;
     border-left: 1px solid var(--gray-200);
@@ -1654,10 +1666,26 @@ body.theme-vscode .nested-index-cell {
 .json-table td:has(.editable-key[data-key^="12"]),
 .json-table td:has(.editable-key[data-key^="13"]),
 .json-table td:has(.editable-key[data-key^="14"]),
-.json-table td:has(.editable-key[data-key^="15"]) {
-    width: 30px;
-    min-width: 30px;
-    max-width: 30px;
+.json-table td:has(.editable-key[data-key^="15"]),
+.json-table td:has(.editable-value[data-raw-value^="#0"]),
+.json-table td:has(.editable-value[data-raw-value^="#1"]),
+.json-table td:has(.editable-value[data-raw-value^="#2"]),
+.json-table td:has(.editable-value[data-raw-value^="#3"]),
+.json-table td:has(.editable-value[data-raw-value^="#4"]),
+.json-table td:has(.editable-value[data-raw-value^="#5"]),
+.json-table td:has(.editable-value[data-raw-value^="#6"]),
+.json-table td:has(.editable-value[data-raw-value^="#7"]),
+.json-table td:has(.editable-value[data-raw-value^="#8"]),
+.json-table td:has(.editable-value[data-raw-value^="#9"]),
+.json-table td:has(.editable-value[data-raw-value^="#10"]),
+.json-table td:has(.editable-value[data-raw-value^="#11"]),
+.json-table td:has(.editable-value[data-raw-value^="#12"]),
+.json-table td:has(.editable-value[data-raw-value^="#13"]),
+.json-table td:has(.editable-value[data-raw-value^="#14"]),
+.json-table td:has(.editable-value[data-raw-value^="#15"]) {
+    width: 45px;
+    min-width: 45px;
+    max-width: 45px;
     padding-right: 4px;
     text-align: center;
 }
@@ -1774,11 +1802,72 @@ body.theme-vscode .nested-index-cell {
     border-right: 1px solid var(--gray-300);
 }
 
+.json-table.index-table td:nth-child(2) {
+    width: 45px !important;
+    min-width: 45px !important;
+    max-width: 45px !important;
+    padding-right: 4px;
+    padding-left: 4px;
+    text-align: center;
+}
+
 /* 第三列：Value值列 */
 .json-table td:nth-child(3) {
     color: var(--gray-800);
     padding-left: 10px;
     word-break: break-word;
+}
+
+/* 兼容不支持 :has() 的环境：通过 class 强制索引列宽度 */
+.json-table td.index-key-cell,
+.json-table td.index-value-cell {
+    width: 45px !important;
+    min-width: 45px !important;
+    max-width: 45px !important;
+    padding-right: 4px;
+    padding-left: 4px;
+    text-align: center;
+}
+
+/* 数字索引（#0/#1/...）列宽强制为 45px（放在列宽规则之后以确保覆盖） */
+.json-table td:nth-child(2):has(.editable-key[data-key^="0"]),
+.json-table td:nth-child(2):has(.editable-key[data-key^="1"]),
+.json-table td:nth-child(2):has(.editable-key[data-key^="2"]),
+.json-table td:nth-child(2):has(.editable-key[data-key^="3"]),
+.json-table td:nth-child(2):has(.editable-key[data-key^="4"]),
+.json-table td:nth-child(2):has(.editable-key[data-key^="5"]),
+.json-table td:nth-child(2):has(.editable-key[data-key^="6"]),
+.json-table td:nth-child(2):has(.editable-key[data-key^="7"]),
+.json-table td:nth-child(2):has(.editable-key[data-key^="8"]),
+.json-table td:nth-child(2):has(.editable-key[data-key^="9"]),
+.json-table td:nth-child(2):has(.editable-key[data-key^="10"]),
+.json-table td:nth-child(2):has(.editable-key[data-key^="11"]),
+.json-table td:nth-child(2):has(.editable-key[data-key^="12"]),
+.json-table td:nth-child(2):has(.editable-key[data-key^="13"]),
+.json-table td:nth-child(2):has(.editable-key[data-key^="14"]),
+.json-table td:nth-child(2):has(.editable-key[data-key^="15"]),
+.json-table td:nth-child(3):has(.editable-value[data-raw-value^="#0"]),
+.json-table td:nth-child(3):has(.editable-value[data-raw-value^="#1"]),
+.json-table td:nth-child(3):has(.editable-value[data-raw-value^="#2"]),
+.json-table td:nth-child(3):has(.editable-value[data-raw-value^="#3"]),
+.json-table td:nth-child(3):has(.editable-value[data-raw-value^="#4"]),
+.json-table td:nth-child(3):has(.editable-value[data-raw-value^="#5"]),
+.json-table td:nth-child(3):has(.editable-value[data-raw-value^="#6"]),
+.json-table td:nth-child(3):has(.editable-value[data-raw-value^="#7"]),
+.json-table td:nth-child(3):has(.editable-value[data-raw-value^="#8"]),
+.json-table td:nth-child(3):has(.editable-value[data-raw-value^="#9"]),
+.json-table td:nth-child(3):has(.editable-value[data-raw-value^="#10"]),
+.json-table td:nth-child(3):has(.editable-value[data-raw-value^="#11"]),
+.json-table td:nth-child(3):has(.editable-value[data-raw-value^="#12"]),
+.json-table td:nth-child(3):has(.editable-value[data-raw-value^="#13"]),
+.json-table td:nth-child(3):has(.editable-value[data-raw-value^="#14"]),
+.json-table td:nth-child(3):has(.editable-value[data-raw-value^="#15"]) {
+    width: 45px;
+    min-width: 45px;
+    max-width: 45px;
+    padding-right: 4px;
+    padding-left: 4px;
+    text-align: center;
 }
 
 /* 可编辑的字段名（Key）*/

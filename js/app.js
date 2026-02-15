@@ -7108,11 +7108,12 @@ class PaperStatsApp {
             this.debugLog('📋 Detected paste content, attempting to parse JSON...');
 
             // Try to extract and parse JSON
-            const jsonData = this.extractJSON(pastedText);
+            let jsonData = this.extractJSON(pastedText);
             if (!jsonData) {
                 this.showNotification('No valid JSON detected, format may be incorrect', 'error');
                 return;
             }
+            jsonData = this.normalizePastedJson(jsonData);
 
             const inLeftPanel = !!e.target.closest('.left-panel');
             const inCenterPanel = !!e.target.closest('.middle-panel');
@@ -7175,47 +7176,84 @@ class PaperStatsApp {
 
     // 提取JSON数据
     extractJSON(text) {
+        const isPasteObject = (val) => {
+            return !!val && typeof val === 'object' && !Array.isArray(val);
+        };
         // 0) 尝试 jsonrepair 库（如已加载）
         if (typeof jsonrepair === 'function') {
             try {
                 const repaired = jsonrepair(text);
                 const parsed = this.tryParseJson(repaired);
-                if (parsed) return parsed;
+                if (isPasteObject(parsed)) return parsed;
             } catch (e) {
                 console.warn('jsonrepair failed:', e);
             }
         }
 
-        // 1) 直接解析
-        const direct = this.tryParseJson(text);
-        if (direct) return direct;
+        // 1) 基础修复后解析（优先做轻量修复）
+        const basicRepaired = this.repairJsonText(text);
+        if (basicRepaired) {
+            const parsed = this.tryParseJson(basicRepaired);
+            if (isPasteObject(parsed)) return parsed;
+        }
 
-        // 2) 代码块内
+        // 2) 直接解析
+        const direct = this.tryParseJson(text);
+        if (isPasteObject(direct)) return direct;
+
+        // 3) 代码块内
         const codeBlockMatch = text.match(/```(?:json)?\s*([\s\S]*?)```/);
         if (codeBlockMatch) {
             const parsed = this.tryParseJson(codeBlockMatch[1].trim());
-            if (parsed) return parsed;
+            if (isPasteObject(parsed)) return parsed;
         }
 
-        // 3) 提取 {} 或 [] 包裹的内容
+        // 4) 提取 {} 或 [] 包裹的内容
         const jsonMatch = text.match(/(\{[\s\S]*\}|\[[\s\S]*\])/);
         if (jsonMatch) {
             const parsed = this.tryParseJson(jsonMatch[1]);
-            if (parsed) return parsed;
-        }
-
-        // 4) 试着修复常见格式错误并重新解析
-        const repaired = this.repairJsonText(text);
-        if (repaired) {
-            const parsed = this.tryParseJson(repaired);
-            if (parsed) return parsed;
+            if (isPasteObject(parsed)) return parsed;
         }
 
         // 5) 逐个提取对象，跳过坏项（数组场景常见）
         const salvaged = this.salvageJsonObjects(text);
-        if (salvaged && salvaged.length) return salvaged;
+        if (isPasteObject(salvaged)) return salvaged;
 
         return null;
+    }
+
+    normalizePastedJson(jsonData) {
+        if (!jsonData || typeof jsonData !== 'object' || Array.isArray(jsonData)) return jsonData;
+
+        const normalizeSourceField = (obj) => {
+            if (!obj || typeof obj !== 'object') return;
+            if (!Object.prototype.hasOwnProperty.call(obj, 'source')) return;
+            const val = obj.source;
+            if (Array.isArray(val)) {
+                const flat = val
+                    .flatMap(v => (v === undefined || v === null) ? [] : [String(v).trim()])
+                    .filter(Boolean);
+                obj.source = flat.join(' ').trim();
+            }
+        };
+
+        normalizeSourceField(jsonData);
+        if (jsonData.meta_info && typeof jsonData.meta_info === 'object') {
+            normalizeSourceField(jsonData.meta_info);
+        }
+
+        // 若缺少“类”字段，提示用户补充并包装为顶层类结构
+        const classKeys = ['class', '类', 'type', 'category'];
+        const hasClass = classKeys.some(k => Object.prototype.hasOwnProperty.call(jsonData, k));
+        if (!hasClass) {
+            const input = prompt('缺少“类/Category”字段。请输入类名（留空将使用“未分类”）：', '未分类');
+            if (input !== null) {
+                const finalVal = String(input).trim() || '未分类';
+                jsonData = { [finalVal]: jsonData };
+            }
+        }
+
+        return jsonData;
     }
 
     tryParseJson(text) {
@@ -7651,6 +7689,7 @@ class PaperStatsApp {
         if (this.isReorderMode) {
             table.classList.add('reorder-mode');
         }
+        this.ensureJsonTableColgroup(table);
         // Click table blank area to select the corresponding section
         table.addEventListener('click', (e) => {
             if (e.target.closest('tr')) return;
@@ -7728,6 +7767,39 @@ class PaperStatsApp {
         return wrapper;
     }
 
+    ensureJsonTableColgroup(table, opts = {}) {
+        if (!table || !(table instanceof HTMLElement)) return;
+        if (table.querySelector('colgroup')) return;
+        const keyWidth = Number.isFinite(opts.keyWidth) ? opts.keyWidth : 160;
+        const colgroup = document.createElement('colgroup');
+        const colToggle = document.createElement('col');
+        const colKey = document.createElement('col');
+        const colValue = document.createElement('col');
+        colToggle.className = 'col-toggle';
+        colKey.className = 'col-key';
+        colValue.className = 'col-value';
+        colToggle.style.width = '25px';
+        colKey.style.width = `${keyWidth}px`;
+        colgroup.appendChild(colToggle);
+        colgroup.appendChild(colKey);
+        colgroup.appendChild(colValue);
+        table.prepend(colgroup);
+    }
+
+    setJsonTableKeyWidth(table, widthPx) {
+        if (!table || !(table instanceof HTMLElement)) return;
+        this.ensureJsonTableColgroup(table);
+        const colKey = table.querySelector('col.col-key');
+        if (!colKey) return;
+        const target = Number.isFinite(widthPx) ? widthPx : 160;
+        colKey.style.width = `${target}px`;
+        if (target === 45) {
+            table.classList.add('index-table');
+        } else {
+            table.classList.remove('index-table');
+        }
+    }
+
     renderObject(obj, table, basePath, parentLocation = null) {
         const entries = this.getOrderedEntriesForObject(obj, basePath);
         for (const [key, value] of entries) {
@@ -7749,13 +7821,18 @@ class PaperStatsApp {
             `;
 
             // Second column: Editable Key
-            const isNestedIndex = table.classList.contains('nested-table') && /^\d+$/.test(key);
-            const displayKey = isNestedIndex ? `#${parseInt(key, 10)}` : this.formatKey(key);
+            const isIndexKey = /^\d+$/.test(key);
+            const displayKey = isIndexKey ? `#${parseInt(key, 10)}` : this.formatKey(key);
             const wosHint = this.wosFieldTagsByKey?.[key]?.full_name || '';
             const keyTitle = wosHint ? ` title="${this.escapeAttr(wosHint)}"` : '';
             const keyDisplay = `<span class="editable-key" data-path="${basePath.join('.')}" data-key="${key}"${keyTitle}>${displayKey}</span>`;
 
             keyCell.innerHTML = keyDisplay;
+            if (isIndexKey) {
+                keyCell.classList.add('index-key-cell');
+                row.classList.add('index-key-row');
+                this.setJsonTableKeyWidth(table, 45);
+            }
             const keySpan = keyCell.querySelector('.editable-key');
             if (keySpan) {
                 keySpan.addEventListener('click', async (e) => {
@@ -7844,6 +7921,7 @@ class PaperStatsApp {
                             subTable.className = 'json-table nested-table';
                             const solePath = [...currentPath, '0'];
                             subTable.dataset.path = solePath.join('.');
+                            this.ensureJsonTableColgroup(subTable);
                             this.renderObject(sole, subTable, solePath);
                             valueCell.appendChild(subTable);
                         } else {
@@ -7853,8 +7931,9 @@ class PaperStatsApp {
                     } else {
                         valueCell.innerHTML = '';
                         const subTable = document.createElement('table');
-                        subTable.className = 'json-table nested-table';
+                        subTable.className = 'json-table nested-table index-table';
                         subTable.dataset.path = currentPath.join('.');
+                        this.ensureJsonTableColgroup(subTable, { keyWidth: 45 });
                         const objValue = Object.fromEntries(value.map((v, i) => [i, v]));
                         this.renderObject(objValue, subTable, currentPath);
                         valueCell.appendChild(subTable);
@@ -7864,12 +7943,16 @@ class PaperStatsApp {
                     const subTable = document.createElement('table');
                     subTable.className = 'json-table nested-table';
                     subTable.dataset.path = currentPath.join('.');
+                    this.ensureJsonTableColgroup(subTable);
                     this.renderObject(value, subTable, currentPath);
                     valueCell.appendChild(subTable);
                 }
             } else {
                 // Simple values (strings, numbers, etc.)
                 valueCell.innerHTML = this.createEditableValue(value, currentPath, null, key);
+                if (typeof value === 'string' && /^#\d+/.test(value.trim())) {
+                    valueCell.classList.add('index-value-cell');
+                }
             }
 
             row.appendChild(toggleCell);
