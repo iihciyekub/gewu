@@ -1425,8 +1425,7 @@ body.theme-vscode .tab-btn.active {
     display: flex;
     flex-direction: column;
     overflow: hidden;
-    padding: 10px;
-    /* gap: 10px; */
+    padding: 5px;
     min-height: 0;
 }
 

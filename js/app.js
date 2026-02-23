@@ -27,10 +27,15 @@ class PaperStatsApp {
         this.isMarkdownEditing = false;
         this.hasUnsavedMarkdownChanges = false;
         this.isDraftViewActive = false;
+        this.isPromptViewActive = false;
+        this.isRootMdViewActive = false;
+        this.rootMdViewFile = '';
         this.isSwitchingView = false;
         this.pendingViewSwitch = null;
         this.fileMarkdownState = null;
         this.draftMarkdownState = null;
+        this.promptMarkdownState = null;
+        this.rootMdMarkdownStates = {};
         this.saveMdEndpoint = '/save-md';
         this.blankDragImage = null;
         this.keywordTooltipEl = null;
@@ -65,6 +70,13 @@ class PaperStatsApp {
                 if (storedView === 'draft') {
                     this.currentView = 'markdown';
                     this.isDraftViewActive = true;
+                } else if (storedView === 'prompt') {
+                    this.currentView = 'markdown';
+                    this.isPromptViewActive = true;
+                } else if (storedView.startsWith('root-md:')) {
+                    this.currentView = 'markdown';
+                    this.isRootMdViewActive = true;
+                    this.rootMdViewFile = storedView.slice('root-md:'.length);
                 } else if (storedView === 'vis-network') {
                     this.currentView = 'structured';
                 } else {
@@ -75,6 +87,13 @@ class PaperStatsApp {
                 if (defaultView === 'draft') {
                     this.currentView = 'markdown';
                     this.isDraftViewActive = true;
+                } else if (defaultView === 'prompt') {
+                    this.currentView = 'markdown';
+                    this.isPromptViewActive = true;
+                } else if (defaultView && defaultView.startsWith('root-md:')) {
+                    this.currentView = 'markdown';
+                    this.isRootMdViewActive = true;
+                    this.rootMdViewFile = defaultView.slice('root-md:'.length);
                 } else {
                     this.currentView = defaultView || 'structured';
                 }
@@ -1037,9 +1056,27 @@ class PaperStatsApp {
             if (lastViewMode === 'draft') {
                 this.currentView = 'markdown';
                 this.isDraftViewActive = true;
+                this.isPromptViewActive = false;
+                this.isRootMdViewActive = false;
+                this.rootMdViewFile = '';
+            } else if (lastViewMode === 'prompt') {
+                this.currentView = 'markdown';
+                this.isPromptViewActive = true;
+                this.isDraftViewActive = false;
+                this.isRootMdViewActive = false;
+                this.rootMdViewFile = '';
+            } else if (lastViewMode.startsWith('root-md:')) {
+                this.currentView = 'markdown';
+                this.isRootMdViewActive = true;
+                this.rootMdViewFile = lastViewMode.slice('root-md:'.length);
+                this.isDraftViewActive = false;
+                this.isPromptViewActive = false;
             } else {
                 this.currentView = lastViewMode;
                 this.isDraftViewActive = false;
+                this.isPromptViewActive = false;
+                this.isRootMdViewActive = false;
+                this.rootMdViewFile = '';
             }
         }
         if (typeof sanitized.draftMarkdownEditing === 'boolean') {
@@ -1862,9 +1899,15 @@ class PaperStatsApp {
         setTimeout(setupPdfViewerHover, 500);
 
         // Tab switching
-        document.querySelectorAll('.tab-btn').forEach(btn => {
-            btn.addEventListener('click', (e) => this.switchView(e.target.closest('.tab-btn')));
-        });
+        const middleTabs = document.getElementById('middleViewTabs');
+        if (middleTabs && !middleTabs.dataset.bound) {
+            middleTabs.dataset.bound = '1';
+            middleTabs.addEventListener('click', (e) => {
+                const btn = e.target.closest('.tab-btn');
+                if (!btn) return;
+                this.switchView(btn);
+            });
+        }
         if (!this._virtualResizeBound) {
             this._virtualResizeBound = true;
             window.addEventListener('resize', () => {
@@ -2075,7 +2118,7 @@ class PaperStatsApp {
         if (mdRenderItem) {
             mdRenderItem.addEventListener('click', async (e) => {
                 e.preventDefault();
-                if (this.isDraftViewActive) {
+                if (this.isDraftViewActive || this.isPromptViewActive || this.isRootMdViewActive) {
                     if (this.isMarkdownEditing) this.toggleMarkdownEdit(false, { skipConfirm: true });
                     this.renderMarkdownView(this.currentMarkdownText || '');
                 } else {
@@ -4697,6 +4740,7 @@ class PaperStatsApp {
         console.log('Raw file count:', rawFiles.length);
         this.fileMetaByBase = {};
         this.fileMetaByPath = {};
+        const rootMdFiles = [];
         const viewSet = new Set();
         rawFiles.forEach((f) => {
             if (typeof f !== 'object') return;
@@ -4706,12 +4750,17 @@ class PaperStatsApp {
             const kind = f.kind || (isMd ? 'md' : isPdf ? 'pdf' : 'json');
             const pathVal = f.path || f.name || '';
             const category = f.category || (isMd ? 'md' : isPdf ? 'pdf' : 'json.root');
+            const isRootMd = isMd && !String(pathVal).includes('/');
 
             // Store in fileMetaByPath (all files are stored)
             this.fileMetaByPath[pathVal] = { name: rawName, path: pathVal, kind, category };
 
             // Only process JSON and MD files, not PDF
             if (isPdf) return;
+            if (isRootMd) {
+                rootMdFiles.push(rawName);
+                return;
+            }
 
             const base = rawName.split('/').pop()?.replace(/\.(json|md)$/i, '') || rawName;
             if (!base) return;
@@ -4730,6 +4779,8 @@ class PaperStatsApp {
         });
         const bases = Object.keys(this.fileMetaByBase).sort();
         const views = Array.from(viewSet).sort();
+        this.rootMdFiles = rootMdFiles;
+        this.updateRootMdTabs(rootMdFiles);
         return { bases, views: views.length ? views : ['view1'] };
     }
 
@@ -7616,7 +7667,7 @@ class PaperStatsApp {
             }
             // 再次确认未切换文件
             if (loadId !== this.currentLoadToken) return;
-            if (!this.isDraftViewActive) {
+            if (!(this.isDraftViewActive || this.isPromptViewActive || this.isRootMdViewActive)) {
                 await this.loadMarkdownForCurrentFile();
             }
             // 自动保存因默认 meta 补全产生的更改，避免频繁提示
@@ -7664,7 +7715,7 @@ class PaperStatsApp {
                 // 清除强制加载标志（如果有）
                 this._forceLoadPdfOnNextFile = false;
             }
-            if (!(this.isDraftViewActive && (this.currentView === 'markdown' || this.currentView === 'draft'))) {
+            if (!((this.isDraftViewActive || this.isPromptViewActive || this.isRootMdViewActive) && (this.currentView === 'markdown' || this.currentView === 'draft' || this.currentView === 'prompt' || this.currentView.startsWith('root-md:')))) {
                 await this.applyCurrentView();
             }
         } catch (error) {
@@ -7733,7 +7784,7 @@ class PaperStatsApp {
 
         // 保持空白，不再显示“Loading”提示
         structuredView.innerHTML = '';
-        if (markdownView && !this.isDraftViewActive) markdownView.innerHTML = '';
+        if (markdownView && !(this.isDraftViewActive || this.isPromptViewActive || this.isRootMdViewActive)) markdownView.innerHTML = '';
         if (flatView) flatView.innerHTML = '';
     }
 
@@ -9860,6 +9911,24 @@ class PaperStatsApp {
     }
 
     async goToMarkdownSource() {
+        if (this.isRootMdViewActive) {
+            if (!this.currentMarkdownExists && this.rootMdViewFile) {
+                await this.loadRootMarkdownFile(this.rootMdViewFile);
+            }
+            this.toggleMarkdownEdit(true);
+            const mdTextarea = document.getElementById('markdownTextarea');
+            if (mdTextarea) mdTextarea.focus();
+            return;
+        }
+        if (this.isPromptViewActive) {
+            if (!this.currentMarkdownExists) {
+                await this.loadPromptMarkdownFile();
+            }
+            this.toggleMarkdownEdit(true);
+            const mdTextarea = document.getElementById('markdownTextarea');
+            if (mdTextarea) mdTextarea.focus();
+            return;
+        }
         if (this.isDraftViewActive) {
             if (!this.currentMarkdownExists) {
                 await this.loadDraftMarkdownFile();
@@ -11288,7 +11357,7 @@ class PaperStatsApp {
         };
         setMdToggleIcon('statusToggleSourceBtn');
 
-        const hasFile = this.isDraftViewActive ? true : !!this.currentFile;
+        const hasFile = (this.isDraftViewActive || this.isPromptViewActive || this.isRootMdViewActive) ? true : !!this.currentFile;
         dropdown.style.display = 'inline-flex';
         if (!hasFile && this.mdMenuVisible) this.toggleMdMenu(false);
 
@@ -13226,9 +13295,17 @@ class PaperStatsApp {
         return 'DRAFT.md';
     }
 
-    getActiveMarkdownFilename(isDraftOverride = null) {
-        const isDraft = typeof isDraftOverride === 'boolean' ? isDraftOverride : this.isDraftViewActive;
-        if (isDraft) return this.getDraftFilename();
+    getPromptFilename() {
+        return 'PROMPT.MD';
+    }
+
+    getActiveMarkdownFilename(modeOverride = null) {
+        const mode = typeof modeOverride === 'string'
+            ? modeOverride
+            : (modeOverride === true ? 'draft' : null);
+        if (mode === 'draft' || (mode === null && this.isDraftViewActive)) return this.getDraftFilename();
+        if (mode === 'prompt' || (mode === null && this.isPromptViewActive)) return this.getPromptFilename();
+        if (mode === 'root' || (mode === null && this.isRootMdViewActive)) return this.rootMdViewFile || '';
         if (this.currentFile) return this.getMarkdownFilename(this.currentFile);
         return this.currentMarkdownFile || 'Markdown';
     }
@@ -13248,6 +13325,30 @@ class PaperStatsApp {
         this.draftMarkdownState = {
             exists: this.currentMarkdownExists,
             file: this.currentMarkdownFile || this.getDraftFilename(),
+            text: this.currentMarkdownText,
+            baseline: this.currentMarkdownBaselineText,
+            isEditing: this.isMarkdownEditing,
+            hasUnsaved: this.hasUnsavedMarkdownChanges
+        };
+    }
+
+    cachePromptMarkdownState() {
+        this.promptMarkdownState = {
+            exists: this.currentMarkdownExists,
+            file: this.currentMarkdownFile || this.getPromptFilename(),
+            text: this.currentMarkdownText,
+            baseline: this.currentMarkdownBaselineText,
+            isEditing: this.isMarkdownEditing,
+            hasUnsaved: this.hasUnsavedMarkdownChanges
+        };
+    }
+
+    cacheRootMarkdownState(filename = '') {
+        const key = filename || this.rootMdViewFile || '';
+        if (!key) return;
+        this.rootMdMarkdownStates[key] = {
+            exists: this.currentMarkdownExists,
+            file: this.currentMarkdownFile || key,
             text: this.currentMarkdownText,
             baseline: this.currentMarkdownBaselineText,
             isEditing: this.isMarkdownEditing,
@@ -13338,6 +13439,8 @@ class PaperStatsApp {
             const name = String(filename || '').replace(/^[/\\]+/, '');
             const lower = name.toLowerCase();
             if (lower === 'draft.md') return 'DRAFT.md';
+            if (lower === 'prompt.md') return 'PROMPT.MD';
+            if (lower.endsWith('.md') && !name.includes('/')) return name;
             if (name.startsWith('md/')) return name;
             return `md/${name}`;
         })();
@@ -13781,8 +13884,95 @@ class PaperStatsApp {
         }
     }
 
+    async loadPromptMarkdownFile() {
+        const mdFilename = this.getPromptFilename();
+        const render = document.getElementById('markdownRender');
+        if (render) {
+            render.innerHTML = '<div class="loading"><div class="spinner"></div>Loading prompt...</div>';
+        }
+        try {
+            let text = '';
+            try {
+                text = await this.readProjectFile(mdFilename);
+                this.currentMarkdownExists = true;
+            } catch (err) {
+                try {
+                    await this.persistMarkdown(mdFilename, '');
+                    this.currentMarkdownExists = true;
+                    text = '';
+                } catch (errCreate) {
+                    console.warn('自动创建PROMPT失败:', errCreate);
+                    this.currentMarkdownExists = false;
+                    text = '';
+                }
+            }
+            this.currentMarkdownFile = mdFilename;
+            this.currentMarkdownText = text;
+            this.currentMarkdownBaselineText = text;
+            this.isMarkdownEditing = this.getMarkdownEditPreference(true);
+            this.hasUnsavedMarkdownChanges = false;
+            const textarea = document.getElementById('markdownTextarea');
+            if (textarea) {
+                textarea.value = text;
+            }
+            this.renderMarkdownView(text);
+        } catch (err) {
+            console.warn('Prompt load error:', err);
+            if (render) {
+                render.innerHTML = `<div class="empty-state"><i class="fas fa-exclamation-triangle"></i><h3>Prompt load failed</h3><p>${err.message}</p></div>`;
+            }
+        } finally {
+            this.updateMarkdownToolbar();
+            this.updateMarkdownDirtyUI();
+        }
+    }
+
+    async loadRootMarkdownFile(filename) {
+        const mdFilename = String(filename || '').trim();
+        if (!mdFilename) return;
+        const render = document.getElementById('markdownRender');
+        if (render) {
+            render.innerHTML = '<div class="loading"><div class="spinner"></div>Loading markdown...</div>';
+        }
+        try {
+            let text = '';
+            try {
+                text = await this.readProjectFile(mdFilename);
+                this.currentMarkdownExists = true;
+            } catch (err) {
+                try {
+                    await this.persistMarkdown(mdFilename, '');
+                    this.currentMarkdownExists = true;
+                    text = '';
+                } catch (errCreate) {
+                    console.warn('自动创建MD失败:', errCreate);
+                    this.currentMarkdownExists = false;
+                    text = '';
+                }
+            }
+            this.currentMarkdownFile = mdFilename;
+            this.currentMarkdownText = text;
+            this.currentMarkdownBaselineText = text;
+            this.isMarkdownEditing = this.getMarkdownEditPreference(true);
+            this.hasUnsavedMarkdownChanges = false;
+            const textarea = document.getElementById('markdownTextarea');
+            if (textarea) {
+                textarea.value = text;
+            }
+            this.renderMarkdownView(text);
+        } catch (err) {
+            console.warn('Root markdown load error:', err);
+            if (render) {
+                render.innerHTML = `<div class="empty-state"><i class="fas fa-exclamation-triangle"></i><h3>Markdown load failed</h3><p>${err.message}</p></div>`;
+            }
+        } finally {
+            this.updateMarkdownToolbar();
+            this.updateMarkdownDirtyUI();
+        }
+    }
+
     async loadMarkdownForCurrentFile() {
-        if (this.isDraftViewActive) {
+        if (this.isDraftViewActive || this.isPromptViewActive || this.isRootMdViewActive) {
             if (!this.currentFile) return;
             const mdFilename = this.getMarkdownFilename(this.currentFile);
             try {
@@ -13867,8 +14057,9 @@ class PaperStatsApp {
         const textarea = document.getElementById('markdownTextarea');
         const forceText = !!opts.forceText;
         const sourceText = this.isMarkdownEditing && textarea && !forceText ? (textarea.value || text) : text;
+        this._promptRenderIndex = 0;
         if (textarea) {
-            const fallback = this.isDraftViewActive ? '' : this.buildDefaultMarkdown();
+            const fallback = (this.isDraftViewActive || this.isPromptViewActive || this.isRootMdViewActive) ? '' : this.buildDefaultMarkdown();
             textarea.value = sourceText || fallback;
         }
         if (!render) return;
@@ -14058,8 +14249,9 @@ class PaperStatsApp {
         const escPrompt = this.escapeHtml(raw);
         const encoded = this.encodePromptContent(raw);
         const escAttrPrompt = this.escapeAttr(encoded);
+        const idx = Number.isFinite(this._promptRenderIndex) ? this._promptRenderIndex++ : 0;
         return `
-            <div class="prompt-block" data-prompt-raw="${escAttrPrompt}">
+            <div class="prompt-block" data-prompt-raw="${escAttrPrompt}" data-prompt-index="${idx}">
                 <button class="prompt-btn" type="button" title="Click to copy prompt. Right-click to edit.">
                     <i class="fa-solid fa-bolt"></i><span>Prompt</span>
                 </button>
@@ -14095,6 +14287,69 @@ class PaperStatsApp {
         out = out.replace(/\\r\\n/g, '\r\n');
         out = out.replace(/\\r/g, '\r').replace(/\\n/g, '\n');
         return out;
+    }
+
+    findPromptOccurrences(text = '') {
+        const src = String(text || '');
+        const out = [];
+        let i = 0;
+        while (i < src.length) {
+            if (src.startsWith('```prompt', i)) {
+                const headerEnd = src.indexOf('\n', i);
+                if (headerEnd < 0) break;
+                const fenceEnd = src.indexOf('```', headerEnd + 1);
+                if (fenceEnd < 0) break;
+                const contentStart = headerEnd + 1;
+                const contentEnd = fenceEnd;
+                out.push({ type: 'fence', start: i, end: fenceEnd + 3, contentStart, contentEnd });
+                i = fenceEnd + 3;
+                continue;
+            }
+            if (src.startsWith('\\prompt{', i)) {
+                let pos = i + '\\prompt{'.length;
+                let depth = 1;
+                while (pos < src.length) {
+                    const ch = src[pos];
+                    if (ch === '{') depth += 1;
+                    if (ch === '}') {
+                        depth -= 1;
+                        if (depth === 0) break;
+                    }
+                    pos += 1;
+                }
+                if (depth === 0) {
+                    const contentStart = i + '\\prompt{'.length;
+                    const contentEnd = pos;
+                    out.push({ type: 'inline', start: i, end: pos + 1, contentStart, contentEnd });
+                    i = pos + 1;
+                    continue;
+                }
+            }
+            i += 1;
+        }
+        return out;
+    }
+
+    updatePromptInCurrentMarkdown(index, newText) {
+        const src = this.isMarkdownEditing
+            ? (document.getElementById('markdownTextarea')?.value || this.currentMarkdownText || '')
+            : (this.currentMarkdownText || '');
+        const occurrences = this.findPromptOccurrences(src);
+        if (!occurrences.length || index < 0 || index >= occurrences.length) return false;
+        const item = occurrences[index];
+        const value = String(newText || '');
+        const updated = `${src.slice(0, item.contentStart)}${value}${src.slice(item.contentEnd)}`;
+        if (updated === src) return false;
+        this.currentMarkdownText = updated;
+        if (this.isMarkdownEditing) {
+            const textarea = document.getElementById('markdownTextarea');
+            if (textarea) textarea.value = updated;
+        }
+        this.hasUnsavedMarkdownChanges = updated !== (this.currentMarkdownBaselineText || '');
+        this.updateMarkdownDirtyUI();
+        this.updateMarkdownToolbar();
+        this.renderMarkdownView(updated, { forceText: true });
+        return true;
     }
 
     async applyCitationRendering(renderRoot) {
@@ -15528,6 +15783,12 @@ class PaperStatsApp {
                     e.preventDefault();
                     e.stopPropagation();
                     const nextRaw = textarea ? textarea.value : '';
+                    const idx = Number(block.dataset.promptIndex || -1);
+                    const ok = this.updatePromptInCurrentMarkdown(idx, nextRaw);
+                    if (!ok) {
+                        this.showNotification('Failed to update prompt block', 'error');
+                        return;
+                    }
                     setStoredPrompt(nextRaw);
                     closeEditor();
                 });
@@ -15660,6 +15921,58 @@ class PaperStatsApp {
         this.updateHeaderControls();
     }
 
+    updateRootMdTabs(files = []) {
+        const container = document.getElementById('middleViewTabs');
+        if (!container) return;
+        const existing = Array.from(container.querySelectorAll('.root-md-tab'));
+        existing.forEach(btn => btn.remove());
+        const list = Array.isArray(files) ? files.filter(Boolean) : [];
+        if (!list.length) {
+            this.updateViewTabs();
+            return;
+        }
+        const normalize = (name) => String(name || '').trim();
+        const lower = (name) => normalize(name).toLowerCase();
+        const draftName = list.find(n => lower(n) === 'draft.md');
+        const promptName = list.find(n => lower(n) === 'prompt.md');
+        const others = list
+            .filter(n => lower(n) !== 'draft.md' && lower(n) !== 'prompt.md')
+            .map(normalize)
+            .filter(Boolean)
+            .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
+        const ordered = [];
+        if (draftName) ordered.push(draftName);
+        if (promptName) ordered.push(promptName);
+        ordered.push(...others);
+
+        const insertBefore = container.querySelector('[data-view="vis-network"]')
+            || container.querySelector('[data-view="settings"]')
+            || null;
+
+        ordered.forEach((filename) => {
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'tab-btn root-md-tab';
+            const name = normalize(filename);
+            const lowerName = lower(name);
+            const view = lowerName === 'draft.md'
+                ? 'draft'
+                : lowerName === 'prompt.md'
+                    ? 'prompt'
+                    : `root-md:${name}`;
+            btn.dataset.view = view;
+            const label = name.replace(/\.md$/i, '');
+            btn.textContent = label;
+            btn.title = name;
+            if (insertBefore) {
+                container.insertBefore(btn, insertBefore);
+            } else {
+                container.appendChild(btn);
+            }
+        });
+        this.updateViewTabs();
+    }
+
     onMarkdownEditorInput() {
         if (!this.currentMarkdownExists) return;
         const textarea = document.getElementById('markdownTextarea');
@@ -15720,6 +16033,14 @@ class PaperStatsApp {
     }
 
     async createMarkdownFile() {
+        if (this.isPromptViewActive) {
+            await this.loadPromptMarkdownFile();
+            return;
+        }
+        if (this.isRootMdViewActive && this.rootMdViewFile) {
+            await this.loadRootMarkdownFile(this.rootMdViewFile);
+            return;
+        }
         if (this.isDraftViewActive) {
             await this.loadDraftMarkdownFile();
             return;
@@ -15871,11 +16192,11 @@ class PaperStatsApp {
             }
         }
         this.isMarkdownEditing = editing;
-        this.setMarkdownEditPreference(this.isDraftViewActive, editing);
+        this.setMarkdownEditPreference(this.isDraftViewActive || this.isPromptViewActive || this.isRootMdViewActive, editing);
         const textarea = document.getElementById('markdownTextarea');
         if (textarea) {
             if (editing) {
-                const fallback = this.isDraftViewActive ? '' : this.buildDefaultMarkdown();
+                const fallback = (this.isDraftViewActive || this.isPromptViewActive || this.isRootMdViewActive) ? '' : this.buildDefaultMarkdown();
                 textarea.value = this.currentMarkdownText || fallback;
                 this.onMarkdownEditorInput();
             } else {
@@ -15902,7 +16223,7 @@ class PaperStatsApp {
         if (content !== textarea.value) {
             textarea.value = content;
         }
-        if (!this.isDraftViewActive && !this.currentFile && !this.currentMarkdownFile) return;
+        if (!(this.isDraftViewActive || this.isPromptViewActive || this.isRootMdViewActive) && !this.currentFile && !this.currentMarkdownFile) return;
         const mdFilename = this.getActiveMarkdownFilename();
         if (!mdFilename) return;
         try {
@@ -16189,15 +16510,24 @@ class PaperStatsApp {
         let switchError = null;
         try {
             const isDraftRequested = requestedView === 'draft';
-            const viewName = isDraftRequested ? 'markdown' : requestedView;
+            const isPromptRequested = requestedView === 'prompt';
+            const isRootMdRequested = requestedView.startsWith('root-md:');
+            const requestedRootMdFile = isRootMdRequested ? requestedView.slice('root-md:'.length) : '';
+            const isSpecialRequested = isDraftRequested || isPromptRequested || isRootMdRequested;
+            const viewName = isSpecialRequested ? 'markdown' : requestedView;
             const prevView = this.currentView || 'structured';
             const wasDraft = this.isDraftViewActive;
+            const wasPrompt = this.isPromptViewActive;
+            const wasRoot = this.isRootMdViewActive;
+            const wasSpecial = wasDraft || wasPrompt || wasRoot;
             const shouldPromptDraft = wasDraft && !isDraftRequested;
-            const shouldPromptFileMd = !wasDraft && isDraftRequested;
+            const shouldPromptPrompt = wasPrompt && !isPromptRequested;
+            const shouldPromptRoot = wasRoot && !isRootMdRequested;
+            const shouldPromptFileMd = !wasSpecial && isSpecialRequested;
             // 离开 Markdown 视图时：若有未保存修改，提示保存；并退出编辑态，避免 UI/按钮残留
             if (prevView === 'markdown' && viewName !== 'markdown') {
                 if (this.hasUnsavedMarkdownChanges && this.currentMarkdownExists) {
-                    const mdFilename = this.getActiveMarkdownFilename(wasDraft);
+                    const mdFilename = this.getActiveMarkdownFilename(wasPrompt ? 'prompt' : (wasDraft ? 'draft' : null));
                     const shouldSave = confirm(`Markdown "${mdFilename}" 有未保存的修改，是否保存？`);
                     try {
                         if (shouldSave) {
@@ -16214,7 +16544,7 @@ class PaperStatsApp {
                 }
             }
             if (prevView === 'markdown' && viewName === 'markdown' && shouldPromptFileMd && this.hasUnsavedMarkdownChanges && this.currentMarkdownExists) {
-                const mdFilename = this.getActiveMarkdownFilename(false);
+                const mdFilename = this.getActiveMarkdownFilename(null);
                 const shouldSave = confirm(`Markdown "${mdFilename}" 有未保存的修改，是否保存？`);
                 try {
                     if (shouldSave) {
@@ -16227,7 +16557,33 @@ class PaperStatsApp {
                 }
             }
             if (prevView === 'markdown' && viewName === 'markdown' && shouldPromptDraft && this.hasUnsavedMarkdownChanges && this.currentMarkdownExists) {
-                const mdFilename = this.getActiveMarkdownFilename(true);
+                const mdFilename = this.getActiveMarkdownFilename('draft');
+                const shouldSave = confirm(`Markdown "${mdFilename}" 有未保存的修改，是否保存？`);
+                try {
+                    if (shouldSave) {
+                        await this.saveCurrentMarkdownSilently();
+                    } else {
+                        this.discardCurrentMarkdownChanges();
+                    }
+                } catch (err) {
+                    this.showNotification(`Failed to save Markdown: ${err.message}`, 'error');
+                }
+            }
+            if (prevView === 'markdown' && viewName === 'markdown' && shouldPromptPrompt && this.hasUnsavedMarkdownChanges && this.currentMarkdownExists) {
+                const mdFilename = this.getActiveMarkdownFilename('prompt');
+                const shouldSave = confirm(`Markdown "${mdFilename}" 有未保存的修改，是否保存？`);
+                try {
+                    if (shouldSave) {
+                        await this.saveCurrentMarkdownSilently();
+                    } else {
+                        this.discardCurrentMarkdownChanges();
+                    }
+                } catch (err) {
+                    this.showNotification(`Failed to save Markdown: ${err.message}`, 'error');
+                }
+            }
+            if (prevView === 'markdown' && viewName === 'markdown' && shouldPromptRoot && this.hasUnsavedMarkdownChanges && this.currentMarkdownExists) {
+                const mdFilename = this.getActiveMarkdownFilename('root');
                 const shouldSave = confirm(`Markdown "${mdFilename}" 有未保存的修改，是否保存？`);
                 try {
                     if (shouldSave) {
@@ -16241,7 +16597,7 @@ class PaperStatsApp {
             }
 
             // 在 Markdown 视图内再次点击 Markdown tab：强制从编辑态切回渲染态并渲染最新内容
-            if (prevView === 'markdown' && viewName === 'markdown' && !isDraftRequested && !wasDraft) {
+            if (prevView === 'markdown' && viewName === 'markdown' && !isSpecialRequested && !wasSpecial) {
                 if (this.currentMarkdownExists) {
                     const textarea = document.getElementById('markdownTextarea');
                     const content = (this.isMarkdownEditing && textarea) ? textarea.value : (this.currentMarkdownText || '');
@@ -16258,10 +16614,13 @@ class PaperStatsApp {
             // Switch views
             const view = viewName;
             this.currentView = view;
+            const lastViewMode = isRootMdRequested
+                ? `root-md:${requestedRootMdFile}`
+                : (isPromptRequested ? 'prompt' : (isDraftRequested ? 'draft' : view));
             try {
-                localStorage.setItem('lastViewMode', isDraftRequested ? 'draft' : view);
+                localStorage.setItem('lastViewMode', lastViewMode);
             } catch (_e) { }
-            this.updateUiPreferences({ lastViewMode: isDraftRequested ? 'draft' : view });
+            this.updateUiPreferences({ lastViewMode });
             await this.saveUiPreferencesNow();
             const structured = document.getElementById('structuredView');
             const markdown = document.getElementById('markdownView');
@@ -16302,15 +16661,62 @@ class PaperStatsApp {
             // 切换到 Markdown 视图时，确保渲染区域为最新内容（尤其是从编辑态进入）
             if (isDraftRequested) {
                 if (!wasDraft) {
-                    this.cacheFileMarkdownState();
+                    if (wasPrompt) {
+                        this.cachePromptMarkdownState();
+                    } else if (wasRoot) {
+                        this.cacheRootMarkdownState(this.rootMdViewFile);
+                    } else {
+                        this.cacheFileMarkdownState();
+                    }
                 } else {
                     this.cacheDraftMarkdownState();
                 }
                 this.isDraftViewActive = true;
+                this.isPromptViewActive = false;
+                this.isRootMdViewActive = false;
+                this.rootMdViewFile = '';
                 await this.loadDraftMarkdownFile();
-            } else if (wasDraft) {
-                this.cacheDraftMarkdownState();
+            } else if (isPromptRequested) {
+                if (!wasPrompt) {
+                    if (wasDraft) {
+                        this.cacheDraftMarkdownState();
+                    } else if (wasRoot) {
+                        this.cacheRootMarkdownState(this.rootMdViewFile);
+                    } else {
+                        this.cacheFileMarkdownState();
+                    }
+                } else {
+                    this.cachePromptMarkdownState();
+                }
+                this.isPromptViewActive = true;
                 this.isDraftViewActive = false;
+                this.isRootMdViewActive = false;
+                this.rootMdViewFile = '';
+                await this.loadPromptMarkdownFile();
+                this.renderMarkdownView(this.currentMarkdownText || '', { forceText: true });
+            } else if (isRootMdRequested) {
+                if (wasDraft) this.cacheDraftMarkdownState();
+                if (wasPrompt) this.cachePromptMarkdownState();
+                if (wasRoot) this.cacheRootMarkdownState(this.rootMdViewFile);
+                if (!wasSpecial) this.cacheFileMarkdownState();
+                this.isRootMdViewActive = true;
+                this.isDraftViewActive = false;
+                this.isPromptViewActive = false;
+                this.rootMdViewFile = requestedRootMdFile;
+                const cached = this.rootMdMarkdownStates?.[requestedRootMdFile];
+                if (cached) {
+                    this.applyMarkdownState(cached, { render: view === 'markdown' });
+                } else {
+                    await this.loadRootMarkdownFile(requestedRootMdFile);
+                }
+            } else if (wasSpecial) {
+                if (wasDraft) this.cacheDraftMarkdownState();
+                if (wasPrompt) this.cachePromptMarkdownState();
+                if (wasRoot) this.cacheRootMarkdownState(this.rootMdViewFile);
+                this.isDraftViewActive = false;
+                this.isPromptViewActive = false;
+                this.isRootMdViewActive = false;
+                this.rootMdViewFile = '';
                 const expectedMd = this.currentFile ? this.getMarkdownFilename(this.currentFile) : '';
                 if (view === 'markdown' && !this.currentFile) {
                     this.currentMarkdownExists = false;
@@ -16329,22 +16735,26 @@ class PaperStatsApp {
                 }
             } else {
                 this.isDraftViewActive = false;
+                this.isPromptViewActive = false;
+                this.isRootMdViewActive = false;
+                this.rootMdViewFile = '';
             }
 
-            if (!this.isDraftViewActive && view === 'markdown' && this.currentFile) {
+            if (!(this.isDraftViewActive || this.isPromptViewActive || this.isRootMdViewActive) && view === 'markdown' && this.currentFile) {
                 const expectedMd = this.getMarkdownFilename(this.currentFile);
                 if (this.currentMarkdownFile !== expectedMd) {
                     await this.loadMarkdownForCurrentFile();
                 }
             }
-            if (!this.isDraftViewActive && view === 'markdown') {
+            if (!(this.isDraftViewActive || this.isPromptViewActive || this.isRootMdViewActive) && view === 'markdown') {
                 const draftFile = this.getDraftFilename();
-                if (!this.currentFile || this.currentMarkdownFile === draftFile) {
+                const promptFile = this.getPromptFilename();
+                if (!this.currentFile || this.currentMarkdownFile === draftFile || this.currentMarkdownFile === promptFile) {
                     await this.loadMarkdownForCurrentFile();
                 }
             }
 
-            if (view === 'markdown' && this.currentMarkdownExists && !isDraftRequested) {
+            if (view === 'markdown' && this.currentMarkdownExists && !isSpecialRequested) {
                 const content = this.currentMarkdownText || '';
                 const textarea = document.getElementById('markdownTextarea');
                 if (this.isMarkdownEditing && textarea) {
@@ -16368,8 +16778,24 @@ class PaperStatsApp {
             this.isSwitchingView = false;
             if (requestedView === 'draft') {
                 this.isDraftViewActive = true;
+                this.isPromptViewActive = false;
+                this.isRootMdViewActive = false;
+                this.rootMdViewFile = '';
+            } else if (requestedView === 'prompt') {
+                this.isPromptViewActive = true;
+                this.isDraftViewActive = false;
+                this.isRootMdViewActive = false;
+                this.rootMdViewFile = '';
+            } else if (requestedView.startsWith('root-md:')) {
+                this.isRootMdViewActive = true;
+                this.isDraftViewActive = false;
+                this.isPromptViewActive = false;
+                this.rootMdViewFile = requestedView.slice('root-md:'.length);
             } else if (requestedView) {
                 this.isDraftViewActive = false;
+                this.isPromptViewActive = false;
+                this.isRootMdViewActive = false;
+                this.rootMdViewFile = '';
             }
         }
         const pending = this.pendingViewSwitch;
@@ -16382,6 +16808,14 @@ class PaperStatsApp {
 
     async applyCurrentView() {
         const view = this.currentView || 'structured';
+        if (view === 'markdown' && this.isRootMdViewActive && this.rootMdViewFile) {
+            await this.switchToView(`root-md:${this.rootMdViewFile}`);
+            return;
+        }
+        if (view === 'markdown' && this.isPromptViewActive) {
+            await this.switchToView('prompt');
+            return;
+        }
         if (view === 'markdown' && this.isDraftViewActive) {
             await this.switchToView('draft');
             return;
@@ -16392,7 +16826,7 @@ class PaperStatsApp {
     toggleTableMarkdownView(reverse = false) {
         const tabs = Array.from(document.querySelectorAll('#middleViewTabs .tab-btn'));
         const order = tabs.map(tab => tab.dataset.view).filter(v => v && v !== 'settings' && v !== 'vis-network');
-        const fallbackOrder = ['structured', 'markdown', 'draft'];
+        const fallbackOrder = ['structured', 'markdown'];
         const sequence = order.length ? order : fallbackOrder;
         
         // 如果当前在 settings 视图，默认跳到 draft
@@ -16403,7 +16837,9 @@ class PaperStatsApp {
         
         let currentKey = 'structured';
         if ((this.currentView || 'structured') === 'markdown') {
-            currentKey = this.isDraftViewActive ? 'draft' : 'markdown';
+            currentKey = this.isRootMdViewActive
+                ? (this.rootMdViewFile ? `root-md:${this.rootMdViewFile}` : 'markdown')
+                : (this.isPromptViewActive ? 'prompt' : (this.isDraftViewActive ? 'draft' : 'markdown'));
         } else if (this.currentView === 'structured') {
             currentKey = 'structured';
         }
@@ -19343,7 +19779,11 @@ class PaperStatsApp {
         tabs.forEach(b => b.classList.remove('active'));
         let target = 'structured';
         if ((this.currentView || 'structured') === 'markdown') {
-            target = this.isDraftViewActive ? 'draft' : 'markdown';
+            if (this.isRootMdViewActive && this.rootMdViewFile) {
+                target = `root-md:${this.rootMdViewFile}`;
+            } else {
+                target = this.isPromptViewActive ? 'prompt' : (this.isDraftViewActive ? 'draft' : 'markdown');
+            }
         } else if ((this.currentView || 'structured') === 'vis-network') {
             target = 'vis-network';
         } else if ((this.currentView || 'structured') === 'settings') {

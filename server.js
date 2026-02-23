@@ -270,6 +270,8 @@ function getMdTargetPath(fullPath, filename) {
     if (!safeName) throw new Error('Missing filename');
     const lower = safeName.toLowerCase();
     if (lower === 'draft.md') return path.join(fullPath, safeName);
+    if (lower === 'prompt.md') return path.join(fullPath, safeName);
+    if (!safeName.includes('/') && lower.endsWith('.md')) return path.join(fullPath, safeName);
     if (safeName.startsWith('md/')) return path.join(fullPath, safeName);
     return path.join(fullPath, 'md', safeName);
 }
@@ -1810,16 +1812,18 @@ const server = http.createServer((req, res) => {
 
                 // md/
                 files.push(...collectFiles(path.join(fullPath, 'md'), 'md', 'md'));
-                // root DRAFT.md (special)
-                const draftPath = path.join(fullPath, 'DRAFT.md');
-                if (fs.existsSync(draftPath)) {
-                    files.push({
-                        name: 'DRAFT.md',
-                        path: 'DRAFT.md',
-                        kind: 'md',
-                        category: 'md'
+                // root *.md
+                const rootEntries = fs.readdirSync(fullPath, { withFileTypes: true });
+                rootEntries
+                    .filter(ent => ent.isFile() && ent.name.toLowerCase().endsWith('.md'))
+                    .forEach(ent => {
+                        files.push({
+                            name: ent.name,
+                            path: ent.name,
+                            kind: 'md',
+                            category: 'md.root'
+                        });
                     });
-                }
 
                 // pdf/ - 添加 PDF 文件列表
                 const pdfDir = path.join(fullPath, 'pdf');
