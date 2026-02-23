@@ -12663,6 +12663,58 @@ class PaperStatsApp {
             };
             md.use(jsonQueryPlugin);
 
+            // 添加 \prompt{} 的 inline 规则处理（支持换行）
+            const promptInlinePlugin = (mdInstance) => {
+                const promptRule = (state, silent) => {
+                    const max = state.posMax;
+                    const start = state.pos;
+                    const prefix = '\\prompt{';
+                    if (state.src.charCodeAt(start) !== 0x5C /* \ */) return false;
+                    if (state.src.slice(start, start + prefix.length) !== prefix) return false;
+
+                    let pos = start + prefix.length;
+                    let depth = 1;
+                    let content = '';
+                    while (pos < max) {
+                        const ch = state.src[pos];
+                        if (ch === '\\' && pos + 1 < max) {
+                            content += ch + state.src[pos + 1];
+                            pos += 2;
+                            continue;
+                        }
+                        if (ch === '{') {
+                            depth += 1;
+                            content += ch;
+                            pos += 1;
+                            continue;
+                        }
+                        if (ch === '}') {
+                            depth -= 1;
+                            if (depth === 0) break;
+                            content += ch;
+                            pos += 1;
+                            continue;
+                        }
+                        content += ch;
+                        pos += 1;
+                    }
+                    if (pos >= max || depth !== 0) return false;
+                    if (!silent) {
+                        const token = state.push('prompt_inline', '', 0);
+                        token.content = content;
+                    }
+                    state.pos = pos + 1;
+                    return true;
+                };
+
+                mdInstance.inline.ruler.before('escape', 'prompt_inline', promptRule);
+                mdInstance.renderer.rules.prompt_inline = (tokens, idx) => {
+                    const content = tokens[idx].content || '';
+                    return this.renderPromptBlock(content);
+                };
+            };
+            md.use(promptInlinePlugin);
+
             // contentReference inline渲染
             const contentRefPlugin = (mdInstance) => {
                 mdInstance.core.ruler.after('inline', 'content-ref', (state) => {
@@ -12806,11 +12858,15 @@ class PaperStatsApp {
                     const token = tokens[idx];
                     const infoRaw = (token.info || '').trim();
                     const infoLower = infoRaw.toLowerCase();
+                    const infoLang = infoLower.split(/\s+/)[0];
                     if (infoLower === 'goto') {
                         const q = token.content.trim();
                         if (!q) return '';
                         const esc = escapeAttr(q);
                         return `<div class="goto-block"><a href="#" class="location-link goto-link" data-page="" data-quote-text="${esc}" data-open-params="" data-quote-index="0" data-value-path="" title="Jump to PDF search"><i class="fa-solid fa-quote-right"></i>${escapeHtml(q)}</a></div>`;
+                    }
+                    if (infoLang === 'prompt') {
+                        return this.renderPromptBlock(token.content || '');
                     }
                     // 避免嵌套渲染导致递归
                     if (env && env.__qaRendering) {
@@ -13699,6 +13755,7 @@ class PaperStatsApp {
         this.applyPendingQaTitle(render);
         this.applyQaCollapsedState(render);
         this.bindQaCollapsibles(render);
+        this.bindPromptBlocks(render);
         this.bindMetadataCollapse(render);
         this.renderMath(render);
         // 确保 mermaid 使用当前主题配置
@@ -13811,6 +13868,50 @@ class PaperStatsApp {
         const title = `Groups: ${groupLabel}\nFields: ${cleanFields || '(none)'}\nValue: ${cleanValue || '(none)'}`;
         const hint = `await query (${groupLabel} → ${cleanFields}${cleanValue ? ` = ${cleanValue}` : ''})...`;
         return `<div class="query-inline" data-query-groups="${escGroups}" data-query-fields="${escFields}" data-query-value="${escValue}"><button class="bib-fetch-btn query-render-btn inline-syntax" type="button" title="${this.escapeAttr(title)}"><i class="fas fa-play"></i><span>${this.escapeHtml(hint)}</span></button></div>`;
+    }
+
+    renderPromptBlock(content = '') {
+        const raw = String(content || '');
+        const escPrompt = this.escapeHtml(raw);
+        const encoded = this.encodePromptContent(raw);
+        const escAttrPrompt = this.escapeAttr(encoded);
+        return `
+            <div class="prompt-block" data-prompt-raw="${escAttrPrompt}">
+                <button class="prompt-btn" type="button" title="Click to copy prompt. Right-click to edit.">
+                    <i class="fa-solid fa-bolt"></i><span>Prompt</span>
+                </button>
+                <div class="prompt-editor" hidden>
+                    <textarea class="prompt-textarea" spellcheck="false">${escPrompt}</textarea>
+                    <div class="prompt-actions">
+                        <button class="prompt-apply-btn" type="button"><i class="fas fa-check"></i><span>Apply</span></button>
+                        <button class="prompt-cancel-btn" type="button"><i class="fas fa-times"></i><span>Cancel</span></button>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    encodePromptContent(text = '') {
+        try {
+            return encodeURIComponent(String(text || ''));
+        } catch (_err) {
+            return '';
+        }
+    }
+
+    decodePromptContent(text = '') {
+        try {
+            return decodeURIComponent(String(text || ''));
+        } catch (_err) {
+            return String(text || '');
+        }
+    }
+
+    convertPromptForCopy(text = '') {
+        let out = String(text || '');
+        out = out.replace(/\\r\\n/g, '\r\n');
+        out = out.replace(/\\r/g, '\r').replace(/\\n/g, '\n');
+        return out;
     }
 
     async applyCitationRendering(renderRoot) {
@@ -15172,6 +15273,91 @@ class PaperStatsApp {
                     qaItem.classList.toggle('qa-answer-collapsed');
                 }
             });
+        });
+    }
+
+    bindPromptBlocks(renderRoot) {
+        if (!renderRoot) return;
+        renderRoot.querySelectorAll('.prompt-block').forEach((block) => {
+            if (block.dataset.bound === '1') return;
+            block.dataset.bound = '1';
+
+            const btn = block.querySelector('.prompt-btn');
+            const editor = block.querySelector('.prompt-editor');
+            const textarea = block.querySelector('.prompt-textarea');
+            const applyBtn = block.querySelector('.prompt-apply-btn');
+            const cancelBtn = block.querySelector('.prompt-cancel-btn');
+
+            const getStoredPrompt = () => {
+                const rawAttr = block.dataset.promptRaw || block.dataset.promptContent || '';
+                return this.decodePromptContent(rawAttr);
+            };
+            const setStoredPrompt = (value) => {
+                const encoded = this.encodePromptContent(value);
+                block.dataset.promptRaw = encoded;
+                if (textarea) textarea.value = value;
+            };
+
+            const openEditor = () => {
+                if (!editor) return;
+                editor.hidden = false;
+                block.classList.add('is-editing');
+                if (textarea) {
+                    textarea.value = getStoredPrompt();
+                    textarea.focus();
+                    textarea.setSelectionRange(textarea.value.length, textarea.value.length);
+                }
+            };
+            const closeEditor = () => {
+                if (!editor) return;
+                editor.hidden = true;
+                block.classList.remove('is-editing');
+            };
+
+            if (btn) {
+                btn.addEventListener('click', async (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    const raw = textarea ? textarea.value : getStoredPrompt();
+                    const text = this.convertPromptForCopy(raw);
+                    try {
+                        await this.writeTextToClipboard(text);
+                        this.flashCopyButton(btn);
+                        this.showNotification('Prompt copied to clipboard', 'success');
+                    } catch (err) {
+                        console.warn('Prompt copy failed:', err);
+                        this.showNotification('Failed to copy prompt', 'error');
+                    }
+                });
+                btn.addEventListener('contextmenu', (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    if (block.classList.contains('is-editing')) {
+                        closeEditor();
+                    } else {
+                        openEditor();
+                    }
+                });
+            }
+
+            if (applyBtn) {
+                applyBtn.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    const nextRaw = textarea ? textarea.value : '';
+                    setStoredPrompt(nextRaw);
+                    closeEditor();
+                });
+            }
+
+            if (cancelBtn) {
+                cancelBtn.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    if (textarea) textarea.value = getStoredPrompt();
+                    closeEditor();
+                });
+            }
         });
     }
 

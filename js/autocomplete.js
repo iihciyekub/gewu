@@ -67,7 +67,8 @@ class AutocompleteManager {
             { trigger: '\\cite', label: '\\cite{doi}', insertText: '\\cite{$1}', detail: 'Narrative citation' },
             { trigger: '\\citep', label: '\\citep{doi}', insertText: '\\citep{$1}', detail: 'Parenthetical citation' },
             { trigger: '\\bib', label: '\\bib{doi}', insertText: '\\bib{$1}', detail: 'BibTeX entry' },
-            { trigger: '\\doi', label: '\\doi{doi}', insertText: '\\doi{$1}', detail: 'DOI reference' }
+            { trigger: '\\doi', label: '\\doi{doi}', insertText: '\\doi{$1}', detail: 'DOI reference' },
+            { trigger: '\\prompt', label: '\\prompt{...}', insertText: '\\prompt{$1}', detail: 'Prompt block (supports newlines)' }
         ];
     }
     

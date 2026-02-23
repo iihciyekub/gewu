@@ -46,6 +46,11 @@ class SpecialSyntaxManager {
                 description: 'Query JSON items by fields',
                 renderer: (matches, fullMatch) => this.renderJsonQuery(matches, fullMatch)
             },
+            'prompt': {
+                pattern: /\\prompt\{([\s\S]*?)\}/g,
+                description: 'Prompt block',
+                renderer: (matches, fullMatch) => this.renderPrompt(matches, fullMatch)
+            },
             'doi': {
                 pattern: /\\doi\{([^}]+)\}/g,
                 description: 'DOI link to publisher',
@@ -154,7 +159,11 @@ class SpecialSyntaxManager {
      */
     renderSyntaxType(text, syntaxType, options = {}) {
         if (!text || !this.syntaxTypes[syntaxType]) return text;
-        
+
+        if (syntaxType === 'prompt') {
+            return this.renderPromptSyntax(text, options);
+        }
+
         const syntax = this.syntaxTypes[syntaxType];
         const pattern = new RegExp(syntax.pattern.source, syntax.pattern.flags);
         let result = '';
@@ -176,6 +185,61 @@ class SpecialSyntaxManager {
         // 添加剩余文本
         result += text.slice(lastIndex);
         
+        return result;
+    }
+
+    /**
+     * 自定义解析 \prompt{...}（支持 \} 转义）
+     */
+    renderPromptSyntax(text, options = {}) {
+        const syntax = this.syntaxTypes.prompt;
+        let result = '';
+        let lastIndex = 0;
+        let i = 0;
+        const prefix = '\\prompt{';
+
+        while (i < text.length) {
+            const next = text.indexOf(prefix, i);
+            if (next === -1) break;
+            result += text.slice(lastIndex, next);
+            let pos = next + prefix.length;
+            let content = '';
+            let depth = 1;
+            while (pos < text.length) {
+                const ch = text[pos];
+                if (ch === '\\' && pos + 1 < text.length) {
+                    content += ch + text[pos + 1];
+                    pos += 2;
+                    continue;
+                }
+                if (ch === '{') {
+                    depth += 1;
+                    content += ch;
+                    pos += 1;
+                    continue;
+                }
+                if (ch === '}') {
+                    depth -= 1;
+                    if (depth === 0) break;
+                    content += ch;
+                    pos += 1;
+                    continue;
+                }
+                content += ch;
+                pos += 1;
+            }
+            if (depth !== 0) {
+                // Unclosed prompt, keep original text
+                result += text.slice(next);
+                return result;
+            }
+            const fullMatch = text.slice(next, pos + 1);
+            const rendered = syntax.renderer(content, fullMatch, options);
+            result += rendered;
+            lastIndex = pos + 1;
+            i = pos + 1;
+        }
+        result += text.slice(lastIndex);
         return result;
     }
     
@@ -294,6 +358,20 @@ class SpecialSyntaxManager {
         const escDoi = this.app.escapeHtml(doi);
         const doiUrl = `https://doi.org/${encodeURIComponent(doi)}`;
         return `<a href="${doiUrl}" target="_blank" class="doi-link" title="Open DOI: ${escDoi}"><i class="fa-solid fa-external-link-alt"></i> ${escDoi}</a>`;
+    }
+
+    /**
+     * 渲染 prompt 块 (prompt)
+     */
+    renderPrompt(content, fullMatch) {
+        const text = (content || '').trimEnd();
+        if (!text) {
+            return this.app.escapeHtml(fullMatch);
+        }
+        if (this.app && typeof this.app.renderPromptBlock === 'function') {
+            return this.app.renderPromptBlock(text);
+        }
+        return this.app.escapeHtml(fullMatch);
     }
     
     /**
