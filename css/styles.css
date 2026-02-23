@@ -5937,8 +5937,16 @@ ol.json-array {
     margin-left: auto;
 }
 
+.header-json-update {
+    cursor: pointer;
+    color: var(--gray-600);
+    font-size: 12px;
+    transition: color 0.2s;
+}
+
 .header-add,
-.header-delete {
+.header-delete,
+.header-json-update {
     flex-shrink: 0;
     opacity: 0;
     visibility: hidden;
@@ -5946,6 +5954,10 @@ ol.json-array {
 }
 
 .header-delete:hover {
+    color: var(--wos-blue);
+}
+
+.header-json-update:hover {
     color: var(--wos-blue);
 }
 
@@ -5959,7 +5971,8 @@ ol.json-array {
 }
 
 .collapsible-header:hover .header-add,
-.collapsible-header:hover .header-delete {
+.collapsible-header:hover .header-delete,
+.collapsible-header:hover .header-json-update {
     opacity: 1;
     visibility: visible;
 }
@@ -5971,6 +5984,63 @@ ol.json-array {
 
 .collapsible-content.active {
     display: block;
+}
+
+.json-merge-box {
+    border: 1px solid var(--gray-200);
+    background: #f9fafb;
+    border-radius: 8px;
+    padding: 10px 12px;
+    margin: 0 0 12px 0;
+}
+
+.json-merge-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+}
+
+.json-merge-title {
+    font-size: 12px;
+    color: var(--gray-700);
+    font-weight: 600;
+}
+
+.json-merge-apply,
+.json-merge-clear {
+    margin-left: auto;
+    background: #fff;
+    border: 1px solid var(--gray-200);
+    color: var(--gray-800);
+    padding: 4px 10px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 12px;
+}
+
+.json-merge-clear {
+    margin-left: 0;
+}
+
+.json-merge-apply:hover,
+.json-merge-clear:hover {
+    border-color: var(--wos-blue);
+    color: var(--wos-blue);
+}
+
+.json-merge-textarea {
+    width: 100%;
+    min-height: 90px;
+    resize: vertical;
+    border: 1px solid var(--gray-200);
+    border-radius: 6px;
+    padding: 8px 10px;
+    font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace);
+    font-size: 12px;
+    line-height: 1.4;
+    color: var(--gray-900);
+    background: #fff;
 }
 
 /* 表单样式 */

@@ -761,7 +761,8 @@ body.theme-dark .collapsible-title {
 }
 
 body.theme-dark .collapsible-toggle,
-body.theme-dark .header-delete {
+body.theme-dark .header-delete,
+body.theme-dark .header-json-update {
     color: var(--vscode-text-muted);
 }
 
@@ -779,6 +780,34 @@ body.theme-dark .header-actions .btn.header-icon-only {
 
 body.theme-dark .header-actions .btn.header-icon-only:hover {
     color: var(--vscode-accent);
+}
+
+body.theme-dark .json-merge-box {
+    border: 1px solid #2c2f3a;
+    background: #14161d;
+}
+
+body.theme-dark .json-merge-title {
+    color: #d7dbe6;
+}
+
+body.theme-dark .json-merge-apply,
+body.theme-dark .json-merge-clear {
+    background: #0f1117;
+    border: 1px solid #2c2f3a;
+    color: #e6e9ef;
+}
+
+body.theme-dark .json-merge-apply:hover,
+body.theme-dark .json-merge-clear:hover {
+    border-color: var(--wos-blue);
+    color: var(--wos-blue);
+}
+
+body.theme-dark .json-merge-textarea {
+    background: #0f1117;
+    border: 1px solid #2c2f3a;
+    color: #e6e9ef;
 }
 
 body.theme-dark .header-dropdown-menu .header-dropdown-item.checked i[data-check] {

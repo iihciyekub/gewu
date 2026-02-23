@@ -7070,12 +7070,66 @@ class PaperStatsApp {
         }
     }
 
+    applyQuickJsonUpdate(rawText) {
+        const text = String(rawText || '').trim();
+        if (!text) return;
+        let jsonData = this.extractJSON(text, { allowArray: true });
+        if (!jsonData) {
+            this.showNotification('No valid JSON detected, format may be incorrect', 'error');
+            return;
+        }
+        jsonData = this.normalizePastedJson(jsonData);
+        jsonData = this.mapIdItemToObject(jsonData);
+        let changed = false;
+        if (Array.isArray(jsonData)) {
+            jsonData.forEach((item) => {
+                const mapped = this.mapIdItemToObject(item);
+                if (this.isPlainObject(mapped)) {
+                    item = mapped;
+                    changed = this.mergeIntoCurrentData(item, true) || changed;
+                }
+            });
+        } else if (this.isPlainObject(jsonData)) {
+            changed = this.mergeIntoCurrentData(jsonData, true);
+        } else {
+            this.showNotification('Pasted JSON must be an object or array of objects', 'error');
+            return;
+        }
+        if (!changed) {
+            this.showNotification('No mergeable fields detected', 'info');
+            return;
+        }
+        this.hasUnsavedChanges = true;
+        if (this.currentFile) {
+            this.tempDataCache[this.currentFile] = this.currentData;
+        }
+        this.updateSaveButtonState();
+        this.renderStructuredView();
+        this.updateFlatViewTextarea();
+        this.setupEditableListeners();
+        this.updateUndoButtonState();
+        this.showNotification('JSON updated', 'success');
+    }
+
+    mapIdItemToObject(value) {
+        if (!this.isPlainObject(value)) return value;
+        if (!Object.prototype.hasOwnProperty.call(value, 'id')) return value;
+        const idVal = value.id;
+        if (idVal === undefined || idVal === null || idVal === '') return value;
+        const next = { ...value };
+        delete next.id;
+        const key = String(idVal);
+        return { [key]: next };
+    }
+
     // 处理粘贴事件
     async handlePaste(e) {
         try {
             // Special handling for Markdown editor: insert and render QA code blocks when pasting
-            // Skip processing if pasting in input fields
-            if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+            // Skip processing if pasting in input fields (except JSON editor textarea)
+            const target = e.target;
+            const isJsonTextarea = target && target.tagName === 'TEXTAREA' && target.id === 'jsonEditorTextarea';
+            if ((target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') && !isJsonTextarea) return;
 
             // Paste PDF file in right panel PDF area
             const clipboardFiles = Array.from((e.clipboardData && e.clipboardData.files) || []);
@@ -7106,6 +7160,63 @@ class PaperStatsApp {
             if (!pastedText) return;
 
             this.debugLog('📋 Detected paste content, attempting to parse JSON...');
+
+            const jsonTextarea = document.getElementById('jsonEditorTextarea');
+            const inFlatView = (this.currentView || 'structured') === 'flat';
+            const activeEl = document.activeElement;
+            const inFlatEditor = !!target.closest?.('.flat-editor');
+            const shouldHandleAsJsonEditor = isJsonTextarea || (inFlatView && jsonTextarea && (inFlatEditor || activeEl === jsonTextarea));
+
+            if (shouldHandleAsJsonEditor) {
+                let jsonData = this.extractJSON(pastedText, { allowArray: true });
+                if (!jsonData) return;
+                e.preventDefault();
+                jsonData = this.normalizePastedJson(jsonData);
+                jsonTextarea.value = JSON.stringify(jsonData, null, 2);
+                this.applyRawJsonFromTextarea({ notifyOnError: true });
+                this.showNotification('Pasted JSON applied in editor', 'success');
+                return;
+            }
+
+            const inJsonRenderView = (this.currentView || 'structured') === 'structured';
+
+            if (inJsonRenderView && this.currentData) {
+                let jsonData = this.extractJSON(pastedText, { allowArray: true });
+                if (!jsonData) {
+                    this.showNotification('No valid JSON detected, format may be incorrect', 'error');
+                    return;
+                }
+                e.preventDefault();
+                jsonData = this.normalizePastedJson(jsonData);
+                jsonData = this.mapIdItemToObject(jsonData);
+                let changed = false;
+                if (Array.isArray(jsonData)) {
+                    jsonData.forEach((item) => {
+                        const mapped = this.mapIdItemToObject(item);
+                        if (this.isPlainObject(mapped)) {
+                            item = mapped;
+                            changed = this.mergeIntoCurrentData(item, true) || changed;
+                        }
+                    });
+                } else if (this.isPlainObject(jsonData)) {
+                    changed = this.mergeIntoCurrentData(jsonData, true);
+                }
+                if (!changed) {
+                    this.showNotification('Pasted content has no mergeable fields', 'info');
+                    return;
+                }
+                this.hasUnsavedChanges = true;
+                if (this.currentFile) {
+                    this.tempDataCache[this.currentFile] = this.currentData;
+                }
+                this.updateSaveButtonState();
+                this.renderStructuredView();
+                this.updateFlatViewTextarea();
+                this.setupEditableListeners();
+                this.updateUndoButtonState();
+                this.showNotification('Merged pasted content into current JSON', 'success');
+                return;
+            }
 
             // Try to extract and parse JSON
             let jsonData = this.extractJSON(pastedText);
@@ -7175,16 +7286,17 @@ class PaperStatsApp {
     }
 
     // 提取JSON数据
-    extractJSON(text) {
-        const isPasteObject = (val) => {
-            return !!val && typeof val === 'object' && !Array.isArray(val);
+    extractJSON(text, opts = {}) {
+        const allowArray = !!opts.allowArray;
+        const isAcceptableJson = (val) => {
+            return !!val && typeof val === 'object' && (allowArray || !Array.isArray(val));
         };
         // 0) 尝试 jsonrepair 库（如已加载）
         if (typeof jsonrepair === 'function') {
             try {
                 const repaired = jsonrepair(text);
                 const parsed = this.tryParseJson(repaired);
-                if (isPasteObject(parsed)) return parsed;
+                if (isAcceptableJson(parsed)) return parsed;
             } catch (e) {
                 console.warn('jsonrepair failed:', e);
             }
@@ -7194,30 +7306,30 @@ class PaperStatsApp {
         const basicRepaired = this.repairJsonText(text);
         if (basicRepaired) {
             const parsed = this.tryParseJson(basicRepaired);
-            if (isPasteObject(parsed)) return parsed;
+            if (isAcceptableJson(parsed)) return parsed;
         }
 
         // 2) 直接解析
         const direct = this.tryParseJson(text);
-        if (isPasteObject(direct)) return direct;
+        if (isAcceptableJson(direct)) return direct;
 
         // 3) 代码块内
         const codeBlockMatch = text.match(/```(?:json)?\s*([\s\S]*?)```/);
         if (codeBlockMatch) {
             const parsed = this.tryParseJson(codeBlockMatch[1].trim());
-            if (isPasteObject(parsed)) return parsed;
+            if (isAcceptableJson(parsed)) return parsed;
         }
 
         // 4) 提取 {} 或 [] 包裹的内容
         const jsonMatch = text.match(/(\{[\s\S]*\}|\[[\s\S]*\])/);
         if (jsonMatch) {
             const parsed = this.tryParseJson(jsonMatch[1]);
-            if (isPasteObject(parsed)) return parsed;
+            if (isAcceptableJson(parsed)) return parsed;
         }
 
         // 5) 逐个提取对象，跳过坏项（数组场景常见）
         const salvaged = this.salvageJsonObjects(text);
-        if (isPasteObject(salvaged)) return salvaged;
+        if (isAcceptableJson(salvaged)) return salvaged;
 
         return null;
     }
@@ -7646,6 +7758,42 @@ class PaperStatsApp {
             container.appendChild(section);
         }
 
+        // Inline JSON merge input (placed at bottom)
+        const mergeBox = document.createElement('div');
+        mergeBox.className = 'json-merge-box';
+        mergeBox.innerHTML = `
+            <div class="json-merge-head">
+                <span class="json-merge-title">Quick JSON Merge</span>
+                <button class="json-merge-apply" type="button">Apply</button>
+                <button class="json-merge-clear" type="button">Clear</button>
+            </div>
+            <textarea class="json-merge-textarea" spellcheck="false" placeholder="Paste JSON here to merge into current data"></textarea>
+        `;
+        container.appendChild(mergeBox);
+
+        const applyBtn = mergeBox.querySelector('.json-merge-apply');
+        const clearBtn = mergeBox.querySelector('.json-merge-clear');
+        const textarea = mergeBox.querySelector('.json-merge-textarea');
+        if (applyBtn && textarea) {
+            applyBtn.addEventListener('click', () => {
+                if (this.isEditLocked) {
+                    this.showLockedNotification('更新 JSON');
+                    return;
+                }
+                if (!this.currentData) {
+                    this.showNotification('No JSON file loaded', 'error');
+                    return;
+                }
+                this.applyQuickJsonUpdate(textarea.value);
+            });
+        }
+        if (clearBtn && textarea) {
+            clearBtn.addEventListener('click', () => {
+                textarea.value = '';
+                textarea.focus();
+            });
+        }
+
         // 恢复已选中元素的高亮
         this.highlightSelectedItem();
 
@@ -7673,6 +7821,7 @@ class PaperStatsApp {
             <i class="fas fa-chevron-right collapsible-toggle" title="Expand/Collapse"></i>
             <span class="collapsible-title">${this.formatKey(title)}</span>
             <i class="fas fa-plus header-add" title="Add child item under this section"></i>
+            <i class="fas fa-pen-to-square header-json-update" title="Quick JSON update"></i>
             <i class="fas fa-trash header-delete" title="Delete this field"></i>
         `;
 
@@ -7710,11 +7859,19 @@ class PaperStatsApp {
         if (deleteBtn) {
             deleteBtn.addEventListener('click', (e) => {
                 e.stopPropagation();
-                const firstConfirm = confirm(`Are you sure to delete the entire field "${title}" and all its contents?`);
-                if (!firstConfirm) return;
-                const secondConfirm = confirm('Confirm again: deletion cannot be undone, continue?');
-                if (!secondConfirm) return;
                 this.deleteField([], title);
+            });
+        }
+        const updateBtn = header.querySelector('.header-json-update');
+        if (updateBtn) {
+            updateBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const mergeBox = document.querySelector('.json-merge-box');
+                const textarea = mergeBox?.querySelector('.json-merge-textarea');
+                if (textarea) {
+                    textarea.focus();
+                    textarea.scrollIntoView({ block: 'center', behavior: 'smooth' });
+                }
             });
         }
         // Add child item button
@@ -11192,7 +11349,26 @@ class PaperStatsApp {
         const body = document.getElementById('projectInfoBody');
         if (!body) return;
         if (!this.currentProject) {
-            body.textContent = 'No project loaded';
+            body.innerHTML = `
+                <div class="project-details">
+                <div class="detail-section">
+                    <div class="detail-item">
+                    <label>Status:</label>
+                    <span class="detail-value">No project loaded</span>
+                    </div>
+                </div>
+                <div class="detail-section">
+                    <div class="detail-actions">
+                    <button class="detail-action-btn" onclick="window.paperStats.openProjectModal()">
+                        <i class="fas fa-exchange-alt"></i> Load or Switch Project
+                    </button>
+                    <button class="detail-action-btn" onclick="window.paperStats.openCreateProjectDialog()">
+                        <i class="fas fa-folder-plus"></i> Create New Project
+                    </button>
+                    </div>
+                </div>
+                </div>
+            `;
             return;
         }
 
@@ -11914,9 +12090,7 @@ class PaperStatsApp {
             if (!btn) return;
             e.preventDefault();
             const target = btn.getAttribute('data-target') || '';
-            if (e.metaKey || e.ctrlKey) {
-                this.hideAllSettingsPanels();
-            }
+            this.hideAllSettingsPanels();
             this.openSettingsPanelFromChat(target);
         });
     }
@@ -12149,15 +12323,12 @@ class PaperStatsApp {
         // 保存配置
         this.saveProjectConfig();
 
-        // 隐藏项目信息面板
-        this.projectInfoVisible = false;
-        document.getElementById('projectInfoPanel')?.classList.remove('is-visible');
-        this.updateSettingsPanelsVisibility();
-        this.saveSettingsPanelsState();
-
         // 更新显示
         this.updateProjectDisplay();
         this.renderJsonViewSelector();
+
+        // 退出后显示项目信息面板，方便加载/切换项目
+        this.toggleProjectInfoPanel(true, { skipClose: true });
 
         // 显示提示
         this.showNotification('Exited project', 'success');
@@ -12393,6 +12564,18 @@ class PaperStatsApp {
             // 初次渲染时同步一次解析状态
             this.applyRawJsonFromTextarea({ notifyOnError: false });
             this.applyEditLockState();
+        }
+    }
+
+    updateFlatViewTextarea() {
+        const textarea = document.getElementById('jsonEditorTextarea');
+        if (textarea) {
+            textarea.value = JSON.stringify(this.currentData, null, 2);
+            this.applyRawJsonFromTextarea({ notifyOnError: false });
+            return;
+        }
+        if ((this.currentView || 'structured') === 'flat') {
+            this.renderFlatView();
         }
     }
 
