@@ -180,6 +180,7 @@ class PaperStatsApp {
         this.autoSaveConfigVisible = false;
         this.doiIndexVisible = false;
         this.pdfPopupWindow = null;
+        this.pdfTabWindow = null;
         this.isPdfPopupMode = false;
         this.pdfPopupFocusInterval = null;
         this.pdfViewModeRestored = false; // 标记是否已经恢复过PDF窗口模式
@@ -2893,6 +2894,12 @@ class PaperStatsApp {
                 this.setAutoLoadPdf(!this.autoLoadPdf);
             });
             this.updatePdfAutoLoadButtonState();
+        }
+
+        // PDF 新标签页按钮
+        const btnPdfTab = document.getElementById('btnPdfTab');
+        if (btnPdfTab) {
+            btnPdfTab.addEventListener('click', async () => this.openPdfInNewTab());
         }
 
         // PDF 独立窗口按钮
@@ -18075,6 +18082,30 @@ class PaperStatsApp {
         }
     }
 
+    openPdfInNewTab() {
+        if (!this.currentPdfUrl) {
+            this.showNotification('No PDF loaded', 'info');
+            return;
+        }
+        const absoluteUrl = window.location.origin + this.currentPdfUrl;
+        const viewerUrl = `js/pdfjs/web/viewer.html?file=${encodeURIComponent(absoluteUrl)}&theme=${this.theme === 'dark' ? 'dark' : 'light'}#zoom=80`;
+        if (this.pdfTabWindow && !this.pdfTabWindow.closed) {
+            try {
+                this.pdfTabWindow.location.href = viewerUrl;
+                this.pdfTabWindow.focus();
+                return;
+            } catch (_err) {
+                this.pdfTabWindow = null;
+            }
+        }
+        const nextTab = window.open(viewerUrl, '_blank');
+        if (!nextTab) {
+            this.showNotification('Failed to open new tab. Please allow popups for this site.', 'error');
+            return;
+        }
+        this.pdfTabWindow = nextTab;
+    }
+
     // 保存PDF窗口模式到localStorage
     savePdfViewMode() {
         try {
@@ -18168,6 +18199,13 @@ class PaperStatsApp {
                 const absoluteUrl = window.location.origin + url;
                 const viewerUrl = `js/pdfjs/web/viewer.html?file=${encodeURIComponent(absoluteUrl)}&theme=${this.theme === 'dark' ? 'dark' : 'light'}#zoom=80`;
                 this.pdfPopupWindow.location.href = viewerUrl;
+                if (this.pdfTabWindow && !this.pdfTabWindow.closed) {
+                    try {
+                        this.pdfTabWindow.location.href = viewerUrl;
+                    } catch (_err) {
+                        this.pdfTabWindow = null;
+                    }
+                }
                 return;
             }
 
@@ -18191,6 +18229,14 @@ class PaperStatsApp {
             const absoluteUrl = window.location.origin + url;
             const themeParam = this.theme === 'dark' ? 'dark' : 'light';
             const viewerUrl = `js/pdfjs/web/viewer.html?file=${encodeURIComponent(absoluteUrl)}&theme=${themeParam}#zoom=80`;
+
+            if (this.pdfTabWindow && !this.pdfTabWindow.closed) {
+                try {
+                    this.pdfTabWindow.location.href = viewerUrl;
+                } catch (_err) {
+                    this.pdfTabWindow = null;
+                }
+            }
 
             const tryReuseViewer = async () => {
                 if (!pdfViewer || !pdfViewer.contentWindow) return false;
