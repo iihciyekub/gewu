@@ -1919,6 +1919,13 @@ class PaperStatsApp {
         if (statusSaveBtn) {
             statusSaveBtn.addEventListener('click', () => this.handleSaveShortcut());
         }
+        const gitSettingsToggleBtn = document.getElementById('gitSettingsToggleBtn');
+        if (gitSettingsToggleBtn) {
+            gitSettingsToggleBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                this.toggleGitPanel(true);
+            });
+        }
         const statusToggleSourceBtn = document.getElementById('statusToggleSourceBtn');
         if (statusToggleSourceBtn) {
             statusToggleSourceBtn.addEventListener('click', () => this.toggleJsonMdSource());
