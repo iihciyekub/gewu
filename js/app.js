@@ -1955,6 +1955,18 @@ class PaperStatsApp {
         if (middleSaveBtn) {
             middleSaveBtn.addEventListener('click', () => this.handleSaveShortcut());
         }
+        const middleGitPanelBtn = document.getElementById('middleGitPanelBtn');
+        if (middleGitPanelBtn) {
+            middleGitPanelBtn.addEventListener('click', () => this.openGitPanelModal());
+        }
+        const gitPanelModal = document.getElementById('gitPanelModal');
+        const gitPanelModalCloseBtn = document.getElementById('gitPanelModalCloseBtn');
+        if (gitPanelModal && gitPanelModalCloseBtn) {
+            gitPanelModalCloseBtn.addEventListener('click', () => this.closeGitPanelModal());
+            gitPanelModal.addEventListener('click', (e) => {
+                if (e.target === gitPanelModal) this.closeGitPanelModal();
+            });
+        }
         this.initMarkdownChatPanel();
         this.initSettingsNav();
         // 快捷键：Cmd/Ctrl + E 正向切换（JSON/MD/Draft），Cmd/Ctrl + Shift + E 反向切换
@@ -11721,12 +11733,14 @@ class PaperStatsApp {
     async renderGitHistoryList() {
         const listEl = document.getElementById('gitHistoryList');
         const emptyEl = document.getElementById('gitHistoryEmpty');
+        const initBtn = document.getElementById('gitInitSettingsBtn');
         if (!listEl || !emptyEl) return;
         listEl.innerHTML = '<div class="git-history-loading">Loading history...</div>';
         emptyEl.style.display = 'none';
         if (!this.currentProject?.path) {
             emptyEl.textContent = 'Load a project to view history.';
             emptyEl.style.display = 'block';
+            if (initBtn) initBtn.style.display = '';
             return;
         }
         const status = await this.fetchGitStatus();
@@ -11734,14 +11748,17 @@ class PaperStatsApp {
             emptyEl.textContent = 'Git not available.';
             emptyEl.style.display = 'block';
             listEl.innerHTML = '';
+            if (initBtn) initBtn.style.display = '';
             return;
         }
         if (!status.repo) {
             emptyEl.textContent = 'Git not initialized.';
             emptyEl.style.display = 'block';
             listEl.innerHTML = '';
+            if (initBtn) initBtn.style.display = '';
             return;
         }
+        if (initBtn) initBtn.style.display = 'none';
         const history = await this.fetchGitHistory();
         if (!history) {
             emptyEl.textContent = 'Failed to load history.';
@@ -17381,6 +17398,37 @@ class PaperStatsApp {
 
     bindGitIdentityInputs() {
         // inputs removed; keep method to avoid callsite changes
+    }
+
+    openGitPanelModal() {
+        const modal = document.getElementById('gitPanelModal');
+        const body = document.getElementById('gitPanelModalBody');
+        const panel = document.getElementById('gitSettingsPanel');
+        if (!modal || !body || !panel) return;
+        if (!this._gitPanelHome) {
+            this._gitPanelHome = {
+                parent: panel.parentElement,
+                nextSibling: panel.nextElementSibling
+            };
+        }
+        body.appendChild(panel);
+        modal.classList.add('active');
+        this.applyGitIdentityInputs();
+        this.renderGitHistoryList();
+    }
+
+    closeGitPanelModal() {
+        const modal = document.getElementById('gitPanelModal');
+        const panel = document.getElementById('gitSettingsPanel');
+        if (modal) modal.classList.remove('active');
+        if (panel && this._gitPanelHome && this._gitPanelHome.parent) {
+            const { parent, nextSibling } = this._gitPanelHome;
+            if (nextSibling && nextSibling.parentElement === parent) {
+                parent.insertBefore(panel, nextSibling);
+            } else {
+                parent.appendChild(panel);
+            }
+        }
     }
 
     ensureJsonTextContextMenu() {

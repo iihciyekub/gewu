@@ -745,22 +745,22 @@
                                 </button>
                             </div>
                             <div class="settings-field-list">
-                                <div class="settings-field-row git-settings-actions">
-                                    <button class="btn btn-secondary" id="gitInitSettingsBtn" type="button">
-                                        <i class="fas fa-folder-plus"></i> Initialize
-                                    </button>
-                                    <button class="btn btn-secondary" id="gitCommitSettingsBtn" type="button">
-                                        <i class="fas fa-check"></i> Save Version
-                                    </button>
-                                </div>
                                 <div class="settings-field-hint">Each project uses its own Git repository.</div>
                                 <div class="settings-field-hint">Git identity is auto-resolved (system git if available, otherwise default).</div>
                                 <div class="git-history-panel">
                                     <div class="git-history-header">
                                         <span>History</span>
-                                        <button class="btn btn-secondary" id="gitHistoryRefreshBtn" type="button">
-                                            <i class="fas fa-rotate"></i> Refresh
-                                        </button>
+                                        <div class="git-history-actions">
+                                            <button class="btn btn-secondary" id="gitInitSettingsBtn" type="button">
+                                                <i class="fas fa-folder-plus"></i> Initialize
+                                            </button>
+                                            <button class="btn btn-secondary" id="gitCommitSettingsBtn" type="button">
+                                                <i class="fas fa-check"></i> Save Version
+                                            </button>
+                                            <button class="btn btn-secondary" id="gitHistoryRefreshBtn" type="button">
+                                                <i class="fas fa-rotate"></i> Refresh
+                                            </button>
+                                        </div>
                                     </div>
                                     <div class="git-history-list" id="gitHistoryList"></div>
                                     <div class="git-history-empty" id="gitHistoryEmpty">No versions yet.</div>
@@ -839,9 +839,14 @@
                                         </button>
                                     </div>
                                 </div>
-                                <div class="settings-field-row">
+                                <div class="settings-field-row doi-cache-row">
                                     <label>DOI Cache DB (GEWUDoiCache)</label>
-                                    <div class="doi-index-count" id="doiIndexCount">0</div>
+                                    <div class="doi-index-count">
+                                        <span id="doiIndexCount">0</span>
+                                        <button class="btn btn-secondary btn-compact" id="refreshDoiCacheBtn" type="button">
+                                            <i class="fas fa-sync-alt"></i> Refresh
+                                        </button>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -1014,6 +1019,11 @@
                         title="Save current view (Ctrl/Cmd+S)">
                         <i class="fas fa-save"></i>
                         <span>Save</span>
+                    </button>
+                    <button class="middle-git-btn" id="middleGitPanelBtn" type="button"
+                        title="Git Version Panel">
+                        <i class="fa-brands fa-git-alt"></i>
+                        <span>Git</span>
                     </button>
                 </div>
             </div>
@@ -1191,11 +1201,6 @@
                     <i class="fas fa-cog"></i>
                 </button>
                 <div class="header-dropdown-menu" id="settingsMenu" role="menu" aria-label="Settings">
-                    <button class="header-dropdown-item" id="refreshDoiCacheBtn" type="button" role="menuitem"
-                        title="Refresh DOI autocomplete cache (rebuild with latest data)">
-                        <i class="fas fa-sync-alt"></i>
-                        <span>Refresh DOI Cache</span>
-                    </button>
                     <button class="header-dropdown-item" id="editLockOnItem" type="button" role="menuitem"
                         title="Lock editing to prevent accidental changes">
                         <i class="fas fa-check" data-check="on" style="opacity:0"></i>
@@ -1289,6 +1294,19 @@
                 <button class="btn btn-primary" id="gotoEditCancel">Cancel</button>
                 <button class="btn btn-primary" id="gotoEditSave">Save</button>
             </div>
+        </div>
+    </div>
+
+    <!-- Git Panel Modal -->
+    <div class="modal" id="gitPanelModal">
+        <div class="modal-content git-panel-modal-content">
+            <div class="modal-header">
+                <span>Git Version</span>
+                <button class="close-btn" type="button" id="gitPanelModalCloseBtn">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body" id="gitPanelModalBody"></div>
         </div>
     </div>
 
