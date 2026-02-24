@@ -126,6 +126,7 @@ class PaperStatsApp {
         this.autoSaveConfigUI = null;
         this.jsonMenuVisible = false;
         this.mdMenuVisible = false;
+        this.gitMenuVisible = false;
         this.rawJsonParseOk = true;
         this.rawJsonParseError = '';
         this.rawJsonParseTimer = null;
@@ -2179,6 +2180,50 @@ class PaperStatsApp {
                 e.preventDefault();
                 await this.deleteDraftMarkdownFile();
                 this.toggleMdMenu(false);
+            });
+        }
+
+        // Git 菜单：初始化 / 保存版本 / 恢复版本
+        const gitMenuToggleBtn = document.getElementById('gitMenuToggleBtn');
+        const gitMenu = document.getElementById('gitMenu');
+        const gitMenuDropdown = document.getElementById('gitMenuDropdown');
+        const gitInitItem = document.getElementById('gitInitItem');
+        const gitCommitItem = document.getElementById('gitCommitItem');
+        const gitRestoreItem = document.getElementById('gitRestoreItem');
+        if (gitMenuToggleBtn && gitMenu) {
+            gitMenuToggleBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                this.toggleGitMenu();
+            });
+            gitMenu.addEventListener('click', (e) => {
+                e.stopPropagation();
+            });
+            document.addEventListener('click', (e) => {
+                if (!this.gitMenuVisible) return;
+                if (gitMenuDropdown && gitMenuDropdown.contains(e.target)) return;
+                this.toggleGitMenu(false);
+            });
+        }
+        if (gitInitItem) {
+            gitInitItem.addEventListener('click', async (e) => {
+                e.preventDefault();
+                await this.initGitWorkspace();
+                this.toggleGitMenu(false);
+            });
+        }
+        if (gitCommitItem) {
+            gitCommitItem.addEventListener('click', async (e) => {
+                e.preventDefault();
+                await this.commitGitWorkspace();
+                this.toggleGitMenu(false);
+            });
+        }
+        if (gitRestoreItem) {
+            gitRestoreItem.addEventListener('click', async (e) => {
+                e.preventDefault();
+                await this.restoreGitWorkspace();
+                this.toggleGitMenu(false);
             });
         }
         const mdTextarea = document.getElementById('markdownTextarea');
@@ -10029,6 +10074,15 @@ class PaperStatsApp {
         menu.classList.toggle('visible', next);
     }
 
+    toggleGitMenu(forceVisible) {
+        const menu = document.getElementById('gitMenu');
+        if (!menu) return;
+        const next = typeof forceVisible === 'boolean' ? forceVisible : !this.gitMenuVisible;
+        if (next) this.closeHeaderMenus('git');
+        this.gitMenuVisible = next;
+        menu.classList.toggle('visible', next);
+    }
+
     toggleImportMenu(forceVisible) {
         const menu = document.getElementById('importMenu');
         if (!menu) return;
@@ -11266,6 +11320,7 @@ class PaperStatsApp {
         const keep = String(except || '').toLowerCase();
         if (keep !== 'json' && this.jsonMenuVisible) this.toggleJsonMenu(false);
         if (keep !== 'md' && this.mdMenuVisible) this.toggleMdMenu(false);
+        if (keep !== 'git' && this.gitMenuVisible) this.toggleGitMenu(false);
         if (keep !== 'settings' && this.settingsMenuVisible) this.toggleSettingsMenu(false);
         if (keep !== 'import' && this.importMenuVisible) this.toggleImportMenu(false);
         if (keep !== 'info' && this.projectInfoVisible) {
@@ -11367,6 +11422,168 @@ class PaperStatsApp {
         renderItem.disabled = !hasFile || (inMarkdownView && !this.isMarkdownEditing);
         sourceItem.disabled = !hasFile || (inMarkdownView && this.isMarkdownEditing) || !this.currentMarkdownExists;
         saveItem.disabled = !hasFile || !inMarkdownView || !this.currentMarkdownExists || !this.hasUnsavedMarkdownChanges;
+    }
+
+    async fetchGitStatus() {
+        try {
+            const resp = await fetch('/git-status', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({})
+            });
+            const data = await resp.json();
+            if (!resp.ok || data?.success === false) {
+                throw new Error(data?.error || 'Git status failed');
+            }
+            return data;
+        } catch (err) {
+            this.showNotification(`Git status failed: ${err.message}`, 'error');
+            return null;
+        }
+    }
+
+    async initGitWorkspace({ silent = false } = {}) {
+        try {
+            const resp = await fetch('/git-init', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({})
+            });
+            const data = await resp.json();
+            if (!resp.ok || data?.success === false) {
+                throw new Error(data?.error || 'Git init failed');
+            }
+            if (!silent) {
+                const msg = data?.already ? 'Git already initialized in workspace' : 'Git initialized in workspace';
+                this.showNotification(msg, 'success');
+            }
+            return data;
+        } catch (err) {
+            this.showNotification(`Git init failed: ${err.message}`, 'error');
+            return null;
+        }
+    }
+
+    async ensureGitWorkspaceReady() {
+        const status = await this.fetchGitStatus();
+        if (!status) return false;
+        if (status.available === false) {
+            this.showNotification('Git not available on server', 'error');
+            return false;
+        }
+        if (status.repo) return true;
+        const ok = confirm('Git is not initialized in this workspace. Initialize now?');
+        if (!ok) return false;
+        const init = await this.initGitWorkspace({ silent: true });
+        if (!init) return false;
+        this.showNotification('Git initialized in workspace', 'success');
+        return true;
+    }
+
+    async commitGitWorkspace() {
+        const ready = await this.ensureGitWorkspaceReady();
+        if (!ready) return;
+        const defaultMsg = `Update ${new Date().toLocaleString()}`;
+        const message = prompt('Commit message:', defaultMsg);
+        if (message === null) return;
+        const msg = String(message || '').trim();
+        if (!msg) {
+            this.showNotification('Commit message is required', 'info');
+            return;
+        }
+        try {
+            const resp = await fetch('/git-commit', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ message: msg })
+            });
+            const data = await resp.json();
+            if (!resp.ok || data?.success === false) {
+                const extra = data?.code === 'NO_CHANGES' ? 'No changes to commit' : (data?.error || 'Git commit failed');
+                throw new Error(extra);
+            }
+            const shortHash = data?.hash ? String(data.hash).slice(0, 7) : '';
+            this.showNotification(`Saved version${shortHash ? ` (${shortHash})` : ''}`, 'success');
+        } catch (err) {
+            this.showNotification(`Git commit failed: ${err.message}`, 'error');
+        }
+    }
+
+    async fetchGitHistory(limit = 20) {
+        try {
+            const resp = await fetch('/git-history', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ limit })
+            });
+            const data = await resp.json();
+            if (!resp.ok || data?.success === false) {
+                throw new Error(data?.error || 'Git history failed');
+            }
+            return Array.isArray(data?.history) ? data.history : [];
+        } catch (err) {
+            this.showNotification(`Git history failed: ${err.message}`, 'error');
+            return null;
+        }
+    }
+
+    formatGitHistoryPrompt(history = []) {
+        return history.map((h, idx) => {
+            const hash = String(h.hash || '').slice(0, 7);
+            const date = String(h.date || '').replace('T', ' ').replace(/\.\d+Z?$/, '');
+            const msg = String(h.message || '');
+            return `${idx + 1}. ${hash}  ${date}  ${msg}`.trim();
+        }).join('\n');
+    }
+
+    resolveGitHistorySelection(input, history = []) {
+        const raw = String(input || '').trim();
+        if (!raw) return null;
+        if (/^\d+$/.test(raw)) {
+            const idx = parseInt(raw, 10) - 1;
+            if (idx >= 0 && idx < history.length) return history[idx]?.hash || null;
+        }
+        const matched = history.find(h => String(h.hash || '').startsWith(raw));
+        return matched?.hash || raw;
+    }
+
+    async restoreGitWorkspace() {
+        const ready = await this.ensureGitWorkspaceReady();
+        if (!ready) return;
+        const history = await this.fetchGitHistory(20);
+        if (!history) return;
+        if (!history.length) {
+            this.showNotification('No git history found', 'info');
+            return;
+        }
+        const list = this.formatGitHistoryPrompt(history);
+        const input = prompt(`Restore which version?\n\n${list}\n\nEnter number or hash:`, '');
+        if (input === null) return;
+        const hash = this.resolveGitHistorySelection(input, history);
+        if (!hash) {
+            this.showNotification('Invalid selection', 'error');
+            return;
+        }
+        const ok = confirm(`Restore workspace to commit ${String(hash).slice(0, 7)}?\n\nThis will overwrite current files. Unsaved changes will be backed up automatically.`);
+        if (!ok) return;
+        try {
+            const resp = await fetch('/git-restore', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ hash, backupIfDirty: true })
+            });
+            const data = await resp.json();
+            if (!resp.ok || data?.success === false) {
+                throw new Error(data?.error || 'Git restore failed');
+            }
+            this.showNotification('Workspace restored. Reloading files...', 'success');
+            await this.loadFileList(true);
+            if (this.currentFileBase) {
+                await this.loadFile(this.currentFileBase);
+            }
+        } catch (err) {
+            this.showNotification(`Git restore failed: ${err.message}`, 'error');
+        }
     }
 
     updateAutoLoadMenuState() {

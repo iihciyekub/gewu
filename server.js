@@ -219,6 +219,41 @@ function formatDateTime() {
     return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
 }
 
+function isGitAvailable() {
+    try {
+        execFileSync('git', ['--version'], { encoding: 'utf8' });
+        return true;
+    } catch (_err) {
+        return false;
+    }
+}
+
+function isGitRepo() {
+    return fs.existsSync(path.join(ROOT_DIR, '.git'));
+}
+
+function runGit(args = []) {
+    return execFileSync('git', args, {
+        cwd: ROOT_DIR,
+        encoding: 'utf8',
+        stdio: ['ignore', 'pipe', 'pipe']
+    });
+}
+
+function ensureGitIgnore() {
+    const gitignorePath = path.join(ROOT_DIR, '.gitignore');
+    if (fs.existsSync(gitignorePath)) return false;
+    const content = [
+        'node_modules/',
+        'dist/',
+        'tmp/',
+        '.DS_Store',
+        '*.log'
+    ].join('\n') + '\n';
+    fs.writeFileSync(gitignorePath, content, 'utf8');
+    return true;
+}
+
 function copyFileToSystemClipboard(absPath) {
     try {
         if (process.platform === 'darwin') {
@@ -430,6 +465,177 @@ const server = http.createServer((req, res) => {
             allowedRoots: ALLOWED_ROOTS,
             platform: process.platform
         }));
+        return;
+    }
+
+    // Git status for workspace
+    if (req.method === 'POST' && pathname === '/git-status') {
+        const available = isGitAvailable();
+        if (!available) {
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ success: true, available: false, repo: false }));
+            return;
+        }
+        const repo = isGitRepo();
+        let dirty = false;
+        let changes = [];
+        if (repo) {
+            try {
+                const out = runGit(['status', '--porcelain']);
+                changes = out.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
+                dirty = changes.length > 0;
+            } catch (_err) {
+                dirty = false;
+            }
+        }
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ success: true, available: true, repo, dirty, changesCount: changes.length }));
+        return;
+    }
+
+    // Git init for workspace
+    if (req.method === 'POST' && pathname === '/git-init') {
+        if (!isGitAvailable()) {
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ success: false, error: 'Git is not available' }));
+            return;
+        }
+        try {
+            const already = isGitRepo();
+            if (!already) {
+                runGit(['init']);
+                ensureGitIgnore();
+            }
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ success: true, already }));
+        } catch (err) {
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ success: false, error: err.message }));
+        }
+        return;
+    }
+
+    // Git commit for workspace
+    if (req.method === 'POST' && pathname === '/git-commit') {
+        let body = '';
+        req.on('data', chunk => { body += chunk.toString(); });
+        req.on('end', () => {
+            if (!isGitAvailable()) {
+                res.writeHead(500, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ success: false, error: 'Git is not available' }));
+                return;
+            }
+            if (!isGitRepo()) {
+                res.writeHead(400, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ success: false, error: 'Git not initialized', code: 'NO_REPO' }));
+                return;
+            }
+            try {
+                const data = JSON.parse(body || '{}');
+                const message = String(data.message || '').trim() || `Update ${formatDateTime()}`;
+                runGit(['add', '-A']);
+                const statusOut = runGit(['status', '--porcelain']);
+                const changes = statusOut.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
+                if (!changes.length) {
+                    res.writeHead(200, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ success: false, error: 'No changes to commit', code: 'NO_CHANGES' }));
+                    return;
+                }
+                runGit(['commit', '-m', message]);
+                const hash = runGit(['rev-parse', 'HEAD']).trim();
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ success: true, hash }));
+            } catch (err) {
+                res.writeHead(500, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ success: false, error: err.message }));
+            }
+        });
+        return;
+    }
+
+    // Git history for workspace
+    if (req.method === 'POST' && pathname === '/git-history') {
+        let body = '';
+        req.on('data', chunk => { body += chunk.toString(); });
+        req.on('end', () => {
+            if (!isGitAvailable()) {
+                res.writeHead(500, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ success: false, error: 'Git is not available' }));
+                return;
+            }
+            if (!isGitRepo()) {
+                res.writeHead(400, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ success: false, error: 'Git not initialized', code: 'NO_REPO' }));
+                return;
+            }
+            try {
+                const data = JSON.parse(body || '{}');
+                let limit = parseInt(data.limit, 10);
+                if (Number.isNaN(limit) || limit <= 0) limit = 20;
+                limit = Math.min(Math.max(limit, 1), 50);
+                const out = runGit(['log', `-n${limit}`, '--date=iso', '--pretty=format:%H%x09%ad%x09%s']);
+                const history = out
+                    .split(/\r?\n/)
+                    .map(line => line.trim())
+                    .filter(Boolean)
+                    .map((line) => {
+                        const [hash, date, ...rest] = line.split('\t');
+                        return { hash, date, message: rest.join('\t') };
+                    });
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ success: true, history }));
+            } catch (err) {
+                res.writeHead(500, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ success: false, error: err.message }));
+            }
+        });
+        return;
+    }
+
+    // Git restore for workspace
+    if (req.method === 'POST' && pathname === '/git-restore') {
+        let body = '';
+        req.on('data', chunk => { body += chunk.toString(); });
+        req.on('end', () => {
+            if (!isGitAvailable()) {
+                res.writeHead(500, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ success: false, error: 'Git is not available' }));
+                return;
+            }
+            if (!isGitRepo()) {
+                res.writeHead(400, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ success: false, error: 'Git not initialized', code: 'NO_REPO' }));
+                return;
+            }
+            try {
+                const data = JSON.parse(body || '{}');
+                const hash = String(data.hash || '').trim();
+                const backupIfDirty = data.backupIfDirty !== false;
+                if (!hash) {
+                    res.writeHead(400, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ success: false, error: 'Missing hash' }));
+                    return;
+                }
+                if (backupIfDirty) {
+                    const statusOut = runGit(['status', '--porcelain']);
+                    const changes = statusOut.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
+                    if (changes.length) {
+                        runGit(['add', '-A']);
+                        try {
+                            runGit(['commit', '-m', `Auto backup before restore ${formatDateTime()}`]);
+                        } catch (_err) {
+                            // ignore empty commit or config errors; restore should still proceed
+                        }
+                    }
+                }
+                runGit(['checkout', hash, '--', '.']);
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ success: true }));
+            } catch (err) {
+                res.writeHead(500, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ success: false, error: err.message }));
+            }
+        });
         return;
     }
 
@@ -2125,6 +2331,11 @@ server.listen(PORT, HOST, () => {
     console.log('   - POST /delete-group-start (delete)');
     console.log('   - GET  /delete-group-status (delete)');
     console.log('   - POST /file-exists');
+    console.log('   - POST /git-status');
+    console.log('   - POST /git-init');
+    console.log('   - POST /git-commit');
+    console.log('   - POST /git-history');
+    console.log('   - POST /git-restore');
     console.log('   - POST /bib-download (download BibTeX by DOI list)');
     console.log('   - POST /groupby-fields (aggregate field values by view)');
     console.log('   - POST /json-query (query JSON items by fields)');
