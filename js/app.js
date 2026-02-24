@@ -12153,7 +12153,18 @@ class PaperStatsApp {
         if (this._settingsNavBound) return;
         const nav = document.querySelector('#settingsView .md-chat-settings-nav');
         if (!nav) return;
+        const layout = document.querySelector('#settingsView .settings-layout');
+        const toggleBtn = nav.querySelector('.md-chat-settings-toggle');
         this._settingsNavBound = true;
+        if (toggleBtn && layout) {
+            toggleBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                layout.classList.toggle('is-nav-collapsed');
+                const isCollapsed = layout.classList.contains('is-nav-collapsed');
+                toggleBtn.setAttribute('aria-expanded', String(!isCollapsed));
+                toggleBtn.setAttribute('title', isCollapsed ? 'Expand' : 'Collapse');
+            });
+        }
         nav.addEventListener('click', (e) => {
             const btn = e.target.closest('.md-chat-settings-btn');
             if (!btn) return;

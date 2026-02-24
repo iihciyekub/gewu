@@ -612,17 +612,54 @@
                     <div class="settings-layout">
                         <div class="md-chat-settings-nav" aria-label="Settings panels">
                             <!-- <div class="md-chat-settings-title">Settings</div> -->
-                            <button class="md-chat-settings-btn" type="button" data-target="projectInfo">Project Info</button>
-                            <button class="md-chat-settings-btn" type="button" data-target="fileFilter">File Filter</button>
-                            <button class="md-chat-settings-btn" type="button" data-target="createGroup">Create Group</button>
-                            <button class="md-chat-settings-btn" type="button" data-target="autoSave">Auto Save</button>
-                            <button class="md-chat-settings-btn" type="button" data-target="queryExport">Query & Export</button>
-                            <button class="md-chat-settings-btn" type="button" data-target="visExport">Vis Export</button>
-                            <button class="md-chat-settings-btn" type="button" data-target="apiSettings">API Settings</button>
-                            <button class="md-chat-settings-btn" type="button" data-target="doiIndex">DOI Index DB</button>
-                            <button class="md-chat-settings-btn" type="button" data-target="shortcuts">Shortcuts</button>
-                            <button class="md-chat-settings-btn" type="button" data-target="thirdParty">Licenses</button>
-                            <button class="md-chat-settings-btn" type="button" data-target="about">About</button>
+                            <button class="md-chat-settings-toggle" type="button" aria-label="Collapse settings navigation"
+                                title="Collapse" aria-expanded="true">
+                                <i class="fas fa-chevron-left"></i>
+                            </button>
+                            <button class="md-chat-settings-btn" type="button" data-target="projectInfo">
+                                <i class="fas fa-folder-open"></i>
+                                <span class="md-chat-settings-label">Project Info</span>
+                            </button>
+                            <button class="md-chat-settings-btn" type="button" data-target="fileFilter">
+                                <i class="fas fa-filter"></i>
+                                <span class="md-chat-settings-label">File Filter</span>
+                            </button>
+                            <button class="md-chat-settings-btn" type="button" data-target="createGroup">
+                                <i class="fas fa-layer-group"></i>
+                                <span class="md-chat-settings-label">Create Group</span>
+                            </button>
+                            <button class="md-chat-settings-btn" type="button" data-target="autoSave">
+                                <i class="fas fa-floppy-disk"></i>
+                                <span class="md-chat-settings-label">Auto Save</span>
+                            </button>
+                            <button class="md-chat-settings-btn" type="button" data-target="queryExport">
+                                <i class="fas fa-file-export"></i>
+                                <span class="md-chat-settings-label">Query & Export</span>
+                            </button>
+                            <button class="md-chat-settings-btn" type="button" data-target="visExport">
+                                <i class="fas fa-chart-line"></i>
+                                <span class="md-chat-settings-label">Vis Export</span>
+                            </button>
+                            <button class="md-chat-settings-btn" type="button" data-target="apiSettings">
+                                <i class="fas fa-key"></i>
+                                <span class="md-chat-settings-label">API Settings</span>
+                            </button>
+                            <button class="md-chat-settings-btn" type="button" data-target="doiIndex">
+                                <i class="fas fa-database"></i>
+                                <span class="md-chat-settings-label">DOI Index DB</span>
+                            </button>
+                            <button class="md-chat-settings-btn" type="button" data-target="shortcuts">
+                                <i class="fas fa-keyboard"></i>
+                                <span class="md-chat-settings-label">Shortcuts</span>
+                            </button>
+                            <button class="md-chat-settings-btn" type="button" data-target="thirdParty">
+                                <i class="fas fa-scale-balanced"></i>
+                                <span class="md-chat-settings-label">Licenses</span>
+                            </button>
+                            <button class="md-chat-settings-btn" type="button" data-target="about">
+                                <i class="fas fa-circle-info"></i>
+                                <span class="md-chat-settings-label">About</span>
+                            </button>
                         </div>
                         <div class="settings-content is-empty" id="settingsContent">
                         <div class="settings-section settings-panel file-filter-settings-panel"
