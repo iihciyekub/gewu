@@ -126,7 +126,6 @@ class PaperStatsApp {
         this.autoSaveConfigUI = null;
         this.jsonMenuVisible = false;
         this.mdMenuVisible = false;
-        this.gitMenuVisible = false;
         this.rawJsonParseOk = true;
         this.rawJsonParseError = '';
         this.rawJsonParseTimer = null;
@@ -177,6 +176,7 @@ class PaperStatsApp {
         this.settingsMenuVisible = false;
         this.autoLoadPdf = false;
         this.apiSettingsVisible = false;
+        this.gitSettingsVisible = false;
         this.autoSaveConfigVisible = false;
         this.doiIndexVisible = false;
         this.pdfPopupWindow = null;
@@ -2183,47 +2183,35 @@ class PaperStatsApp {
             });
         }
 
-        // Git 菜单：初始化 / 保存版本 / 恢复版本
-        const gitMenuToggleBtn = document.getElementById('gitMenuToggleBtn');
-        const gitMenu = document.getElementById('gitMenu');
-        const gitMenuDropdown = document.getElementById('gitMenuDropdown');
-        const gitInitItem = document.getElementById('gitInitItem');
-        const gitCommitItem = document.getElementById('gitCommitItem');
-        const gitRestoreItem = document.getElementById('gitRestoreItem');
-        if (gitMenuToggleBtn && gitMenu) {
-            gitMenuToggleBtn.addEventListener('click', (e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                this.toggleGitMenu();
-            });
-            gitMenu.addEventListener('click', (e) => {
-                e.stopPropagation();
-            });
-            document.addEventListener('click', (e) => {
-                if (!this.gitMenuVisible) return;
-                if (gitMenuDropdown && gitMenuDropdown.contains(e.target)) return;
-                this.toggleGitMenu(false);
-            });
-        }
-        if (gitInitItem) {
-            gitInitItem.addEventListener('click', async (e) => {
+        // Git 设置面板：初始化 / 保存版本 / 还原
+        const gitInitSettingsBtn = document.getElementById('gitInitSettingsBtn');
+        const gitCommitSettingsBtn = document.getElementById('gitCommitSettingsBtn');
+        const gitRestoreSettingsBtn = document.getElementById('gitRestoreSettingsBtn');
+        const gitHistoryRefreshBtn = document.getElementById('gitHistoryRefreshBtn');
+        if (gitInitSettingsBtn) {
+            gitInitSettingsBtn.addEventListener('click', async (e) => {
                 e.preventDefault();
                 await this.initGitWorkspace();
-                this.toggleGitMenu(false);
+                await this.renderGitHistoryList();
             });
         }
-        if (gitCommitItem) {
-            gitCommitItem.addEventListener('click', async (e) => {
+        if (gitCommitSettingsBtn) {
+            gitCommitSettingsBtn.addEventListener('click', async (e) => {
                 e.preventDefault();
                 await this.commitGitWorkspace();
-                this.toggleGitMenu(false);
+                await this.renderGitHistoryList();
             });
         }
-        if (gitRestoreItem) {
-            gitRestoreItem.addEventListener('click', async (e) => {
+        if (gitRestoreSettingsBtn) {
+            gitRestoreSettingsBtn.addEventListener('click', async (e) => {
                 e.preventDefault();
                 await this.restoreGitWorkspace();
-                this.toggleGitMenu(false);
+            });
+        }
+        if (gitHistoryRefreshBtn) {
+            gitHistoryRefreshBtn.addEventListener('click', async (e) => {
+                e.preventDefault();
+                await this.renderGitHistoryList();
             });
         }
         const mdTextarea = document.getElementById('markdownTextarea');
@@ -10074,15 +10062,6 @@ class PaperStatsApp {
         menu.classList.toggle('visible', next);
     }
 
-    toggleGitMenu(forceVisible) {
-        const menu = document.getElementById('gitMenu');
-        if (!menu) return;
-        const next = typeof forceVisible === 'boolean' ? forceVisible : !this.gitMenuVisible;
-        if (next) this.closeHeaderMenus('git');
-        this.gitMenuVisible = next;
-        menu.classList.toggle('visible', next);
-    }
-
     toggleImportMenu(forceVisible) {
         const menu = document.getElementById('importMenu');
         if (!menu) return;
@@ -10304,6 +10283,28 @@ class PaperStatsApp {
         }
     }
 
+    toggleGitPanel(forceVisible) {
+        const panel = document.getElementById('gitSettingsPanel');
+        if (this.gitSettingsVisible && forceVisible !== false) {
+            if (panel) this.moveSettingsPanelToEnd(panel);
+            this.updateSettingsPanelsVisibility();
+            this.saveSettingsPanelsState();
+            this.switchToView('settings');
+            this.renderGitHistoryList();
+            return;
+        }
+        const next = typeof forceVisible === 'boolean' ? forceVisible : !this.gitSettingsVisible;
+        this.gitSettingsVisible = next;
+        if (panel) panel.classList.toggle('is-visible', next);
+        if (next) this.moveSettingsPanelToEnd(panel);
+        this.updateSettingsPanelsVisibility();
+        this.saveSettingsPanelsState();
+        if (next) {
+            this.switchToView('settings');
+            this.renderGitHistoryList();
+        }
+    }
+
     toggleDoiIndexPanel(forceVisible) {
         const panel = document.getElementById('doiIndexPanel');
         if (this.doiIndexVisible && forceVisible !== false) {
@@ -10461,7 +10462,7 @@ class PaperStatsApp {
 
     updateSettingsPanelsVisibility() {
         const settingsContent = document.getElementById('settingsContent');
-        const hasAny = !!(this.fileFilterVisible || this.createGroupVisible || this.projectInfoVisible || this.thirdPartyInfoVisible || this.shortcutsVisible || this.queryExportVisible || this.visExportVisible || this.apiSettingsVisible || this.autoSaveConfigVisible || this.aboutVisible || this.doiIndexVisible);
+        const hasAny = !!(this.fileFilterVisible || this.createGroupVisible || this.projectInfoVisible || this.thirdPartyInfoVisible || this.shortcutsVisible || this.queryExportVisible || this.visExportVisible || this.apiSettingsVisible || this.gitSettingsVisible || this.autoSaveConfigVisible || this.aboutVisible || this.doiIndexVisible);
         if (settingsContent) settingsContent.classList.toggle('is-empty', !hasAny);
     }
 
@@ -10512,6 +10513,7 @@ class PaperStatsApp {
             { id: 'queryExportPanel', flag: 'queryExportVisible' },
             { id: 'visExportSettingsPanel', flag: 'visExportVisible' },
             { id: 'apiSettingsPanel', flag: 'apiSettingsVisible' },
+            { id: 'gitSettingsPanel', flag: 'gitSettingsVisible' },
             { id: 'doiIndexPanel', flag: 'doiIndexVisible' },
             { id: 'shortcutsInfoPanel', flag: 'shortcutsVisible' },
             { id: 'thirdPartyInfoPanel', flag: 'thirdPartyInfoVisible' },
@@ -10638,6 +10640,7 @@ class PaperStatsApp {
             queryExportVisible: !!this.queryExportVisible,
             visExportVisible: !!this.visExportVisible,
             apiSettingsVisible: !!this.apiSettingsVisible,
+            gitSettingsVisible: !!this.gitSettingsVisible,
             autoSaveConfigVisible: !!this.autoSaveConfigVisible,
             doiIndexVisible: !!this.doiIndexVisible,
             panelOrder: this.getSettingsPanelsOrder()
@@ -10659,6 +10662,7 @@ class PaperStatsApp {
         this.queryExportVisible = !!state.queryExportVisible;
         this.visExportVisible = !!state.visExportVisible;
         this.apiSettingsVisible = !!state.apiSettingsVisible;
+        this.gitSettingsVisible = !!state.gitSettingsVisible;
         this.autoSaveConfigVisible = !!state.autoSaveConfigVisible;
         this.doiIndexVisible = !!state.doiIndexVisible;
         this.applySettingsPanelsOrder(state.panelOrder);
@@ -10671,6 +10675,7 @@ class PaperStatsApp {
         const queryExportPanel = document.getElementById('queryExportPanel');
         const visExportPanel = document.getElementById('visExportSettingsPanel');
         const apiSettingsPanel = document.getElementById('apiSettingsPanel');
+        const gitSettingsPanel = document.getElementById('gitSettingsPanel');
         const autoSaveConfigPanel = document.getElementById('autoSaveConfigPanel');
         const doiIndexPanel = document.getElementById('doiIndexPanel');
         const fileFilterBtn = document.getElementById('fileFilterToggleBtn');
@@ -10685,6 +10690,7 @@ class PaperStatsApp {
         if (queryExportPanel) queryExportPanel.classList.toggle('is-visible', this.queryExportVisible);
         if (visExportPanel) visExportPanel.classList.toggle('is-visible', this.visExportVisible);
         if (apiSettingsPanel) apiSettingsPanel.classList.toggle('is-visible', this.apiSettingsVisible);
+        if (gitSettingsPanel) gitSettingsPanel.classList.toggle('is-visible', this.gitSettingsVisible);
         if (autoSaveConfigPanel) autoSaveConfigPanel.classList.toggle('is-visible', this.autoSaveConfigVisible);
         if (doiIndexPanel) doiIndexPanel.classList.toggle('is-visible', this.doiIndexVisible);
         if (fileFilterBtn) fileFilterBtn.classList.toggle('active', this.fileFilterVisible);
@@ -10734,7 +10740,7 @@ class PaperStatsApp {
                 }
             }, 100);
         }
-        if (!skipView && (this.fileFilterVisible || this.createGroupVisible || this.projectInfoVisible || this.thirdPartyInfoVisible || this.shortcutsVisible || this.queryExportVisible || this.apiSettingsVisible || this.autoSaveConfigVisible)) {
+        if (!skipView && (this.fileFilterVisible || this.createGroupVisible || this.projectInfoVisible || this.thirdPartyInfoVisible || this.shortcutsVisible || this.queryExportVisible || this.apiSettingsVisible || this.gitSettingsVisible || this.autoSaveConfigVisible)) {
             this.switchToView('settings');
         }
     }
@@ -11320,7 +11326,6 @@ class PaperStatsApp {
         const keep = String(except || '').toLowerCase();
         if (keep !== 'json' && this.jsonMenuVisible) this.toggleJsonMenu(false);
         if (keep !== 'md' && this.mdMenuVisible) this.toggleMdMenu(false);
-        if (keep !== 'git' && this.gitMenuVisible) this.toggleGitMenu(false);
         if (keep !== 'settings' && this.settingsMenuVisible) this.toggleSettingsMenu(false);
         if (keep !== 'import' && this.importMenuVisible) this.toggleImportMenu(false);
         if (keep !== 'info' && this.projectInfoVisible) {
@@ -11464,7 +11469,8 @@ class PaperStatsApp {
         }
     }
 
-    async ensureGitWorkspaceReady() {
+    async ensureGitWorkspaceReady(opts = {}) {
+        const promptInit = opts.promptInit !== false;
         if (!this.currentProject?.path) {
             this.showNotification('Please load a project first', 'info');
             return false;
@@ -11476,6 +11482,7 @@ class PaperStatsApp {
             return false;
         }
         if (status.repo) return true;
+        if (!promptInit) return false;
         const ok = confirm('Git is not initialized in this project. Initialize now?');
         if (!ok) return false;
         const init = await this.initGitWorkspace({ silent: true });
@@ -11551,19 +11558,22 @@ class PaperStatsApp {
         return matched?.hash || raw;
     }
 
-    async restoreGitWorkspace() {
+    async restoreGitWorkspace(hashOverride = '') {
         const ready = await this.ensureGitWorkspaceReady();
         if (!ready) return;
-        const history = await this.fetchGitHistory(20);
-        if (!history) return;
-        if (!history.length) {
-            this.showNotification('No git history found', 'info');
-            return;
+        let hash = String(hashOverride || '').trim();
+        if (!hash) {
+            const history = await this.fetchGitHistory(20);
+            if (!history) return;
+            if (!history.length) {
+                this.showNotification('No git history found', 'info');
+                return;
+            }
+            const list = this.formatGitHistoryPrompt(history);
+            const input = prompt(`Restore which version?\n\n${list}\n\nEnter number or hash:`, '');
+            if (input === null) return;
+            hash = this.resolveGitHistorySelection(input, history);
         }
-        const list = this.formatGitHistoryPrompt(history);
-        const input = prompt(`Restore which version?\n\n${list}\n\nEnter number or hash:`, '');
-        if (input === null) return;
-        const hash = this.resolveGitHistorySelection(input, history);
         if (!hash) {
             this.showNotification('Invalid selection', 'error');
             return;
@@ -11585,9 +11595,65 @@ class PaperStatsApp {
             if (this.currentFileBase) {
                 await this.loadFile(this.currentFileBase);
             }
+            await this.renderGitHistoryList();
         } catch (err) {
             this.showNotification(`Git restore failed: ${err.message}`, 'error');
         }
+    }
+
+    async renderGitHistoryList() {
+        const listEl = document.getElementById('gitHistoryList');
+        const emptyEl = document.getElementById('gitHistoryEmpty');
+        if (!listEl || !emptyEl) return;
+        listEl.innerHTML = '';
+        emptyEl.style.display = 'none';
+        if (!this.currentProject?.path) {
+            emptyEl.textContent = 'Load a project to view history.';
+            emptyEl.style.display = 'block';
+            return;
+        }
+        const status = await this.fetchGitStatus();
+        if (!status || status.available === false) {
+            emptyEl.textContent = 'Git not available.';
+            emptyEl.style.display = 'block';
+            return;
+        }
+        if (!status.repo) {
+            emptyEl.textContent = 'Git not initialized.';
+            emptyEl.style.display = 'block';
+            return;
+        }
+        const history = await this.fetchGitHistory(30);
+        if (!history || history.length === 0) {
+            emptyEl.textContent = 'No versions yet.';
+            emptyEl.style.display = 'block';
+            return;
+        }
+        history.forEach((item) => {
+            const row = document.createElement('div');
+            row.className = 'git-history-item';
+            const meta = document.createElement('div');
+            meta.className = 'git-history-meta';
+            const hash = String(item.hash || '').slice(0, 7);
+            const date = String(item.date || '').replace('T', ' ').replace(/\.\d+Z?$/, '');
+            const msg = String(item.message || '');
+            meta.innerHTML = `
+                <div class="git-history-hash">${this.escapeHtml(hash)}</div>
+                <div class="git-history-message" title="${this.escapeAttr(msg)}">${this.escapeHtml(msg)}</div>
+                <div class="git-history-date">${this.escapeHtml(date)}</div>
+            `;
+            const btn = document.createElement('button');
+            btn.className = 'btn btn-secondary';
+            btn.type = 'button';
+            btn.textContent = 'Restore';
+            btn.addEventListener('click', async (e) => {
+                e.preventDefault();
+                await this.restoreGitWorkspace(item.hash);
+            });
+            row.appendChild(meta);
+            row.appendChild(btn);
+            listEl.appendChild(row);
+        });
     }
 
     updateAutoLoadMenuState() {
@@ -12341,6 +12407,9 @@ class PaperStatsApp {
             case 'apiSettings':
                 this.toggleApiSettingsPanel(true);
                 break;
+            case 'git':
+                this.toggleGitPanel(true);
+                break;
             case 'createGroup':
                 this.toggleCreateGroupPanel(true);
                 break;
@@ -12409,6 +12478,7 @@ class PaperStatsApp {
             { id: 'queryExportPanel', flag: 'queryExportVisible', btn: 'queryExportBtn' },
             { id: 'visExportSettingsPanel', flag: 'visExportVisible' },
             { id: 'apiSettingsPanel', flag: 'apiSettingsVisible' },
+            { id: 'gitSettingsPanel', flag: 'gitSettingsVisible' },
             { id: 'autoSaveConfigPanel', flag: 'autoSaveConfigVisible' },
             { id: 'aboutPanel', flag: 'aboutVisible' },
             { id: 'doiIndexPanel', flag: 'doiIndexVisible' }

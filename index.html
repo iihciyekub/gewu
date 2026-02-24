@@ -644,6 +644,10 @@
                                 <i class="fas fa-key"></i>
                                 <span class="md-chat-settings-label">API Settings</span>
                             </button>
+                            <button class="md-chat-settings-btn" type="button" data-target="git">
+                                <i class="fa-brands fa-git-alt"></i>
+                                <span class="md-chat-settings-label">Git Version</span>
+                            </button>
                             <button class="md-chat-settings-btn" type="button" data-target="doiIndex">
                                 <i class="fas fa-database"></i>
                                 <span class="md-chat-settings-label">DOI Index DB</span>
@@ -729,6 +733,39 @@
                                     <input type="text" id="openaiApiInput" placeholder="Enter OpenAI API key">
                                 </div>
                                 <div class="settings-field-hint">API values are stored locally and masked after editing.
+                                </div>
+                            </div>
+                        </div>
+                        <div class="settings-section settings-panel git-settings-panel" id="gitSettingsPanel">
+                            <div class="settings-panel-header">
+                                <span>Git Version</span>
+                                <button class="btn btn-secondary" type="button"
+                                    onclick="window.paperStats.toggleGitPanel(false)">
+                                    <i class="fas fa-eye-slash"></i> Hide
+                                </button>
+                            </div>
+                            <div class="settings-field-list">
+                                <div class="settings-field-row git-settings-actions">
+                                    <button class="btn btn-secondary" id="gitInitSettingsBtn" type="button">
+                                        <i class="fas fa-folder-plus"></i> Initialize
+                                    </button>
+                                    <button class="btn btn-secondary" id="gitCommitSettingsBtn" type="button">
+                                        <i class="fas fa-check"></i> Save Version
+                                    </button>
+                                    <button class="btn btn-secondary" id="gitRestoreSettingsBtn" type="button">
+                                        <i class="fas fa-rotate-left"></i> Restore Version
+                                    </button>
+                                </div>
+                                <div class="settings-field-hint">Each project uses its own Git repository.</div>
+                                <div class="git-history-panel">
+                                    <div class="git-history-header">
+                                        <span>History</span>
+                                        <button class="btn btn-secondary" id="gitHistoryRefreshBtn" type="button">
+                                            <i class="fas fa-rotate"></i> Refresh
+                                        </button>
+                                    </div>
+                                    <div class="git-history-list" id="gitHistoryList"></div>
+                                    <div class="git-history-empty" id="gitHistoryEmpty">No versions yet.</div>
                                 </div>
                             </div>
                         </div>
@@ -1134,26 +1171,6 @@
                 aria-label="Query & Export">
                 <i class="fas fa-list-check"></i>
             </button>
-            <div class="header-dropdown" id="gitMenuDropdown">
-                <button id="gitMenuToggleBtn" class="status-btn" type="button" title="Git Versioning"
-                    aria-label="Git Versioning">
-                    <i class="fa-brands fa-git-alt"></i>
-                </button>
-                <div class="header-dropdown-menu" id="gitMenu" role="menu" aria-label="Git Versioning">
-                    <button class="header-dropdown-item" id="gitInitItem" type="button" role="menuitem"
-                        title="Initialize Git in current project">
-                        <i class="fas fa-folder-plus"></i><span>Init Git (Project)</span>
-                    </button>
-                    <button class="header-dropdown-item" id="gitCommitItem" type="button" role="menuitem"
-                        title="Save a version (git commit)">
-                        <i class="fas fa-check"></i><span>Save Version</span>
-                    </button>
-                    <button class="header-dropdown-item" id="gitRestoreItem" type="button" role="menuitem"
-                        title="Restore files from a past commit">
-                        <i class="fas fa-rotate-left"></i><span>Restore Version</span>
-                    </button>
-                </div>
-            </div>
             <div class="header-dropdown" id="settingsDropdown">
                 <button id="settingsToggleBtn" class="status-btn" type="button" title="Settings" aria-label="Settings">
                     <i class="fas fa-cog"></i>

@@ -3850,6 +3850,110 @@ body.theme-dark .settings-field-row .doi-index-count {
     font-size: 12px;
 }
 
+.settings-field-row.git-settings-actions {
+    grid-template-columns: 1fr;
+    align-items: flex-start;
+}
+
+.settings-field-row.git-settings-actions .btn {
+    width: 100%;
+    justify-content: flex-start;
+}
+
+.git-history-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 10px 12px;
+    border-radius: 12px;
+    border: 1px solid var(--wos-border, #e5e7eb);
+    background: var(--wos-card, #ffffff);
+    box-shadow: 0 6px 16px rgba(15, 23, 42, 0.06);
+}
+
+.git-history-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--wos-text, #111111);
+}
+
+.git-history-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    max-height: 240px;
+    overflow-y: auto;
+}
+
+.git-history-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 10px;
+    border-radius: 10px;
+    border: 1px solid var(--wos-border, #e5e7eb);
+    background: rgba(248, 250, 252, 0.9);
+    font-size: 11px;
+}
+
+.git-history-meta {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    flex: 1;
+    min-width: 0;
+}
+
+.git-history-hash {
+    font-family: 'Fira Code', 'Menlo', 'Monaco', 'Consolas', 'DejaVu Sans Mono', 'Courier New', monospace;
+    font-size: 11px;
+    color: var(--wos-text, #111111);
+}
+
+.git-history-message {
+    color: var(--gray-600);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.git-history-date {
+    color: var(--gray-500);
+}
+
+.git-history-empty {
+    font-size: 11px;
+    color: var(--gray-500);
+}
+
+body.theme-dark .git-history-panel {
+    border-color: rgba(148, 163, 184, 0.25);
+    background: rgba(15, 23, 42, 0.65);
+    box-shadow: 0 8px 18px rgba(2, 6, 23, 0.5);
+}
+
+body.theme-dark .git-history-item {
+    border-color: rgba(148, 163, 184, 0.25);
+    background: rgba(15, 23, 42, 0.5);
+}
+
+body.theme-dark .git-history-header,
+body.theme-dark .git-history-hash {
+    color: #f1f5f9;
+}
+
+body.theme-dark .git-history-message {
+    color: rgba(226, 232, 240, 0.8);
+}
+
+body.theme-dark .git-history-date,
+body.theme-dark .git-history-empty {
+    color: rgba(148, 163, 184, 0.9);
+}
+
 .settings-field-hint {
     font-size: 11px;
     color: var(--gray-500);
