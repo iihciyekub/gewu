@@ -355,7 +355,6 @@ class ProjectStorageManager {
             const uiPreferences = {
                 theme: getLegacyValue('gewuTheme', 'reviewerTheme'),
                 lastViewMode: localStorage.getItem('lastViewMode'),
-                editLocked: getLegacyValue('gewuEditLocked', 'reviewerEditLocked'),
                 debug: getLegacyValue('gewuDebug', 'paperReviewerDebug'),
                 lastJsonView: null,
                 lastSelectedFile: null

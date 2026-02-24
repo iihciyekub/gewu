@@ -113,7 +113,6 @@ class PaperStatsApp {
         this.envInfo = { homeDir: '', desktopDir: '', rootDir: '', platform: '' };
         this.defaultProjectPathExample = '/path/to/project';
         this.migrateLocalStorageKeys();
-        this.isEditLocked = this.loadEditLockState();
         this.citationCache = {}; // 缓存 cite/citep 渲染结果 {text, fallback}
         this.citationMetaCache = {}; // 缓存 DOI -> CSL
         this.citationMetaStoreKey = 'gewuCitationMeta';
@@ -891,24 +890,6 @@ class PaperStatsApp {
         }
     }
 
-    loadEditLockState() {
-        try {
-            const stored = localStorage.getItem('gewuEditLocked');
-            if (stored !== null) return stored === '1';
-            return localStorage.getItem('reviewerEditLocked') === '1';
-        } catch (_e) {
-            return false;
-        }
-    }
-
-    persistEditLockState() {
-        try {
-            localStorage.setItem('gewuEditLocked', this.isEditLocked ? '1' : '0');
-        } catch (_e) {
-            // ignore
-        }
-    }
-
     loadQaCollapsedState() {
         try {
             const raw = localStorage.getItem('qaCollapsedStateByProject');
@@ -1153,7 +1134,6 @@ class PaperStatsApp {
         if (raw.lastViewMode) cleaned.lastViewMode = raw.lastViewMode;
         if (raw.lastRootMdFile) cleaned.lastRootMdFile = String(raw.lastRootMdFile || '').trim();
         if (raw.theme) cleaned.theme = raw.theme;
-        if (typeof raw.editLocked !== 'undefined') cleaned.editLocked = !!raw.editLocked;
         if (typeof raw.debug !== 'undefined') cleaned.debug = raw.debug;
         if (typeof raw.draftMarkdownEditing === 'boolean') cleaned.draftMarkdownEditing = raw.draftMarkdownEditing;
         if (typeof raw.markdownEditing === 'boolean') cleaned.markdownEditing = raw.markdownEditing;
@@ -1849,7 +1829,6 @@ class PaperStatsApp {
     migrateLocalStorageKeys() {
         const keyPairs = [
             { oldKey: 'reviewerTheme', newKey: 'gewuTheme' },
-            { oldKey: 'reviewerEditLocked', newKey: 'gewuEditLocked' },
             { oldKey: 'reviewerProjectConfig', newKey: 'gewuProjectConfig' },
             { oldKey: 'paperReviewerCitationMeta', newKey: 'gewuCitationMeta' },
             { oldKey: 'paperReviewerDebug', newKey: 'gewuDebug' }
@@ -2092,10 +2071,6 @@ class PaperStatsApp {
         if (jsonAddFieldItem) {
             jsonAddFieldItem.addEventListener('click', async (e) => {
                 e.preventDefault();
-                if (this.isEditLocked) {
-                    this.showLockedNotification('添加字段');
-                    return;
-                }
                 if (!this.currentFile || !this.currentData) {
                     this.showNotification('Please load a JSON file first', 'error');
                     return;
@@ -2364,12 +2339,6 @@ class PaperStatsApp {
         document.getElementById('addItemModal').addEventListener('click', (e) => {
             if (e.target.id === 'addItemModal') this.closeAddItemModal();
         });
-        const queryExportBtn = document.getElementById('queryExportBtn');
-        if (queryExportBtn) {
-            queryExportBtn.addEventListener('click', () => {
-                this.toggleQueryExportPanel();
-            });
-        }
         const queryCancelBtn = document.getElementById('queryCancelBtn');
         if (queryCancelBtn) {
             queryCancelBtn.addEventListener('click', () => this.closeQueryExportModal());
@@ -2532,21 +2501,8 @@ class PaperStatsApp {
                 this.closeJsonTargetDialog();
                 this.closeCreateGroupDialog();
             }
-            // 锁定时，仅当鼠标在中间栏时才拦截结构区的排序/移动
             const middleActive = !!this.isMiddleActive;
             const leftActive = !!this.isLeftActive;
-            if (this.isEditLocked && middleActive && (key === 'k' || e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
-                // 锁定时禁止排序模式切换和上下移动
-                if (mod && !e.shiftKey && key === 'k') {
-                    e.preventDefault();
-                    this.showLockedNotification('Adjust order');
-
-                } else if (this.isReorderMode || this.selectedItem) {
-                    e.preventDefault();
-                    this.showLockedNotification('Adjust order');
-                }
-                return;
-            }
             if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === 'f') {
                 e.preventDefault();
                 this.toggleRightPanelVisibility();
@@ -2966,21 +2922,6 @@ class PaperStatsApp {
                 e.stopPropagation();
                 if (this.settingsMenuVisible) this.toggleSettingsMenu(false);
                 this.toggleAboutPanel();
-            });
-        }
-        // 编辑锁定菜单项
-        const editLockOnItem = document.getElementById('editLockOnItem');
-        const editLockOffItem = document.getElementById('editLockOffItem');
-        if (editLockOnItem) {
-            editLockOnItem.addEventListener('click', () => {
-                this.setEditLock(true);
-                this.toggleSettingsMenu(false);
-            });
-        }
-        if (editLockOffItem) {
-            editLockOffItem.addEventListener('click', () => {
-                this.setEditLock(false);
-                this.toggleSettingsMenu(false);
             });
         }
         if (fixAllMdDoisBtn) {
@@ -7939,10 +7880,6 @@ class PaperStatsApp {
         const textarea = mergeBox.querySelector('.json-merge-textarea');
         if (applyBtn && textarea) {
             applyBtn.addEventListener('click', () => {
-                if (this.isEditLocked) {
-                    this.showLockedNotification('更新 JSON');
-                    return;
-                }
                 if (!this.currentData) {
                     this.showNotification('No JSON file loaded', 'error');
                     return;
@@ -8029,10 +7966,6 @@ class PaperStatsApp {
         if (updateBtn) {
             updateBtn.addEventListener('click', (e) => {
                 e.stopPropagation();
-                if (this.isEditLocked) {
-                    this.showLockedNotification('编辑字段名');
-                    return;
-                }
                 if (!this.currentData) {
                     this.showNotification('No JSON file loaded', 'error');
                     return;
@@ -9751,10 +9684,6 @@ class PaperStatsApp {
     }
 
     moveKey(pathArray, key, offset) {
-        if (this.isEditLocked) {
-            this.showLockedNotification('Adjust order');
-            return null;
-        }
         if (!key || offset === 0) return null;
         let parent = this.currentData;
         for (const segment of pathArray) {
@@ -9945,10 +9874,6 @@ class PaperStatsApp {
     }
 
     moveSelectedItem(offset) {
-        if (this.isEditLocked) {
-            this.showLockedNotification('Adjust order');
-            return;
-        }
         if (!this.selectedItem || !offset) return;
         if (this.selectedItem.type === 'row') {
             const pathArr = [...(this.selectedItem.path || [])];
@@ -9985,10 +9910,6 @@ class PaperStatsApp {
     }
 
     moveSection(key, offset) {
-        if (this.isEditLocked) {
-            this.showLockedNotification('Adjust order');
-            return;
-        }
         if (!key || !this.currentData) return;
         const keys = Object.keys(this.currentData).filter(k => !k.endsWith('_loc') && k !== 'schema_version' && k !== 'lastupdate');
         const idx = keys.indexOf(key);
@@ -10186,59 +10107,27 @@ class PaperStatsApp {
         }
     }
 
-    setEditLock(locked) {
-        this.isEditLocked = !!locked;
-        this.persistEditLockState();
-        this.applyEditLockState();
-        this.showNotification(locked ? 'Editing locked' : 'Editing unlocked', locked ? 'info' : 'success');
-    }
-
-    toggleEditLock(forceLocked) {
-        const next = typeof forceLocked === 'boolean' ? forceLocked : !this.isEditLocked;
-        this.setEditLock(next);
-    }
-
     applyEditLockState() {
-        // 更新设置菜单中的编辑锁定选项状态
-        const editLockOnItem = document.getElementById('editLockOnItem');
-        const editLockOffItem = document.getElementById('editLockOffItem');
-        if (editLockOnItem) {
-            const checkIcon = editLockOnItem.querySelector('i[data-check="on"]');
-            if (checkIcon) checkIcon.style.opacity = this.isEditLocked ? '1' : '0';
-        }
-        if (editLockOffItem) {
-            const checkIcon = editLockOffItem.querySelector('i[data-check="off"]');
-            if (checkIcon) checkIcon.style.opacity = this.isEditLocked ? '0' : '1';
-        }
-
-        // 应用锁定状态到编辑器
+        // 确保编辑器保持可编辑状态
         const jsonTextarea = document.getElementById('jsonEditorTextarea');
         if (jsonTextarea) {
-            jsonTextarea.readOnly = this.isEditLocked;
-            jsonTextarea.classList.toggle('locked', this.isEditLocked);
+            jsonTextarea.readOnly = false;
+            jsonTextarea.classList.remove('locked');
         }
         const mdTextarea = document.getElementById('markdownTextarea');
         if (mdTextarea) {
-            mdTextarea.readOnly = this.isEditLocked;
-            mdTextarea.classList.toggle('locked', this.isEditLocked);
+            mdTextarea.readOnly = false;
+            mdTextarea.classList.remove('locked');
         }
         const addSectionBtn = document.getElementById('addSectionBtn');
         if (addSectionBtn) {
-            addSectionBtn.disabled = this.isEditLocked;
+            addSectionBtn.disabled = false;
         }
         this.updateJsonMenuState();
         this.updateMarkdownMenuState();
     }
 
-    showLockedNotification(action = 'operation') {
-        this.showNotification(`Locked, unable to ${action}`, 'info');
-    }
-
     async handleSaveShortcut() {
-        if (this.isEditLocked) {
-            this.showLockedNotification('save');
-            return;
-        }
         const view = this.currentView || 'structured';
         if (view === 'markdown') {
             if (this.isMarkdownEditing) {
@@ -10614,8 +10503,7 @@ class PaperStatsApp {
             this[item.flag] = false;
             const btnMap = {
                 fileFilterVisible: 'fileFilterToggleBtn',
-                createGroupVisible: 'addGroupBtn',
-                queryExportVisible: 'queryExportBtn'
+                createGroupVisible: 'addGroupBtn'
             };
             const btnId = btnMap[item.flag];
             if (btnId) {
@@ -10664,7 +10552,6 @@ class PaperStatsApp {
 
     toggleQueryExportPanel(forceVisible) {
         const panel = document.getElementById('queryExportPanel');
-        const btn = document.getElementById('queryExportBtn');
         const queryDoiOrderInput = document.getElementById('queryDoiOrderInput');
         if (this.queryExportVisible && forceVisible !== false) {
             if (panel) this.moveSettingsPanelToEnd(panel);
@@ -10681,7 +10568,6 @@ class PaperStatsApp {
         const next = typeof forceVisible === 'boolean' ? forceVisible : !this.queryExportVisible;
         this.queryExportVisible = next;
         if (panel) panel.classList.toggle('is-visible', next);
-        if (btn) btn.classList.toggle('active', next);
         if (next) this.moveSettingsPanelToEnd(panel);
         this.updateSettingsPanelsVisibility();
         this.saveSettingsPanelsState();
@@ -10763,7 +10649,6 @@ class PaperStatsApp {
         const doiIndexPanel = document.getElementById('doiIndexPanel');
         const fileFilterBtn = document.getElementById('fileFilterToggleBtn');
         const addGroupBtn = document.getElementById('addGroupBtn');
-        const queryExportBtn = document.getElementById('queryExportBtn');
 
         if (fileFilterPanel) fileFilterPanel.classList.toggle('is-visible', this.fileFilterVisible);
         if (createGroupPanel) createGroupPanel.classList.toggle('is-visible', this.createGroupVisible);
@@ -10778,7 +10663,6 @@ class PaperStatsApp {
         if (doiIndexPanel) doiIndexPanel.classList.toggle('is-visible', this.doiIndexVisible);
         if (fileFilterBtn) fileFilterBtn.classList.toggle('active', this.fileFilterVisible);
         if (addGroupBtn) addGroupBtn.classList.toggle('active', this.createGroupVisible);
-        if (queryExportBtn) queryExportBtn.classList.toggle('active', this.queryExportVisible);
 
         this.updateSettingsPanelsVisibility();
         if (this.fileFilterVisible) {
@@ -11475,7 +11359,7 @@ class PaperStatsApp {
         structuredItem.disabled = view === 'structured';
         flatItem.disabled = view === 'flat';
         formatItem.disabled = !(hasFile && view === 'flat');
-        addFieldItem.disabled = !(hasFile && !this.isEditLocked);
+        addFieldItem.disabled = !hasFile;
         const inFlat = view === 'flat';
         const canSave = hasFile && this.hasUnsavedChanges && (!inFlat || this.rawJsonParseOk);
         saveItem.disabled = !canSave;
@@ -12618,7 +12502,7 @@ class PaperStatsApp {
             { id: 'projectInfoPanel', flag: 'projectInfoVisible' },
             { id: 'thirdPartyInfoPanel', flag: 'thirdPartyInfoVisible' },
             { id: 'shortcutsInfoPanel', flag: 'shortcutsVisible' },
-            { id: 'queryExportPanel', flag: 'queryExportVisible', btn: 'queryExportBtn' },
+            { id: 'queryExportPanel', flag: 'queryExportVisible' },
             { id: 'visExportSettingsPanel', flag: 'visExportVisible' },
             { id: 'apiSettingsPanel', flag: 'apiSettingsVisible' },
             { id: 'gitSettingsPanel', flag: 'gitSettingsVisible' },
@@ -13065,11 +12949,6 @@ class PaperStatsApp {
         if (textarea) {
             textarea.value = JSON.stringify(this.currentData, null, 2);
             textarea.addEventListener('input', () => {
-                if (this.isEditLocked) {
-                    this.showLockedNotification('编辑 JSON');
-                    textarea.value = JSON.stringify(this.currentData, null, 2);
-                    return;
-                }
                 if (this.rawJsonParseTimer) {
                     clearTimeout(this.rawJsonParseTimer);
                     this.rawJsonParseTimer = null;
@@ -16441,11 +16320,6 @@ class PaperStatsApp {
         if (!this.currentMarkdownExists) return;
         const textarea = document.getElementById('markdownTextarea');
         if (!textarea) return;
-        if (this.isEditLocked) {
-            textarea.value = this.currentMarkdownText || this.buildDefaultMarkdown();
-            this.showLockedNotification('编辑 Markdown');
-            return;
-        }
         const nextDirty = textarea.value !== (this.currentMarkdownBaselineText || '');
         if (nextDirty === this.hasUnsavedMarkdownChanges) return;
         this.hasUnsavedMarkdownChanges = nextDirty;
@@ -16642,9 +16516,6 @@ class PaperStatsApp {
 
     toggleMarkdownEdit(editing, opts = {}) {
         if (!this.currentMarkdownExists) return;
-        if (editing && this.isEditLocked) {
-            this.showLockedNotification('编辑 Markdown');
-        }
         const skipConfirm = !!opts.skipConfirm;
         // 退出编辑时，如有未保存修改，给出提示
         if (!skipConfirm && !editing && this.isMarkdownEditing && this.hasUnsavedMarkdownChanges) {
@@ -20098,10 +19969,6 @@ class PaperStatsApp {
     // Edit Functions
     // 编辑字段名（双击key时调用）
     openEditKeyModal(parentPath, oldKey) {
-        if (this.isEditLocked) {
-            this.showLockedNotification('编辑字段名');
-            return;
-        }
         const newKey = prompt(`编辑字段名称:`, oldKey);
         if (!newKey || newKey === oldKey || !newKey.trim()) return;
 
@@ -20142,10 +20009,6 @@ class PaperStatsApp {
     }
 
     openEditModal(path, currentValue) {
-        if (this.isEditLocked) {
-            this.showLockedNotification('编辑字段');
-            return;
-        }
         this.editingPath = path;
         const lastKey = path[path.length - 1];
         document.getElementById('modalTitle').textContent = `编辑: ${this.formatKey(lastKey)}`;
@@ -20293,10 +20156,6 @@ class PaperStatsApp {
     }
 
     async saveEditedValue() {
-        if (this.isEditLocked) {
-            this.showLockedNotification('保存字段');
-            return;
-        }
         if (!this.editingPath) return;
 
         const newValue = document.getElementById('editTextarea').value;
@@ -20403,10 +20262,6 @@ class PaperStatsApp {
     }
 
     deleteCurrentField() {
-        if (this.isEditLocked) {
-            this.showLockedNotification('删除字段');
-            return;
-        }
         if (!this.editingPath) return;
         const lastKey = this.editingPath[this.editingPath.length - 1];
         const parentPath = this.editingPath.slice(0, -1);
