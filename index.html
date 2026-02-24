@@ -362,10 +362,16 @@
         <!-- Left Panel - File List -->
         <div class="left-panel">
             <div class="panel-header">
-                <div class="panel-header-actions">
+                <div class="panel-header-left">
                     <button class="btn-switch-project" id="statusBarVisibilityToggleBtn" title="Toggle status bar">
                         <i class="fa-solid fa-compass-drafting fa-bounce"></i>
                     </button>
+                    <button class="btn-switch-project" id="statusBarPositionToggleBtn"
+                        title="Toggle Status Bar Position (Top/Bottom)">
+                        <i class="fas fa-up-down"></i>
+                    </button>
+                </div>
+                <div class="panel-header-actions">
                     <button class="btn-switch-project" id="fileFilterToggleBtn" title="Search/filter files">
                         <i class="fas fa-search"></i>
                     </button>
@@ -670,10 +676,6 @@
                             id="fileFilterSettingsPanel">
                             <div class="settings-panel-header">
                                 <span>File Filter</span>
-                                <button class="btn btn-secondary" type="button"
-                                    onclick="window.paperStats.toggleFileFilter(false)">
-                                    <i class="fas fa-eye-slash"></i> Hide
-                                </button>
                             </div>
                             <div class="file-filter" id="fileFilterContainer">
                                 <div class="file-filter-row">
@@ -722,10 +724,6 @@
                         <div class="settings-section settings-panel api-settings-panel" id="apiSettingsPanel">
                             <div class="settings-panel-header">
                                 <span>API Settings</span>
-                                <button class="btn btn-secondary" type="button"
-                                    onclick="window.paperStats.toggleApiSettingsPanel(false)">
-                                    <i class="fas fa-eye-slash"></i> Hide
-                                </button>
                             </div>
                             <div class="settings-field-list">
                                 <div class="settings-field-row">
@@ -767,10 +765,6 @@
                             id="createGroupSettingsPanel">
                             <div class="settings-panel-header">
                                 <span>Create Group</span>
-                                <button class="btn btn-secondary" type="button"
-                                    onclick="window.paperStats.toggleCreateGroupPanel(false)">
-                                    <i class="fas fa-eye-slash"></i> Hide
-                                </button>
                             </div>
                             <div class="form-group">
                                 <label for="groupNamesInput">Group Names:</label>
@@ -796,10 +790,6 @@
                         <div class="settings-section settings-panel vis-export-settings-panel" id="visExportSettingsPanel">
                             <div class="settings-panel-header">
                                 <span>Vis Export</span>
-                                <button class="btn btn-secondary" type="button"
-                                    onclick="window.paperStats.toggleVisExportPanel(false)">
-                                    <i class="fas fa-eye-slash"></i> Hide
-                                </button>
                             </div>
                             <div class="settings-field-list">
                                 <div class="settings-field-row">
@@ -820,10 +810,6 @@
                         <div class="settings-section settings-panel doi-index-settings-panel" id="doiIndexPanel">
                             <div class="settings-panel-header">
                                 <span>DOI Index DB</span>
-                                <button class="btn btn-secondary" type="button"
-                                    onclick="window.paperStats.toggleDoiIndexPanel(false)">
-                                    <i class="fas fa-eye-slash"></i> Hide
-                                </button>
                             </div>
                             <div class="settings-field-list">
                                 <div class="settings-field-row">
@@ -849,10 +835,6 @@
                         <div class="settings-section settings-panel project-info-settings-panel" id="projectInfoPanel">
                             <div class="settings-panel-header">
                                 <span>Project Info</span>
-                                <button class="btn btn-secondary" type="button"
-                                    onclick="window.paperStats.toggleProjectInfoPanel(false)">
-                                    <i class="fas fa-eye-slash"></i> Hide
-                                </button>
                             </div>
                             <div class="info-body" id="projectInfoBody">Loading...</div>
                         </div>
@@ -860,10 +842,6 @@
                             id="thirdPartyInfoPanel">
                             <div class="settings-panel-header">
                                 <span>Licenses and Credits</span>
-                                <button class="btn btn-secondary" type="button"
-                                    onclick="window.paperStats.toggleThirdPartyInfoPanel(false)">
-                                    <i class="fas fa-eye-slash"></i> Hide
-                                </button>
                             </div>
                             <div class="info-body" id="thirdPartyInfoBody">Loading...</div>
                         </div>
@@ -871,20 +849,12 @@
                             id="shortcutsInfoPanel">
                             <div class="settings-panel-header">
                                 <span>Shortcuts</span>
-                                <button class="btn btn-secondary" type="button"
-                                    onclick="window.paperStats.toggleShortcutsPanel(false)">
-                                    <i class="fas fa-eye-slash"></i> Hide
-                                </button>
                             </div>
                             <div class="info-body" id="shortcutsInfoBody">Loading...</div>
                         </div>
                         <div class="settings-section settings-panel auto-save-settings-panel" id="autoSaveConfigPanel">
                             <div class="settings-panel-header">
                                 <span>Auto Save Config</span>
-                                <button class="btn btn-secondary" type="button"
-                                    onclick="window.paperStats.toggleAutoSaveConfigPanel(false)">
-                                    <i class="fas fa-eye-slash"></i> Hide
-                                </button>
                             </div>
                             <div class="auto-save-config-body" id="autoSaveConfigBody">
                                 <!-- Dynamic content will be inserted here -->
@@ -893,20 +863,12 @@
                         <div class="settings-section settings-panel about-settings-panel" id="aboutPanel">
                             <div class="settings-panel-header">
                                 <span>About</span>
-                                <button class="btn btn-secondary" type="button"
-                                    onclick="window.paperStats.toggleAboutPanel(false)">
-                                    <i class="fas fa-eye-slash"></i> Hide
-                                </button>
                             </div>
                             <div class="info-body" id="aboutBody">Loading...</div>
                         </div>
                         <div class="settings-section settings-panel query-export-settings-panel" id="queryExportPanel">
                             <div class="settings-panel-header">
                                 <span>Query & Export (DOI keyed)</span>
-                                <button class="btn btn-secondary" type="button"
-                                    onclick="window.paperStats.toggleQueryExportPanel(false)">
-                                    <i class="fas fa-eye-slash"></i> Hide
-                                </button>
                             </div>
                             <div class="form-group">
                                 <p>Select fields to export (dynamic from JSONs). If nothing is selected, only DOI is
@@ -1161,11 +1123,6 @@
                         </button>
                     </div>
                 </div>
-                <button class="status-btn" id="statusToggleSourceBtn" type="button"
-                    title="Toggle Markdown Source (Cmd/Ctrl+/)">
-                    <i class="fa-solid fa-person-chalkboard"></i>
-                    <span>Toggle Source</span>
-                </button>
             </div>
             <div class="status-progress" id="statusProgress" aria-live="polite">
                 <div class="status-progress-bar" id="statusProgressBar"></div>
@@ -1173,10 +1130,6 @@
             </div>
         </div>
         <div class="status-right">
-            <button class="status-btn" id="gitSettingsToggleBtn" type="button" title="Git Version Settings"
-                aria-label="Git Version Settings">
-                <i class="fa-brands fa-git-alt"></i>
-            </button>
             <button class="status-btn" id="mdChatToggleBtn" type="button" title="Toggle MD Chat Panel"
                 aria-label="Toggle MD Chat Panel">
                 <i class="fa-solid fa-bolt-lightning"></i>
@@ -1184,42 +1137,6 @@
             <button class="status-btn" id="themeToggleBtn" title="Toggle Theme (Light/Dark)" aria-label="Toggle Theme">
                 <i class="fas fa-moon"></i>
             </button>
-            <button class="status-btn" id="statusBarPositionToggleBtn" title="Toggle Status Bar Position (Top/Bottom)"
-                aria-label="Toggle Status Bar Position">
-                <i class="fas fa-up-down"></i>
-            </button>
-            <div class="header-dropdown" id="settingsDropdown">
-                <button id="settingsToggleBtn" class="status-btn" type="button" title="Settings" aria-label="Settings">
-                    <i class="fas fa-cog"></i>
-                </button>
-                <div class="header-dropdown-menu" id="settingsMenu" role="menu" aria-label="Settings">
-                    <button class="header-dropdown-item" id="apiSettingsMenuItem" type="button" role="menuitem"
-                        title="API settings">
-                        <i class="fas fa-key"></i>
-                        <span>API Settings</span>
-                    </button>
-                    <button class="header-dropdown-item" id="autoSaveSettingsMenuItem" type="button" role="menuitem"
-                        title="Auto Save settings">
-                        <i class="fas fa-save"></i>
-                        <span>Auto Save Settings</span>
-                    </button>
-                    <button class="header-dropdown-item" id="shortcutsInfoBtn" type="button" role="menuitem"
-                        title="Keyboard Shortcuts">
-                        <i class="fas fa-keyboard"></i>
-                        <span>Shortcuts</span>
-                    </button>
-                    <button class="header-dropdown-item" id="thirdPartyInfoBtn" type="button" role="menuitem"
-                        title="Licenses and Credits">
-                        <i class="fas fa-certificate"></i>
-                        <span>Licenses</span>
-                    </button>
-                    <button class="header-dropdown-item" id="aboutMenuItem" type="button" role="menuitem"
-                        title="About this project">
-                        <i class="fas fa-info-circle"></i>
-                        <span>About</span>
-                    </button>
-                </div>
-            </div>
             <a class="status-version-group" id="statusVersionGroup"
                 href="https://hub.docker.com/repository/docker/iihciyekub/gewu/general" title="Docker Hub: GEWU 0.0.1"
                 aria-label="Docker Hub: GEWU 0.0.1" target="_blank" rel="noopener noreferrer">

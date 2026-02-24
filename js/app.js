@@ -174,7 +174,6 @@ class PaperStatsApp {
         this.pendingPdfUrl = null;
         this.pendingPdfFallback = null;
         this.pdfPlaceholderEl = null;
-        this.settingsMenuVisible = false;
         this.autoLoadPdf = false;
         this.apiSettingsVisible = false;
         this.gitSettingsVisible = false;
@@ -1915,17 +1914,6 @@ class PaperStatsApp {
         if (statusSaveBtn) {
             statusSaveBtn.addEventListener('click', () => this.handleSaveShortcut());
         }
-        const gitSettingsToggleBtn = document.getElementById('gitSettingsToggleBtn');
-        if (gitSettingsToggleBtn) {
-            gitSettingsToggleBtn.addEventListener('click', (e) => {
-                e.preventDefault();
-                this.toggleGitPanel(true);
-            });
-        }
-        const statusToggleSourceBtn = document.getElementById('statusToggleSourceBtn');
-        if (statusToggleSourceBtn) {
-            statusToggleSourceBtn.addEventListener('click', () => this.toggleJsonMdSource());
-        }
         const middleToggleSourceBtn = document.getElementById('middleToggleSourceBtn');
         if (middleToggleSourceBtn) {
             middleToggleSourceBtn.addEventListener('click', () => this.toggleJsonMdSource());
@@ -2001,11 +1989,6 @@ class PaperStatsApp {
                 }
                 e.preventDefault();
                 this._cmdShortcutTimestamp = 0;
-                const toggleBtn = document.getElementById('statusToggleSourceBtn');
-                if (toggleBtn) {
-                    toggleBtn.click();
-                    return;
-                }
                 if ((this.currentView || 'structured') === 'settings') {
                     this.switchToView('draft');
                     return;
@@ -2486,10 +2469,6 @@ class PaperStatsApp {
                     this.closeProjectSelector();
                     return;
                 }
-                if (this.handleSettingsPanelEscape()) {
-                    e.preventDefault();
-                    return;
-                }
                 if ((this.currentView || '') === 'settings') {
                     return;
                 }
@@ -2637,17 +2616,6 @@ class PaperStatsApp {
             this.handleCreateProject();
         });
 
-        const thirdPartyInfoBtn = document.getElementById('thirdPartyInfoBtn');
-        if (thirdPartyInfoBtn) {
-            thirdPartyInfoBtn.addEventListener('click', (e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                if (this.settingsMenuVisible) {
-                    this.toggleSettingsMenu(false);
-                }
-                this.toggleThirdPartyInfoPanel();
-            });
-        }
         const projectNameBtn = document.getElementById('currentProjectName');
         if (projectNameBtn) {
             projectNameBtn.addEventListener('click', (e) => {
@@ -2686,17 +2654,6 @@ class PaperStatsApp {
             });
         }
 
-        const shortcutsInfoBtn = document.getElementById('shortcutsInfoBtn');
-        if (shortcutsInfoBtn) {
-            shortcutsInfoBtn.addEventListener('click', (e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                if (this.settingsMenuVisible) {
-                    this.toggleSettingsMenu(false);
-                }
-                this.toggleShortcutsPanel();
-            });
-        }
         const importJsonFolderInput = document.getElementById('importJsonFolderInput');
         const importJsonFileInput = document.getElementById('importJsonFileInput');
         const importPdfInput = document.getElementById('importPdfInput');
@@ -2709,7 +2666,6 @@ class PaperStatsApp {
         const importJsonFileMenuItem = document.getElementById('importJsonFileMenuItem');
         const importPdfMenuItem = document.getElementById('importPdfMenuItem');
         const importWosMenuItem = document.getElementById('importWosMenuItem');
-        const apiSettingsMenuItem = document.getElementById('apiSettingsMenuItem');
         if (importJsonFolderInput) {
             importJsonFolderInput.addEventListener('change', (e) => this.handleJsonFolderImport(e));
         }
@@ -2771,21 +2727,6 @@ class PaperStatsApp {
                 e.preventDefault();
                 importWosInput.click();
                 this.toggleImportMenu(false);
-            });
-        }
-        if (apiSettingsMenuItem) {
-            apiSettingsMenuItem.addEventListener('click', (e) => {
-                e.preventDefault();
-                this.toggleApiSettingsPanel(true);
-                this.toggleSettingsMenu(false);
-            });
-        }
-        const autoSaveSettingsMenuItem = document.getElementById('autoSaveSettingsMenuItem');
-        if (autoSaveSettingsMenuItem) {
-            autoSaveSettingsMenuItem.addEventListener('click', (e) => {
-                e.preventDefault();
-                this.toggleAutoSavePanel(true);
-                this.toggleSettingsMenu(false);
             });
         }
         // 左侧文件列表：鼠标激活后可用上下键快速切换
@@ -2882,51 +2823,12 @@ class PaperStatsApp {
         if (statusBarPositionToggleBtn) {
             statusBarPositionToggleBtn.addEventListener('click', () => this.toggleStatusBarPosition());
         }
-        const settingsToggleBtn = document.getElementById('settingsToggleBtn');
-        const settingsMenu = document.getElementById('settingsMenu');
-        const settingsDropdown = document.getElementById('settingsDropdown');
-        const autoLoadOnItem = document.getElementById('autoLoadOnItem');
-        const autoLoadOffItem = document.getElementById('autoLoadOffItem');
         const fixAllMdDoisBtn = document.getElementById('fixAllMdDoisBtn');
         const fixAllJsonDoisBtn = document.getElementById('fixAllJsonDoisBtn');
         const refreshDoiCacheBtn = document.getElementById('refreshDoiCacheBtn');
-        const aboutMenuItem = document.getElementById('aboutMenuItem');
-        if (settingsToggleBtn && settingsMenu) {
-            settingsToggleBtn.addEventListener('click', (e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                this.toggleSettingsMenu();
-            });
-            settingsMenu.addEventListener('click', (e) => e.stopPropagation());
-            document.addEventListener('click', (e) => {
-                if (!this.settingsMenuVisible) return;
-                if (settingsDropdown && settingsDropdown.contains(e.target)) return;
-                this.toggleSettingsMenu(false);
-            });
-        }
-        if (autoLoadOnItem) {
-            autoLoadOnItem.addEventListener('click', () => {
-                this.setAutoLoadPdf(true);
-                this.toggleSettingsMenu(false);
-            });
-        }
-        if (autoLoadOffItem) {
-            autoLoadOffItem.addEventListener('click', () => {
-                this.setAutoLoadPdf(false);
-                this.toggleSettingsMenu(false);
-            });
-        }
-        if (aboutMenuItem) {
-            aboutMenuItem.addEventListener('click', (e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                if (this.settingsMenuVisible) this.toggleSettingsMenu(false);
-                this.toggleAboutPanel();
-            });
-        }
         if (fixAllMdDoisBtn) {
             fixAllMdDoisBtn.addEventListener('click', async () => {
-                this.toggleSettingsMenu(false);
+                this.toggleMdMenu(false);
                 if (confirm('Are you sure you want to batch fix DOIs in all MD files?\n\nThis will correct the DOI field in the frontmatter of all MD files to only include the filename (removing the path portion).')) {
                     await this.fixAllMarkdownDois();
                 }
@@ -2934,7 +2836,7 @@ class PaperStatsApp {
         }
         if (fixAllJsonDoisBtn) {
             fixAllJsonDoisBtn.addEventListener('click', async () => {
-                this.toggleSettingsMenu(false);
+                this.toggleJsonMenu(false);
                 if (confirm('Are you sure you want to batch fix meta_info.doi in all JSON files?\n\nThis will extract a valid DOI via regex and normalize the field.')) {
                     await this.fixAllJsonDois();
                 }
@@ -2943,7 +2845,6 @@ class PaperStatsApp {
 
         if (refreshDoiCacheBtn) {
             refreshDoiCacheBtn.addEventListener('click', async () => {
-                this.toggleSettingsMenu(false);
                 await this.refreshDoiCacheFromUi();
             });
         }
@@ -10044,15 +9945,6 @@ class PaperStatsApp {
         menu.classList.toggle('visible', next);
     }
 
-    toggleSettingsMenu(forceVisible) {
-        const menu = document.getElementById('settingsMenu');
-        if (!menu) return;
-        const next = typeof forceVisible === 'boolean' ? forceVisible : !this.settingsMenuVisible;
-        if (next) this.closeHeaderMenus('settings');
-        this.settingsMenuVisible = next;
-        menu.classList.toggle('visible', next);
-    }
-
     toggleJsonMenu(forceVisible) {
         const menu = document.getElementById('jsonMenu');
         if (!menu) return;
@@ -10159,6 +10051,7 @@ class PaperStatsApp {
         const btn = document.getElementById('fileFilterToggleBtn');
         const input = document.getElementById('fileFilterInput');
         if (this.fileFilterVisible && forceVisible !== false) {
+            this.closeOtherSettingsPanels('fileFilterVisible');
             if (panel) this.moveSettingsPanelToEnd(panel);
             this.updateSettingsPanelsVisibility();
             this.saveSettingsPanelsState();
@@ -10170,6 +10063,7 @@ class PaperStatsApp {
             return;
         }
         const next = typeof forceVisible === 'boolean' ? forceVisible : !this.fileFilterVisible;
+        if (next) this.closeOtherSettingsPanels('fileFilterVisible');
         this.fileFilterVisible = next;
         if (panel) panel.classList.toggle('is-visible', next);
         if (btn) btn.classList.toggle('active', next);
@@ -10193,6 +10087,7 @@ class PaperStatsApp {
         const btn = document.getElementById('addGroupBtn');
         const input = document.getElementById('groupNamesInput');
         if (this.createGroupVisible && forceVisible !== false) {
+            this.closeOtherSettingsPanels('createGroupVisible');
             if (panel) this.moveSettingsPanelToEnd(panel);
             this.updateSettingsPanelsVisibility();
             this.saveSettingsPanelsState();
@@ -10204,6 +10099,7 @@ class PaperStatsApp {
             return;
         }
         const next = typeof forceVisible === 'boolean' ? forceVisible : !this.createGroupVisible;
+        if (next) this.closeOtherSettingsPanels('createGroupVisible');
         this.createGroupVisible = next;
         if (panel) panel.classList.toggle('is-visible', next);
         if (btn) btn.classList.toggle('active', next);
@@ -10228,6 +10124,7 @@ class PaperStatsApp {
     toggleApiSettingsPanel(forceVisible) {
         const panel = document.getElementById('apiSettingsPanel');
         if (this.apiSettingsVisible && forceVisible !== false) {
+            this.closeOtherSettingsPanels('apiSettingsVisible');
             if (panel) this.moveSettingsPanelToEnd(panel);
             this.updateSettingsPanelsVisibility();
             this.saveSettingsPanelsState();
@@ -10238,6 +10135,7 @@ class PaperStatsApp {
             return;
         }
         const next = typeof forceVisible === 'boolean' ? forceVisible : !this.apiSettingsVisible;
+        if (next) this.closeOtherSettingsPanels('apiSettingsVisible');
         this.apiSettingsVisible = next;
         if (panel) panel.classList.toggle('is-visible', next);
         if (next) this.moveSettingsPanelToEnd(panel);
@@ -10254,6 +10152,7 @@ class PaperStatsApp {
     toggleGitPanel(forceVisible) {
         const panel = document.getElementById('gitSettingsPanel');
         if (this.gitSettingsVisible && forceVisible !== false) {
+            this.closeOtherSettingsPanels('gitSettingsVisible');
             if (panel) this.moveSettingsPanelToEnd(panel);
             this.updateSettingsPanelsVisibility();
             this.saveSettingsPanelsState();
@@ -10264,6 +10163,7 @@ class PaperStatsApp {
             return;
         }
         const next = typeof forceVisible === 'boolean' ? forceVisible : !this.gitSettingsVisible;
+        if (next) this.closeOtherSettingsPanels('gitSettingsVisible');
         this.gitSettingsVisible = next;
         if (panel) panel.classList.toggle('is-visible', next);
         if (next) this.moveSettingsPanelToEnd(panel);
@@ -10280,6 +10180,7 @@ class PaperStatsApp {
     toggleDoiIndexPanel(forceVisible) {
         const panel = document.getElementById('doiIndexPanel');
         if (this.doiIndexVisible && forceVisible !== false) {
+            this.closeOtherSettingsPanels('doiIndexVisible');
             if (panel) this.moveSettingsPanelToEnd(panel);
             this.updateSettingsPanelsVisibility();
             this.saveSettingsPanelsState();
@@ -10290,6 +10191,7 @@ class PaperStatsApp {
             return;
         }
         const next = typeof forceVisible === 'boolean' ? forceVisible : !this.doiIndexVisible;
+        if (next) this.closeOtherSettingsPanels('doiIndexVisible');
         this.doiIndexVisible = next;
         if (panel) panel.classList.toggle('is-visible', next);
         if (next) this.moveSettingsPanelToEnd(panel);
@@ -10350,6 +10252,7 @@ class PaperStatsApp {
     toggleAutoSavePanel(forceVisible) {
         const panel = document.getElementById('autoSaveConfigPanel');
         if (this.autoSaveConfigVisible && forceVisible !== false) {
+            this.closeOtherSettingsPanels('autoSaveConfigVisible');
             if (panel) this.moveSettingsPanelToEnd(panel);
             this.updateSettingsPanelsVisibility();
             this.saveSettingsPanelsState();
@@ -10369,6 +10272,7 @@ class PaperStatsApp {
             return;
         }
         const next = typeof forceVisible === 'boolean' ? forceVisible : !this.autoSaveConfigVisible;
+        if (next) this.closeOtherSettingsPanels('autoSaveConfigVisible');
         this.autoSaveConfigVisible = next;
         if (panel) panel.classList.toggle('is-visible', next);
         if (next) this.moveSettingsPanelToEnd(panel);
@@ -10400,6 +10304,7 @@ class PaperStatsApp {
     toggleVisExportPanel(forceVisible) {
         const panel = document.getElementById('visExportSettingsPanel');
         if (this.visExportVisible && forceVisible !== false) {
+            this.closeOtherSettingsPanels('visExportVisible');
             if (panel) this.moveSettingsPanelToEnd(panel);
             this.updateSettingsPanelsVisibility();
             this.saveSettingsPanelsState();
@@ -10412,6 +10317,7 @@ class PaperStatsApp {
             return;
         }
         const next = typeof forceVisible === 'boolean' ? forceVisible : !this.visExportVisible;
+        if (next) this.closeOtherSettingsPanels('visExportVisible');
         this.visExportVisible = next;
         if (panel) panel.classList.toggle('is-visible', next);
         if (next) this.moveSettingsPanelToEnd(panel);
@@ -10478,48 +10384,10 @@ class PaperStatsApp {
         });
     }
 
-    handleSettingsPanelEscape() {
-        if ((this.currentView || '') !== 'settings') return false;
-        const candidates = [
-            { id: 'autoSaveConfigPanel', flag: 'autoSaveConfigVisible' },
-            { id: 'queryExportPanel', flag: 'queryExportVisible' },
-            { id: 'visExportSettingsPanel', flag: 'visExportVisible' },
-            { id: 'apiSettingsPanel', flag: 'apiSettingsVisible' },
-            { id: 'gitSettingsPanel', flag: 'gitSettingsVisible' },
-            { id: 'doiIndexPanel', flag: 'doiIndexVisible' },
-            { id: 'shortcutsInfoPanel', flag: 'shortcutsVisible' },
-            { id: 'thirdPartyInfoPanel', flag: 'thirdPartyInfoVisible' },
-            { id: 'projectInfoPanel', flag: 'projectInfoVisible' },
-            { id: 'aboutPanel', flag: 'aboutVisible' },
-            { id: 'createGroupSettingsPanel', flag: 'createGroupVisible' },
-            { id: 'fileFilterSettingsPanel', flag: 'fileFilterVisible' }
-        ];
-        for (const item of candidates) {
-            if (!this[item.flag]) continue;
-            const panel = document.getElementById(item.id);
-            if (panel) {
-                panel.classList.remove('is-visible');
-            }
-            this[item.flag] = false;
-            const btnMap = {
-                fileFilterVisible: 'fileFilterToggleBtn',
-                createGroupVisible: 'addGroupBtn'
-            };
-            const btnId = btnMap[item.flag];
-            if (btnId) {
-                const btn = document.getElementById(btnId);
-                if (btn) btn.classList.remove('active');
-            }
-            this.updateSettingsPanelsVisibility();
-            this.saveSettingsPanelsState();
-            return true;
-        }
-        return false;
-    }
-
     toggleAutoSaveConfigPanel(forceVisible) {
         const panel = document.getElementById('autoSaveConfigPanel');
         if (this.autoSaveConfigVisible && forceVisible !== false) {
+            this.closeOtherSettingsPanels('autoSaveConfigVisible');
             if (panel) this.moveSettingsPanelToEnd(panel);
             this.updateSettingsPanelsVisibility();
             this.saveSettingsPanelsState();
@@ -10533,6 +10401,7 @@ class PaperStatsApp {
             return;
         }
         const next = typeof forceVisible === 'boolean' ? forceVisible : !this.autoSaveConfigVisible;
+        if (next) this.closeOtherSettingsPanels('autoSaveConfigVisible');
         this.autoSaveConfigVisible = next;
         if (panel) panel.classList.toggle('is-visible', next);
         if (next) this.moveSettingsPanelToEnd(panel);
@@ -10554,6 +10423,7 @@ class PaperStatsApp {
         const panel = document.getElementById('queryExportPanel');
         const queryDoiOrderInput = document.getElementById('queryDoiOrderInput');
         if (this.queryExportVisible && forceVisible !== false) {
+            this.closeOtherSettingsPanels('queryExportVisible');
             if (panel) this.moveSettingsPanelToEnd(panel);
             this.updateSettingsPanelsVisibility();
             this.saveSettingsPanelsState();
@@ -10566,6 +10436,7 @@ class PaperStatsApp {
             return;
         }
         const next = typeof forceVisible === 'boolean' ? forceVisible : !this.queryExportVisible;
+        if (next) this.closeOtherSettingsPanels('queryExportVisible');
         this.queryExportVisible = next;
         if (panel) panel.classList.toggle('is-visible', next);
         if (next) this.moveSettingsPanelToEnd(panel);
@@ -10663,6 +10534,11 @@ class PaperStatsApp {
         if (doiIndexPanel) doiIndexPanel.classList.toggle('is-visible', this.doiIndexVisible);
         if (fileFilterBtn) fileFilterBtn.classList.toggle('active', this.fileFilterVisible);
         if (addGroupBtn) addGroupBtn.classList.toggle('active', this.createGroupVisible);
+
+        const visiblePanels = this.getSettingsPanelItems().filter((item) => this[item.flag]);
+        if (visiblePanels.length > 1) {
+            this.closeOtherSettingsPanels(visiblePanels[0].flag);
+        }
 
         this.updateSettingsPanelsVisibility();
         if (this.fileFilterVisible) {
@@ -11293,7 +11169,6 @@ class PaperStatsApp {
         const keep = String(except || '').toLowerCase();
         if (keep !== 'json' && this.jsonMenuVisible) this.toggleJsonMenu(false);
         if (keep !== 'md' && this.mdMenuVisible) this.toggleMdMenu(false);
-        if (keep !== 'settings' && this.settingsMenuVisible) this.toggleSettingsMenu(false);
         if (keep !== 'import' && this.importMenuVisible) this.toggleImportMenu(false);
         if (keep !== 'info' && this.projectInfoVisible) {
             const panel = document.getElementById('projectInfoPanel');
@@ -11389,7 +11264,6 @@ class PaperStatsApp {
                 label.textContent = isSourceMode ? 'Switch to Render' : 'Switch to Source';
             }
         };
-        setMdToggleIcon('statusToggleSourceBtn');
         setMdToggleIcon('middleToggleSourceBtn');
 
         const hasFile = (this.isDraftViewActive || this.isPromptViewActive || this.isRootMdViewActive) ? true : !!this.currentFile;
@@ -12495,8 +12369,8 @@ class PaperStatsApp {
         });
     }
 
-    hideAllSettingsPanels() {
-        const items = [
+    getSettingsPanelItems() {
+        return [
             { id: 'fileFilterSettingsPanel', flag: 'fileFilterVisible', btn: 'fileFilterToggleBtn' },
             { id: 'createGroupSettingsPanel', flag: 'createGroupVisible', btn: 'addGroupBtn' },
             { id: 'projectInfoPanel', flag: 'projectInfoVisible' },
@@ -12510,6 +12384,32 @@ class PaperStatsApp {
             { id: 'aboutPanel', flag: 'aboutVisible' },
             { id: 'doiIndexPanel', flag: 'doiIndexVisible' }
         ];
+    }
+
+    closeOtherSettingsPanels(exceptFlag) {
+        const items = this.getSettingsPanelItems();
+        let changed = false;
+        items.forEach((item) => {
+            if (item.flag === exceptFlag) return;
+            if (this[item.flag]) {
+                this[item.flag] = false;
+                changed = true;
+            }
+            const panel = document.getElementById(item.id);
+            if (panel) panel.classList.remove('is-visible');
+            if (item.btn) {
+                const btn = document.getElementById(item.btn);
+                if (btn) btn.classList.remove('active');
+            }
+        });
+        if (changed) {
+            this.updateSettingsPanelsVisibility();
+            this.saveSettingsPanelsState();
+        }
+    }
+
+    hideAllSettingsPanels() {
+        const items = this.getSettingsPanelItems();
         items.forEach((item) => {
             if (this[item.flag]) this[item.flag] = false;
             const panel = document.getElementById(item.id);
@@ -12741,6 +12641,7 @@ class PaperStatsApp {
         const body = document.getElementById('projectInfoBody');
         if (!panel || !body) return;
         if (this.projectInfoVisible && forceVisible !== false) {
+            this.closeOtherSettingsPanels('projectInfoVisible');
             if (!opts.skipClose) this.closeHeaderMenus('info');
             this.moveSettingsPanelToEnd(panel);
             this.updateSettingsPanelsVisibility();
@@ -12749,6 +12650,7 @@ class PaperStatsApp {
             return;
         }
         const next = typeof forceVisible === 'boolean' ? forceVisible : !this.projectInfoVisible;
+        if (next) this.closeOtherSettingsPanels('projectInfoVisible');
         if (next && !opts.skipClose) this.closeHeaderMenus('info');
         this.projectInfoVisible = next;
         panel.classList.toggle('is-visible', next);
@@ -12770,6 +12672,7 @@ class PaperStatsApp {
         const body = document.getElementById('thirdPartyInfoBody');
         if (!panel || !body) return;
         if (this.thirdPartyInfoVisible && forceVisible !== false) {
+            this.closeOtherSettingsPanels('thirdPartyInfoVisible');
             if (!opts.skipClose) this.closeHeaderMenus('thirdparty');
             this.moveSettingsPanelToEnd(panel);
             this.updateSettingsPanelsVisibility();
@@ -12779,6 +12682,7 @@ class PaperStatsApp {
             return;
         }
         const next = typeof forceVisible === 'boolean' ? forceVisible : !this.thirdPartyInfoVisible;
+        if (next) this.closeOtherSettingsPanels('thirdPartyInfoVisible');
         if (next && !opts.skipClose) this.closeHeaderMenus('thirdparty');
         this.thirdPartyInfoVisible = next;
         panel.classList.toggle('is-visible', next);
@@ -12798,6 +12702,7 @@ class PaperStatsApp {
         const body = document.getElementById('aboutBody');
         if (!panel || !body) return;
         if (this.aboutVisible && forceVisible !== false) {
+            this.closeOtherSettingsPanels('aboutVisible');
             if (!opts.skipClose) this.closeHeaderMenus('about');
             this.moveSettingsPanelToEnd(panel);
             this.updateSettingsPanelsVisibility();
@@ -12807,6 +12712,7 @@ class PaperStatsApp {
             return;
         }
         const next = typeof forceVisible === 'boolean' ? forceVisible : !this.aboutVisible;
+        if (next) this.closeOtherSettingsPanels('aboutVisible');
         if (next && !opts.skipClose) this.closeHeaderMenus('about');
         this.aboutVisible = next;
         panel.classList.toggle('is-visible', next);
@@ -12859,6 +12765,7 @@ class PaperStatsApp {
         const body = document.getElementById('shortcutsInfoBody');
         if (!panel || !body) return;
         if (this.shortcutsVisible && forceVisible !== false) {
+            this.closeOtherSettingsPanels('shortcutsVisible');
             if (!opts.skipClose) this.closeHeaderMenus('shortcuts');
             this.moveSettingsPanelToEnd(panel);
             this.updateSettingsPanelsVisibility();
@@ -12868,6 +12775,7 @@ class PaperStatsApp {
             return;
         }
         const next = typeof forceVisible === 'boolean' ? forceVisible : !this.shortcutsVisible;
+        if (next) this.closeOtherSettingsPanels('shortcutsVisible');
         if (next && !opts.skipClose) this.closeHeaderMenus('shortcuts');
         this.shortcutsVisible = next;
         panel.classList.toggle('is-visible', next);
@@ -17276,6 +17184,11 @@ class PaperStatsApp {
         const body = document.getElementById('gitPanelModalBody');
         const panel = document.getElementById('gitSettingsPanel');
         if (!modal || !body || !panel) return;
+        this.closeOtherSettingsPanels('gitSettingsVisible');
+        this.gitSettingsVisible = true;
+        panel.classList.add('is-visible');
+        this.updateSettingsPanelsVisibility();
+        this.saveSettingsPanelsState();
         if (!this._gitPanelHome) {
             this._gitPanelHome = {
                 parent: panel.parentElement,

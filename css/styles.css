@@ -212,6 +212,12 @@ body {
     letter-spacing: 0.02em;
 }
 
+.panel-header-left {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
 .project-name-btn {
     font-weight: 500;
     overflow: hidden;
