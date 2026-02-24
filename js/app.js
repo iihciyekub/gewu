@@ -152,6 +152,7 @@ class PaperStatsApp {
         this._mdChatSlotButtons = null;
         this._settingsNavBound = false;
         this.gitIdentity = { name: '', email: '' };
+        this._pendingRootMdRestore = '';
 
         // 项目管理
         this.currentProject = null; // { name, path }
@@ -1081,6 +1082,9 @@ class PaperStatsApp {
                 this.rootMdViewFile = '';
             }
         }
+        if (lastViewMode === 'markdown' && sanitized.lastRootMdFile) {
+            this._pendingRootMdRestore = sanitized.lastRootMdFile;
+        }
         if (typeof sanitized.draftMarkdownEditing === 'boolean') {
             this.markdownEditMode.draft = sanitized.draftMarkdownEditing;
         }
@@ -1147,6 +1151,7 @@ class PaperStatsApp {
         const cleaned = {};
         const projectKey = this.getProjectKey();
         if (raw.lastViewMode) cleaned.lastViewMode = raw.lastViewMode;
+        if (raw.lastRootMdFile) cleaned.lastRootMdFile = String(raw.lastRootMdFile || '').trim();
         if (raw.theme) cleaned.theme = raw.theme;
         if (typeof raw.editLocked !== 'undefined') cleaned.editLocked = !!raw.editLocked;
         if (typeof raw.debug !== 'undefined') cleaned.debug = raw.debug;
@@ -1782,6 +1787,17 @@ class PaperStatsApp {
 
         // 加载文件列表
         await this.loadFileList();
+        if (this._pendingRootMdRestore) {
+            const target = String(this._pendingRootMdRestore || '').trim();
+            if (target && Array.isArray(this.rootMdFiles) && this.rootMdFiles.includes(target)) {
+                this.isRootMdViewActive = true;
+                this.isDraftViewActive = false;
+                this.isPromptViewActive = false;
+                this.rootMdViewFile = target;
+                this.currentView = 'markdown';
+            }
+            this._pendingRootMdRestore = '';
+        }
         await this.applyCurrentView();
         this.setupEditableListeners();
 
@@ -1930,6 +1946,14 @@ class PaperStatsApp {
         const statusToggleSourceBtn = document.getElementById('statusToggleSourceBtn');
         if (statusToggleSourceBtn) {
             statusToggleSourceBtn.addEventListener('click', () => this.toggleJsonMdSource());
+        }
+        const middleToggleSourceBtn = document.getElementById('middleToggleSourceBtn');
+        if (middleToggleSourceBtn) {
+            middleToggleSourceBtn.addEventListener('click', () => this.toggleJsonMdSource());
+        }
+        const middleSaveBtn = document.getElementById('middleSaveBtn');
+        if (middleSaveBtn) {
+            middleSaveBtn.addEventListener('click', () => this.handleSaveShortcut());
         }
         this.initMarkdownChatPanel();
         this.initSettingsNav();
@@ -2194,7 +2218,6 @@ class PaperStatsApp {
         // Git 设置面板：初始化 / 保存版本 / 还原
         const gitInitSettingsBtn = document.getElementById('gitInitSettingsBtn');
         const gitCommitSettingsBtn = document.getElementById('gitCommitSettingsBtn');
-        const gitRestoreSettingsBtn = document.getElementById('gitRestoreSettingsBtn');
         const gitHistoryRefreshBtn = document.getElementById('gitHistoryRefreshBtn');
         if (gitInitSettingsBtn) {
             gitInitSettingsBtn.addEventListener('click', async (e) => {
@@ -2208,12 +2231,6 @@ class PaperStatsApp {
                 e.preventDefault();
                 await this.commitGitWorkspace();
                 await this.renderGitHistoryList();
-            });
-        }
-        if (gitRestoreSettingsBtn) {
-            gitRestoreSettingsBtn.addEventListener('click', async (e) => {
-                e.preventDefault();
-                await this.restoreGitWorkspace();
             });
         }
         if (gitHistoryRefreshBtn) {
@@ -11477,6 +11494,7 @@ class PaperStatsApp {
             }
         };
         setMdToggleIcon('statusToggleSourceBtn');
+        setMdToggleIcon('middleToggleSourceBtn');
 
         const hasFile = (this.isDraftViewActive || this.isPromptViewActive || this.isRootMdViewActive) ? true : !!this.currentFile;
         dropdown.style.display = 'inline-flex';
@@ -17049,7 +17067,11 @@ class PaperStatsApp {
             try {
                 localStorage.setItem('lastViewMode', lastViewMode);
             } catch (_e) { }
-            this.updateUiPreferences({ lastViewMode });
+            const prefs = { lastViewMode };
+            if (isRootMdRequested && requestedRootMdFile) {
+                prefs.lastRootMdFile = requestedRootMdFile;
+            }
+            this.updateUiPreferences(prefs);
             await this.saveUiPreferencesNow();
             const structured = document.getElementById('structuredView');
             const markdown = document.getElementById('markdownView');
@@ -17245,6 +17267,9 @@ class PaperStatsApp {
         const view = this.currentView || 'structured';
         if (view === 'markdown' && this.isRootMdViewActive && this.rootMdViewFile) {
             await this.switchToView(`root-md:${this.rootMdViewFile}`);
+            if (!this.currentMarkdownExists) {
+                await this.loadRootMarkdownFile(this.rootMdViewFile);
+            }
             return;
         }
         if (view === 'markdown' && this.isPromptViewActive) {

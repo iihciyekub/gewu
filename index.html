@@ -752,9 +752,6 @@
                                     <button class="btn btn-secondary" id="gitCommitSettingsBtn" type="button">
                                         <i class="fas fa-check"></i> Save Version
                                     </button>
-                                    <button class="btn btn-secondary" id="gitRestoreSettingsBtn" type="button">
-                                        <i class="fas fa-rotate-left"></i> Restore Version
-                                    </button>
                                 </div>
                                 <div class="settings-field-hint">Each project uses its own Git repository.</div>
                                 <div class="settings-field-hint">Git identity is auto-resolved (system git if available, otherwise default).</div>
@@ -1006,6 +1003,18 @@
                             </div>
                         </div>
                     </div>
+                </div>
+                <div class="middle-action-buttons" aria-label="Middle panel actions">
+                    <button class="middle-toggle-source-btn" id="middleToggleSourceBtn" type="button"
+                        title="Toggle Source / Render">
+                        <i class="fa-solid fa-code"></i>
+                        <span>Toggle</span>
+                    </button>
+                    <button class="middle-save-btn" id="middleSaveBtn" type="button"
+                        title="Save current view (Ctrl/Cmd+S)">
+                        <i class="fas fa-save"></i>
+                        <span>Save</span>
+                    </button>
                 </div>
             </div>
         </div>

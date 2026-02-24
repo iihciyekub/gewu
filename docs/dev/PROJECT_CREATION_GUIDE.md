@@ -10,6 +10,17 @@
 - `项目名/md/` - 存放 Markdown 格式的笔记和评论
 - `项目名/pdf/` - 存放 PDF 文件
 
+同时，当前版本支持以下扩展内容：
+- `.git/`（可选）- 项目级 Git 版本管理（通过 Git 面板初始化后创建）
+- `PROMPT.MD` - Prompt 视图文档（项目根目录）
+- `DRAFT.md` - Draft 视图文档（项目根目录）
+- `md/*.md` - 额外的 root MD 文档（可在根 MD 视图中切换）
+- `.project` - 项目标记文件（自动创建）
+- 本地存储（非项目目录内）：
+  - 项目视图状态（最近视图、面板宽度、分组顺序等）
+  - Git 身份缓存（按项目本地存储）
+  - 引用缓存 / DOI 缓存（IndexedDB / localStorage）
+
 ### 2. **创建新项目**
 
 #### 方式 A: 通过 UI 界面
@@ -76,20 +87,29 @@ curl -X POST http://localhost:8000/validate-project \
 ```
 user/
 ├── my_research/              # 项目目录
+│   ├── .git/                 # (可选) 项目级 Git 仓库
+│   ├── .project              # 项目标记文件（自动创建）
 │   ├── json/                 # JSON 数据目录
-│   │   ├── paper1.json
-│   │   ├── paper2.json
-│   │   └── view1/            # (可选) 组织视图
-│   │       └── checklist.json
+│   │   ├── view1/            # (可选) 组织视图
+│   │   │   ├── paper1.json
+│   │   │   ├── paper2.json
+│   │   │   └── (其它json)
+│   │   ├── view2/            # (可选) 组织视图
+│   │   │   ├── paper1.json
+│   │   │   ├── paper2.json
+│   │   │   └── (其它json)
+│   │   └── view3(其它更多)/  
 │   ├── md/                   # Markdown 笔记目录
 │   │   ├── paper1.md
 │   │   ├── paper2.md
-│   │   └── notes.md
+│   │   └── (其它md)
 │   ├── pdf/                  # PDF 文件目录
 │   │   ├── paper1.pdf
 │   │   ├── paper2.pdf
-│   │   └── background.pdf
-│   └── .project              # 项目标记文件（自动创建）
+│   │   └── (其它更多)
+│   ├── PROMPT.MD             # Prompt 视图文档（可选）
+│   ├── DRAFT.md              # Draft 视图文档（可选）
+│   └── (其它md)              # 额外 md 文档 / 辅助文件
 ```
 
 ## 操作步骤
@@ -114,6 +134,8 @@ user/
 - 将 PDF 文件放到 `pdf/` 目录
 - 将 JSON 数据文件放到 `json/` 目录
 - 将 Markdown 笔记放到 `md/` 目录
+  - 其中 `PROMPT.MD` 与 `DRAFT.md`（位于项目根目录）会被分别识别为 Prompt / Draft 视图
+  - 其它 `md/*.md` 会出现在 root MD 视图
 
 系统会自动识别这些文件并显示在文件列表中。
 
@@ -170,6 +192,3 @@ user/
 1. 项目选择器模态窗口 - 支持创建和加载
 2. 文件列表扫描 - 同时支持新旧结构
 3. 文件保存 - 自动检测并使用正确的目录
-
-## 许可证和支持
-有问题或建议？请提交反馈。
