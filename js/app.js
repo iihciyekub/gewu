@@ -11742,11 +11742,13 @@ class PaperStatsApp {
             panel.style.height = `${stored}px`;
         }
         const storedHidden = localStorage.getItem('mdChatHidden') === '1';
-        const storedDocked = localStorage.getItem('mdChatDocked') === '1';
+        const storedDockedRaw = localStorage.getItem('mdChatDocked');
+        const storedDocked = storedDockedRaw === null ? true : storedDockedRaw === '1';
         const storedCollapsed = localStorage.getItem('mdChatCollapsed') === '1';
         const storedDockSide = localStorage.getItem('mdChatDockSide') === 'left' ? 'left' : 'right';
+        const defaultDockSide = localStorage.getItem('mdChatDockSide') ? storedDockSide : 'left';
         const storedDockPos = localStorage.getItem('mdChatDockPos');
-        let dockSide = storedDockSide;
+        let dockSide = defaultDockSide;
         const updateDockButton = () => {
             if (!dockSideBtn) return;
             const icon = dockSideBtn.querySelector('i');

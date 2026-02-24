@@ -370,6 +370,10 @@
                         title="Toggle Status Bar Position (Top/Bottom)">
                         <i class="fas fa-up-down"></i>
                     </button>
+                    <button class="btn-switch-project" id="themeToggleBtn" title="Toggle Theme (Light/Dark)"
+                        aria-label="Toggle Theme">
+                        <i class="fas fa-moon"></i>
+                    </button>
                 </div>
                 <div class="panel-header-actions">
                     <button class="btn-switch-project" id="fileFilterToggleBtn" title="Search/filter files">
@@ -983,6 +987,11 @@
                         <i class="fa-brands fa-git-alt"></i>
                         <span>Git</span>
                     </button>
+                    <button class="middle-chat-btn" id="mdChatToggleBtn" type="button"
+                        title="Toggle MD Chat Panel" aria-label="Toggle MD Chat Panel">
+                        <i class="fa-solid fa-bolt-lightning"></i>
+                        <span>Chat</span>
+                    </button>
                 </div>
             </div>
         </div>
@@ -995,9 +1004,6 @@
 
         <!-- Right Panel - PDF Viewer -->
         <div class="right-panel">
-            <button class="btn-pdf-popup" id="btnPdfPopup" title="Toggle PDF view" aria-pressed="false">
-                <i class="fas fa-up-right-from-square"></i>
-            </button>
             <iframe id="pdfViewer" style="width: 100%; height: 100%; border: none;"></iframe>
             <div id="pdfPlaceholder" class="pdf-placeholder" aria-live="polite">
                 <div class="pdf-placeholder-inner">
@@ -1007,17 +1013,24 @@
                     <div class="pdf-placeholder-text"></div>
                 </div>
             </div>
-            <!-- PDF.js fullscreen shortcut button -->
-            <button class="btn-pdf-autoload" id="btnPdfAutoLoad" title="Auto-load PDF: Off" aria-pressed="false">
-                <i class="fas fa-toggle-off"></i>
-            </button>
-            <button class="btn-pdfjs-fullscreen" id="btnPdfJsFullscreen" title="Enter PDF fullscreen mode">
-                <i class="fas fa-expand"></i>
-            </button>
-            <!-- PDF.js download shortcut button -->
-            <button class="btn-pdfjs-download" id="btnPdfJsDownload" title="Download current PDF">
-                <i class="fas fa-download"></i>
-            </button>
+            <div class="pdf-action-buttons" aria-label="PDF actions">
+                <button class="btn-pdf-popup pdf-action-btn" id="btnPdfPopup" title="Toggle PDF view"
+                    aria-pressed="false">
+                    <i class="fas fa-up-right-from-square"></i>
+                </button>
+                <button class="btn-pdf-autoload pdf-action-btn" id="btnPdfAutoLoad" title="Auto-load PDF: Off"
+                    aria-pressed="false">
+                    <i class="fas fa-toggle-off"></i>
+                </button>
+                <button class="btn-pdfjs-fullscreen pdf-action-btn" id="btnPdfJsFullscreen"
+                    title="Enter PDF fullscreen mode">
+                    <i class="fas fa-expand"></i>
+                </button>
+                <button class="btn-pdfjs-download pdf-action-btn" id="btnPdfJsDownload"
+                    title="Download current PDF">
+                    <i class="fas fa-download"></i>
+                </button>
+            </div>
         </div>
     </div>
 
@@ -1130,13 +1143,6 @@
             </div>
         </div>
         <div class="status-right">
-            <button class="status-btn" id="mdChatToggleBtn" type="button" title="Toggle MD Chat Panel"
-                aria-label="Toggle MD Chat Panel">
-                <i class="fa-solid fa-bolt-lightning"></i>
-            </button>
-            <button class="status-btn" id="themeToggleBtn" title="Toggle Theme (Light/Dark)" aria-label="Toggle Theme">
-                <i class="fas fa-moon"></i>
-            </button>
             <a class="status-version-group" id="statusVersionGroup"
                 href="https://hub.docker.com/repository/docker/iihciyekub/gewu/general" title="Docker Hub: GEWU 0.0.1"
                 aria-label="Docker Hub: GEWU 0.0.1" target="_blank" rel="noopener noreferrer">

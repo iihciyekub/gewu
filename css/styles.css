@@ -1460,7 +1460,8 @@ body.theme-vscode .tab-btn.active {
 
 .middle-toggle-source-btn,
 .middle-save-btn,
-.middle-git-btn {
+.middle-git-btn,
+.middle-chat-btn {
     display: inline-flex;
     align-items: center;
     gap: 6px;
@@ -1476,7 +1477,8 @@ body.theme-vscode .tab-btn.active {
 
 .middle-toggle-source-btn:hover,
 .middle-save-btn:hover,
-.middle-git-btn:hover {
+.middle-git-btn:hover,
+.middle-chat-btn:hover {
     background: #e5e7eb;
     border-color: rgba(17, 24, 39, 0.25);
     box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
@@ -1484,13 +1486,15 @@ body.theme-vscode .tab-btn.active {
 
 .middle-toggle-source-btn:active,
 .middle-save-btn:active,
-.middle-git-btn:active {
+.middle-git-btn:active,
+.middle-chat-btn:active {
     transform: translateY(1px);
 }
 
 body.theme-dark .middle-toggle-source-btn,
 body.theme-dark .middle-save-btn,
-body.theme-dark .middle-git-btn {
+body.theme-dark .middle-git-btn,
+body.theme-dark .middle-chat-btn {
     background: rgba(15, 23, 42, 0.7);
     border-color: rgba(148, 163, 184, 0.35);
     color: #f8fafc;
@@ -4083,8 +4087,8 @@ body.theme-dark .git-history-empty {
 
 .markdown-body {
     font-family: 'Georgia', 'Times New Roman', serif;
-    font-size: 13px;
-    padding: 6px;
+    font-size: 12px;
+    /* padding: 6px; */
     line-height: 1.6;
     color: var(--wos-text);
     flex: 1;
@@ -5440,140 +5444,63 @@ body.theme-vscode .md-chat-input-text {
 }
 
 /* PDF.js 全屏快捷按钮 */
-.btn-pdfjs-fullscreen {
+.pdf-action-buttons {
     position: absolute;
-    bottom: 16px;
-    right: 70px;
-    width: 42px;
-    height: 42px;
-    background: var(--wos-blue);
-    color: #fff;
-    border: none;
-    border-radius: 50%;
-    cursor: pointer;
-    display: flex;
+    right: 10px;
+    bottom: 10px;
+    z-index: 10;
+    display: inline-flex;
+    gap: 8px;
+}
+
+.pdf-action-btn {
+    display: inline-flex;
     align-items: center;
     justify-content: center;
-    box-shadow: 0 6px 16px rgba(0, 62, 116, 0.35);
-    transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
-    z-index: 10;
-}
-
-.btn-pdfjs-fullscreen:hover {
-    background: var(--wos-blue-dark);
-    transform: translateY(-2px) scale(1.03);
-    box-shadow: 0 8px 18px rgba(0, 62, 116, 0.45);
-}
-
-.btn-pdfjs-fullscreen i {
-    font-size: 16px;
-}
-
-/* PDF.js 下载快捷按钮 */
-.btn-pdfjs-download {
-    position: absolute;
-    bottom: 16px;
-    right: 125px;
-    width: 42px;
-    height: 42px;
-    background: var(--wos-blue-light);
-    color: #fff;
-    border: none;
-    border-radius: 50%;
+    gap: 6px;
+    width: 40px;
+    height: 32px;
+    border-radius: 999px;
+    border: 1px solid rgba(17, 24, 39, 0.15);
+    background: #f3f4f6;
+    color: #111827;
+    font-size: 11px;
     cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    box-shadow: 0 6px 16px rgba(0, 102, 204, 0.35);
-    transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
-    z-index: 10;
+    transition: background 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease, transform 0.12s ease;
 }
 
-.btn-pdfjs-download:hover {
-    background: var(--wos-blue);
-    transform: translateY(-2px) scale(1.03);
-    box-shadow: 0 8px 18px rgba(0, 62, 116, 0.45);
+.pdf-action-btn i {
+    font-size: 14px;
 }
 
-.btn-pdfjs-download i {
-    font-size: 16px;
+.pdf-action-btn:hover {
+    background: #e5e7eb;
+    border-color: rgba(17, 24, 39, 0.25);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
 }
 
-/* PDF Popup Window Button */
-.btn-pdf-popup {
-    position: absolute;
-    bottom: 16px;
-    right: 180px;
-    width: 42px;
-    height: 42px;
-    background: var(--wos-blue-light);
-    color: #fff;
-    border: none;
-    border-radius: 50%;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    box-shadow: 0 6px 16px rgba(0, 102, 204, 0.35);
-    transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
-    z-index: 10;
+.pdf-action-btn:active {
+    transform: translateY(1px);
 }
 
-.btn-pdf-popup.is-popup {
-    background: var(--wos-orange);
-    box-shadow: 0 6px 16px rgba(255, 106, 0, 0.35);
+body.theme-dark .pdf-action-btn {
+    background: rgba(15, 23, 42, 0.7);
+    border-color: rgba(148, 163, 184, 0.35);
+    color: #f8fafc;
 }
 
-.btn-pdf-popup:hover {
-    background: var(--wos-blue);
-    transform: translateY(-2px) scale(1.03);
-    box-shadow: 0 8px 18px rgba(0, 62, 116, 0.45);
-}
-
-.btn-pdf-popup.is-popup:hover {
-    background: var(--wos-orange-light);
-    box-shadow: 0 8px 18px rgba(255, 106, 0, 0.4);
-}
-
-.btn-pdf-popup i {
-    font-size: 16px;
-}
-
-/* PDF auto-load toggle */
-.btn-pdf-autoload {
-    position: absolute;
-    bottom: 16px;
-    right: 16px;
-    width: 42px;
-    height: 42px;
-    background: var(--wos-border);
-    color: var(--wos-text);
-    border: none;
-    border-radius: 50%;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    box-shadow: 0 6px 16px rgba(17, 24, 39, 0.18);
-    transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
-    z-index: 10;
-}
-
+.btn-pdf-popup.is-popup,
 .btn-pdf-autoload.is-on {
-    background: var(--wos-blue);
-    color: #fff;
-    box-shadow: 0 6px 16px rgba(0, 62, 116, 0.35);
+    background: #e0f2fe;
+    border-color: rgba(14, 116, 144, 0.35);
+    color: #0f172a;
 }
 
-.btn-pdf-autoload:hover {
-    background: var(--wos-blue-light);
-    color: #fff;
-    transform: translateY(-2px) scale(1.03);
-    box-shadow: 0 8px 18px rgba(0, 62, 116, 0.45);
-}
-
-.btn-pdf-autoload i {
-    font-size: 16px;
+body.theme-dark .btn-pdf-popup.is-popup,
+body.theme-dark .btn-pdf-autoload.is-on {
+    background: rgba(37, 99, 235, 0.2);
+    border-color: rgba(96, 165, 250, 0.4);
+    color: #f8fafc;
 }
 
 .pdf-placeholder {
