@@ -180,6 +180,7 @@ class PaperStatsApp {
         this.autoSaveConfigVisible = false;
         this.doiIndexVisible = false;
         this.pdfTabWindow = null;
+        this.isPdfTabMode = false;
         this._pdfPrewarmCache = new Map();
         this.metaDefaultsPatched = false;
         this.addSectionShowTimer = null;
@@ -3077,6 +3078,10 @@ class PaperStatsApp {
                 const icon = middleToggle.querySelector('i');
                 if (rightPanel.classList.contains('panel-collapsed')) {
                     rightPanel.classList.remove('panel-collapsed');
+                    if (this.isPdfTabMode) {
+                        this.disablePdfTabMode();
+                        this.ensurePdfLoaded({ force: true });
+                    }
                     // 若之前宽度为0，默认恢复为容器宽度的33%
                     if (!this.lastRightWidth || this.lastRightWidth <= 1) {
                         const containerWidth = container?.getBoundingClientRect().width || window.innerWidth;
@@ -3279,6 +3284,10 @@ class PaperStatsApp {
         const icon = middleToggle?.querySelector('i');
         if (rightPanel.classList.contains('panel-collapsed')) {
             rightPanel.classList.remove('panel-collapsed');
+            if (this.isPdfTabMode) {
+                this.disablePdfTabMode();
+                this.ensurePdfLoaded({ force: true });
+            }
             if (!this.lastRightWidth || this.lastRightWidth <= 1) {
                 const containerWidth = container?.getBoundingClientRect().width || window.innerWidth;
                 this.lastRightWidth = Math.max(200, Math.floor(containerWidth * 0.33));
@@ -7542,7 +7551,9 @@ class PaperStatsApp {
                     // 刚导入的PDF，跳过可用性检查直接加载
                     this._skipPdfAvailabilityCheck = true;
                 }
-                if ((this.autoLoadPdf || shouldForceLoad) && this.isPdfViewActive()) {
+                if (this.isPdfTabMode && this.isPdfTabActive()) {
+                    await this.ensurePdfLoaded({ force: true });
+                } else if ((this.autoLoadPdf || shouldForceLoad) && this.isPdfViewActive()) {
                     await this.ensurePdfLoaded({ force: shouldForceLoad });
                 }
             } else {
@@ -7554,6 +7565,14 @@ class PaperStatsApp {
                 this.updatePdfPlaceholder('empty');
                 this.lastPdfLoadedUrl = '';
                 this.lastPdfLoadedKey = '';
+                if (this.isPdfTabMode && this.isPdfTabActive()) {
+                    try {
+                        this.pdfTabWindow.location.href = 'about:blank';
+                    } catch (_err) {
+                        this.pdfTabWindow = null;
+                        this.isPdfTabMode = false;
+                    }
+                }
                 // 清除强制加载标志（如果有）
                 this._forceLoadPdfOnNextFile = false;
             }
@@ -17781,7 +17800,60 @@ class PaperStatsApp {
         }
     }
 
+    ensurePdfTabWindowState() {
+        if (this.pdfTabWindow && this.pdfTabWindow.closed) {
+            this.pdfTabWindow = null;
+            if (this.isPdfTabMode) {
+                this.isPdfTabMode = false;
+                if (this.isPdfViewActive()) {
+                    this.ensurePdfLoaded({ force: true });
+                }
+            }
+        }
+    }
+
+    isPdfTabActive() {
+        this.ensurePdfTabWindowState();
+        return !!this.pdfTabWindow;
+    }
+
+    getActivePdfWindow() {
+        if (this.isPdfTabMode && this.isPdfTabActive()) {
+            return this.pdfTabWindow;
+        }
+        const iframe = document.getElementById('pdfViewer');
+        return iframe?.contentWindow || null;
+    }
+
+    getActivePdfApp() {
+        const win = this.getActivePdfWindow();
+        return win?.PDFViewerApplication || null;
+    }
+
+    collapseRightPanelForPdfTab() {
+        const rightPanel = document.querySelector('.right-panel');
+        const middleToggle = document.querySelector('#middleResizer .resizer-toggle');
+        if (!rightPanel || rightPanel.classList.contains('panel-collapsed')) return;
+        this.lastRightWidth = rightPanel.getBoundingClientRect().width || this.lastRightWidth;
+        rightPanel.classList.add('panel-collapsed');
+        rightPanel.style.width = '';
+        if (middleToggle) middleToggle.title = 'Show PDF preview (Cmd+Shift+F / Ctrl+Shift+F)';
+        const icon = middleToggle?.querySelector('i');
+        if (icon) icon.style.transform = 'rotate(180deg)';
+    }
+
+    enablePdfTabMode() {
+        this.isPdfTabMode = true;
+        this.collapseRightPanelForPdfTab();
+        this.resetPdfViewerFrame();
+    }
+
+    disablePdfTabMode() {
+        this.isPdfTabMode = false;
+    }
+
     openPdfInNewTab() {
+        this.ensurePdfTabWindowState();
         if (!this.currentPdfUrl) {
             this.showNotification('No PDF loaded', 'info');
             return;
@@ -17792,6 +17864,8 @@ class PaperStatsApp {
             try {
                 this.pdfTabWindow.location.href = viewerUrl;
                 this.pdfTabWindow.focus();
+                this.enablePdfTabMode();
+                this.ensurePdfLoaded({ force: true });
                 return;
             } catch (_err) {
                 this.pdfTabWindow = null;
@@ -17803,11 +17877,14 @@ class PaperStatsApp {
             return;
         }
         this.pdfTabWindow = nextTab;
+        this.enablePdfTabMode();
+        this.ensurePdfLoaded({ force: true });
     }
 
     async loadPDF(url) {
         const loadToken = ++this.currentPdfLoadToken;
         try {
+            this.ensurePdfTabWindowState();
             this.currentPdfUrl = url;
             this.pendingPdfUrl = url;
 
@@ -17838,6 +17915,12 @@ class PaperStatsApp {
                 } catch (_err) {
                     this.pdfTabWindow = null;
                 }
+            }
+            if (this.isPdfTabMode && this.isPdfTabActive()) {
+                this.lastPdfLoadedUrl = url;
+                this.pendingPdfUrl = url;
+                this.updatePdfPlaceholder('loaded');
+                return;
             }
 
             const tryReuseViewer = async () => {
@@ -17952,9 +18035,6 @@ class PaperStatsApp {
 
                             // 恢复PDF标注数据
                             await this.restorePdfAnnotations(url);
-
-                            // 恢复PDF窗口模式
-                            this.restorePdfViewMode();
                         });
                     }
                 } catch (err) {
@@ -18030,11 +18110,13 @@ class PaperStatsApp {
 
     async ensurePdfLoaded(options = {}) {
         const force = !!options.force;
-        if (!this.isPdfViewActive()) {
+        this.ensurePdfTabWindowState();
+        const tabActive = this.isPdfTabMode && this.isPdfTabActive();
+        if (!tabActive && !this.isPdfViewActive()) {
             console.log('⏭️ PDF view inactive, skip loading');
             return;
         }
-        if (!this.autoLoadPdf && !force && !this.lastPdfLoadedUrl) {
+        if (!tabActive && !this.autoLoadPdf && !force && !this.lastPdfLoadedUrl) {
             console.log('⏭️ Auto-load disabled, skip loading');
             return;
         }
@@ -18126,6 +18208,7 @@ class PaperStatsApp {
     }
 
     isPdfViewActive() {
+        if (this.isPdfTabMode && this.isPdfTabActive()) return true;
         const rightPanel = document.querySelector('.right-panel');
         if (!rightPanel) return false;
         return !rightPanel.classList.contains('panel-collapsed');
@@ -18199,13 +18282,9 @@ class PaperStatsApp {
 
     enterPdfJsFullscreen() {
         try {
-            let pdfApp = null;
-
-            // 从内嵌iframe获取PDFViewerApplication
-            const iframe = document.getElementById('pdfViewer');
-            if (iframe && iframe.contentWindow) {
-                pdfApp = iframe.contentWindow.PDFViewerApplication;
-                this.debugLog('✅ 从内嵌iframe获取PDFViewerApplication成功');
+            const pdfApp = this.getActivePdfApp();
+            if (pdfApp) {
+                this.debugLog('✅ 获取PDFViewerApplication成功');
             }
 
             if (!pdfApp) {
@@ -18241,13 +18320,9 @@ class PaperStatsApp {
             this._isSavingPdf = true;
             this.showNotification('Starting to save PDF...', 'info');
 
-            let pdfApp = null;
-
-            // 从内嵌iframe获取PDFViewerApplication
-            const iframe = document.getElementById('pdfViewer');
-            if (iframe && iframe.contentWindow) {
-                pdfApp = iframe.contentWindow.PDFViewerApplication;
-                this.debugLog('✅ 从内嵌iframe获取PDFViewerApplication成功（下载）');
+            const pdfApp = this.getActivePdfApp();
+            if (pdfApp) {
+                this.debugLog('✅ 获取PDFViewerApplication成功（下载）');
             }
 
             const pdfUrl = this.currentPdfUrl;
@@ -18845,27 +18920,25 @@ class PaperStatsApp {
                 setTimeout(() => rightPanel.classList.remove('panel-highlight'), 800);
             }
 
-            // 使用主窗口的iframe
-            const pdfViewer = document.getElementById('pdfViewer');
-            if (!pdfViewer) {
+            // 使用当前活跃PDF窗口（Tab优先）
+            const pdfWindow = this.getActivePdfWindow();
+            if (!pdfWindow) {
                 this.showNotification('PDF viewer not found', 'warning');
                 return;
             }
 
-            const pdfWindow = pdfViewer.contentWindow;
-            if (!pdfWindow || !pdfWindow.PDFViewerApplication) {
+            const pdfApp = pdfWindow.PDFViewerApplication;
+            if (!pdfApp || !pdfApp.pdfDocument) {
                 console.error('❌ PDF.js未初始化');
                 return;
             }
-
-            const pdfApp = pdfWindow.PDFViewerApplication;
 
             // 如果有搜索文本，执行全文搜索并滚动
             if (cleanText) {
                 this.executeSearchAndScroll(pdfApp, cleanText, valuePath, pdfWindow);
             } else if (page) {
                 // 如果没有搜索文本，丝滑跳转到页码
-                this.smoothScrollToPage(pdfApp, parseInt(page));
+                this.smoothScrollToPage(pdfApp, parseInt(page), pdfWindow);
             }
 
         } catch (error) {
@@ -18874,18 +18947,14 @@ class PaperStatsApp {
     }
 
     // 丝滑滚动到指定页码
-    smoothScrollToPage(pdfApp, targetPage) {
+    smoothScrollToPage(pdfApp, targetPage, pdfWindow = null) {
         try {
-
-            // 获取PDF iframe
-            const pdfIframe = document.querySelector('#pdfViewer');
-            if (!pdfIframe || !pdfIframe.contentWindow) {
-                console.warn('⚠️ 找不到PDF iframe');
+            const activeWindow = pdfWindow || this.getActivePdfWindow();
+            if (!activeWindow) {
+                console.warn('⚠️ 找不到PDF窗口');
                 return;
             }
-
-            const pdfWindow = pdfIframe.contentWindow;
-            const pdfDoc = pdfWindow.document;
+            const pdfDoc = activeWindow.document;
 
             // 查找viewerContainer（PDF.js的滚动容器）
             const viewerContainer = pdfDoc.querySelector('#viewerContainer');
@@ -18975,14 +19044,14 @@ class PaperStatsApp {
                 findPrevious: false
             });
             setTimeout(() => {
-                this.scrollToCurrentMatch(pdfApp);
+                this.scrollToCurrentMatch(pdfApp, pdfWindow);
                 this.schedulePdfHighlightAutoClear(pdfWindow);
                 this._isSearching = false;
             }, 300);
             return;
         } else if (isSameSearch && this.searchMatchCount === 1) {
             setTimeout(() => {
-                this.scrollToCurrentMatch(pdfApp);
+                this.scrollToCurrentMatch(pdfApp, pdfWindow);
                 this.schedulePdfHighlightAutoClear(pdfWindow);
                 this._isSearching = false;
             }, 100);
@@ -19067,7 +19136,7 @@ class PaperStatsApp {
                         this.showNotification(`Adjusted goto text to: ${matchedVariant}`, 'success');
                     }
                     setTimeout(() => {
-                        this.scrollToCurrentMatch(pdfApp);
+                        this.scrollToCurrentMatch(pdfApp, pdfWindow);
                         this.schedulePdfHighlightAutoClear(pdfWindow);
                     }, 200);
                 } else {
@@ -19113,7 +19182,7 @@ class PaperStatsApp {
     }
 
     // 滚动到当前匹配结果的中央（丝滑动画）
-    scrollToCurrentMatch(pdfApp) {
+    scrollToCurrentMatch(pdfApp, pdfWindow = null) {
         try {
             const pdfViewer = pdfApp.pdfViewer;
             if (!pdfViewer) {
@@ -19121,12 +19190,8 @@ class PaperStatsApp {
                 return;
             }
 
-            // 内嵌模式：从主窗口iframe获取文档
-            let pdfDoc = null;
-            const pdfIframe = document.querySelector('#pdfViewer');
-            if (pdfIframe && pdfIframe.contentWindow) {
-                pdfDoc = pdfIframe.contentWindow.document;
-            }
+            const activeWindow = pdfWindow || this.getActivePdfWindow();
+            const pdfDoc = activeWindow?.document || null;
 
             if (!pdfDoc) {
                 console.warn('⚠️ 找不到PDF文档');
@@ -19469,11 +19534,8 @@ class PaperStatsApp {
         }
 
         // Get PDFViewerApplication
-        let pdfApp = null;
-        const iframe = document.getElementById('pdfViewer');
-        if (iframe && iframe.contentWindow) {
-            pdfApp = iframe.contentWindow.PDFViewerApplication;
-        }
+        const pdfWindow = this.getActivePdfWindow();
+        const pdfApp = pdfWindow?.PDFViewerApplication || null;
 
         if (!pdfApp || !pdfApp.pdfDocument) {
             this.showNotification('PDF not loaded, cannot test search', 'error');
@@ -19490,7 +19552,7 @@ class PaperStatsApp {
                 this.showNotification(`Found ${result.total} match(es)`, 'success');
 
                 // Optional: scroll to first match
-                setTimeout(() => this.scrollToCurrentMatch(pdfApp), 200);
+                setTimeout(() => this.scrollToCurrentMatch(pdfApp, pdfWindow), 200);
             } else {
                 // Try variant search
                 this.showNotification('No exact match found, trying variants...', 'info');
@@ -19510,7 +19572,7 @@ class PaperStatsApp {
 
                 if (foundVariant) {
                     this.showNotification(`Found variant match: "${foundVariant}" (${foundCount} match(es))`, 'success');
-                    setTimeout(() => this.scrollToCurrentMatch(pdfApp), 200);
+                    setTimeout(() => this.scrollToCurrentMatch(pdfApp, pdfWindow), 200);
                 } else {
                     this.showNotification('No match found, consider modifying the text', 'error');
                 }
