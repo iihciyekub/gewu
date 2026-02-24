@@ -11429,7 +11429,7 @@ class PaperStatsApp {
             const resp = await fetch('/git-status', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({})
+                body: JSON.stringify({ projectPath: this.currentProject?.path || '' })
             });
             const data = await resp.json();
             if (!resp.ok || data?.success === false) {
@@ -11447,14 +11447,14 @@ class PaperStatsApp {
             const resp = await fetch('/git-init', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({})
+                body: JSON.stringify({ projectPath: this.currentProject?.path || '' })
             });
             const data = await resp.json();
             if (!resp.ok || data?.success === false) {
                 throw new Error(data?.error || 'Git init failed');
             }
             if (!silent) {
-                const msg = data?.already ? 'Git already initialized in workspace' : 'Git initialized in workspace';
+                const msg = data?.already ? 'Git already initialized in project' : 'Git initialized in project';
                 this.showNotification(msg, 'success');
             }
             return data;
@@ -11465,6 +11465,10 @@ class PaperStatsApp {
     }
 
     async ensureGitWorkspaceReady() {
+        if (!this.currentProject?.path) {
+            this.showNotification('Please load a project first', 'info');
+            return false;
+        }
         const status = await this.fetchGitStatus();
         if (!status) return false;
         if (status.available === false) {
@@ -11472,11 +11476,11 @@ class PaperStatsApp {
             return false;
         }
         if (status.repo) return true;
-        const ok = confirm('Git is not initialized in this workspace. Initialize now?');
+        const ok = confirm('Git is not initialized in this project. Initialize now?');
         if (!ok) return false;
         const init = await this.initGitWorkspace({ silent: true });
         if (!init) return false;
-        this.showNotification('Git initialized in workspace', 'success');
+        this.showNotification('Git initialized in project', 'success');
         return true;
     }
 
@@ -11495,7 +11499,7 @@ class PaperStatsApp {
             const resp = await fetch('/git-commit', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ message: msg })
+                body: JSON.stringify({ projectPath: this.currentProject?.path || '', message: msg })
             });
             const data = await resp.json();
             if (!resp.ok || data?.success === false) {
@@ -11514,7 +11518,7 @@ class PaperStatsApp {
             const resp = await fetch('/git-history', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ limit })
+                body: JSON.stringify({ projectPath: this.currentProject?.path || '', limit })
             });
             const data = await resp.json();
             if (!resp.ok || data?.success === false) {
@@ -11564,19 +11568,19 @@ class PaperStatsApp {
             this.showNotification('Invalid selection', 'error');
             return;
         }
-        const ok = confirm(`Restore workspace to commit ${String(hash).slice(0, 7)}?\n\nThis will overwrite current files. Unsaved changes will be backed up automatically.`);
+        const ok = confirm(`Restore project files to commit ${String(hash).slice(0, 7)}?\n\nThis will overwrite current files. Unsaved changes will be backed up automatically.`);
         if (!ok) return;
         try {
             const resp = await fetch('/git-restore', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ hash, backupIfDirty: true })
+                body: JSON.stringify({ projectPath: this.currentProject?.path || '', hash, backupIfDirty: true })
             });
             const data = await resp.json();
             if (!resp.ok || data?.success === false) {
                 throw new Error(data?.error || 'Git restore failed');
             }
-            this.showNotification('Workspace restored. Reloading files...', 'success');
+            this.showNotification('Project restored. Reloading files...', 'success');
             await this.loadFileList(true);
             if (this.currentFileBase) {
                 await this.loadFile(this.currentFileBase);

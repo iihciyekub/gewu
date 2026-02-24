@@ -228,20 +228,20 @@ function isGitAvailable() {
     }
 }
 
-function isGitRepo() {
-    return fs.existsSync(path.join(ROOT_DIR, '.git'));
+function isGitRepo(rootDir) {
+    return fs.existsSync(path.join(rootDir, '.git'));
 }
 
-function runGit(args = []) {
+function runGit(rootDir, args = []) {
     return execFileSync('git', args, {
-        cwd: ROOT_DIR,
+        cwd: rootDir,
         encoding: 'utf8',
         stdio: ['ignore', 'pipe', 'pipe']
     });
 }
 
-function ensureGitIgnore() {
-    const gitignorePath = path.join(ROOT_DIR, '.gitignore');
+function ensureGitIgnore(rootDir) {
+    const gitignorePath = path.join(rootDir, '.gitignore');
     if (fs.existsSync(gitignorePath)) return false;
     const content = [
         'node_modules/',
@@ -470,52 +470,82 @@ const server = http.createServer((req, res) => {
 
     // Git status for workspace
     if (req.method === 'POST' && pathname === '/git-status') {
-        const available = isGitAvailable();
-        if (!available) {
-            res.writeHead(200, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify({ success: true, available: false, repo: false }));
-            return;
-        }
-        const repo = isGitRepo();
-        let dirty = false;
-        let changes = [];
-        if (repo) {
+        let body = '';
+        req.on('data', chunk => { body += chunk.toString(); });
+        req.on('end', () => {
+            const available = isGitAvailable();
+            if (!available) {
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ success: true, available: false, repo: false }));
+                return;
+            }
             try {
-                const out = runGit(['status', '--porcelain']);
-                changes = out.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
-                dirty = changes.length > 0;
-            } catch (_err) {
-                dirty = false;
+                const data = JSON.parse(body || '{}');
+                const projectPath = String(data.projectPath || '').trim();
+                if (!projectPath) {
+                    res.writeHead(400, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ success: false, error: 'Missing projectPath' }));
+                    return;
+                }
+                const { fullPath } = normalizeProjectPath(projectPath);
+                const repo = isGitRepo(fullPath);
+                let dirty = false;
+                let changes = [];
+                if (repo) {
+                    try {
+                        const out = runGit(fullPath, ['status', '--porcelain']);
+                        changes = out.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
+                        dirty = changes.length > 0;
+                    } catch (_err) {
+                        dirty = false;
+                    }
+                }
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ success: true, available: true, repo, dirty, changesCount: changes.length }));
+            } catch (err) {
+                res.writeHead(500, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ success: false, error: err.message }));
             }
-        }
-        res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ success: true, available: true, repo, dirty, changesCount: changes.length }));
+        });
         return;
     }
 
-    // Git init for workspace
+    // Git init for project
     if (req.method === 'POST' && pathname === '/git-init') {
-        if (!isGitAvailable()) {
-            res.writeHead(500, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify({ success: false, error: 'Git is not available' }));
-            return;
-        }
-        try {
-            const already = isGitRepo();
-            if (!already) {
-                runGit(['init']);
-                ensureGitIgnore();
+        let body = '';
+        req.on('data', chunk => { body += chunk.toString(); });
+        req.on('end', () => {
+            if (!isGitAvailable()) {
+                res.writeHead(500, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ success: false, error: 'Git is not available' }));
+                return;
             }
-            res.writeHead(200, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify({ success: true, already }));
-        } catch (err) {
-            res.writeHead(500, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify({ success: false, error: err.message }));
-        }
+            try {
+                const data = JSON.parse(body || '{}');
+                const projectPath = String(data.projectPath || '').trim();
+                if (!projectPath) {
+                    res.writeHead(400, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ success: false, error: 'Missing projectPath' }));
+                    return;
+                }
+                const { fullPath } = normalizeProjectPath(projectPath);
+                ensureProjectStructure(fullPath);
+                const already = isGitRepo(fullPath);
+                if (!already) {
+                    runGit(fullPath, ['init']);
+                    ensureGitIgnore(fullPath);
+                }
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ success: true, already }));
+            } catch (err) {
+                res.writeHead(500, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ success: false, error: err.message }));
+            }
+        });
         return;
     }
 
-    // Git commit for workspace
+    // Git commit for project
     if (req.method === 'POST' && pathname === '/git-commit') {
         let body = '';
         req.on('data', chunk => { body += chunk.toString(); });
@@ -525,7 +555,18 @@ const server = http.createServer((req, res) => {
                 res.end(JSON.stringify({ success: false, error: 'Git is not available' }));
                 return;
             }
-            if (!isGitRepo()) {
+            let projectPath = '';
+            try {
+                const data = JSON.parse(body || '{}');
+                projectPath = String(data.projectPath || '').trim();
+            } catch (_err) { }
+            if (!projectPath) {
+                res.writeHead(400, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ success: false, error: 'Missing projectPath' }));
+                return;
+            }
+            const { fullPath } = normalizeProjectPath(projectPath);
+            if (!isGitRepo(fullPath)) {
                 res.writeHead(400, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify({ success: false, error: 'Git not initialized', code: 'NO_REPO' }));
                 return;
@@ -533,16 +574,16 @@ const server = http.createServer((req, res) => {
             try {
                 const data = JSON.parse(body || '{}');
                 const message = String(data.message || '').trim() || `Update ${formatDateTime()}`;
-                runGit(['add', '-A']);
-                const statusOut = runGit(['status', '--porcelain']);
+                runGit(fullPath, ['add', '-A']);
+                const statusOut = runGit(fullPath, ['status', '--porcelain']);
                 const changes = statusOut.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
                 if (!changes.length) {
                     res.writeHead(200, { 'Content-Type': 'application/json' });
                     res.end(JSON.stringify({ success: false, error: 'No changes to commit', code: 'NO_CHANGES' }));
                     return;
                 }
-                runGit(['commit', '-m', message]);
-                const hash = runGit(['rev-parse', 'HEAD']).trim();
+                runGit(fullPath, ['commit', '-m', message]);
+                const hash = runGit(fullPath, ['rev-parse', 'HEAD']).trim();
                 res.writeHead(200, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify({ success: true, hash }));
             } catch (err) {
@@ -553,7 +594,7 @@ const server = http.createServer((req, res) => {
         return;
     }
 
-    // Git history for workspace
+    // Git history for project
     if (req.method === 'POST' && pathname === '/git-history') {
         let body = '';
         req.on('data', chunk => { body += chunk.toString(); });
@@ -563,7 +604,18 @@ const server = http.createServer((req, res) => {
                 res.end(JSON.stringify({ success: false, error: 'Git is not available' }));
                 return;
             }
-            if (!isGitRepo()) {
+            let projectPath = '';
+            try {
+                const data = JSON.parse(body || '{}');
+                projectPath = String(data.projectPath || '').trim();
+            } catch (_err) { }
+            if (!projectPath) {
+                res.writeHead(400, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ success: false, error: 'Missing projectPath' }));
+                return;
+            }
+            const { fullPath } = normalizeProjectPath(projectPath);
+            if (!isGitRepo(fullPath)) {
                 res.writeHead(400, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify({ success: false, error: 'Git not initialized', code: 'NO_REPO' }));
                 return;
@@ -573,7 +625,7 @@ const server = http.createServer((req, res) => {
                 let limit = parseInt(data.limit, 10);
                 if (Number.isNaN(limit) || limit <= 0) limit = 20;
                 limit = Math.min(Math.max(limit, 1), 50);
-                const out = runGit(['log', `-n${limit}`, '--date=iso', '--pretty=format:%H%x09%ad%x09%s']);
+                const out = runGit(fullPath, ['log', `-n${limit}`, '--date=iso', '--pretty=format:%H%x09%ad%x09%s']);
                 const history = out
                     .split(/\r?\n/)
                     .map(line => line.trim())
@@ -592,7 +644,7 @@ const server = http.createServer((req, res) => {
         return;
     }
 
-    // Git restore for workspace
+    // Git restore for project
     if (req.method === 'POST' && pathname === '/git-restore') {
         let body = '';
         req.on('data', chunk => { body += chunk.toString(); });
@@ -602,7 +654,18 @@ const server = http.createServer((req, res) => {
                 res.end(JSON.stringify({ success: false, error: 'Git is not available' }));
                 return;
             }
-            if (!isGitRepo()) {
+            let projectPath = '';
+            try {
+                const data = JSON.parse(body || '{}');
+                projectPath = String(data.projectPath || '').trim();
+            } catch (_err) { }
+            if (!projectPath) {
+                res.writeHead(400, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ success: false, error: 'Missing projectPath' }));
+                return;
+            }
+            const { fullPath } = normalizeProjectPath(projectPath);
+            if (!isGitRepo(fullPath)) {
                 res.writeHead(400, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify({ success: false, error: 'Git not initialized', code: 'NO_REPO' }));
                 return;
@@ -617,18 +680,18 @@ const server = http.createServer((req, res) => {
                     return;
                 }
                 if (backupIfDirty) {
-                    const statusOut = runGit(['status', '--porcelain']);
+                    const statusOut = runGit(fullPath, ['status', '--porcelain']);
                     const changes = statusOut.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
                     if (changes.length) {
-                        runGit(['add', '-A']);
+                        runGit(fullPath, ['add', '-A']);
                         try {
-                            runGit(['commit', '-m', `Auto backup before restore ${formatDateTime()}`]);
+                            runGit(fullPath, ['commit', '-m', `Auto backup before restore ${formatDateTime()}`]);
                         } catch (_err) {
                             // ignore empty commit or config errors; restore should still proceed
                         }
                     }
                 }
-                runGit(['checkout', hash, '--', '.']);
+                runGit(fullPath, ['checkout', hash, '--', '.']);
                 res.writeHead(200, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify({ success: true }));
             } catch (err) {
