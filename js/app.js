@@ -7872,7 +7872,7 @@ class PaperStatsApp {
             <i class="fas fa-chevron-right collapsible-toggle" title="Expand/Collapse"></i>
             <span class="collapsible-title">${this.formatKey(title)}</span>
             <i class="fas fa-plus header-add" title="Add child item under this section"></i>
-            <i class="fas fa-pen-to-square header-json-update" title="Quick JSON update"></i>
+            <i class="fas fa-pen-to-square header-json-update" title="Rename this section key"></i>
             <i class="fas fa-trash header-delete" title="Delete this field"></i>
         `;
 
@@ -7917,12 +7917,15 @@ class PaperStatsApp {
         if (updateBtn) {
             updateBtn.addEventListener('click', (e) => {
                 e.stopPropagation();
-                const mergeBox = document.querySelector('.json-merge-box');
-                const textarea = mergeBox?.querySelector('.json-merge-textarea');
-                if (textarea) {
-                    textarea.focus();
-                    textarea.scrollIntoView({ block: 'center', behavior: 'smooth' });
+                if (this.isEditLocked) {
+                    this.showLockedNotification('编辑字段名');
+                    return;
                 }
+                if (!this.currentData) {
+                    this.showNotification('No JSON file loaded', 'error');
+                    return;
+                }
+                this.openEditKeyModal([], title);
             });
         }
         // Add child item button

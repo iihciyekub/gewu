@@ -10,7 +10,7 @@ GEWU is a powerful research workspace supporting JSON structured data, Markdown 
 **Author**: @iihciyekub
 **Repository**: Docker Hub: [iihciyekub/gewu](https://hub.docker.com/repository/docker/iihciyekub/gewu)
 
----
+
 
 ## Core Features
 
@@ -23,14 +23,14 @@ GEWU is a powerful research workspace supporting JSON structured data, Markdown 
 - **Bibliography Management**: Citation.js powered citation formatting and management
 - **Auto Save**: Real-time saving without losing progress
 
----
+
 
 ## Project License
 
 This project (GEWU application code) is available for personal and commercial use.
 All original code is developed by @iihciyekub.
 
----
+
 
 ## Third-Party Open Source Licenses
 
@@ -89,7 +89,7 @@ GEWU uses the following open-source libraries and resources. All are licensed fo
 **Commercial Use**: Yes
 **Note**: Font can be freely used, embedded, and distributed. Cannot be sold standalone.
 
----
+
 
 ## License Descriptions
 
@@ -136,7 +136,6 @@ For Font Awesome icons:
 - Distribution: Permitted
 - Requirement: Attribution to original creator must be provided
 
----
 
 ## Commercial Use Summary
 
@@ -154,7 +153,6 @@ Not Permitted:
 - Remove copyright notices from third-party libraries
 - Use contributor names for endorsement without permission
 
----
 
 ## Full License Texts
 
@@ -171,7 +169,6 @@ Online references:
 - SIL OFL 1.1: https://scripts.sil.org/OFL
 - CC BY 4.0: https://creativecommons.org/licenses/by/4.0/
 
----
 
 ## Acknowledgments
 
@@ -190,7 +187,6 @@ GEWU is built on the shoulders of giants. We are grateful to all the open-source
 - **Jos de Jong** - For jsonrepair library
 - **Alexandre Bodelot** - For jquery.json-viewer
 
----
 
 ## Contact
 
@@ -198,15 +194,12 @@ For questions about GEWU or licensing:
 - GitHub: @iihciyekub
 - Docker Hub: [iihciyekub/gewu](https://hub.docker.com/repository/docker/iihciyekub/gewu)
 
----
 
 **Last Updated**: February 8, 2026
 
----
 
 *This document provides a comprehensive overview of all open-source licenses used in GEWU. All third-party libraries retain their original licenses and copyrights.*
 
----
 
 ## References
 
