@@ -1228,6 +1228,10 @@ body {
     padding: 0px 5px;
     cursor: pointer;
     line-height: 1;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    white-space: nowrap;
 }
 
 .status-btn:hover {
@@ -1269,7 +1273,7 @@ body {
 }
 
 .status-bar .middle-tabs-left .status-btn {
-    width: 16px;
+    width: auto;
     height: 16px;
     background: transparent;
     border: none;

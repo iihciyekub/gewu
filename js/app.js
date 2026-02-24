@@ -7204,11 +7204,17 @@ class PaperStatsApp {
 
     mapIdItemToObject(value) {
         if (!this.isPlainObject(value)) return value;
-        if (!Object.prototype.hasOwnProperty.call(value, 'id')) return value;
-        const idVal = value.id;
+        const hasId = Object.prototype.hasOwnProperty.call(value, 'id');
+        const hasCategory = Object.prototype.hasOwnProperty.call(value, 'category');
+        if (!hasId && !hasCategory) return value;
+        const idVal = hasId ? value.id : value.category;
         if (idVal === undefined || idVal === null || idVal === '') return value;
         const next = { ...value };
-        delete next.id;
+        if (hasId) {
+            delete next.id;
+        } else if (hasCategory) {
+            delete next.category;
+        }
         const key = String(idVal);
         return { [key]: next };
     }
@@ -7263,6 +7269,42 @@ class PaperStatsApp {
                 if (!jsonData) return;
                 e.preventDefault();
                 jsonData = this.normalizePastedJson(jsonData);
+                const hasFullKeys = (obj) => {
+                    if (!this.isPlainObject(obj)) return false;
+                    return Object.prototype.hasOwnProperty.call(obj, 'meta_info')
+                        || Object.prototype.hasOwnProperty.call(obj, 'schema_version');
+                };
+                const canMerge = !!this.currentData;
+                const shouldReplace = this.isPlainObject(jsonData) && hasFullKeys(jsonData);
+                if (canMerge && !shouldReplace) {
+                    jsonData = this.mapIdItemToObject(jsonData);
+                    let changed = false;
+                    if (Array.isArray(jsonData)) {
+                        jsonData.forEach((item) => {
+                            const mapped = this.mapIdItemToObject(item);
+                            if (this.isPlainObject(mapped)) {
+                                changed = this.mergeIntoCurrentData(mapped, true) || changed;
+                            }
+                        });
+                    } else if (this.isPlainObject(jsonData)) {
+                        changed = this.mergeIntoCurrentData(jsonData, true);
+                    }
+                    if (!changed) {
+                        this.showNotification('Pasted content has no mergeable fields', 'info');
+                        return;
+                    }
+                    this.hasUnsavedChanges = true;
+                    if (this.currentFile) {
+                        this.tempDataCache[this.currentFile] = this.currentData;
+                    }
+                    this.updateSaveButtonState();
+                    this.renderStructuredView();
+                    this.updateFlatViewTextarea();
+                    this.setupEditableListeners();
+                    this.updateUndoButtonState();
+                    this.showNotification('Merged pasted content into current JSON', 'success');
+                    return;
+                }
                 jsonTextarea.value = JSON.stringify(jsonData, null, 2);
                 this.applyRawJsonFromTextarea({ notifyOnError: true });
                 this.showNotification('Pasted JSON applied in editor', 'success');
@@ -16037,6 +16079,11 @@ class PaperStatsApp {
             const textarea = block.querySelector('.prompt-textarea');
             const applyBtn = block.querySelector('.prompt-apply-btn');
             const cancelBtn = block.querySelector('.prompt-cancel-btn');
+            const syncTextareaHeight = () => {
+                if (!textarea) return;
+                textarea.style.height = 'auto';
+                textarea.style.height = `${textarea.scrollHeight}px`;
+            };
 
             const getStoredPrompt = () => {
                 const rawAttr = block.dataset.promptRaw || block.dataset.promptContent || '';
@@ -16054,6 +16101,7 @@ class PaperStatsApp {
                 block.classList.add('is-editing');
                 if (textarea) {
                     textarea.value = getStoredPrompt();
+                    syncTextareaHeight();
                     textarea.focus();
                     textarea.setSelectionRange(textarea.value.length, textarea.value.length);
                 }
@@ -16088,6 +16136,10 @@ class PaperStatsApp {
                         openEditor();
                     }
                 });
+            }
+            if (textarea && textarea.dataset.autosizeBound !== '1') {
+                textarea.dataset.autosizeBound = '1';
+                textarea.addEventListener('input', () => syncTextareaHeight());
             }
 
             if (applyBtn) {
@@ -16969,6 +17021,12 @@ class PaperStatsApp {
             this.updateMarkdownDirtyUI();
             this.updateJsonMenuState();
             this.updateMarkdownMenuState();
+            if (view === 'structured' && this.currentData && typeof this.currentData === 'object') {
+                this.renderStructuredView();
+                this.setupEditableListeners();
+            } else if (view === 'flat' && this.currentData && typeof this.currentData === 'object') {
+                this.renderFlatView();
+            }
 
             // 切换到 Markdown 视图时，确保渲染区域为最新内容（尤其是从编辑态进入）
             if (isDraftRequested) {
