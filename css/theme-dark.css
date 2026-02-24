@@ -225,28 +225,16 @@ body.theme-dark .btn-theme-toggle:hover {
 }
 
 body.theme-dark .btn-pdfjs-fullscreen,
-body.theme-dark .btn-pdfjs-download,
-body.theme-dark .btn-pdf-popup {
+body.theme-dark .btn-pdfjs-download {
     background: var(--vscode-accent-strong);
     box-shadow: 0 6px 16px rgba(36, 114, 200, 0.25);
     color: var(--vscode-text);
 }
 
-body.theme-dark .btn-pdf-popup.is-popup {
-    background: var(--wos-orange);
-    box-shadow: 0 6px 16px rgba(206, 145, 120, 0.35);
-}
-
 body.theme-dark .btn-pdfjs-fullscreen:hover,
-body.theme-dark .btn-pdfjs-download:hover,
-body.theme-dark .btn-pdf-popup:hover {
+body.theme-dark .btn-pdfjs-download:hover {
     background: var(--vscode-accent);
     box-shadow: 0 8px 18px rgba(36, 114, 200, 0.3);
-}
-
-body.theme-dark .btn-pdf-popup.is-popup:hover {
-    background: var(--wos-orange-light);
-    box-shadow: 0 8px 18px rgba(206, 145, 120, 0.4);
 }
 
 body.theme-dark .right-panel iframe {

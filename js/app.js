@@ -179,13 +179,7 @@ class PaperStatsApp {
         this.gitSettingsVisible = false;
         this.autoSaveConfigVisible = false;
         this.doiIndexVisible = false;
-        this.pdfPopupWindow = null;
         this.pdfTabWindow = null;
-        this.isPdfPopupMode = false;
-        this.pdfPopupFocusInterval = null;
-        this.pdfViewModeRestored = false; // 标记是否已经恢复过PDF窗口模式
-        this.pdfPopupAutoCollapsed = false;
-        this.pdfPopupRightWasCollapsed = false;
         this._pdfPrewarmCache = new Map();
         this.metaDefaultsPatched = false;
         this.addSectionShowTimer = null;
@@ -248,48 +242,7 @@ class PaperStatsApp {
         this.autoSaveManager = null; // 自动保存管理器
         this.autoSaveConfigUI = null; // 自动保存配置界面
 
-        // 🔑 立即清理可能遗留的独立PDF窗口
-        this.cleanupOrphanedPdfWindows();
-
         this.init();
-    }
-
-    // 清理可能遗留的独立PDF窗口
-    cleanupOrphanedPdfWindows() {
-        try {
-            // 方法1: 通过localStorage发送关闭信号
-            try {
-                // 检查是否有活动的PDF窗口标记
-                const hasActiveWindow = localStorage.getItem('pdfPopupWindowActive');
-                if (hasActiveWindow) {
-                    localStorage.setItem('closePdfPopupWindow', 'true');
-                    // 等待一小段时间让窗口接收信号
-                    setTimeout(() => {
-                        localStorage.removeItem('closePdfPopupWindow');
-                        localStorage.removeItem('pdfPopupWindowActive');
-                    }, 1000);
-                }
-            } catch (e) {
-                console.warn('⚠️ 无法使用localStorage发送关闭信号:', e);
-            }
-
-            // 方法2: 检查是否有之前打开的窗口引用
-            if (this.pdfPopupWindow && !this.pdfPopupWindow.closed) {
-                this.pdfPopupWindow.close();
-                this.pdfPopupWindow = null;
-            }
-
-            // 注意：移除了 window.open('', 'PDFViewer') 的方法3
-            // 因为它会在每次页面重载时创建一个空白窗口，导致用户体验问题
-            // localStorage信号和窗口引用的方法已经足够处理大多数情况
-
-            this.isPdfPopupMode = false;
-            this.updatePdfPopupButtonState();
-            this.clearPdfPopupCloseSignal();
-        } catch (err) {
-            // 忽略清理错误
-            console.warn('⚠️ 清理遗留PDF窗口时出错:', err);
-        }
     }
 
     closeAllModals(exceptId = '') {
@@ -1733,9 +1686,6 @@ class PaperStatsApp {
     }
 
     async initializeProject() {
-        // 🔑 优先关闭独立PDF窗口（如果存在）
-        this.forceEmbeddedPdfMode();
-
         // 更新UI显示当前项目
         this.updateProjectDisplay();
 
@@ -2458,12 +2408,6 @@ class PaperStatsApp {
                 return;
             }
             if (key === 'escape') {
-                // 如果PDF在独立窗口模式，只有当鼠标悬停在pdfViewer上才切换回内嵌模式
-                if (this.isPdfPopupMode && this._isMouseOverPdfViewer) {
-                    e.preventDefault();
-                    this.togglePdfPopup().catch(err => console.error('Toggle PDF popup failed:', err));
-                    return;
-                }
                 const projectModal = document.getElementById('projectSelectorModal');
                 if (projectModal && projectModal.classList.contains('active')) {
                     e.preventDefault();
@@ -2902,13 +2846,6 @@ class PaperStatsApp {
             btnPdfTab.addEventListener('click', async () => this.openPdfInNewTab());
         }
 
-        // PDF 独立窗口按钮
-        const btnPdfPopup = document.getElementById('btnPdfPopup');
-        if (btnPdfPopup) {
-            btnPdfPopup.addEventListener('click', async () => await this.togglePdfPopup());
-            this.updatePdfPopupButtonState();
-        }
-
         const rightPanel = document.querySelector('.right-panel');
         if (rightPanel) {
             rightPanel.addEventListener('mousedown', () => this.ensurePdfLoaded());
@@ -3137,10 +3074,6 @@ class PaperStatsApp {
         if (middleToggle) {
             middleToggle.addEventListener('click', (e) => {
                 e.stopPropagation();
-                if (this.isPdfPopupMode) {
-                    this.togglePdfPopup().catch(err => console.error('Toggle PDF popup failed:', err));
-                    return;
-                }
                 const icon = middleToggle.querySelector('i');
                 if (rightPanel.classList.contains('panel-collapsed')) {
                     rightPanel.classList.remove('panel-collapsed');
@@ -3423,42 +3356,6 @@ class PaperStatsApp {
         } catch (e) {
             console.warn('Failed to restore status bar state:', e);
         }
-    }
-
-    collapseRightPanelForPdfPopup() {
-        const rightPanel = document.querySelector('.right-panel');
-        const middleToggle = document.querySelector('#middleResizer .resizer-toggle');
-        if (!rightPanel) return;
-        this.pdfPopupRightWasCollapsed = rightPanel.classList.contains('panel-collapsed');
-        if (this.pdfPopupRightWasCollapsed) {
-            this.pdfPopupAutoCollapsed = false;
-            return;
-        }
-        this.pdfPopupAutoCollapsed = true;
-        this.lastRightWidth = rightPanel.getBoundingClientRect().width || this.lastRightWidth;
-        rightPanel.classList.add('panel-collapsed');
-        rightPanel.style.width = '';
-        if (middleToggle) middleToggle.title = 'Show PDF preview (Cmd+Shift+F / Ctrl+Shift+F)';
-        const icon = middleToggle?.querySelector('i');
-        if (icon) icon.style.transform = 'rotate(180deg)';
-    }
-
-    restoreRightPanelAfterPdfPopup() {
-        if (!this.pdfPopupAutoCollapsed) return;
-        this.pdfPopupAutoCollapsed = false;
-        const rightPanel = document.querySelector('.right-panel');
-        const middleToggle = document.querySelector('#middleResizer .resizer-toggle');
-        const container = document.querySelector('.container');
-        if (!rightPanel || !rightPanel.classList.contains('panel-collapsed')) return;
-        rightPanel.classList.remove('panel-collapsed');
-        if (!this.lastRightWidth || this.lastRightWidth <= 1) {
-            const containerWidth = container?.getBoundingClientRect().width || window.innerWidth;
-            this.lastRightWidth = Math.max(200, Math.floor(containerWidth * 0.33));
-        }
-        rightPanel.style.width = this.lastRightWidth + 'px';
-        if (middleToggle) middleToggle.title = 'Hide PDF preview (Cmd+Shift+F / Ctrl+Shift+F)';
-        const icon = middleToggle?.querySelector('i');
-        if (icon) icon.style.transform = 'rotate(0deg)';
     }
 
     // ========== 项目管理方法 ==========
@@ -4267,19 +4164,6 @@ class PaperStatsApp {
 
     async switchProject(project) {
         try {
-            // 🔑 切换项目前先保存标注并关闭独立PDF窗口
-            const hadPopupWindow = this.isPdfPopupMode && this.pdfPopupWindow && !this.pdfPopupWindow.closed;
-
-            if (this.isPdfPopupMode) {
-                await this.savePdfAnnotationsFromPopup();
-            }
-            this.forceEmbeddedPdfMode();
-
-            // 如果关闭了独立窗口，给予提示
-            if (hadPopupWindow) {
-                this.showNotification('🔄 Closed detached PDF window', 'info');
-            }
-
             // 验证项目结构
             console.log('Validating project path:', project.path);
             const response = await fetch('/validate-project', {
@@ -4359,9 +4243,6 @@ class PaperStatsApp {
             this.currentMarkdownExists = false;
             this.isMarkdownEditing = false;
             this.hasUnsavedMarkdownChanges = false;
-
-            // 关闭独立PDF窗口并强制使用内嵌模式
-            this.forceEmbeddedPdfMode();
 
             // 清空UI
             const fileListEl = document.getElementById('fileList');
@@ -17900,188 +17781,6 @@ class PaperStatsApp {
         }
     }
 
-    updatePdfPopupButtonState() {
-        const btn = document.getElementById('btnPdfPopup');
-        if (!btn) return;
-        const icon = btn.querySelector('i');
-        const isPopup = !!this.isPdfPopupMode;
-        btn.classList.toggle('is-popup', isPopup);
-        btn.setAttribute('aria-pressed', isPopup ? 'true' : 'false');
-        btn.title = isPopup ? '切回内嵌 PDF 视图' : '弹出 PDF 到独立窗口';
-        if (icon) {
-            icon.className = isPopup ? 'fas fa-window-restore' : 'fas fa-up-right-from-square';
-        }
-    }
-
-    clearPdfPopupCloseSignal() {
-        try {
-            localStorage.removeItem('closePdfPopupWindow');
-        } catch (err) {
-            console.warn('清理 PDF 关闭信号失败:', err);
-        }
-    }
-
-    // PDF Functions - 使用iframe加载完整的PDF.js viewer
-    async togglePdfPopup() {
-        // 检查是否在独立窗口模式
-        if (this.isPdfPopupMode) {
-            // 在关闭前保存PDF标注数据
-            await this.savePdfAnnotationsFromPopup();
-
-            // 关闭独立窗口，回到嵌入模式
-            if (this.pdfPopupWindow && !this.pdfPopupWindow.closed) {
-                this.pdfPopupWindow.close();
-            }
-            // 清除聚焦定时器
-            if (this.pdfPopupFocusInterval) {
-                clearInterval(this.pdfPopupFocusInterval);
-                this.pdfPopupFocusInterval = null;
-            }
-            // 保存当前PDF URL
-            const urlToRestore = this.currentPdfUrl;
-            // 立即设置状态为false，防止重复点击
-            this.isPdfPopupMode = false;
-            this.pdfPopupWindow = null;
-            this.updatePdfPopupButtonState();
-            this.restoreRightPanelAfterPdfPopup();
-            // 标记用户已手动切换，禁止自动恢复
-            this.pdfViewModeRestored = true;
-            // 保存状态到localStorage
-            this.savePdfViewMode();
-            // 清除lastPdfLoadedUrl以强制重新加载
-            this.lastPdfLoadedUrl = '';
-
-            // 确保iframe已准备好
-            const pdfViewer = document.getElementById('pdfViewer');
-            if (pdfViewer) {
-                pdfViewer.classList.remove('pdf-loaded');
-            }
-
-            // 立即同步加载PDF到iframe，不使用延迟
-            if (urlToRestore) {
-                this.loadPDF(urlToRestore);
-            }
-        } else {
-            // 打开独立窗口
-            this.openPdfInPopup();
-        }
-    }
-
-    openPdfInPopup() {
-        if (!this.currentPdfUrl) {
-            this.showNotification('No PDF loaded', 'info');
-            return;
-        }
-
-        // 确保没有残留的关闭信号导致新窗口被立即关闭
-        this.clearPdfPopupCloseSignal();
-
-        // 保存URL用于恢复
-        const savedPdfUrl = this.currentPdfUrl;
-
-        // 创建独立窗口 - 使用简化的查看器页面，URL更简洁
-        const absoluteUrl = window.location.origin + this.currentPdfUrl;
-        const viewerUrl = `pdf-popup-viewer.html?file=${encodeURIComponent(absoluteUrl)}&theme=${this.theme === 'dark' ? 'dark' : 'light'}`;
-
-        const width = 1000;
-        const height = 800;
-        const left = (screen.width - width) / 2;
-        const top = (screen.height - height) / 2;
-
-        this.pdfPopupWindow = window.open(
-            viewerUrl,
-            'PDFViewer',
-            `width=${width},height=${height},left=${left},top=${top},resizable=yes,scrollbars=yes,location=no,menubar=no,toolbar=no,status=no,alwaysRaised=yes`
-        );
-
-        // 添加定期聚焦机制，让窗口保持在前面
-        if (this.pdfPopupFocusInterval) {
-            clearInterval(this.pdfPopupFocusInterval);
-        }
-
-        if (this.pdfPopupWindow) {
-            // 使用 requestAnimationFrame 确保窗口完全打开后再处理
-            requestAnimationFrame(() => {
-                requestAnimationFrame(() => {
-                    // 检查窗口是否真的打开了
-                    if (!this.pdfPopupWindow || this.pdfPopupWindow.closed) {
-                        // 窗口立即关闭或打开失败，保持内嵌模式
-                        this.isPdfPopupMode = false;
-                        this.pdfPopupWindow = null;
-                        this.updatePdfPopupButtonState();
-                        return;
-                    }
-
-                    // 窗口成功打开，现在可以设置状态并清空iframe
-                    this.isPdfPopupMode = true;
-                    this.updatePdfPopupButtonState();
-                    // 保存状态到localStorage
-                    this.savePdfViewMode();
-                    this.collapseRightPanelForPdfPopup();
-
-                    // 清空内嵌iframe
-                    const pdfViewer = document.getElementById('pdfViewer');
-                    if (pdfViewer) {
-                        pdfViewer.removeAttribute('src');
-                        pdfViewer.classList.remove('pdf-loaded');
-                    }
-
-                    // 监听窗口关闭
-                    const checkClosed = setInterval(async () => {
-                        if (this.pdfPopupWindow && this.pdfPopupWindow.closed) {
-                            clearInterval(checkClosed);
-                            // 清除聚焦定时器
-                            if (this.pdfPopupFocusInterval) {
-                                clearInterval(this.pdfPopupFocusInterval);
-                                this.pdfPopupFocusInterval = null;
-                            }
-                            // 保存URL用于恢复
-                            const urlToRestore = this.currentPdfUrl || savedPdfUrl;
-                            // 重置状态
-                            this.isPdfPopupMode = false;
-                            this.pdfPopupWindow = null;
-                            this.lastPdfLoadedUrl = '';
-                            this.updatePdfPopupButtonState();
-                            this.restoreRightPanelAfterPdfPopup();
-                            // 保存状态到localStorage（窗口关闭=切换回嵌入模式）
-                            this.savePdfViewMode();
-
-                            // 确保iframe准备好
-                            const pdfViewer = document.getElementById('pdfViewer');
-                            if (pdfViewer) {
-                                pdfViewer.classList.remove('pdf-loaded');
-                            }
-
-                            // 立即加载PDF到iframe
-                            if (urlToRestore) {
-                                this.loadPDF(urlToRestore);
-                            }
-                        }
-                    }, 500);
-
-                    // 设置定期聚焦，让窗口保持在前面（每3秒聚焦一次）
-                    this.pdfPopupFocusInterval = setInterval(() => {
-                        if (this.pdfPopupWindow && !this.pdfPopupWindow.closed) {
-                            try {
-                                this.pdfPopupWindow.focus();
-                            } catch (e) {
-                                // 忽略错误
-                            }
-                        } else {
-                            clearInterval(this.pdfPopupFocusInterval);
-                            this.pdfPopupFocusInterval = null;
-                        }
-                    }, 3000);
-                });
-            });
-        } else {
-            // 窗口打开失败（可能被浏览器拦截）
-            this.isPdfPopupMode = false;
-            this.updatePdfPopupButtonState();
-            this.showNotification('Failed to open popup window. Please allow popups for this site.', 'error');
-        }
-    }
-
     openPdfInNewTab() {
         if (!this.currentPdfUrl) {
             this.showNotification('No PDF loaded', 'info');
@@ -18106,108 +17805,11 @@ class PaperStatsApp {
         this.pdfTabWindow = nextTab;
     }
 
-    // 保存PDF窗口模式到localStorage
-    savePdfViewMode() {
-        try {
-            if (!this.currentProject || !this.currentProject.path) return;
-            const key = `pdfViewMode_${this.currentProject.path}`;
-            localStorage.setItem(key, this.isPdfPopupMode ? 'popup' : 'embedded');
-            this.debugLog(`💾 保存PDF窗口模式: ${this.isPdfPopupMode ? 'popup' : 'embedded'} for project ${this.currentProject.name}`);
-        } catch (e) {
-            console.warn('Failed to save PDF view mode:', e);
-        }
-    }
-
-    // 从 localStorage 加载PDF窗口模式
-    loadPdfViewMode() {
-        try {
-            if (!this.currentProject || !this.currentProject.path) return 'embedded';
-            const key = `pdfViewMode_${this.currentProject.path}`;
-            const mode = localStorage.getItem(key) || 'embedded';
-            this.debugLog(`📚 加载PDF窗口模式: ${mode} for project ${this.currentProject.name}`);
-            return mode;
-        } catch (e) {
-            console.warn('Failed to load PDF view mode:', e);
-            return 'embedded';
-        }
-    }
-
-    // 强制切换到内嵌PDF模式
-    forceEmbeddedPdfMode() {
-        this.debugLog('🔄 强制切换为内嵌PDF模式...');
-
-        // 关闭独立PDF窗口（多次尝试确保关闭）
-        if (this.pdfPopupWindow) {
-            try {
-                if (!this.pdfPopupWindow.closed) {
-                    this.debugLog('📌 关闭独立PDF窗口');
-                    this.pdfPopupWindow.close();
-                }
-            } catch (err) {
-                console.warn('⚠️ 关闭PDF窗口时出错:', err);
-            }
-
-            // 强制清空引用
-            this.pdfPopupWindow = null;
-        }
-
-        // 清除聚焦定时器
-        if (this.pdfPopupFocusInterval) {
-            clearInterval(this.pdfPopupFocusInterval);
-            this.pdfPopupFocusInterval = null;
-        }
-
-        // 重置状态
-        this.isPdfPopupMode = false;
-        this.pdfViewModeRestored = true; // 标记已处理，防止自动恢复
-        this.updatePdfPopupButtonState();
-        this.restoreRightPanelAfterPdfPopup();
-
-        // 清除保存的popup模式状态
-        try {
-            if (this.currentProject && this.currentProject.path) {
-                const key = `pdfViewMode_${this.currentProject.path}`;
-                localStorage.setItem(key, 'embedded');
-            }
-        } catch (err) {
-            console.warn('⚠️ 清除localStorage失败:', err);
-        }
-
-        this.debugLog('✅ 已重置为内嵌PDF模式');
-    }
-
-    // 恢复PDF窗口状态（已禁用自动恢复popup模式）
-    restorePdfViewMode() {
-        // 每次加载项目时都强制使用内嵌模式，不再自动恢复popup模式
-        // 如果已经恢复过或用户已手动切换，则不再自动恢复
-        if (this.pdfViewModeRestored) {
-            return;
-        }
-
-        // 内嵌模式标记已恢复，避免后续被触发
-        this.pdfViewModeRestored = true;
-    }
-
     async loadPDF(url) {
         const loadToken = ++this.currentPdfLoadToken;
         try {
             this.currentPdfUrl = url;
             this.pendingPdfUrl = url;
-
-            // 如果在独立窗口模式，更新独立窗口的PDF
-            if (this.isPdfPopupMode && this.pdfPopupWindow && !this.pdfPopupWindow.closed) {
-                const absoluteUrl = window.location.origin + url;
-                const viewerUrl = `js/pdfjs/web/viewer.html?file=${encodeURIComponent(absoluteUrl)}&theme=${this.theme === 'dark' ? 'dark' : 'light'}#zoom=80`;
-                this.pdfPopupWindow.location.href = viewerUrl;
-                if (this.pdfTabWindow && !this.pdfTabWindow.closed) {
-                    try {
-                        this.pdfTabWindow.location.href = viewerUrl;
-                    } catch (_err) {
-                        this.pdfTabWindow = null;
-                    }
-                }
-                return;
-            }
 
             const pdfViewer = document.getElementById('pdfViewer');
             this.setPdfSidebarPrefClosed();
@@ -18254,7 +17856,6 @@ class PaperStatsApp {
                     this.updatePdfPlaceholder('loaded');
                     this.closePdfSidebarIfOpen(win);
                     await this.restorePdfAnnotations(url);
-                    this.restorePdfViewMode();
                     return true;
                 } catch (err) {
                     console.warn('PDF viewer reuse failed:', err);
@@ -18525,7 +18126,6 @@ class PaperStatsApp {
     }
 
     isPdfViewActive() {
-        if (this.isPdfPopupMode && this.pdfPopupWindow && !this.pdfPopupWindow.closed) return true;
         const rightPanel = document.querySelector('.right-panel');
         if (!rightPanel) return false;
         return !rightPanel.classList.contains('panel-collapsed');
@@ -18601,27 +18201,11 @@ class PaperStatsApp {
         try {
             let pdfApp = null;
 
-            // 检查是否在独立窗口模式
-            if (this.isPdfPopupMode && this.pdfPopupWindow && !this.pdfPopupWindow.closed) {
-                // 从独立窗口获取PDFViewerApplication
-                try {
-                    const popupIframe = this.pdfPopupWindow.document.getElementById('pdfFrame');
-                    if (popupIframe && popupIframe.contentWindow) {
-                        pdfApp = popupIframe.contentWindow.PDFViewerApplication;
-                        this.debugLog('✅ 从独立窗口获取PDFViewerApplication成功');
-                    } else {
-                        console.warn('❌ 独立窗口中找不到pdfFrame iframe');
-                    }
-                } catch (e) {
-                    console.warn('❌ 无法访问独立窗口的PDF:', e);
-                }
-            } else {
-                // 从内嵌iframe获取PDFViewerApplication
-                const iframe = document.getElementById('pdfViewer');
-                if (iframe && iframe.contentWindow) {
-                    pdfApp = iframe.contentWindow.PDFViewerApplication;
-                    this.debugLog('✅ 从内嵌iframe获取PDFViewerApplication成功');
-                }
+            // 从内嵌iframe获取PDFViewerApplication
+            const iframe = document.getElementById('pdfViewer');
+            if (iframe && iframe.contentWindow) {
+                pdfApp = iframe.contentWindow.PDFViewerApplication;
+                this.debugLog('✅ 从内嵌iframe获取PDFViewerApplication成功');
             }
 
             if (!pdfApp) {
@@ -18659,27 +18243,11 @@ class PaperStatsApp {
 
             let pdfApp = null;
 
-            // 检查是否在独立窗口模式
-            if (this.isPdfPopupMode && this.pdfPopupWindow && !this.pdfPopupWindow.closed) {
-                // 从独立窗口获取PDFViewerApplication
-                try {
-                    const popupIframe = this.pdfPopupWindow.document.getElementById('pdfFrame');
-                    if (popupIframe && popupIframe.contentWindow) {
-                        pdfApp = popupIframe.contentWindow.PDFViewerApplication;
-                        this.debugLog('✅ 从独立窗口获取PDFViewerApplication成功（下载）');
-                    } else {
-                        console.warn('❌ 独立窗口中找不到pdfFrame iframe');
-                    }
-                } catch (e) {
-                    console.warn('❌ 无法访问独立窗口的PDF:', e);
-                }
-            } else {
-                // 从内嵌iframe获取PDFViewerApplication
-                const iframe = document.getElementById('pdfViewer');
-                if (iframe && iframe.contentWindow) {
-                    pdfApp = iframe.contentWindow.PDFViewerApplication;
-                    this.debugLog('✅ 从内嵌iframe获取PDFViewerApplication成功（下载）');
-                }
+            // 从内嵌iframe获取PDFViewerApplication
+            const iframe = document.getElementById('pdfViewer');
+            if (iframe && iframe.contentWindow) {
+                pdfApp = iframe.contentWindow.PDFViewerApplication;
+                this.debugLog('✅ 从内嵌iframe获取PDFViewerApplication成功（下载）');
             }
 
             const pdfUrl = this.currentPdfUrl;
@@ -19101,70 +18669,6 @@ class PaperStatsApp {
         URL.revokeObjectURL(url);
     }
 
-    // 从独立窗口保存PDF标注数据
-    async savePdfAnnotationsFromPopup() {
-        try {
-            if (!this.isPdfPopupMode || !this.pdfPopupWindow || this.pdfPopupWindow.closed) {
-                return;
-            }
-
-            // 从独立窗口获取PDFViewerApplication
-            const popupIframe = this.pdfPopupWindow.document.getElementById('pdfFrame');
-            if (!popupIframe || !popupIframe.contentWindow) {
-                console.warn('无法访问独立窗口的PDF iframe');
-                return;
-            }
-
-            const pdfApp = popupIframe.contentWindow.PDFViewerApplication;
-            if (!pdfApp || !pdfApp.pdfDocument) {
-                console.warn('独立窗口中PDF未加载');
-                return;
-            }
-
-            this.debugLog('🔄 正在从独立窗口保存PDF标注...');
-
-            // 🔑 关键修复：确保标注已提交
-            await this.ensureAnnotationsCommitted(pdfApp);
-
-            // 使用saveDocument保存带标注的PDF数据 - 带重试机制
-            let pdfData = null;
-            if (typeof pdfApp.pdfDocument.saveDocument === 'function') {
-                // 添加重试机制
-                for (let attempt = 0; attempt < 3; attempt++) {
-                    try {
-                        if (attempt > 0) {
-                            this.debugLog(`🔄 重试保存标注 (${attempt + 1}/3)...`);
-                            await this.ensureAnnotationsCommitted(pdfApp);
-                            await new Promise(resolve => setTimeout(resolve, 300 * (attempt + 1)));
-                        }
-                        pdfData = await pdfApp.pdfDocument.saveDocument();
-                        if (pdfData && pdfData.byteLength > 0) {
-                            this.debugLog(`✅ 标注数据保存成功 (${pdfData.byteLength} bytes)`);
-                            break;
-                        }
-                    } catch (err) {
-                        console.warn(`标注保存失败 (尝试 ${attempt + 1}/3):`, err);
-                        if (attempt === 2 && typeof pdfApp.pdfDocument.getData === 'function') {
-                            pdfData = await pdfApp.pdfDocument.getData();
-                        }
-                    }
-                }
-            } else if (typeof pdfApp.pdfDocument.getData === 'function') {
-                pdfData = await pdfApp.pdfDocument.getData();
-            }
-
-            if (pdfData && this.currentPdfUrl) {
-                // 保存到内存缓存
-                const key = `pdfAnnotations_${this.currentPdfUrl}`;
-                this._pdfAnnotationsCache = this._pdfAnnotationsCache || {};
-                this._pdfAnnotationsCache[key] = pdfData;
-                this.debugLog('✅ PDF标注数据已保存到缓存');
-            }
-        } catch (error) {
-            console.warn('保存PDF标注失败:', error);
-        }
-    }
-
     // 恢复PDF标注数据到内嵌iframe
     async restorePdfAnnotations(pdfUrl) {
         try {
@@ -19325,83 +18829,6 @@ class PaperStatsApp {
         try {
             const cleanText = searchText ? searchText.trim() : '';
             this.lastGotoAttemptText = cleanText;
-
-            // 检查是否在独立窗口模式
-            if (this.isPdfPopupMode && this.pdfPopupWindow && !this.pdfPopupWindow.closed) {
-                // 在独立窗口中执行搜索（不依赖内嵌iframe的状态）
-                try {
-                    // 高亮右侧面板（如果存在）
-                    const rightPanel = document.querySelector('.right-panel');
-                    if (rightPanel) {
-                        rightPanel.classList.remove('panel-highlight');
-                        void rightPanel.offsetWidth;
-                        rightPanel.classList.add('panel-highlight');
-                        setTimeout(() => rightPanel.classList.remove('panel-highlight'), 800);
-                    }
-
-                    // 等待独立窗口中的PDF.js加载完成
-                    let checkAttempts = 0;
-                    const maxAttempts = 50; // 最多等待5秒
-                    const checkAndSearch = () => {
-                        checkAttempts++;
-                        if (checkAttempts > maxAttempts) {
-                            this.showNotification('PDF viewer not ready', 'error');
-                            return;
-                        }
-
-                        if (!this.pdfPopupWindow || this.pdfPopupWindow.closed) {
-                            console.log('独立窗口已关闭');
-                            return;
-                        }
-
-                        const popupDoc = this.pdfPopupWindow.document;
-                        const popupIframe = popupDoc.getElementById('pdfFrame');
-                        if (!popupIframe || !popupIframe.contentWindow) {
-                            setTimeout(checkAndSearch, 100);
-                            return;
-                        }
-                        const pdfJsWindow = popupIframe.contentWindow;
-                        if (!pdfJsWindow.PDFViewerApplication) {
-                            setTimeout(checkAndSearch, 100);
-                            return;
-                        }
-                        const pdfApp = pdfJsWindow.PDFViewerApplication;
-
-                        // 检查PDF是否已完全加载
-                        if (!pdfApp.pdfDocument || !pdfApp.pdfViewer) {
-                            setTimeout(checkAndSearch, 100);
-                            return;
-                        }
-
-                        // 等待eventBus准备就绪
-                        if (!pdfApp.eventBus) {
-                            setTimeout(checkAndSearch, 100);
-                            return;
-                        }
-
-                        // 确保PDF已渲染至少一页
-                        const viewerContainer = pdfJsWindow.document.querySelector('#viewerContainer');
-                        if (!viewerContainer || viewerContainer.children.length === 0) {
-                            setTimeout(checkAndSearch, 100);
-                            return;
-                        }
-
-                        // 执行搜索或跳转
-                        if (cleanText) {
-                            this.executeSearchAndScroll(pdfApp, cleanText, valuePath, pdfJsWindow);
-                        } else if (page) {
-                            this.smoothScrollToPage(pdfApp, parseInt(page));
-                        }
-                        // 聚焦独立窗口
-                        this.pdfPopupWindow.focus();
-                    };
-                    checkAndSearch();
-                    return;
-                } catch (error) {
-                    this.showNotification('Popup window search failed', 'error');
-                    return;
-                }
-            }
 
             // 内嵌模式：需要检查PDF是否已加载
             if (!this.currentPdfUrl) {
@@ -19694,26 +19121,11 @@ class PaperStatsApp {
                 return;
             }
 
-            // 获取PDF文档（需要根据是否在独立窗口来判断）
+            // 内嵌模式：从主窗口iframe获取文档
             let pdfDoc = null;
-
-            // 检查是否在独立窗口模式
-            if (this.isPdfPopupMode && this.pdfPopupWindow && !this.pdfPopupWindow.closed) {
-                // 独立窗口模式：从独立窗口获取文档
-                try {
-                    const popupIframe = this.pdfPopupWindow.document.getElementById('pdfFrame');
-                    if (popupIframe && popupIframe.contentWindow) {
-                        pdfDoc = popupIframe.contentWindow.document;
-                    }
-                } catch (e) {
-                    console.warn('⚠️ 无法访问独立窗口文档:', e);
-                }
-            } else {
-                // 内嵌模式：从主窗口iframe获取文档
-                const pdfIframe = document.querySelector('#pdfViewer');
-                if (pdfIframe && pdfIframe.contentWindow) {
-                    pdfDoc = pdfIframe.contentWindow.document;
-                }
+            const pdfIframe = document.querySelector('#pdfViewer');
+            if (pdfIframe && pdfIframe.contentWindow) {
+                pdfDoc = pdfIframe.contentWindow.document;
             }
 
             if (!pdfDoc) {
@@ -20058,16 +19470,9 @@ class PaperStatsApp {
 
         // Get PDFViewerApplication
         let pdfApp = null;
-        if (this.isPdfPopupMode && this.pdfPopupWindow && !this.pdfPopupWindow.closed) {
-            const popupIframe = this.pdfPopupWindow.document.getElementById('pdfFrame');
-            if (popupIframe && popupIframe.contentWindow) {
-                pdfApp = popupIframe.contentWindow.PDFViewerApplication;
-            }
-        } else {
-            const iframe = document.getElementById('pdfViewer');
-            if (iframe && iframe.contentWindow) {
-                pdfApp = iframe.contentWindow.PDFViewerApplication;
-            }
+        const iframe = document.getElementById('pdfViewer');
+        if (iframe && iframe.contentWindow) {
+            pdfApp = iframe.contentWindow.PDFViewerApplication;
         }
 
         if (!pdfApp || !pdfApp.pdfDocument) {
@@ -21559,22 +20964,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // 页面关闭/刷新前提示保存
     window.addEventListener('beforeunload', (e) => {
-        // 通过localStorage发送关闭信号给独立PDF窗口
-        try {
-            localStorage.setItem('closePdfPopupWindow', 'true');
-        } catch (err) {
-            console.warn('无法发送关闭信号:', err);
-        }
-
-        // 关闭独立PDF窗口
-        if (app.pdfPopupWindow && !app.pdfPopupWindow.closed) {
-            try {
-                app.pdfPopupWindow.close();
-            } catch (err) {
-                console.warn('关闭独立PDF窗口失败:', err);
-            }
-        }
-
         if (app.hasUnsavedChanges || app.hasUnsavedMarkdownChanges) {
             e.preventDefault();
             e.returnValue = '您有未保存的修改（JSON/Markdown），确定要离开吗？';

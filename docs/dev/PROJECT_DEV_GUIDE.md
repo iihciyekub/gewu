@@ -26,14 +26,12 @@ Keep it updated as features change.
 - JSON and MD operations go through `server.js`
 - Project path is required and validated for every API call
 
-### PDF View (Embedded vs Popup)
+### PDF View (Embedded)
 - Embedded PDF loads in iframe
-- Popup window collapses embedded panel; closing popup restores embedded panel
 
 ## Key Functions (App)
 - `loadFileList()`: loads file list for current project
 - `getRequiredProjectPath()`: enforces selected project before file operations
-- `togglePdfPopup()`: switch between embedded and popup PDF modes
 - `saveToFile()`: save current JSON file
 
 ## Key Functions (Server)

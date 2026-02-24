@@ -5489,14 +5489,12 @@ body.theme-dark .pdf-action-btn {
     color: #f8fafc;
 }
 
-.btn-pdf-popup.is-popup,
 .btn-pdf-autoload.is-on {
     background: #e0f2fe;
     border-color: rgba(14, 116, 144, 0.35);
     color: #0f172a;
 }
 
-body.theme-dark .btn-pdf-popup.is-popup,
 body.theme-dark .btn-pdf-autoload.is-on {
     background: rgba(37, 99, 235, 0.2);
     border-color: rgba(96, 165, 250, 0.4);
