@@ -44,17 +44,21 @@ ALLOWED_ROOTS="$HOME,$PWD,/data" npm start
 ### Docker 启动
 
 ```bash
+# 构建 Docker 镜像
 docker build -t gewu .
 
+# 从docker hub拉取最新版本
+docker pull iihciyekub/gewu:0.0.2
+
 # 将本地项目目录映射到容器 /data
-docker run -p 8000:8000 \
-  -e HOST=0.0.0.0 \
-  -e ALLOWED_ROOTS=/data \
-  -v /path/to/projects:/data \
-  gewu
+docker run -d --name gewu \
+  -p 8000:8000 \
+  -v $(pwd)/projects:/data \
+  -v $(pwd)/home:/home/node \
+  iihciyekub/gewu:0.0.2
 ```
 
-在应用内创建/选择项目时，使用绝对路径，例如：`/data/my_research`。
+在应用内创建/选择项目时，使用绝对路径，例如：`/home/node/my_research`。
 
 使用 docker-compose：
 
@@ -80,7 +84,8 @@ docker compose up --build
 ├── json/      # JSON 结构化数据（默认视图为 json/view1）
 ├── md/        # Markdown 笔记
 ├── pdf/       # PDF 文献
-└── DRAFT.md   # 草稿（项目根目录）
+├── DRAFT.md   # 草稿（项目根目录）
+└── PROMPT.md  # prompt（项目根目录）
 ```
 
 ## 📖 文档
@@ -92,7 +97,7 @@ docker compose up --build
 
 ## 🐳 Docker 提示
 
-容器内默认只允许 `/data` 作为项目根目录。如需放开范围，运行时覆盖：
+容器内默认只允许 `/data` 或 `/home/node` 作为项目根目录。如需放开范围，运行时覆盖：
 
 ```bash
 docker run -e ALLOWED_ROOTS=/data,/other/path ...

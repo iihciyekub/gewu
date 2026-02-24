@@ -161,7 +161,7 @@ function ensurePromptManifest() {
         );
         const payload = JSON.stringify({
             name: 'GEWU',
-            version: '0.0.1',
+            version: '0.0.2',
             dockerHub: 'https://hub.docker.com/repository/docker/iihciyekub/gewu/general',
             isDocker
         }, null, 2);
@@ -252,6 +252,49 @@ function ensureGitIgnore(rootDir) {
     ].join('\n') + '\n';
     fs.writeFileSync(gitignorePath, content, 'utf8');
     return true;
+}
+
+function ensureGitIdentity(rootDir) {
+    const getConfig = (key) => {
+        try {
+            return runGit(rootDir, ['config', '--get', key]).trim();
+        } catch (_err) {
+            return '';
+        }
+    };
+    const setConfig = (key, value) => {
+        try {
+            runGit(rootDir, ['config', key, value]);
+            return true;
+        } catch (_err) {
+            return false;
+        }
+    };
+    const name = getConfig('user.name');
+    const email = getConfig('user.email');
+    let changed = false;
+    if (!name) changed = setConfig('user.name', 'GEWU User') || changed;
+    if (!email) changed = setConfig('user.email', 'gewu@localhost') || changed;
+    return changed;
+}
+
+function setGitIdentity(rootDir, name, email) {
+    let changed = false;
+    const safeName = String(name || '').trim();
+    const safeEmail = String(email || '').trim();
+    if (safeName) {
+        try {
+            runGit(rootDir, ['config', 'user.name', safeName]);
+            changed = true;
+        } catch (_err) { }
+    }
+    if (safeEmail) {
+        try {
+            runGit(rootDir, ['config', 'user.email', safeEmail]);
+            changed = true;
+        } catch (_err) { }
+    }
+    return changed;
 }
 
 function copyFileToSystemClipboard(absPath) {
@@ -482,6 +525,8 @@ const server = http.createServer((req, res) => {
             try {
                 const data = JSON.parse(body || '{}');
                 const projectPath = String(data.projectPath || '').trim();
+                const userName = String(data.userName || '').trim();
+                const userEmail = String(data.userEmail || '').trim();
                 if (!projectPath) {
                     res.writeHead(400, { 'Content-Type': 'application/json' });
                     res.end(JSON.stringify({ success: false, error: 'Missing projectPath' }));
@@ -503,6 +548,50 @@ const server = http.createServer((req, res) => {
                 res.writeHead(200, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify({ success: true, available: true, repo, dirty, changesCount: changes.length }));
             } catch (err) {
+                const stderr = err?.stderr ? String(err.stderr) : '';
+                const stdout = err?.stdout ? String(err.stdout) : '';
+                const details = [err.message, stderr, stdout].filter(Boolean).join('\n');
+                res.writeHead(500, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ success: false, error: details || 'Git commit failed' }));
+            }
+        });
+        return;
+    }
+
+    // Git identity for project
+    if (req.method === 'POST' && pathname === '/git-identity') {
+        let body = '';
+        req.on('data', chunk => { body += chunk.toString(); });
+        req.on('end', () => {
+            if (!isGitAvailable()) {
+                res.writeHead(500, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ success: false, error: 'Git is not available' }));
+                return;
+            }
+            try {
+                const data = JSON.parse(body || '{}');
+                const projectPath = String(data.projectPath || '').trim();
+                const userName = String(data.userName || '').trim();
+                const userEmail = String(data.userEmail || '').trim();
+                if (!projectPath) {
+                    res.writeHead(400, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ success: false, error: 'Missing projectPath' }));
+                    return;
+                }
+                const { fullPath } = normalizeProjectPath(projectPath);
+                const getConfig = (key) => {
+                    try {
+                        return runGit(fullPath, ['config', '--get', key]).trim();
+                    } catch (_err) {
+                        return '';
+                    }
+                };
+                const name = getConfig('user.name');
+                const email = getConfig('user.email');
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ success: true, name, email }));
+            } catch (err) {
+                console.error('✗ Git init failed:', err);
                 res.writeHead(500, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify({ success: false, error: err.message }));
             }
@@ -523,6 +612,8 @@ const server = http.createServer((req, res) => {
             try {
                 const data = JSON.parse(body || '{}');
                 const projectPath = String(data.projectPath || '').trim();
+                const userName = String(data.userName || '').trim();
+                const userEmail = String(data.userEmail || '').trim();
                 if (!projectPath) {
                     res.writeHead(400, { 'Content-Type': 'application/json' });
                     res.end(JSON.stringify({ success: false, error: 'Missing projectPath' }));
@@ -535,11 +626,18 @@ const server = http.createServer((req, res) => {
                     runGit(fullPath, ['init']);
                     ensureGitIgnore(fullPath);
                 }
+                if (userName || userEmail) {
+                    setGitIdentity(fullPath, userName, userEmail);
+                }
                 res.writeHead(200, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify({ success: true, already }));
             } catch (err) {
+                console.error('✗ Git commit failed:', err);
+                const stderr = err?.stderr ? String(err.stderr) : '';
+                const stdout = err?.stdout ? String(err.stdout) : '';
+                const details = [err.message, stderr, stdout].filter(Boolean).join('\n');
                 res.writeHead(500, { 'Content-Type': 'application/json' });
-                res.end(JSON.stringify({ success: false, error: err.message }));
+                res.end(JSON.stringify({ success: false, error: details || 'Git commit failed' }));
             }
         });
         return;
@@ -574,6 +672,8 @@ const server = http.createServer((req, res) => {
             try {
                 const data = JSON.parse(body || '{}');
                 const message = String(data.message || '').trim() || `Update ${formatDateTime()}`;
+                const userName = String(data.userName || '').trim();
+                const userEmail = String(data.userEmail || '').trim();
                 runGit(fullPath, ['add', '-A']);
                 const statusOut = runGit(fullPath, ['status', '--porcelain']);
                 const changes = statusOut.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
@@ -581,6 +681,11 @@ const server = http.createServer((req, res) => {
                     res.writeHead(200, { 'Content-Type': 'application/json' });
                     res.end(JSON.stringify({ success: false, error: 'No changes to commit', code: 'NO_CHANGES' }));
                     return;
+                }
+                if (userName || userEmail) {
+                    setGitIdentity(fullPath, userName, userEmail);
+                } else {
+                    ensureGitIdentity(fullPath);
                 }
                 runGit(fullPath, ['commit', '-m', message]);
                 const hash = runGit(fullPath, ['rev-parse', 'HEAD']).trim();
@@ -623,9 +728,24 @@ const server = http.createServer((req, res) => {
             try {
                 const data = JSON.parse(body || '{}');
                 let limit = parseInt(data.limit, 10);
-                if (Number.isNaN(limit) || limit <= 0) limit = 20;
-                limit = Math.min(Math.max(limit, 1), 50);
-                const out = runGit(fullPath, ['log', `-n${limit}`, '--date=iso', '--pretty=format:%H%x09%ad%x09%s']);
+                const args = ['log', '--date=iso', '--pretty=format:%H%x09%ad%x09%s'];
+                if (!Number.isNaN(limit) && limit > 0) {
+                    limit = Math.min(Math.max(limit, 1), 200);
+                    args.splice(1, 0, `-n${limit}`);
+                }
+                let out = '';
+                try {
+                    out = runGit(fullPath, args);
+                } catch (err) {
+                    // No commits yet -> return empty history
+                    const msg = String(err.message || '');
+                    if (msg.includes('does not have any commits yet') || msg.includes('unknown revision') || msg.includes('bad revision')) {
+                        res.writeHead(200, { 'Content-Type': 'application/json' });
+                        res.end(JSON.stringify({ success: true, history: [] }));
+                        return;
+                    }
+                    throw err;
+                }
                 const history = out
                     .split(/\r?\n/)
                     .map(line => line.trim())
@@ -673,7 +793,7 @@ const server = http.createServer((req, res) => {
             try {
                 const data = JSON.parse(body || '{}');
                 const hash = String(data.hash || '').trim();
-                const backupIfDirty = data.backupIfDirty !== false;
+                const backupIfDirty = data.backupIfDirty === true;
                 if (!hash) {
                     res.writeHead(400, { 'Content-Type': 'application/json' });
                     res.end(JSON.stringify({ success: false, error: 'Missing hash' }));
@@ -2395,6 +2515,7 @@ server.listen(PORT, HOST, () => {
     console.log('   - GET  /delete-group-status (delete)');
     console.log('   - POST /file-exists');
     console.log('   - POST /git-status');
+    console.log('   - POST /git-identity');
     console.log('   - POST /git-init');
     console.log('   - POST /git-commit');
     console.log('   - POST /git-history');

@@ -151,6 +151,7 @@ class PaperStatsApp {
         this.mdChatSavedSlotsLoaded = false;
         this._mdChatSlotButtons = null;
         this._settingsNavBound = false;
+        this.gitIdentity = { name: '', email: '' };
 
         // 项目管理
         this.currentProject = null; // { name, path }
@@ -10339,6 +10340,8 @@ class PaperStatsApp {
             this.updateSettingsPanelsVisibility();
             this.saveSettingsPanelsState();
             this.switchToView('settings');
+            this.applyGitIdentityInputs();
+            this.bindGitIdentityInputs();
             this.renderGitHistoryList();
             return;
         }
@@ -10350,6 +10353,8 @@ class PaperStatsApp {
         this.saveSettingsPanelsState();
         if (next) {
             this.switchToView('settings');
+            this.applyGitIdentityInputs();
+            this.bindGitIdentityInputs();
             this.renderGitHistoryList();
         }
     }
@@ -11466,6 +11471,10 @@ class PaperStatsApp {
             icon.className = isSourceMode
                 ? 'fa-solid fa-pen-to-square'
                 : 'fa-solid fa-person-chalkboard';
+            const label = toggleBtn.querySelector('span');
+            if (label) {
+                label.textContent = isSourceMode ? 'Switch to Render' : 'Switch to Source';
+            }
         };
         setMdToggleIcon('statusToggleSourceBtn');
 
@@ -11496,12 +11505,39 @@ class PaperStatsApp {
         }
     }
 
-    async initGitWorkspace({ silent = false } = {}) {
+    async fetchGitIdentity() {
         try {
-            const resp = await fetch('/git-init', {
+            const resp = await fetch('/git-identity', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ projectPath: this.currentProject?.path || '' })
+            });
+            const data = await resp.json();
+            if (!resp.ok || data?.success === false) {
+                throw new Error(data?.error || 'Git identity failed');
+            }
+            return {
+                name: String(data?.name || '').trim(),
+                email: String(data?.email || '').trim()
+            };
+        } catch (_err) {
+            return null;
+        }
+    }
+
+    async initGitWorkspace({ silent = false } = {}) {
+        try {
+            await this.applyGitIdentityInputs();
+            const userName = String(this.gitIdentity?.name || '').trim();
+            const userEmail = String(this.gitIdentity?.email || '').trim();
+            const resp = await fetch('/git-init', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    projectPath: this.currentProject?.path || '',
+                    userName,
+                    userEmail
+                })
             });
             const data = await resp.json();
             if (!resp.ok || data?.success === false) {
@@ -11551,11 +11587,23 @@ class PaperStatsApp {
             this.showNotification('Commit message is required', 'info');
             return;
         }
+        await this.applyGitIdentityInputs();
+        const userName = String(this.gitIdentity?.name || '').trim();
+        const userEmail = String(this.gitIdentity?.email || '').trim();
+        const tracker = (typeof this.createStatusProgressTracker === 'function')
+            ? this.createStatusProgressTracker('Git Save')
+            : null;
+        if (tracker) tracker.update('Saving version...', 20);
         try {
             const resp = await fetch('/git-commit', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ projectPath: this.currentProject?.path || '', message: msg })
+                body: JSON.stringify({
+                    projectPath: this.currentProject?.path || '',
+                    message: msg,
+                    userName,
+                    userEmail
+                })
             });
             const data = await resp.json();
             if (!resp.ok || data?.success === false) {
@@ -11564,12 +11612,14 @@ class PaperStatsApp {
             }
             const shortHash = data?.hash ? String(data.hash).slice(0, 7) : '';
             this.showNotification(`Saved version${shortHash ? ` (${shortHash})` : ''}`, 'success');
+            if (tracker) tracker.finish('Version saved', 600);
         } catch (err) {
+            if (tracker) tracker.fail('Save version failed');
             this.showNotification(`Git commit failed: ${err.message}`, 'error');
         }
     }
 
-    async fetchGitHistory(limit = 20) {
+    async fetchGitHistory(limit = null) {
         try {
             const resp = await fetch('/git-history', {
                 method: 'POST',
@@ -11627,13 +11677,13 @@ class PaperStatsApp {
             this.showNotification('Invalid selection', 'error');
             return;
         }
-        const ok = confirm(`Restore project files to commit ${String(hash).slice(0, 7)}?\n\nThis will overwrite current files. Unsaved changes will be backed up automatically.`);
+        const ok = confirm(`Restore project files to commit ${String(hash).slice(0, 7)}?\n\nThis will overwrite current files. Unsaved changes will be lost.`);
         if (!ok) return;
         try {
             const resp = await fetch('/git-restore', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ projectPath: this.currentProject?.path || '', hash, backupIfDirty: true })
+                body: JSON.stringify({ projectPath: this.currentProject?.path || '', hash, backupIfDirty: false })
             });
             const data = await resp.json();
             if (!resp.ok || data?.success === false) {
@@ -11654,7 +11704,7 @@ class PaperStatsApp {
         const listEl = document.getElementById('gitHistoryList');
         const emptyEl = document.getElementById('gitHistoryEmpty');
         if (!listEl || !emptyEl) return;
-        listEl.innerHTML = '';
+        listEl.innerHTML = '<div class="git-history-loading">Loading history...</div>';
         emptyEl.style.display = 'none';
         if (!this.currentProject?.path) {
             emptyEl.textContent = 'Load a project to view history.';
@@ -11665,17 +11715,26 @@ class PaperStatsApp {
         if (!status || status.available === false) {
             emptyEl.textContent = 'Git not available.';
             emptyEl.style.display = 'block';
+            listEl.innerHTML = '';
             return;
         }
         if (!status.repo) {
             emptyEl.textContent = 'Git not initialized.';
             emptyEl.style.display = 'block';
+            listEl.innerHTML = '';
             return;
         }
-        const history = await this.fetchGitHistory(30);
-        if (!history || history.length === 0) {
+        const history = await this.fetchGitHistory();
+        if (!history) {
+            emptyEl.textContent = 'Failed to load history.';
+            emptyEl.style.display = 'block';
+            listEl.innerHTML = '';
+            return;
+        }
+        if (history.length === 0) {
             emptyEl.textContent = 'No versions yet.';
             emptyEl.style.display = 'block';
+            listEl.innerHTML = '';
             return;
         }
         history.forEach((item) => {
@@ -16080,9 +16139,7 @@ class PaperStatsApp {
             const applyBtn = block.querySelector('.prompt-apply-btn');
             const cancelBtn = block.querySelector('.prompt-cancel-btn');
             const syncTextareaHeight = () => {
-                if (!textarea) return;
-                textarea.style.height = 'auto';
-                textarea.style.height = `${textarea.scrollHeight}px`;
+                this.autoSizeTextarea(textarea);
             };
 
             const getStoredPrompt = () => {
@@ -16140,6 +16197,14 @@ class PaperStatsApp {
             if (textarea && textarea.dataset.autosizeBound !== '1') {
                 textarea.dataset.autosizeBound = '1';
                 textarea.addEventListener('input', () => syncTextareaHeight());
+                textarea.addEventListener('contextmenu', (e) => {
+                    const start = textarea.selectionStart || 0;
+                    const end = textarea.selectionEnd || 0;
+                    if (end <= start) return;
+                    e.preventDefault();
+                    e.stopPropagation();
+                    this.showJsonTextContextMenu(textarea, e.clientX, e.clientY);
+                });
             }
 
             if (applyBtn) {
@@ -17234,6 +17299,154 @@ class PaperStatsApp {
 
     escapeAttr(text) {
         return this.escapeHtml(text || '').replace(/`/g, '&#96;');
+    }
+
+    autoSizeTextarea(textarea) {
+        if (!textarea) return;
+        textarea.style.height = 'auto';
+        textarea.style.height = `${textarea.scrollHeight}px`;
+    }
+
+    getGitIdentityStorageKey() {
+        const key = this.getProjectKey();
+        return key ? `gitIdentity:${key}` : '';
+    }
+
+    loadGitIdentity() {
+        const key = this.getGitIdentityStorageKey();
+        if (!key) return { name: '', email: '' };
+        try {
+            const raw = localStorage.getItem(key);
+            if (!raw) return { name: '', email: '' };
+            const parsed = JSON.parse(raw);
+            return {
+                name: String(parsed?.name || '').trim(),
+                email: String(parsed?.email || '').trim()
+            };
+        } catch (_err) {
+            return { name: '', email: '' };
+        }
+    }
+
+    saveGitIdentity(identity = null) {
+        const key = this.getGitIdentityStorageKey();
+        if (!key) return;
+        const payload = identity || this.gitIdentity || { name: '', email: '' };
+        try {
+            localStorage.setItem(key, JSON.stringify(payload));
+        } catch (_err) {
+            // ignore
+        }
+    }
+
+    async applyGitIdentityInputs() {
+        const stored = this.loadGitIdentity();
+        const defaults = { name: 'GEWU User', email: 'gewu@localhost' };
+        let system = null;
+        if ((!stored.name || !stored.email) && this.currentProject?.path) {
+            system = await this.fetchGitIdentity();
+        }
+        const next = {
+            name: stored.name || system?.name || defaults.name,
+            email: stored.email || system?.email || defaults.email
+        };
+        this.gitIdentity = next;
+        this.saveGitIdentity(next);
+    }
+
+    bindGitIdentityInputs() {
+        // inputs removed; keep method to avoid callsite changes
+    }
+
+    ensureJsonTextContextMenu() {
+        if (this._jsonTextContextMenu) return this._jsonTextContextMenu;
+        const menu = document.createElement('div');
+        menu.className = 'json-text-context-menu';
+        menu.innerHTML = `
+            <button type="button" class="json-text-menu-item" data-action="format">Format JSON</button>
+            <button type="button" class="json-text-menu-item" data-action="repair">Repair JSON</button>
+        `;
+        menu.addEventListener('click', (e) => {
+            const btn = e.target.closest('.json-text-menu-item');
+            if (!btn) return;
+            const action = btn.dataset.action || '';
+            this.applyJsonTextContextAction(action);
+        });
+        document.body.appendChild(menu);
+        this._jsonTextContextMenu = menu;
+        if (!this._jsonTextContextBound) {
+            this._jsonTextContextBound = true;
+            document.addEventListener('click', () => this.hideJsonTextContextMenu());
+            window.addEventListener('resize', () => this.hideJsonTextContextMenu());
+        }
+        return menu;
+    }
+
+    showJsonTextContextMenu(textarea, x, y) {
+        if (!textarea) return;
+        const start = textarea.selectionStart || 0;
+        const end = textarea.selectionEnd || 0;
+        if (end <= start) return;
+        this._jsonTextContextTarget = textarea;
+        this._jsonTextContextRange = { start, end };
+        const menu = this.ensureJsonTextContextMenu();
+        menu.style.display = 'block';
+        const padding = 8;
+        const { innerWidth, innerHeight } = window;
+        const rect = menu.getBoundingClientRect();
+        let left = Math.min(x, innerWidth - rect.width - padding);
+        let top = Math.min(y, innerHeight - rect.height - padding);
+        left = Math.max(padding, left);
+        top = Math.max(padding, top);
+        menu.style.left = `${left}px`;
+        menu.style.top = `${top}px`;
+    }
+
+    hideJsonTextContextMenu() {
+        const menu = this._jsonTextContextMenu;
+        if (menu) {
+            menu.style.display = 'none';
+        }
+        this._jsonTextContextTarget = null;
+        this._jsonTextContextRange = null;
+    }
+
+    applyJsonTextContextAction(action = '') {
+        const textarea = this._jsonTextContextTarget;
+        const range = this._jsonTextContextRange;
+        if (!textarea || !range) return;
+        const start = range.start;
+        const end = range.end;
+        const raw = textarea.value.slice(start, end);
+        if (!raw.trim()) {
+            this.hideJsonTextContextMenu();
+            return;
+        }
+        let nextText = '';
+        if (action === 'format') {
+            const parsed = this.tryParseJson(raw);
+            if (!parsed) {
+                this.showNotification('Selected text is not valid JSON', 'error');
+                this.hideJsonTextContextMenu();
+                return;
+            }
+            nextText = JSON.stringify(parsed, null, 2);
+        } else if (action === 'repair') {
+            const repaired = this.repairJsonText(raw);
+            const parsed = this.tryParseJson(repaired);
+            if (!parsed) {
+                this.showNotification('Unable to repair selected JSON', 'error');
+                this.hideJsonTextContextMenu();
+                return;
+            }
+            nextText = JSON.stringify(parsed, null, 2);
+        } else {
+            this.hideJsonTextContextMenu();
+            return;
+        }
+        textarea.setRangeText(nextText, start, end, 'select');
+        this.autoSizeTextarea(textarea);
+        this.hideJsonTextContextMenu();
     }
 
     getJsonNodeByPath(pathStr) {

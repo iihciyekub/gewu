@@ -1242,6 +1242,10 @@ body {
     font-size: 11px;
 }
 
+#statusToggleSourceBtn span {
+    font-size: 9px;
+}
+
 
 .status-bar .view-tabs {
     height: 16px;
@@ -3892,6 +3896,12 @@ body.theme-dark .settings-field-row .doi-index-count {
     overflow-y: auto;
 }
 
+.git-history-loading {
+    font-size: 11px;
+    color: var(--gray-500);
+    padding: 6px 4px;
+}
+
 .git-history-item {
     display: flex;
     align-items: center;
@@ -4536,6 +4546,43 @@ body.theme-vscode .qa-toggle:hover {
 .prompt-actions button:hover {
     background: #e5e7eb;
     border-color: #cbd5f5;
+}
+
+.json-text-context-menu {
+    position: fixed;
+    z-index: 2000;
+    display: none;
+    min-width: 150px;
+    padding: 6px;
+    border-radius: 10px;
+    border: 1px solid var(--wos-border, #e5e7eb);
+    background: var(--wos-card, #ffffff);
+    box-shadow: 0 10px 24px rgba(15, 23, 42, 0.18);
+}
+
+.json-text-menu-item {
+    width: 100%;
+    display: block;
+    text-align: left;
+    padding: 6px 8px;
+    border: none;
+    border-radius: 8px;
+    background: transparent;
+    font-size: 12px;
+    cursor: pointer;
+}
+
+.json-text-menu-item:hover {
+    background: rgba(15, 23, 42, 0.08);
+}
+
+body.theme-dark .json-text-context-menu {
+    border-color: rgba(148, 163, 184, 0.25);
+    background: rgba(15, 23, 42, 0.95);
+}
+
+body.theme-dark .json-text-menu-item:hover {
+    background: rgba(255, 255, 255, 0.08);
 }
 
 body.theme-vscode .prompt-btn {

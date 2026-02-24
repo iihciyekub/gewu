@@ -1,6 +1,6 @@
 {
   "name": "GEWU",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "dockerHub": "https://hub.docker.com/repository/docker/iihciyekub/gewu/general",
   "isDocker": false
 }

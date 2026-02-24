@@ -1,6 +1,6 @@
 services:
   gewu:
-    image: gewu:0.0.1
+    image: gewu:0.0.2
     ports:
       - "8000:8000"
     init: true
