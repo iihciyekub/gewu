@@ -2839,14 +2839,7 @@ class PaperStatsApp {
         }
 
         // PDF 自动加载开关
-        const pdfAutoLoadBtn = document.getElementById('btnPdfAutoLoad');
-        if (pdfAutoLoadBtn) {
-            pdfAutoLoadBtn.addEventListener('click', () => {
-                this.setAutoLoadPdf(!this.autoLoadPdf);
-            });
-            this.updatePdfAutoLoadButtonState();
-        }
-
+        // PDF 自动加载开关（按钮已移除，保留菜单入口）
         // PDF 缩放滑杆
         const pdfZoomSlider = document.getElementById('pdfZoomSlider');
         if (pdfZoomSlider) {
