@@ -50,11 +50,6 @@ class SpecialSyntaxManager {
                 pattern: /\\prompt\{([\s\S]*?)\}/g,
                 description: 'Prompt block',
                 renderer: (matches, fullMatch) => this.renderPrompt(matches, fullMatch)
-            },
-            'doi': {
-                pattern: /\\doi\{([^}]+)\}/g,
-                description: 'DOI link to publisher',
-                renderer: (matches, fullMatch) => this.renderDoiLink(matches, fullMatch)
             }
         };
         

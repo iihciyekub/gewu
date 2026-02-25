@@ -6197,17 +6197,6 @@ class PaperStatsApp {
         const { relPath, fileName } = this.normalizePdfRel(trimmed);
         const target = relPath || fileName;
         if (!target) throw new Error('PDF filename is empty');
-        try {
-            await this.copyPdfFileWithBrowserClipboard(target);
-            this.showNotification(`PDF copied: ${target}`, 'success');
-            return;
-        } catch (browserErr) {
-            if (this.isDockerMode) {
-                console.warn('Browser copy failed in Docker mode:', browserErr);
-                throw browserErr;
-            }
-            console.warn('Browser copy failed, fallback server:', browserErr);
-        }
         await this.copyPdfFileViaServer(target);
         this.showNotification(`PDF copied via system clipboard: ${target}`, 'success');
     }
@@ -13058,49 +13047,6 @@ class PaperStatsApp {
             };
             md.use(gotoPlugin);
 
-            // 添加 \doi{} 的 inline 规则处理
-            const specialLinkPlugin = (mdInstance) => {
-                // 定义 inline rule 来识别 \doi{}
-                const doiRule = (state, silent) => {
-                    const max = state.posMax;
-                    const start = state.pos;
-
-                    // 检查是否以 \doi{ 开始
-                    if (state.src.charCodeAt(start) !== 0x5C /* \ */) return false;
-                    if (state.src.slice(start, start + 5) !== '\\doi{') return false;
-
-                    // 找到匹配的 }
-                    let pos = start + 5;
-                    while (pos < max && state.src.charCodeAt(pos) !== 0x7D /* } */) {
-                        pos++;
-                    }
-                    if (pos >= max) return false;
-
-                    const doi = state.src.slice(start + 5, pos).trim();
-                    if (!doi) return false;
-
-                    if (!silent) {
-                        const token = state.push('doi_link', '', 0);
-                        token.content = doi;
-                    }
-
-                    state.pos = pos + 1;
-                    return true;
-                };
-
-                // 注册 inline rules
-                mdInstance.inline.ruler.before('escape', 'doi_link', doiRule);
-
-                // 添加 renderers
-                mdInstance.renderer.rules.doi_link = (tokens, idx) => {
-                    const doi = tokens[idx].content;
-                    const escDoi = md.utils.escapeHtml(doi);
-                    const doiUrl = `https://doi.org/${encodeURIComponent(doi)}`;
-                    return `<a href="${doiUrl}" target="_blank" class="doi-link" title="Open DOI: ${escDoi}"><i class="fa-solid fa-external-link-alt"></i> DOI</a>`;
-                };
-            };
-            md.use(specialLinkPlugin);
-
             // 添加 \groupby{}{} 的 inline 规则处理
             const groupByPlugin = (mdInstance) => {
                 const groupByRule = (state, silent) => {
@@ -14570,7 +14516,7 @@ class PaperStatsApp {
         const idx = Number.isFinite(this._promptRenderIndex) ? this._promptRenderIndex++ : 0;
         return `
             <div class="prompt-block" data-prompt-raw="${escAttrPrompt}" data-prompt-index="${idx}">
-                <button class="prompt-btn" type="button" title="Click to copy prompt. Right-click to edit.">
+                <button class="bib-fetch-btn prompt-btn inline-syntax" type="button" title="Click to copy prompt. Right-click to edit.">
                     <i class="fa-solid fa-bolt"></i><span>Prompt</span>
                 </button>
                 <div class="prompt-editor" hidden>

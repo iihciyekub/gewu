@@ -29,13 +29,6 @@
       "documentation": "Create a link to jump to specific text in PDF"
     },
     {
-      "trigger": "\\doi",
-      "label": "\\doi{doi}",
-      "insertText": "\\doi{$1}",
-      "detail": "DOI link",
-      "documentation": "Create a link to open DOI in publisher website"
-    },
-    {
       "trigger": "\\groupby",
       "label": "\\groupby{groups}{fields}",
       "insertText": "\\groupby{$1}{$2}",

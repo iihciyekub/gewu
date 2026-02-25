@@ -67,7 +67,6 @@ class AutocompleteManager {
             { trigger: '\\cite', label: '\\cite{doi}', insertText: '\\cite{$1}', detail: 'Narrative citation' },
             { trigger: '\\citep', label: '\\citep{doi}', insertText: '\\citep{$1}', detail: 'Parenthetical citation' },
             { trigger: '\\bib', label: '\\bib{doi}', insertText: '\\bib{$1}', detail: 'BibTeX entry' },
-            { trigger: '\\doi', label: '\\doi{doi}', insertText: '\\doi{$1}', detail: 'DOI reference' },
             { trigger: '\\prompt', label: '\\prompt{...}', insertText: '\\prompt{$1}', detail: 'Prompt block (supports newlines)' }
         ];
     }
@@ -275,7 +274,7 @@ class AutocompleteManager {
 
     /**
      * 检测 DOI 补全上下文
-     * 支持 \cite{}, \citep{}, \bib{}, \doi{} 等命令内的 DOI 补全
+     * 支持 \cite{}, \citep{}, \bib{} 等命令内的 DOI 补全
      */
     getDoiContext(text, cursorPos) {
         if (!this.doiProvider || typeof this.doiProvider.getSuggestions !== 'function') {
@@ -284,9 +283,9 @@ class AutocompleteManager {
 
         const beforeCursor = text.substring(0, cursorPos);
 
-        // 匹配 \cite{...}, \citep{...}, \bib{...}, \doi{...} 等命令
+        // 匹配 \cite{...}, \citep{...}, \bib{...} 等命令
         // 支持多个 DOI 用逗号分隔的情况
-        const match = beforeCursor.match(/\\(cite|citep|bib|doi)\{([^}]*)$/);
+        const match = beforeCursor.match(/\\(cite|citep|bib)\{([^}]*)$/);
         if (!match) return null;
 
         const command = match[1];
