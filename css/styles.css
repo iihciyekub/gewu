@@ -1442,6 +1442,8 @@ body.theme-vscode .tab-btn.active {
     padding: 5px;
     min-height: 0;
     position: relative;
+    container-type: inline-size;
+    container-name: editor;
 }
 
 .middle-action-buttons {
@@ -1451,6 +1453,7 @@ body.theme-vscode .tab-btn.active {
     z-index: 5;
     display: inline-flex;
     gap: 8px;
+    flex-wrap: nowrap;
 }
 
 .settings-view.active ~ .middle-action-buttons,
@@ -1471,6 +1474,8 @@ body.theme-vscode .tab-btn.active {
     background: #f3f4f6;
     color: #111827;
     font-size: 11px;
+    height: 28px;
+    white-space: nowrap;
     cursor: pointer;
     transition: background 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease, transform 0.12s ease;
 }
@@ -1482,6 +1487,20 @@ body.theme-vscode .tab-btn.active {
     background: #e5e7eb;
     border-color: rgba(17, 24, 39, 0.25);
     box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+}
+
+@container editor (max-width: 520px) {
+    .middle-action-buttons span {
+        display: none;
+    }
+
+    .middle-toggle-source-btn,
+    .middle-save-btn,
+    .middle-git-btn,
+    .middle-chat-btn {
+        padding: 6px 8px;
+        gap: 0;
+    }
 }
 
 .middle-toggle-source-btn:active,
@@ -5907,32 +5926,73 @@ body.theme-dark .btn-pdf-autoload.is-on {
     justify-content: center;
 }
 
+/* Match md-chat-dock-resizer style for side resizers */
+#leftResizer,
+#middleResizer {
+    width: 6px;
+    background: transparent;
+    box-shadow: none;
+    border-left: 1px solid #c9c9c9;
+}
+
+#leftResizer::before,
+#middleResizer::before {
+    content: '';
+    position: absolute;
+    width: 5px;
+    height: 48px;
+    border-radius: 999px;
+    background: #333;
+    opacity: 0.8;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+}
+
+#leftResizer:hover::before,
+#middleResizer:hover::before {
+    opacity: 1;
+}
+
+#leftResizer:active::before,
+#middleResizer:active::before {
+    opacity: 1;
+}
+
 .resizer-toggle {
     position: absolute;
     left: 50%;
     top: 50%;
     transform: translate(-50%, -50%);
-    background: #ffffff;
-    border-radius: 50%;
-    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
-    width: 22px;
-    height: 22px;
+    background: #333;
+    border-radius: 999px;
+    box-shadow: none;
+    width: 5px;
+    height: 48px;
     display: flex;
     align-items: center;
     justify-content: center;
     cursor: pointer;
     z-index: 20;
     pointer-events: auto;
-    transition: background 0.15s;
+    opacity: 0;
+    transition: background 0.15s ease, box-shadow 0.15s ease, opacity 0.15s ease;
+}
+
+.resizer:hover .resizer-toggle,
+.resizer-toggle:hover,
+.resizer-toggle:focus-visible {
+    opacity: 1;
+    background: #333;
+    box-shadow: none;
 }
 
 .resizer-toggle:hover {
-    background: #f5f5f5;
+    background: #333;
 }
 
 .resizer-toggle i {
-    font-size: 14px;
-    color: #888;
+    display: none;
 }
 
 .resizer:hover {
@@ -5944,7 +6004,7 @@ body.theme-dark .btn-pdf-autoload.is-on {
 }
 
 /* 扩大可点击区域 */
-.resizer::before {
+.resizer::after {
     content: '';
     position: absolute;
     top: 0;

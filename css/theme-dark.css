@@ -690,17 +690,48 @@ body.theme-dark .resizer:hover {
     background: #424242;
 }
 
+body.theme-dark #leftResizer,
+body.theme-dark #middleResizer {
+    background: transparent;
+    border-left: 1px solid #3e3e3e;
+}
+
+body.theme-dark #leftResizer::before,
+body.theme-dark #middleResizer::before {
+    background: #cbcbcb;
+    opacity: 0.6;
+}
+
+body.theme-dark #leftResizer:hover::before,
+body.theme-dark #middleResizer:hover::before,
+body.theme-dark #leftResizer:active::before,
+body.theme-dark #middleResizer:active::before {
+    opacity: 0.85;
+}
+
 body.theme-dark .resizer-toggle {
     color: var(--vscode-text);
-    background: #242424;
-    border-radius: 10px;
-    padding: 2px 6px;
-    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+    background: #cbcbcb;
+    border-radius: 999px;
+    padding: 0;
+    width: 5px;
+    height: 48px;
+    box-shadow: none;
+    opacity: 0;
+    transition: background 0.15s ease, box-shadow 0.15s ease, opacity 0.15s ease;
+}
+
+body.theme-dark .resizer:hover .resizer-toggle,
+body.theme-dark .resizer-toggle:hover,
+body.theme-dark .resizer-toggle:focus-visible {
+    opacity: 1;
+    background: #cbcbcb;
+    box-shadow: none;
 }
 
 body.theme-dark .resizer-toggle:hover {
-    background: #1a1a1a;
-    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.12);
+    background: #cbcbcb;
+    box-shadow: none;
 }
 
 body.theme-dark .resizer-toggle i {
