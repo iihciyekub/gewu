@@ -85,7 +85,7 @@ curl -X POST http://localhost:8000/validate-project \
 ## 目录结构示例
 
 ```
-user/
+data/
 ├── my_research/              # 项目目录
 │   ├── .git/                 # (可选) 项目级 Git 仓库
 │   ├── .project              # 项目标记文件（自动创建）

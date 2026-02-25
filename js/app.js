@@ -10130,6 +10130,8 @@ class PaperStatsApp {
             this.switchToView('settings');
             this.applyGitIdentityInputs();
             this.bindGitIdentityInputs();
+            this.applyGitIgnoreInputs();
+            this.bindGitIgnoreInputs();
             this.renderGitHistoryList();
             return;
         }
@@ -10144,6 +10146,8 @@ class PaperStatsApp {
             this.switchToView('settings');
             this.applyGitIdentityInputs();
             this.bindGitIdentityInputs();
+            this.applyGitIgnoreInputs();
+            this.bindGitIgnoreInputs();
             this.renderGitHistoryList();
         }
     }
@@ -11282,6 +11286,119 @@ class PaperStatsApp {
         } catch (_err) {
             return null;
         }
+    }
+
+    getGitIgnoreDefaults() {
+        return [
+            'data/',
+            'node_modules/',
+            'dist/',
+            'tmp/',
+            '.DS_Store',
+            '*.log'
+        ].join('\n') + '\n';
+    }
+
+    async fetchGitIgnore() {
+        if (!this.currentProject?.path) {
+            this.showNotification('Please load a project first', 'info');
+            return null;
+        }
+        try {
+            const resp = await fetch('/gitignore-get', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ projectPath: this.currentProject?.path || '' })
+            });
+            const data = await resp.json();
+            if (!resp.ok || data?.success === false) {
+                throw new Error(data?.error || 'Git ignore read failed');
+            }
+            return {
+                exists: !!data?.exists,
+                content: String(data?.content || '')
+            };
+        } catch (err) {
+            this.showNotification(`Git ignore read failed: ${err.message}`, 'error');
+            return null;
+        }
+    }
+
+    async saveGitIgnoreContent(content = '') {
+        if (!this.currentProject?.path) {
+            this.showNotification('Please load a project first', 'info');
+            return false;
+        }
+        try {
+            const resp = await fetch('/gitignore-set', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    projectPath: this.currentProject?.path || '',
+                    content: String(content ?? '')
+                })
+            });
+            const data = await resp.json();
+            if (!resp.ok || data?.success === false) {
+                throw new Error(data?.error || 'Git ignore save failed');
+            }
+            this.showNotification('.gitignore saved', 'success');
+            return true;
+        } catch (err) {
+            this.showNotification(`Git ignore save failed: ${err.message}`, 'error');
+            return false;
+        }
+    }
+
+    async applyGitIgnoreInputs() {
+        const input = document.getElementById('gitIgnoreInput');
+        if (!input) return;
+        const data = await this.fetchGitIgnore();
+        const next = data?.content ? data.content : this.getGitIgnoreDefaults();
+        input.value = next;
+        input.dataset.loaded = '1';
+    }
+
+    bindGitIgnoreInputs() {
+        const input = document.getElementById('gitIgnoreInput');
+        if (!input || input.dataset.bound === '1') return;
+        const panel = input.closest('.git-ignore-panel');
+        const saveBtn = document.getElementById('gitIgnoreSaveBtn');
+        const reloadBtn = document.getElementById('gitIgnoreReloadBtn');
+        const resetBtn = document.getElementById('gitIgnoreResetBtn');
+        const toggleBtn = document.getElementById('gitIgnoreToggleBtn');
+        if (toggleBtn && panel) {
+            toggleBtn.addEventListener('click', () => {
+                panel.classList.toggle('is-collapsed');
+                const collapsed = panel.classList.contains('is-collapsed');
+                toggleBtn.setAttribute('aria-expanded', String(!collapsed));
+                toggleBtn.setAttribute('title', collapsed ? 'Expand' : 'Collapse');
+            });
+        }
+        if (saveBtn) {
+            saveBtn.addEventListener('click', async () => {
+                await this.saveGitIgnoreContent(input.value);
+            });
+        }
+        if (reloadBtn) {
+            reloadBtn.addEventListener('click', async () => {
+                await this.applyGitIgnoreInputs();
+            });
+        }
+        if (resetBtn) {
+            resetBtn.addEventListener('click', () => {
+                input.value = this.getGitIgnoreDefaults();
+                input.focus();
+            });
+        }
+        input.addEventListener('keydown', async (e) => {
+            const isMod = e.metaKey || e.ctrlKey;
+            if (isMod && e.key.toLowerCase() === 's') {
+                e.preventDefault();
+                await this.saveGitIgnoreContent(input.value);
+            }
+        });
+        input.dataset.bound = '1';
     }
 
     async initGitWorkspace({ silent = false } = {}) {
@@ -17212,6 +17329,8 @@ class PaperStatsApp {
         body.appendChild(panel);
         modal.classList.add('active');
         this.applyGitIdentityInputs();
+        this.applyGitIgnoreInputs();
+        this.bindGitIgnoreInputs();
         this.renderGitHistoryList();
     }
 
@@ -17931,6 +18050,29 @@ class PaperStatsApp {
         valueEl.textContent = `${Math.round(clamped * 100)}%`;
     }
 
+    getPdfZoomWheelStep(e) {
+        const slider = document.getElementById('pdfZoomSlider');
+        const step = Number.parseFloat(slider?.step) || 0.02;
+        const base = step * 2.0;
+        return (e?.shiftKey || e?.altKey) ? base * 0.5 : base;
+    }
+
+    bindPdfViewerWheelZoom(win) {
+        if (!win || win.__gewuPdfWheelZoomBound) return;
+        const handler = (e) => {
+            if (!(e.metaKey || e.ctrlKey)) return;
+            e.preventDefault();
+            e.stopPropagation();
+            this.queuePdfZoomWheel(e.deltaY, this.getPdfZoomWheelStep(e));
+        };
+        win.addEventListener('wheel', handler, { passive: false, capture: true });
+        const cancel = () => this.cancelPdfZoomSmooth();
+        win.addEventListener('pointerdown', cancel, { capture: true });
+        win.addEventListener('mousedown', cancel, { capture: true });
+        win.__gewuPdfWheelZoomBound = true;
+        win.__gewuPdfWheelZoomHandler = handler;
+    }
+
     syncPdfZoomFromActive() {
         const pdfApp = this.getActivePdfApp();
         const scale = pdfApp?.pdfViewer?.currentScale;
@@ -17988,18 +18130,28 @@ class PaperStatsApp {
             const current = app.pdfViewer.currentScale || 1;
             const target = this._pdfZoomTargetScale ?? current;
             const diff = target - current;
-            if (Math.abs(diff) < 0.002) {
+            if (Math.abs(diff) < 0.004) {
                 app.pdfViewer.currentScale = target;
                 this.updatePdfZoomUI(target);
                 this._pdfZoomSmoothRafId = null;
                 return;
             }
-            const next = current + diff * 0.22;
+            const speed = Math.min(0.45, Math.max(0.12, Math.abs(diff) * 0.7));
+            const next = current + diff * speed;
             app.pdfViewer.currentScale = next;
             this.updatePdfZoomUI(next);
             this._pdfZoomSmoothRafId = requestAnimationFrame(tick);
         };
         this._pdfZoomSmoothRafId = requestAnimationFrame(tick);
+    }
+
+    cancelPdfZoomSmooth() {
+        if (this._pdfZoomSmoothRafId) {
+            cancelAnimationFrame(this._pdfZoomSmoothRafId);
+            this._pdfZoomSmoothRafId = null;
+        }
+        this._pdfZoomTargetScale = null;
+        this._pdfZoomWheelDelta = 0;
     }
 
     queuePdfZoomWheel(deltaY, step) {
@@ -18015,7 +18167,7 @@ class PaperStatsApp {
             }
             const raw = this._pdfZoomWheelDelta;
             this._pdfZoomWheelDelta = 0;
-            const magnitude = Math.min(4, Math.max(1, Math.abs(raw) / 60));
+            const magnitude = Math.min(5, Math.max(1, Math.abs(raw) / 50));
             const direction = raw < 0 ? 1 : -1;
             const current = pdfApp.pdfViewer.currentScale || 1;
             const next = current + direction * step * magnitude;
@@ -18184,6 +18336,7 @@ class PaperStatsApp {
                     await app.initializedPromise;
                     if (loadToken !== this.currentPdfLoadToken) return true;
                     await app.open({ url: absoluteUrl });
+                    this.bindPdfViewerWheelZoom(win);
                     pdfViewer.classList.add('pdf-loaded');
                     this.lastPdfLoadedUrl = url;
                     this.pendingPdfUrl = url;
@@ -18222,6 +18375,7 @@ class PaperStatsApp {
                         } catch (err) {
                             console.warn('Failed to bind PDF panel activation:', err);
                         }
+                        this.bindPdfViewerWheelZoom(win);
                         // 添加自定义样式：保持0.8缩放但修正标注层坐标
                         const styleId = 'gewuPdfScaleStyle';
                         if (!pdfDoc.getElementById(styleId)) {

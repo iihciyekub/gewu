@@ -240,16 +240,21 @@ function runGit(rootDir, args = []) {
     });
 }
 
-function ensureGitIgnore(rootDir) {
-    const gitignorePath = path.join(rootDir, '.gitignore');
-    if (fs.existsSync(gitignorePath)) return false;
-    const content = [
+function getDefaultGitIgnoreContent() {
+    return [
+        'data/',
         'node_modules/',
         'dist/',
         'tmp/',
         '.DS_Store',
         '*.log'
     ].join('\n') + '\n';
+}
+
+function ensureGitIgnore(rootDir) {
+    const gitignorePath = path.join(rootDir, '.gitignore');
+    if (fs.existsSync(gitignorePath)) return false;
+    const content = getDefaultGitIgnoreContent();
     fs.writeFileSync(gitignorePath, content, 'utf8');
     return true;
 }
@@ -553,6 +558,67 @@ const server = http.createServer((req, res) => {
                 const details = [err.message, stderr, stdout].filter(Boolean).join('\n');
                 res.writeHead(500, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify({ success: false, error: details || 'Git commit failed' }));
+            }
+        });
+        return;
+    }
+
+    // Git ignore read for project
+    if (req.method === 'POST' && pathname === '/gitignore-get') {
+        let body = '';
+        req.on('data', chunk => { body += chunk.toString(); });
+        req.on('end', () => {
+            try {
+                const data = JSON.parse(body || '{}');
+                const projectPath = String(data.projectPath || '').trim();
+                if (!projectPath) {
+                    res.writeHead(400, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ success: false, error: 'Missing projectPath' }));
+                    return;
+                }
+                const { fullPath } = normalizeProjectPath(projectPath);
+                const gitignorePath = path.join(fullPath, '.gitignore');
+                const exists = fs.existsSync(gitignorePath);
+                let content = '';
+                if (exists) {
+                    content = fs.readFileSync(gitignorePath, 'utf8');
+                } else {
+                    content = getDefaultGitIgnoreContent();
+                }
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ success: true, exists, content }));
+            } catch (err) {
+                res.writeHead(500, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ success: false, error: err.message }));
+            }
+        });
+        return;
+    }
+
+    // Git ignore write for project
+    if (req.method === 'POST' && pathname === '/gitignore-set') {
+        let body = '';
+        req.on('data', chunk => { body += chunk.toString(); });
+        req.on('end', () => {
+            try {
+                const data = JSON.parse(body || '{}');
+                const projectPath = String(data.projectPath || '').trim();
+                if (!projectPath) {
+                    res.writeHead(400, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ success: false, error: 'Missing projectPath' }));
+                    return;
+                }
+                const raw = String(data.content ?? '');
+                let content = raw.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+                if (content.length && !content.endsWith('\n')) content += '\n';
+                const { fullPath } = normalizeProjectPath(projectPath);
+                const gitignorePath = path.join(fullPath, '.gitignore');
+                fs.writeFileSync(gitignorePath, content, 'utf8');
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ success: true, bytes: content.length }));
+            } catch (err) {
+                res.writeHead(500, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ success: false, error: err.message }));
             }
         });
         return;
@@ -2515,6 +2581,8 @@ server.listen(PORT, HOST, () => {
     console.log('   - GET  /delete-group-status (delete)');
     console.log('   - POST /file-exists');
     console.log('   - POST /git-status');
+    console.log('   - POST /gitignore-get');
+    console.log('   - POST /gitignore-set');
     console.log('   - POST /git-identity');
     console.log('   - POST /git-init');
     console.log('   - POST /git-commit');

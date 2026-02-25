@@ -740,6 +740,29 @@
                         </div>
                         <div class="settings-section settings-panel git-settings-panel" id="gitSettingsPanel">
                             <div class="settings-field-list">
+                                <div class="git-ignore-panel is-collapsed">
+                                    <div class="git-ignore-header">
+                                        <span>.gitignore</span>
+                                        <div class="git-ignore-actions">
+                                            <button class="btn btn-secondary git-ignore-toggle" id="gitIgnoreToggleBtn"
+                                                type="button" aria-expanded="false" title="Expand">
+                                                <i class="fas fa-chevron-up"></i>
+                                            </button>
+                                            <button class="btn btn-secondary" id="gitIgnoreReloadBtn" type="button">
+                                                <i class="fas fa-rotate"></i> Reload
+                                            </button>
+                                            <button class="btn btn-secondary" id="gitIgnoreResetBtn" type="button">
+                                                <i class="fas fa-wand-magic-sparkles"></i> Default
+                                            </button>
+                                            <button class="btn btn-primary" id="gitIgnoreSaveBtn" type="button">
+                                                <i class="fas fa-save"></i> Save
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <textarea id="gitIgnoreInput" rows="6"
+                                        placeholder="Enter .gitignore rules, one per line. Example: data/"></textarea>
+                                    <div class="git-ignore-hint">默认包含 <code>data/</code>，用于忽略本地数据目录。</div>
+                                </div>
                                 <div class="git-history-panel">
                                     <div class="git-history-header">
                                         <span>History</span>
@@ -983,9 +1006,9 @@
                         <span>Git</span>
                     </button>
                     <button class="middle-chat-btn" id="mdChatToggleBtn" type="button"
-                        title=",,,,metainfo面板" aria-label=",,,,metainfo面板">
+                        title="metainfo" aria-label="metainfo panel toggle">
                         <i class="fa-solid fa-bolt-lightning"></i>
-                        <span>,,,,metainfo面板</span>
+                        <span>metainfo</span>
                     </button>
                 </div>
             </div>

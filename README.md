@@ -4,17 +4,17 @@ GEWU — a workspace for dissecting texts and composing knowledge.
 
 一个强大的文本研读与知识构建工作台，支持 JSON 结构化数据、Markdown 笔记和 PDF 查看。
 
-## 🎯 核心功能
+## 核心功能
 
-- 📄 **项目管理**: 轻松创建和管理多个研究项目
-- 🗂️ **文件组织**: 自动管理 JSON 数据、Markdown 笔记和 PDF 文献
-- 📊 **结构化编辑**: 支持 JSON 的可视化编辑和验证
-- 📝 **Markdown 编辑**: 内置 Markdown 编辑器，支持实时预览
-- 🏷️ **Front Matter 支持**: 在 Markdown 中添加结构化元数据（NEW!）
-- 📖 **PDF 查看**: 集成 PDF 查看器
-- 💾 **自动保存**: 实时保存，不丢失工作进度
+- **项目管理**: 轻松创建和管理多个研究项目
+- **文件组织**: 自动管理 JSON 数据、Markdown 笔记和 PDF 文献
+- **结构化编辑**: 支持 JSON 的可视化编辑和验证
+- **Markdown 编辑**: 内置 Markdown 编辑器，支持实时预览
+- **Front Matter 支持**: 在 Markdown 中添加结构化元数据（NEW!）
+- **PDF 查看**: 集成 PDF 查看器
+- **自动保存**: 实时保存，不丢失工作进度
 
-## 🚀 快速开始
+## 快速开始
 
 ### 安装
 
@@ -22,11 +22,15 @@ GEWU — a workspace for dissecting texts and composing knowledge.
 # 克隆或进入项目目录
 cd /Users/yjli/PolyUWorkspace/ref_251207_GEWU
 
+# Node.js 版本（建议 LTS 20）
+# 如果使用 nvm：
+nvm use
+
 # 安装依赖（如果需要）
 npm install  # 可选，大多数功能无需额外依赖
 ```
 
-### 启动
+### 启动（Node.js）
 
 ```bash
 npm start
@@ -41,29 +45,6 @@ ALLOWED_ROOTS="$HOME,$PWD,/data" npm start
 
 访问: **http://localhost:8000**
 
-### Docker 启动
-
-```bash
-# 构建 Docker 镜像
-docker build -t gewu .
-
-# 从docker hub拉取最新版本
-docker pull iihciyekub/gewu:0.0.2
-
-# 将本地项目目录映射到容器 /data
-docker run -d --name gewu \
-  -p 8000:8000 \
-  -v $(pwd)/gewu_projects:/home/node \
-  iihciyekub/gewu:latest
-```
-
-在应用内创建/选择项目时，使用绝对路径，例如：`/home/node/my_research`。
-
-使用 docker-compose：
-
-```bash
-docker compose up --build
-```
 
 ### 创建第一个项目
 
@@ -74,30 +55,40 @@ docker compose up --build
 
 详见 [QUICK_START.md](QUICK_START.md)
 
-## 📁 项目结构
+## 项目结构
 
-每个项目必须包含：
+当前项目目录结构示例（非 Docker，直接用 Node 启动）：
 
 ```
-项目名/
-├── json/      # JSON 结构化数据（默认视图为 json/view1）
-├── md/        # Markdown 笔记
-├── pdf/       # PDF 文献
-├── DRAFT.md   # 草稿（项目根目录）
-└── PROMPT.md  # prompt（项目根目录）
+data/
+├── my_research/              # 项目目录
+│   ├── .git/                 # (可选) 项目级 Git 仓库
+│   ├── .project              # 项目标记文件（自动创建）
+│   ├── json/                 # JSON 数据目录
+│   │   ├── view1/            # (可选) 组织视图
+│   │   │   ├── paper1.json
+│   │   │   ├── paper2.json
+│   │   │   └── (其它json)
+│   │   ├── view2/            # (可选) 组织视图
+│   │   │   ├── paper1.json
+│   │   │   ├── paper2.json
+│   │   │   └── (其它json)
+│   │   └── view3(其它更多)/
+│   ├── md/                   # Markdown 笔记目录
+│   │   ├── paper1.md
+│   │   ├── paper2.md
+│   │   └── (其它md)
+│   ├── pdf/                  # PDF 文件目录
+│   │   ├── paper1.pdf
+│   │   ├── paper2.pdf
+│   │   └── (其它更多)
+│   ├── PROMPT.MD             # Prompt 视图文档（可选）
+│   ├── DRAFT.md              # Draft 视图文档（可选）
+│   └── (其它md)              # 额外 md 文档 / 辅助文件
 ```
 
-## 📖 文档
+## 文档
 
 - [快速开始](QUICK_START.md)
 - [项目创建指南](docs/dev/PROJECT_CREATION_GUIDE.md)
 - [快捷键](shortcuts.md)
-- [Front Matter 使用指南](FRONTMATTER_GUIDE.md)
-
-## 🐳 Docker 提示
-
-容器内默认只允许 `/data` 或 `/home/node` 作为项目根目录。如需放开范围，运行时覆盖：
-
-```bash
-docker run -e ALLOWED_ROOTS=/data,/other/path ...
-```

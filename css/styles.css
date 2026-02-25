@@ -3974,6 +3974,75 @@ body.theme-dark .settings-field-row .doi-index-count {
     font-size: 11px;
 }
 
+.git-ignore-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 8px 8px;
+    border-radius: 12px;
+    border: 1px solid var(--wos-border, #e5e7eb);
+    background: var(--wos-card, #ffffff);
+    box-shadow: 0 6px 16px rgba(15, 23, 42, 0.06);
+}
+
+.git-ignore-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--wos-text, #111111);
+}
+
+.git-ignore-actions {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.git-ignore-actions .btn {
+    padding: 4px 10px;
+    font-size: 11px;
+}
+
+.git-ignore-toggle {
+    padding: 4px 8px;
+}
+
+.git-ignore-toggle i {
+    transition: transform 0.2s ease;
+}
+
+.git-ignore-panel.is-collapsed .git-ignore-toggle i {
+    transform: rotate(180deg);
+}
+
+.git-ignore-panel.is-collapsed > :not(.git-ignore-header) {
+    display: none;
+}
+
+#gitIgnoreInput {
+    width: 100%;
+    min-height: 120px;
+    padding: 8px 10px;
+    border-radius: 10px;
+    border: 1px solid var(--wos-border, #e5e7eb);
+    background: rgba(248, 250, 252, 0.9);
+    font-family: 'Fira Code', 'Menlo', 'Monaco', 'Consolas', 'DejaVu Sans Mono', 'Courier New', monospace;
+    font-size: 11px;
+    line-height: 1.5;
+    resize: vertical;
+}
+
+.git-ignore-hint {
+    font-size: 11px;
+    color: var(--gray-500);
+}
+
+.git-ignore-hint code {
+    font-family: 'Fira Code', 'Menlo', 'Monaco', 'Consolas', 'DejaVu Sans Mono', 'Courier New', monospace;
+}
+
 .git-history-panel {
     display: flex;
     flex-direction: column;
@@ -4049,6 +4118,26 @@ body.theme-dark .git-history-panel {
     border-color: rgba(148, 163, 184, 0.25);
     background: rgba(15, 23, 42, 0.65);
     box-shadow: 0 8px 18px rgba(2, 6, 23, 0.5);
+}
+
+body.theme-dark .git-ignore-panel {
+    border-color: rgba(148, 163, 184, 0.25);
+    background: rgba(15, 23, 42, 0.65);
+    box-shadow: 0 8px 18px rgba(2, 6, 23, 0.5);
+}
+
+body.theme-dark #gitIgnoreInput {
+    border-color: rgba(148, 163, 184, 0.25);
+    background: rgba(15, 23, 42, 0.5);
+    color: #f1f5f9;
+}
+
+body.theme-dark .git-ignore-header {
+    color: #f1f5f9;
+}
+
+body.theme-dark .git-ignore-hint {
+    color: rgba(148, 163, 184, 0.9);
 }
 
 body.theme-dark .git-history-item {
@@ -6348,7 +6437,7 @@ ol.json-array {
     border-radius: 6px;
     padding: 8px 10px;
     font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace);
-    font-size: 12px;
+    font-size: 11px;
     line-height: 1.4;
     color: var(--gray-900);
     background: #fff;

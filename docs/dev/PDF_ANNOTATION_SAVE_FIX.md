@@ -101,7 +101,7 @@ async savePdfAnnotationsFromPopup() {
 }
 ```
 
-#### 4. **pdf-popup-viewer.html - downloadPdfWithAnnotations()**
+#### 4. **(Removed) pdf-popup-viewer.html**
 弹窗模式下的本地保存函数也添加了相同的保护：
 
 ```javascript
@@ -224,7 +224,6 @@ async function downloadPdfWithAnnotations(pdfApp) {
   - `savePdfAnnotationsFromPopup()` - 从独立窗口保存标注
   - `savePdfToProjectDirectory()` - 保存到项目目录
 
-- `pdf-popup-viewer.html`
   - `downloadPdfWithAnnotations()` - 弹窗模式下载
   - `ensureAnnotationsCommitted()` - 标注提交（新增）
 
