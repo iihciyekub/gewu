@@ -3851,9 +3851,9 @@ class PaperStatsApp {
     }
 
     normalizeDoi(doi = '') {
-        return (doi || '')
+        const clean = this.normalizeDoiString(doi || '');
+        return clean
             .trim()
-            .replace(/^https?:\/\/(dx\.)?doi\.org\//i, '')
             .replace(/[\s<>]+/g, '')
             .replace(/[.]+$/g, '');
     }
