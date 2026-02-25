@@ -2838,6 +2838,15 @@ class PaperStatsApp {
             });
         }
 
+        // PDF 复制到剪贴板快捷入口
+        const pdfCopyBtn = document.getElementById('btnPdfJsCopy');
+        if (pdfCopyBtn) {
+            pdfCopyBtn.addEventListener('click', async () => {
+                await this.ensurePdfLoaded({ force: true });
+                await this.copyCurrentPdfToClipboard();
+            });
+        }
+
         // PDF 自动加载开关
         // PDF 自动加载开关（按钮已移除，保留菜单入口）
         // PDF 缩放滑杆
@@ -6171,23 +6180,11 @@ class PaperStatsApp {
 
     async copyPdfFileToClipboard(jsonFilename) {
         try {
-            if (this.isDockerMode) {
-                this.showNotification('Copy PDF not available in Docker mode', 'warning');
-                return;
-            }
             const pdfFile = await this.getPdfFilenameForJson(jsonFilename);
             if (!pdfFile) {
                 throw new Error('PDF filename not found');
             }
-            try {
-                await this.copyPdfFileWithBrowserClipboard(pdfFile);
-                this.showNotification(`PDF copied: ${pdfFile}`, 'success');
-                return;
-            } catch (browserErr) {
-                console.warn('Browser clipboard write failed, try server:', browserErr);
-            }
-            await this.copyPdfFileViaServer(pdfFile);
-            this.showNotification(`PDF copied via system clipboard: ${pdfFile}`, 'success');
+            await this.copyPdfFileByPath(pdfFile);
         } catch (err) {
             console.error('Failed to copy PDF file:', err);
             this.showNotification(`Copy failed: ${err.message}`, 'error');
@@ -6245,18 +6242,27 @@ class PaperStatsApp {
         }
     }
 
-    async copyPdfFileByName(pdfFile) {
-        const clean = this.normalizePdfPathValue(pdfFile);
-        if (!clean) throw new Error('PDF filename is empty');
+    async copyPdfFileByPath(pdfPath) {
+        const trimmed = (pdfPath || '').trim();
+        if (!trimmed) throw new Error('PDF filename is empty');
+        const { relPath, fileName } = this.normalizePdfRel(trimmed);
+        const target = relPath || fileName;
+        if (!target) throw new Error('PDF filename is empty');
         try {
-            await this.copyPdfFileWithBrowserClipboard(clean);
-            this.showNotification(`PDF copied: ${clean}`, 'success');
+            await this.copyPdfFileWithBrowserClipboard(target);
+            this.showNotification(`PDF copied: ${target}`, 'success');
             return;
         } catch (browserErr) {
             console.warn('Browser copy failed, fallback server:', browserErr);
         }
-        await this.copyPdfFileViaServer(clean);
-        this.showNotification(`PDF copied via system clipboard: ${clean}`, 'success');
+        await this.copyPdfFileViaServer(target);
+        this.showNotification(`PDF copied via system clipboard: ${target}`, 'success');
+    }
+
+    async copyPdfFileByName(pdfFile) {
+        const clean = this.normalizePdfPathValue(pdfFile);
+        if (!clean) throw new Error('PDF filename is empty');
+        await this.copyPdfFileByPath(clean);
     }
 
     async deletePdfFileByName(pdfFile) {
@@ -18440,6 +18446,7 @@ class PaperStatsApp {
         const btn = this.pdfPlaceholderEl.querySelector('.pdf-placeholder-btn');
         if (state === 'loaded') {
             this.pdfPlaceholderEl.classList.remove('show');
+            this.updatePdfActionButtonsState('loaded');
             return;
         }
         this.pdfPlaceholderEl.classList.add('show');
@@ -18451,6 +18458,21 @@ class PaperStatsApp {
                 textEl.textContent = 'Drop or paste a PDF here to auto link and display.';
             }
         }
+        this.updatePdfActionButtonsState(state);
+    }
+
+    updatePdfActionButtonsState(state) {
+        const copyBtn = document.getElementById('btnPdfJsCopy');
+        if (!copyBtn) return;
+        if (!copyBtn.dataset.defaultTitle) {
+            copyBtn.dataset.defaultTitle = copyBtn.title || 'Copy PDF file to clipboard';
+        }
+        const isLoaded = state === 'loaded';
+        const isLoading = state === 'pending';
+        copyBtn.disabled = !isLoaded;
+        copyBtn.classList.toggle('is-loading', isLoading);
+        copyBtn.title = isLoading ? 'Loading PDF...' : copyBtn.dataset.defaultTitle;
+        copyBtn.setAttribute('aria-disabled', String(!isLoaded));
     }
 
     isPdfViewActive() {
@@ -18687,6 +18709,48 @@ class PaperStatsApp {
         } finally {
             // 释放保存锁
             this._isSavingPdf = false;
+        }
+    }
+
+    async copyCurrentPdfToClipboard() {
+        try {
+            let pdfPath = '';
+            const metaPath = this.currentData?.meta_info?.pdf_path || '';
+            if (metaPath) {
+                const { relPath, fileName } = this.normalizePdfRel(metaPath);
+                pdfPath = relPath || fileName;
+            }
+
+            if (!pdfPath && this.currentPdfUrl) {
+                try {
+                    const urlObj = new URL(this.currentPdfUrl, window.location.href);
+                    const params = new URLSearchParams(urlObj.search);
+                    const fileParam = params.get('file');
+                    if (fileParam) {
+                        pdfPath = fileParam.replace(/^\.?[\\/]+/, '');
+                    } else {
+                        const parts = urlObj.pathname.split('/').filter(Boolean);
+                        const projectKey = this.getProjectKey();
+                        if (projectKey && parts[0] === projectKey) {
+                            pdfPath = parts.slice(1).join('/');
+                        } else {
+                            pdfPath = parts[parts.length - 1] || '';
+                        }
+                    }
+                } catch (urlErr) {
+                    console.warn('Failed to parse current PDF URL:', urlErr);
+                }
+            }
+
+            if (!pdfPath) {
+                this.showNotification('No PDF loaded', 'warning');
+                return;
+            }
+
+            await this.copyPdfFileByPath(pdfPath);
+        } catch (err) {
+            console.error('Failed to copy current PDF:', err);
+            this.showNotification(`Copy failed: ${err.message}`, 'error');
         }
     }
 

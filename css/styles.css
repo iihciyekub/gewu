@@ -5488,6 +5488,21 @@ body.theme-vscode .md-chat-input-text {
     transition: background 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease, transform 0.12s ease;
 }
 
+.pdf-action-btn:disabled,
+.pdf-action-btn[aria-disabled="true"] {
+    opacity: 0.55;
+    cursor: not-allowed;
+    box-shadow: none;
+}
+
+.pdf-action-btn.is-loading {
+    pointer-events: none;
+}
+
+.pdf-action-btn.is-loading i {
+    animation: pdf-action-spin 0.9s linear infinite;
+}
+
 .pdf-action-btn i {
     font-size: 14px;
 }
@@ -5500,6 +5515,15 @@ body.theme-vscode .md-chat-input-text {
 
 .pdf-action-btn:active {
     transform: translateY(1px);
+}
+
+@keyframes pdf-action-spin {
+    from {
+        transform: rotate(0deg);
+    }
+    to {
+        transform: rotate(360deg);
+    }
 }
 
 .pdf-zoom-control {
