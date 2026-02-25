@@ -1014,6 +1014,11 @@
                 </div>
             </div>
             <div class="pdf-action-buttons" aria-label="PDF actions">
+                <div class="pdf-zoom-control" aria-label="PDF zoom control">
+                    <input type="range" id="pdfZoomSlider" class="pdf-zoom-slider" min="0.5" max="3" step="0.02"
+                        value="1" aria-label="PDF zoom slider" />
+                    <span id="pdfZoomValue" class="pdf-zoom-value">100%</span>
+                </div>
                 <button class="btn-pdf-tab pdf-action-btn" id="btnPdfTab" title="Open PDF in new tab"
                     aria-label="Open PDF in new tab">
                     <i class="fas fa-external-link-alt"></i>

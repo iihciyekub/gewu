@@ -5483,6 +5483,38 @@ body.theme-vscode .md-chat-input-text {
     transform: translateY(1px);
 }
 
+.pdf-zoom-control {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 10px;
+    border-radius: 999px;
+    border: 1px solid rgba(17, 24, 39, 0.15);
+    background: #f8fafc;
+    height: 32px;
+}
+
+.pdf-zoom-slider {
+    width: 120px;
+    accent-color: #0ea5e9;
+}
+
+.pdf-zoom-value {
+    min-width: 48px;
+    text-align: right;
+    font-size: 11px;
+    color: #1f2937;
+}
+
+body.theme-dark .pdf-zoom-control {
+    background: rgba(15, 23, 42, 0.7);
+    border-color: rgba(148, 163, 184, 0.35);
+}
+
+body.theme-dark .pdf-zoom-value {
+    color: #e2e8f0;
+}
+
 body.theme-dark .pdf-action-btn {
     background: rgba(15, 23, 42, 0.7);
     border-color: rgba(148, 163, 184, 0.35);

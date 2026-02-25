@@ -233,6 +233,12 @@ class PaperStatsApp {
         this._pdfHighlightTimer = null;
         this._pdfHighlightClickHandler = null;
         this._pdfHighlightBoundWindow = null;
+        this._pdfZoomRafId = null;
+        this._pdfZoomWheelRafId = null;
+        this._pdfZoomWheelDelta = 0;
+        this._pdfZoomSmoothRafId = null;
+        this._pdfZoomTargetScale = null;
+        this._pdfZoomDragging = false;
 
         // 跟踪鼠标是否在pdfViewer上（用于ESC键判断）
         this._isMouseOverPdfViewer = false;
@@ -2839,6 +2845,61 @@ class PaperStatsApp {
                 this.setAutoLoadPdf(!this.autoLoadPdf);
             });
             this.updatePdfAutoLoadButtonState();
+        }
+
+        // PDF 缩放滑杆
+        const pdfZoomSlider = document.getElementById('pdfZoomSlider');
+        if (pdfZoomSlider) {
+            const syncFromSlider = () => {
+                const val = Number.parseFloat(pdfZoomSlider.value);
+                if (!Number.isFinite(val)) return;
+                if (this._pdfZoomDragging) {
+                    if (this._pdfZoomSmoothRafId) {
+                        cancelAnimationFrame(this._pdfZoomSmoothRafId);
+                        this._pdfZoomSmoothRafId = null;
+                    }
+                    this._pdfZoomTargetScale = null;
+                    this.setActivePdfScale(val, { animate: false });
+                } else {
+                    this.setPdfZoomTargetScale(val);
+                }
+            };
+            pdfZoomSlider.addEventListener('input', syncFromSlider);
+            pdfZoomSlider.addEventListener('pointerdown', () => {
+                this._pdfZoomDragging = true;
+                if (this._pdfZoomSmoothRafId) {
+                    cancelAnimationFrame(this._pdfZoomSmoothRafId);
+                    this._pdfZoomSmoothRafId = null;
+                }
+                this._pdfZoomTargetScale = null;
+            });
+            const stopDrag = () => {
+                if (!this._pdfZoomDragging) return;
+                this._pdfZoomDragging = false;
+                const val = Number.parseFloat(pdfZoomSlider.value);
+                if (Number.isFinite(val)) {
+                    this.setPdfZoomTargetScale(val);
+                }
+            };
+            pdfZoomSlider.addEventListener('pointerup', stopDrag);
+            pdfZoomSlider.addEventListener('pointercancel', stopDrag);
+            pdfZoomSlider.addEventListener('blur', stopDrag);
+            pdfZoomSlider.addEventListener('dblclick', (e) => {
+                e.preventDefault();
+                this.setPdfZoomTargetScale(1);
+            });
+            const onWheelAdjust = (e) => {
+                e.preventDefault();
+                const step = Number.parseFloat(pdfZoomSlider.step) || 0.02;
+                const fineStep = (e.shiftKey || e.altKey) ? step * 0.5 : step;
+                if (this._pdfZoomDragging) return;
+                this.queuePdfZoomWheel(e.deltaY, fineStep);
+            };
+            pdfZoomSlider.addEventListener('wheel', onWheelAdjust, { passive: false });
+            const zoomControl = document.querySelector('.pdf-zoom-control');
+            if (zoomControl) {
+                zoomControl.addEventListener('wheel', onWheelAdjust, { passive: false });
+            }
         }
 
         // PDF 新标签页按钮
@@ -17800,6 +17861,107 @@ class PaperStatsApp {
         }
     }
 
+    updatePdfZoomUI(scale) {
+        const slider = document.getElementById('pdfZoomSlider');
+        const valueEl = document.getElementById('pdfZoomValue');
+        if (!slider || !valueEl) return;
+        const clamped = Math.max(0.5, Math.min(3, scale));
+        slider.value = clamped.toFixed(2);
+        valueEl.textContent = `${Math.round(clamped * 100)}%`;
+    }
+
+    syncPdfZoomFromActive() {
+        const pdfApp = this.getActivePdfApp();
+        const scale = pdfApp?.pdfViewer?.currentScale;
+        if (Number.isFinite(scale)) {
+            this.updatePdfZoomUI(scale);
+        }
+    }
+
+    setActivePdfScale(targetScale, { animate = true } = {}) {
+        const pdfApp = this.getActivePdfApp();
+        if (!pdfApp || !pdfApp.pdfViewer) {
+            this.showNotification('PDF not fully loaded', 'error');
+            return;
+        }
+        const clamped = Math.max(0.5, Math.min(3, targetScale));
+        const start = pdfApp.pdfViewer.currentScale || 1;
+        if (!animate || Math.abs(clamped - start) < 0.01) {
+            pdfApp.pdfViewer.currentScale = clamped;
+            this.updatePdfZoomUI(clamped);
+            return;
+        }
+        if (this._pdfZoomRafId) {
+            cancelAnimationFrame(this._pdfZoomRafId);
+        }
+        const duration = 160;
+        const startTime = performance.now();
+        const step = (now) => {
+            const t = Math.min(1, (now - startTime) / duration);
+            const eased = t * (2 - t);
+            const next = start + (clamped - start) * eased;
+            pdfApp.pdfViewer.currentScale = next;
+            this.updatePdfZoomUI(next);
+            if (t < 1) {
+                this._pdfZoomRafId = requestAnimationFrame(step);
+            }
+        };
+        this._pdfZoomRafId = requestAnimationFrame(step);
+    }
+
+    setPdfZoomTargetScale(targetScale) {
+        const pdfApp = this.getActivePdfApp();
+        if (!pdfApp || !pdfApp.pdfViewer) {
+            this.showNotification('PDF not fully loaded', 'error');
+            return;
+        }
+        const clamped = Math.max(0.5, Math.min(3, targetScale));
+        this._pdfZoomTargetScale = clamped;
+        if (this._pdfZoomSmoothRafId) return;
+        const tick = () => {
+            const app = this.getActivePdfApp();
+            if (!app?.pdfViewer) {
+                this._pdfZoomSmoothRafId = null;
+                return;
+            }
+            const current = app.pdfViewer.currentScale || 1;
+            const target = this._pdfZoomTargetScale ?? current;
+            const diff = target - current;
+            if (Math.abs(diff) < 0.002) {
+                app.pdfViewer.currentScale = target;
+                this.updatePdfZoomUI(target);
+                this._pdfZoomSmoothRafId = null;
+                return;
+            }
+            const next = current + diff * 0.22;
+            app.pdfViewer.currentScale = next;
+            this.updatePdfZoomUI(next);
+            this._pdfZoomSmoothRafId = requestAnimationFrame(tick);
+        };
+        this._pdfZoomSmoothRafId = requestAnimationFrame(tick);
+    }
+
+    queuePdfZoomWheel(deltaY, step) {
+        if (!Number.isFinite(deltaY) || !Number.isFinite(step)) return;
+        this._pdfZoomWheelDelta += deltaY;
+        if (this._pdfZoomWheelRafId) return;
+        this._pdfZoomWheelRafId = requestAnimationFrame(() => {
+            this._pdfZoomWheelRafId = null;
+            const pdfApp = this.getActivePdfApp();
+            if (!pdfApp?.pdfViewer) {
+                this._pdfZoomWheelDelta = 0;
+                return;
+            }
+            const raw = this._pdfZoomWheelDelta;
+            this._pdfZoomWheelDelta = 0;
+            const magnitude = Math.min(4, Math.max(1, Math.abs(raw) / 60));
+            const direction = raw < 0 ? 1 : -1;
+            const current = pdfApp.pdfViewer.currentScale || 1;
+            const next = current + direction * step * magnitude;
+            this.setPdfZoomTargetScale(next);
+        });
+    }
+
     syncPdfCurrentPage(pdfApp, pageNumber) {
         if (!pdfApp || !Number.isFinite(pageNumber) || pageNumber <= 0) return;
         try {
@@ -17882,6 +18044,7 @@ class PaperStatsApp {
                 this.pdfTabWindow.focus();
                 this.enablePdfTabMode();
                 this.ensurePdfLoaded({ force: true });
+                this.syncPdfZoomFromActive();
                 return;
             } catch (_err) {
                 this.pdfTabWindow = null;
@@ -17895,6 +18058,17 @@ class PaperStatsApp {
         this.pdfTabWindow = nextTab;
         this.enablePdfTabMode();
         this.ensurePdfLoaded({ force: true });
+        const syncZoom = (attempts = 0) => {
+            if (attempts > 10) return;
+            const pdfApp = this.getActivePdfApp();
+            const scale = pdfApp?.pdfViewer?.currentScale;
+            if (Number.isFinite(scale)) {
+                this.updatePdfZoomUI(scale);
+                return;
+            }
+            setTimeout(() => syncZoom(attempts + 1), 200);
+        };
+        syncZoom();
     }
 
     async loadPDF(url) {
@@ -18051,6 +18225,10 @@ class PaperStatsApp {
 
                             // 恢复PDF标注数据
                             await this.restorePdfAnnotations(url);
+
+                            // 同步缩放滑杆
+                            const currentScale = win.PDFViewerApplication?.pdfViewer?.currentScale || 1;
+                            this.updatePdfZoomUI(currentScale);
                         });
                     }
                 } catch (err) {
@@ -18175,6 +18353,7 @@ class PaperStatsApp {
         this.pendingPdfUrl = availableUrl;
         tracker.update('Opening PDF...', 65);
         await this.loadPDF(availableUrl);
+        this.syncPdfZoomFromActive();
         tracker.finish('PDF ready');
     }
 
