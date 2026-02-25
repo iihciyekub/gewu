@@ -9,7 +9,7 @@ ENV HOST=0.0.0.0
 ENV ALLOWED_ROOTS=/data,/home/node
 ENV GIT_CONFIG_GLOBAL=/home/node/.gitconfig
 
-RUN apk add --no-cache git \
+RUN apk add --no-cache git xclip \
     && mkdir -p /data /home/node \
     && chown -R node:node /data /home/node /app
 

@@ -53,9 +53,8 @@ docker pull iihciyekub/gewu:0.0.2
 # 将本地项目目录映射到容器 /data
 docker run -d --name gewu \
   -p 8000:8000 \
-  -v $(pwd)/projects:/data \
-  -v $(pwd)/home:/home/node \
-  iihciyekub/gewu:0.0.2
+  -v $(pwd)/gewu_projects:/home/node \
+  iihciyekub/gewu:latest
 ```
 
 在应用内创建/选择项目时，使用绝对路径，例如：`/home/node/my_research`。

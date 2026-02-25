@@ -6253,6 +6253,10 @@ class PaperStatsApp {
             this.showNotification(`PDF copied: ${target}`, 'success');
             return;
         } catch (browserErr) {
+            if (this.isDockerMode) {
+                console.warn('Browser copy failed in Docker mode:', browserErr);
+                throw browserErr;
+            }
             console.warn('Browser copy failed, fallback server:', browserErr);
         }
         await this.copyPdfFileViaServer(target);
