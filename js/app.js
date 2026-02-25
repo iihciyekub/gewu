@@ -20742,6 +20742,11 @@ class PaperStatsApp {
             if (pdfApp?.eventBus) {
                 pdfApp.eventBus.dispatch('findbarclose');
             }
+            // 清除搜索状态，确保同一 goto 可再次触发搜索
+            this.searchMatchCount = 0;
+            this.currentMatchIndex = 0;
+            this._lastClickedLink = null;
+            this._lastClickTime = 0;
             // 不清除用户的文本选择，避免影响手动选中
         } catch (err) {
             console.warn('清除 PDF 高亮失败:', err);
