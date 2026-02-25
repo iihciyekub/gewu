@@ -1521,7 +1521,7 @@ body.theme-dark .middle-chat-btn {
 
 .git-panel-modal-content {
     width: min(720px, 92vw);
-    max-height: min(70vh, 720px);
+    max-height: min(82vh, 860px);
     overflow: hidden;
     display: flex;
     flex-direction: column;
@@ -3886,6 +3886,10 @@ body.theme-dark .vis-settings-panel.is-open .vis-label-panel .vis-section-toggle
     display: flex;
 }
 
+.git-settings-panel {
+    min-height: 280px;
+}
+
 .settings-panel:last-child {
     border-bottom: none;
     margin-bottom: 0;
@@ -3974,11 +3978,7 @@ body.theme-dark .settings-field-row .doi-index-count {
     display: flex;
     flex-direction: column;
     gap: 8px;
-    padding: 10px 12px;
-    border-radius: 12px;
-    border: 1px solid var(--wos-border, #e5e7eb);
-    background: var(--wos-card, #ffffff);
-    box-shadow: 0 6px 16px rgba(15, 23, 42, 0.06);
+    padding: 6px 6px;
 }
 
 .git-history-header {
@@ -3994,7 +3994,7 @@ body.theme-dark .settings-field-row .doi-index-count {
     display: flex;
     flex-direction: column;
     gap: 8px;
-    max-height: 240px;
+    max-height: 450px;
     overflow-y: auto;
 }
 
