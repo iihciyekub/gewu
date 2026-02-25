@@ -3938,8 +3938,7 @@ body.theme-dark .vis-settings-panel.is-open .vis-label-panel .vis-section-toggle
 
 body.theme-dark .settings-field-row {
     border-color: rgba(148, 163, 184, 0.25);
-    background: rgba(15, 23, 42, 0.65);
-    box-shadow: 0 8px 18px rgba(2, 6, 23, 0.5);
+    background: var(--vscode-panel);
 }
 
 body.theme-dark .settings-field-row label {
@@ -4116,14 +4115,16 @@ body.theme-dark .settings-field-row .doi-index-count {
 
 body.theme-dark .git-history-panel {
     border-color: rgba(148, 163, 184, 0.25);
-    background: rgba(15, 23, 42, 0.65);
-    box-shadow: 0 8px 18px rgba(2, 6, 23, 0.5);
+    background: var(--vscode-panel);
 }
 
 body.theme-dark .git-ignore-panel {
     border-color: rgba(148, 163, 184, 0.25);
-    background: rgba(15, 23, 42, 0.65);
-    box-shadow: 0 8px 18px rgba(2, 6, 23, 0.5);
+    background: var(--vscode-panel);
+}
+
+body.theme-dark .git-ignore-panel.is-collapsed {
+    background: var(--vscode-panel);
 }
 
 body.theme-dark #gitIgnoreInput {

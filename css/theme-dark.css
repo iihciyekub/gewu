@@ -255,6 +255,13 @@ body.theme-dark .settings-panel-header {
     color: var(--vscode-text);
 }
 
+body.theme-dark .settings-field-list {
+    background: var(--vscode-panel);
+    border: 1px solid var(--vscode-border);
+    border-radius: 12px;
+    padding: 6px;
+}
+
 body.theme-dark .auto-save-settings-panel .auto-save-config-content {
     color: var(--vscode-text);
 }
@@ -380,6 +387,11 @@ body.theme-dark .modal .modal-footer {
 body.theme-dark .modal .modal-footer {
     border-top: 1px solid var(--vscode-border);
     background: var(--vscode-panel);
+}
+
+body.theme-dark #gitPanelModalBody {
+    background: var(--vscode-panel);
+    color: var(--vscode-text);
 }
 
 body.theme-dark .project-selector-content .modal-footer {
@@ -802,31 +814,32 @@ body.theme-dark .header-actions .btn.header-icon-only:hover {
 }
 
 body.theme-dark .json-merge-box {
-    border: 1px solid #2c2f3a;
-    background: #14161d;
+    border: 1px solid var(--vscode-border);
+    background: var(--vscode-panel);
 }
 
 body.theme-dark .json-merge-title {
-    color: #d7dbe6;
+    color: var(--vscode-text);
 }
 
 body.theme-dark .json-merge-apply,
 body.theme-dark .json-merge-clear {
-    background: #0f1117;
-    border: 1px solid #2c2f3a;
-    color: #e6e9ef;
+    background: #1f1f1f;
+    border: 1px solid var(--vscode-border);
+    color: var(--vscode-text);
 }
 
 body.theme-dark .json-merge-apply:hover,
 body.theme-dark .json-merge-clear:hover {
-    border-color: var(--wos-blue);
-    color: var(--wos-blue);
+    background: var(--vscode-hover);
+    border-color: var(--vscode-border);
+    color: var(--vscode-text);
 }
 
 body.theme-dark .json-merge-textarea {
-    background: #0f1117;
-    border: 1px solid #2c2f3a;
-    color: #e6e9ef;
+    background: #1f1f1f;
+    border: 1px solid var(--vscode-border);
+    color: var(--vscode-text);
 }
 
 body.theme-dark .header-dropdown-menu .header-dropdown-item.checked i[data-check] {
@@ -1171,7 +1184,7 @@ body.theme-dark .md-chat-shell {
 }
 
 body.theme-dark .md-chat-settings-nav {
-    background: #1a1d21;
+    background: var(--vscode-panel);
     border-right-color: #2b3445;
 }
 

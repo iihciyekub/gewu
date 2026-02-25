@@ -175,7 +175,6 @@ class PaperStatsApp {
         this.pendingPdfFallback = null;
         this.pdfPlaceholderEl = null;
         this.autoLoadPdf = false;
-        this.apiSettingsVisible = false;
         this.gitSettingsVisible = false;
         this.autoSaveConfigVisible = false;
         this.doiIndexVisible = false;
@@ -557,55 +556,6 @@ class PaperStatsApp {
         window.appSettings = payload;
         window.APP_SETTINGS = payload;
         window.OPENAI_API = payload.openaiApi || '';
-    }
-
-    maskApiValue(value = '') {
-        const raw = String(value || '').trim();
-        if (!raw) return '';
-        if (raw.length <= 4) return `${raw[0]}****`;
-        if (raw.length <= 8) return `${raw.slice(0, 2)}****${raw.slice(-2)}`;
-        return `${raw.slice(0, 4)}****${raw.slice(-4)}`;
-    }
-
-    applyApiSettingsInputs() {
-        const openaiInput = document.getElementById('openaiApiInput');
-        const setMasked = (input, raw) => {
-            if (!input) return;
-            const clean = String(raw || '');
-            input.dataset.raw = clean;
-            if (!clean) {
-                input.dataset.masked = '0';
-                input.value = '';
-                return;
-            }
-            input.dataset.masked = '1';
-            input.value = this.maskApiValue(clean);
-        };
-        setMasked(openaiInput, this.globalSettings?.openaiApi || '');
-    }
-
-    bindApiSettingsInputs() {
-        const openaiInput = document.getElementById('openaiApiInput');
-        if (!openaiInput) return;
-
-        const handleMaskedFocus = (input) => {
-            if (input.dataset.masked === '1') {
-                input.value = input.dataset.raw || '';
-                input.dataset.masked = '0';
-            }
-        };
-
-        const handleMaskedBlur = (key, input) => {
-            const raw = String(input.value || '').trim();
-            this.globalSettings[key] = raw;
-            this.saveGlobalSettings();
-            this.applyApiSettingsInputs();
-        };
-
-        openaiInput.addEventListener('focus', () => handleMaskedFocus(openaiInput));
-        openaiInput.addEventListener('blur', () => handleMaskedBlur('openaiApi', openaiInput));
-
-        this.applyApiSettingsInputs();
     }
 
     persistTheme() {
@@ -1625,7 +1575,6 @@ class PaperStatsApp {
 
         this.setupEventListeners();
         this.initVisManager();
-        this.bindApiSettingsInputs();
         this.updateJsonMenuState();
         this.updateAutoLoadMenuState();
         this.updateMarkdownToolbar();
@@ -10092,34 +10041,6 @@ class PaperStatsApp {
         }
     }
 
-    toggleApiSettingsPanel(forceVisible) {
-        const panel = document.getElementById('apiSettingsPanel');
-        if (this.apiSettingsVisible && forceVisible !== false) {
-            this.closeOtherSettingsPanels('apiSettingsVisible');
-            if (panel) this.moveSettingsPanelToEnd(panel);
-            this.updateSettingsPanelsVisibility();
-            this.saveSettingsPanelsState();
-            this.switchToView('settings');
-            this.applyApiSettingsInputs();
-            const openaiInput = document.getElementById('openaiApiInput');
-            if (openaiInput) setTimeout(() => openaiInput.focus({ preventScroll: true }), 0);
-            return;
-        }
-        const next = typeof forceVisible === 'boolean' ? forceVisible : !this.apiSettingsVisible;
-        if (next) this.closeOtherSettingsPanels('apiSettingsVisible');
-        this.apiSettingsVisible = next;
-        if (panel) panel.classList.toggle('is-visible', next);
-        if (next) this.moveSettingsPanelToEnd(panel);
-        this.updateSettingsPanelsVisibility();
-        this.saveSettingsPanelsState();
-        if (next) {
-            this.switchToView('settings');
-            this.applyApiSettingsInputs();
-            const openaiInput = document.getElementById('openaiApiInput');
-            if (openaiInput) setTimeout(() => openaiInput.focus({ preventScroll: true }), 0);
-        }
-    }
-
     toggleGitPanel(forceVisible) {
         const panel = document.getElementById('gitSettingsPanel');
         if (this.gitSettingsVisible && forceVisible !== false) {
@@ -10315,7 +10236,7 @@ class PaperStatsApp {
 
     updateSettingsPanelsVisibility() {
         const settingsContent = document.getElementById('settingsContent');
-        const hasAny = !!(this.fileFilterVisible || this.createGroupVisible || this.projectInfoVisible || this.thirdPartyInfoVisible || this.shortcutsVisible || this.queryExportVisible || this.visExportVisible || this.apiSettingsVisible || this.gitSettingsVisible || this.autoSaveConfigVisible || this.aboutVisible || this.doiIndexVisible);
+        const hasAny = !!(this.fileFilterVisible || this.createGroupVisible || this.projectInfoVisible || this.thirdPartyInfoVisible || this.shortcutsVisible || this.queryExportVisible || this.visExportVisible || this.gitSettingsVisible || this.autoSaveConfigVisible || this.aboutVisible || this.doiIndexVisible);
         if (settingsContent) settingsContent.classList.toggle('is-empty', !hasAny);
     }
 
@@ -10454,7 +10375,6 @@ class PaperStatsApp {
             shortcutsVisible: !!this.shortcutsVisible,
             queryExportVisible: !!this.queryExportVisible,
             visExportVisible: !!this.visExportVisible,
-            apiSettingsVisible: !!this.apiSettingsVisible,
             gitSettingsVisible: !!this.gitSettingsVisible,
             autoSaveConfigVisible: !!this.autoSaveConfigVisible,
             doiIndexVisible: !!this.doiIndexVisible,
@@ -10476,7 +10396,6 @@ class PaperStatsApp {
         this.shortcutsVisible = !!state.shortcutsVisible;
         this.queryExportVisible = !!state.queryExportVisible;
         this.visExportVisible = !!state.visExportVisible;
-        this.apiSettingsVisible = !!state.apiSettingsVisible;
         this.gitSettingsVisible = !!state.gitSettingsVisible;
         this.autoSaveConfigVisible = !!state.autoSaveConfigVisible;
         this.doiIndexVisible = !!state.doiIndexVisible;
@@ -10489,7 +10408,6 @@ class PaperStatsApp {
         const shortcutsPanel = document.getElementById('shortcutsInfoPanel');
         const queryExportPanel = document.getElementById('queryExportPanel');
         const visExportPanel = document.getElementById('visExportSettingsPanel');
-        const apiSettingsPanel = document.getElementById('apiSettingsPanel');
         const gitSettingsPanel = document.getElementById('gitSettingsPanel');
         const autoSaveConfigPanel = document.getElementById('autoSaveConfigPanel');
         const doiIndexPanel = document.getElementById('doiIndexPanel');
@@ -10503,7 +10421,6 @@ class PaperStatsApp {
         if (shortcutsPanel) shortcutsPanel.classList.toggle('is-visible', this.shortcutsVisible);
         if (queryExportPanel) queryExportPanel.classList.toggle('is-visible', this.queryExportVisible);
         if (visExportPanel) visExportPanel.classList.toggle('is-visible', this.visExportVisible);
-        if (apiSettingsPanel) apiSettingsPanel.classList.toggle('is-visible', this.apiSettingsVisible);
         if (gitSettingsPanel) gitSettingsPanel.classList.toggle('is-visible', this.gitSettingsVisible);
         if (autoSaveConfigPanel) autoSaveConfigPanel.classList.toggle('is-visible', this.autoSaveConfigVisible);
         if (doiIndexPanel) doiIndexPanel.classList.toggle('is-visible', this.doiIndexVisible);
@@ -10543,9 +10460,6 @@ class PaperStatsApp {
         if (this.doiIndexVisible) {
             this.renderDoiIndexPanel();
         }
-        if (this.apiSettingsVisible) {
-            this.applyApiSettingsInputs();
-        }
         if (this.autoSaveConfigVisible) {
             // 渲染自动保存配置内容
             setTimeout(() => {
@@ -10558,7 +10472,7 @@ class PaperStatsApp {
                 }
             }, 100);
         }
-        if (!skipView && (this.fileFilterVisible || this.createGroupVisible || this.projectInfoVisible || this.thirdPartyInfoVisible || this.shortcutsVisible || this.queryExportVisible || this.apiSettingsVisible || this.gitSettingsVisible || this.autoSaveConfigVisible)) {
+        if (!skipView && (this.fileFilterVisible || this.createGroupVisible || this.projectInfoVisible || this.thirdPartyInfoVisible || this.shortcutsVisible || this.queryExportVisible || this.gitSettingsVisible || this.autoSaveConfigVisible)) {
             this.switchToView('settings');
         }
     }
@@ -12395,9 +12309,6 @@ class PaperStatsApp {
             case 'fileFilter':
                 this.toggleFileFilter(true);
                 break;
-            case 'apiSettings':
-                this.toggleApiSettingsPanel(true);
-                break;
             case 'git':
                 this.toggleGitPanel(true);
                 break;
@@ -12468,7 +12379,6 @@ class PaperStatsApp {
             { id: 'shortcutsInfoPanel', flag: 'shortcutsVisible' },
             { id: 'queryExportPanel', flag: 'queryExportVisible' },
             { id: 'visExportSettingsPanel', flag: 'visExportVisible' },
-            { id: 'apiSettingsPanel', flag: 'apiSettingsVisible' },
             { id: 'gitSettingsPanel', flag: 'gitSettingsVisible' },
             { id: 'autoSaveConfigPanel', flag: 'autoSaveConfigVisible' },
             { id: 'aboutPanel', flag: 'aboutVisible' },
