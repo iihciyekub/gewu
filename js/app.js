@@ -15988,10 +15988,26 @@ class PaperStatsApp {
             }
             if (textarea && textarea.dataset.autosizeBound !== '1') {
                 textarea.dataset.autosizeBound = '1';
+                const storeSelection = () => {
+                    textarea.dataset.jsonSelStart = String(textarea.selectionStart ?? 0);
+                    textarea.dataset.jsonSelEnd = String(textarea.selectionEnd ?? 0);
+                };
+                textarea.addEventListener('mouseup', storeSelection);
+                textarea.addEventListener('keyup', storeSelection);
+                textarea.addEventListener('select', storeSelection);
                 textarea.addEventListener('input', () => syncTextareaHeight());
                 textarea.addEventListener('contextmenu', (e) => {
-                    const start = textarea.selectionStart || 0;
-                    const end = textarea.selectionEnd || 0;
+                    let start = textarea.selectionStart || 0;
+                    let end = textarea.selectionEnd || 0;
+                    if (end <= start) {
+                        const prevStart = Number(textarea.dataset.jsonSelStart || 0);
+                        const prevEnd = Number(textarea.dataset.jsonSelEnd || 0);
+                        if (prevEnd > prevStart) {
+                            start = prevStart;
+                            end = prevEnd;
+                            textarea.setSelectionRange(start, end);
+                        }
+                    }
                     if (end <= start) return;
                     e.preventDefault();
                     e.stopPropagation();
@@ -17092,10 +17108,35 @@ class PaperStatsApp {
         return this.escapeHtml(text || '').replace(/`/g, '&#96;');
     }
 
+    getScrollContainer(el) {
+        let node = el ? el.parentElement : null;
+        while (node) {
+            const style = window.getComputedStyle(node);
+            const overflowY = style.overflowY;
+            if ((overflowY === 'auto' || overflowY === 'scroll') && node.scrollHeight > node.clientHeight) {
+                return node;
+            }
+            node = node.parentElement;
+        }
+        return null;
+    }
+
     autoSizeTextarea(textarea) {
         if (!textarea) return;
+        const scrollParent = this.getScrollContainer(textarea);
+        const prevScrollTop = scrollParent ? scrollParent.scrollTop : 0;
         textarea.style.height = 'auto';
         textarea.style.height = `${textarea.scrollHeight}px`;
+        if (scrollParent) {
+            if (scrollParent.scrollTop !== prevScrollTop) {
+                scrollParent.scrollTop = prevScrollTop;
+            }
+            requestAnimationFrame(() => {
+                if (scrollParent.scrollTop !== prevScrollTop) {
+                    scrollParent.scrollTop = prevScrollTop;
+                }
+            });
+        }
     }
 
     getGitIdentityStorageKey() {
@@ -17190,6 +17231,7 @@ class PaperStatsApp {
         const menu = document.createElement('div');
         menu.className = 'json-text-context-menu';
         menu.innerHTML = `
+            <button type="button" class="json-text-menu-item" data-action="copy">Copy</button>
             <button type="button" class="json-text-menu-item" data-action="format">Format JSON</button>
             <button type="button" class="json-text-menu-item" data-action="repair">Repair JSON</button>
         `;
@@ -17250,7 +17292,17 @@ class PaperStatsApp {
             return;
         }
         let nextText = '';
-        if (action === 'format') {
+        if (action === 'copy') {
+            this.writeTextToClipboard(raw)
+                .then(() => this.showNotification('Selected text copied', 'success'))
+                .catch(() => this.showNotification('Failed to copy selected text', 'error'));
+            textarea.focus();
+            textarea.setSelectionRange(start, end);
+            textarea.dataset.jsonSelStart = String(start);
+            textarea.dataset.jsonSelEnd = String(end);
+            this.hideJsonTextContextMenu();
+            return;
+        } else if (action === 'format') {
             const parsed = this.tryParseJson(raw);
             if (!parsed) {
                 this.showNotification('Selected text is not valid JSON', 'error');
@@ -17272,9 +17324,15 @@ class PaperStatsApp {
             return;
         }
         textarea.setRangeText(nextText, start, end, 'select');
+        textarea.focus();
+        const nextEnd = start + nextText.length;
+        textarea.setSelectionRange(start, nextEnd);
+        textarea.dataset.jsonSelStart = String(start);
+        textarea.dataset.jsonSelEnd = String(nextEnd);
         this.autoSizeTextarea(textarea);
         this.hideJsonTextContextMenu();
     }
+
 
     getJsonNodeByPath(pathStr) {
         if (!pathStr) return this.currentData;
