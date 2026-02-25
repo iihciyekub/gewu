@@ -17800,6 +17800,22 @@ class PaperStatsApp {
         }
     }
 
+    syncPdfCurrentPage(pdfApp, pageNumber) {
+        if (!pdfApp || !Number.isFinite(pageNumber) || pageNumber <= 0) return;
+        try {
+            if (pdfApp.pdfViewer) {
+                pdfApp.pdfViewer.currentPageNumber = pageNumber;
+            }
+        } catch (err) {
+            console.warn('PDF currentPageNumber sync failed:', err);
+        }
+        try {
+            pdfApp.page = pageNumber;
+        } catch (err) {
+            console.warn('PDF page sync failed:', err);
+        }
+    }
+
     ensurePdfTabWindowState() {
         if (this.pdfTabWindow && this.pdfTabWindow.closed) {
             this.pdfTabWindow = null;
@@ -18967,10 +18983,10 @@ class PaperStatsApp {
 
             this.debugLog('找到viewerContainer');
 
-            // 确保设置了平滑滚动（以防未设置）
-            if (viewerContainer.style.scrollBehavior !== 'smooth') {
+            const prevScrollBehavior = viewerContainer.style.scrollBehavior;
+            if (prevScrollBehavior !== 'smooth') {
                 viewerContainer.style.scrollBehavior = 'smooth';
-                this.debugLog('🔧 已设置viewerContainer平滑滚动');
+                this.debugLog('🔧 临时启用viewerContainer平滑滚动');
             }
 
             // 获取目标页面元素
@@ -19000,7 +19016,10 @@ class PaperStatsApp {
 
                 // 同时更新PDF.js的当前页码（延迟避免冲突）
                 setTimeout(() => {
-                    pdfApp.page = targetPage;
+                    this.syncPdfCurrentPage(pdfApp, targetPage);
+                    if (viewerContainer.style.scrollBehavior !== prevScrollBehavior) {
+                        viewerContainer.style.scrollBehavior = prevScrollBehavior || '';
+                    }
                 }, 500);
 
                 this.showNotification(`Page ${targetPage}`, 'info');
@@ -19008,11 +19027,14 @@ class PaperStatsApp {
                 const allPages = pdfDoc.querySelectorAll('[data-page-number]');
 
                 // 使用PDF.js API跳转
-                pdfApp.page = targetPage;
+                this.syncPdfCurrentPage(pdfApp, targetPage);
+                if (viewerContainer.style.scrollBehavior !== prevScrollBehavior) {
+                    viewerContainer.style.scrollBehavior = prevScrollBehavior || '';
+                }
                 this.showNotification(`Page ${targetPage}`, 'info');
             }
         } catch (error) {
-            pdfApp.page = targetPage;
+            this.syncPdfCurrentPage(pdfApp, targetPage);
             this.showNotification(`Page ${targetPage}`, 'info');
         }
     }
@@ -19207,8 +19229,8 @@ class PaperStatsApp {
 
             this.debugLog('✅ 找到viewerContainer，查找高亮元素...');
 
-            // 确保设置了平滑滚动（以防未设置）
-            if (viewerContainer.style.scrollBehavior !== 'smooth') {
+            const prevScrollBehavior = viewerContainer.style.scrollBehavior;
+            if (prevScrollBehavior !== 'smooth') {
                 viewerContainer.style.scrollBehavior = 'smooth';
             }
 
@@ -19245,8 +19267,21 @@ class PaperStatsApp {
                     top: Math.max(0, targetScrollTop),
                     behavior: 'smooth'
                 });
+                setTimeout(() => {
+                    if (viewerContainer.style.scrollBehavior !== prevScrollBehavior) {
+                        viewerContainer.style.scrollBehavior = prevScrollBehavior || '';
+                    }
+                }, 400);
+                const pageEl = highlighted.closest('.page');
+                const pageNum = pageEl ? parseInt(pageEl.dataset.pageNumber, 10) : NaN;
+                if (Number.isFinite(pageNum)) {
+                    this.syncPdfCurrentPage(pdfApp, pageNum);
+                }
 
             } else {
+                if (viewerContainer.style.scrollBehavior !== prevScrollBehavior) {
+                    viewerContainer.style.scrollBehavior = prevScrollBehavior || '';
+                }
                 // 如果第一次没找到，再重试一次
                 setTimeout(() => {
                     this.scrollToFirstMatch(pdfApp);
