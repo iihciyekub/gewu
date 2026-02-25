@@ -6338,7 +6338,9 @@ ol.json-array {
     margin-left: auto;
 }
 
-.header-json-update {
+.header-json-update,
+.header-move-up,
+.header-move-down {
     cursor: pointer;
     color: var(--gray-600);
     font-size: 12px;
@@ -6347,7 +6349,9 @@ ol.json-array {
 
 .header-add,
 .header-delete,
-.header-json-update {
+.header-json-update,
+.header-move-up,
+.header-move-down {
     flex-shrink: 0;
     opacity: 0;
     visibility: hidden;
@@ -6362,6 +6366,11 @@ ol.json-array {
     color: var(--wos-blue);
 }
 
+.header-move-up:hover,
+.header-move-down:hover {
+    color: var(--wos-blue);
+}
+
 .collapsible-toggle {
     color: #666;
     transition: transform 0.2s;
@@ -6373,7 +6382,9 @@ ol.json-array {
 
 .collapsible-header:hover .header-add,
 .collapsible-header:hover .header-delete,
-.collapsible-header:hover .header-json-update {
+.collapsible-header:hover .header-json-update,
+.collapsible-header:hover .header-move-up,
+.collapsible-header:hover .header-move-down {
     opacity: 1;
     visibility: visible;
 }

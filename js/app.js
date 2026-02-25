@@ -7741,6 +7741,8 @@ class PaperStatsApp {
         header.innerHTML = `
             <i class="fas fa-chevron-right collapsible-toggle" title="Expand/Collapse"></i>
             <span class="collapsible-title">${this.formatKey(title)}</span>
+            <i class="fas fa-arrow-up header-move-up" title="Move section up"></i>
+            <i class="fas fa-arrow-down header-move-down" title="Move section down"></i>
             <i class="fas fa-plus header-add" title="Add child item under this section"></i>
             <i class="fas fa-pen-to-square header-json-update" title="Rename this section key"></i>
             <i class="fas fa-trash header-delete" title="Delete this field"></i>
@@ -7802,6 +7804,36 @@ class PaperStatsApp {
                 this.addChildField(title);
             });
         }
+        const moveUpBtn = header.querySelector('.header-move-up');
+        if (moveUpBtn) {
+            moveUpBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                this.setSelectedItem({ type: 'section', path: [], key: title });
+                const moved = this.moveSection(title, -1);
+                if (!moved) {
+                    this.showNotification('Already at top (meta_info is pinned)', 'info');
+                }
+                setTimeout(() => {
+                    this.setSelectedItem({ type: 'section', path: [], key: title });
+                    this.highlightSelectedItem();
+                }, 0);
+            });
+        }
+        const moveDownBtn = header.querySelector('.header-move-down');
+        if (moveDownBtn) {
+            moveDownBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                this.setSelectedItem({ type: 'section', path: [], key: title });
+                const moved = this.moveSection(title, 1);
+                if (!moved) {
+                    this.showNotification('Already at bottom', 'info');
+                }
+                setTimeout(() => {
+                    this.setSelectedItem({ type: 'section', path: [], key: title });
+                    this.highlightSelectedItem();
+                }, 0);
+            });
+        }
         // Collapse/Expand button
         const toggleBtn = header.querySelector('.collapsible-toggle');
         if (toggleBtn) {
@@ -7820,7 +7852,12 @@ class PaperStatsApp {
         }
         // Click title area: select this section for keyboard up/down navigation
         header.addEventListener('click', (e) => {
-            if (e.target.closest('.header-delete') || e.target.closest('.header-add') || e.target.closest('.collapsible-toggle')) {
+            if (e.target.closest('.header-delete') ||
+                e.target.closest('.header-add') ||
+                e.target.closest('.header-json-update') ||
+                e.target.closest('.header-move-up') ||
+                e.target.closest('.header-move-down') ||
+                e.target.closest('.collapsible-toggle')) {
                 return;
             }
             if (e.shiftKey) {
@@ -9537,6 +9574,39 @@ class PaperStatsApp {
         const index = keys.indexOf(key);
         if (index === -1) return null;
 
+        const numericKeys = keys.filter(k => /^\d+$/.test(k));
+        if (numericKeys.length === keys.length) {
+            const sorted = numericKeys
+                .map(k => parseInt(k, 10))
+                .filter(n => Number.isFinite(n))
+                .sort((a, b) => a - b)
+                .map(n => String(n));
+            const pos = sorted.indexOf(String(key));
+            if (pos === -1) return null;
+            let targetPos = pos + offset;
+            targetPos = Math.max(0, Math.min(sorted.length - 1, targetPos));
+            if (targetPos === pos) return key;
+            const targetKey = sorted[targetPos];
+            if (!Object.prototype.hasOwnProperty.call(parent, targetKey)) return key;
+            const temp = parent[key];
+            parent[key] = parent[targetKey];
+            parent[targetKey] = temp;
+            const locA = key + '_loc';
+            const locB = targetKey + '_loc';
+            if (Object.prototype.hasOwnProperty.call(parent, locA) || Object.prototype.hasOwnProperty.call(parent, locB)) {
+                const tmpLoc = parent[locA];
+                parent[locA] = parent[locB];
+                parent[locB] = tmpLoc;
+            }
+            this.hasUnsavedChanges = true;
+            this.tempDataCache[this.currentFile] = this.currentData;
+            this.updateSaveButtonState();
+            this.renderStructuredView();
+            this.setupEditableListeners();
+            this.restoreReorderSelection();
+            return targetKey;
+        }
+
         let targetIndex = index + offset;
         targetIndex = Math.max(0, Math.min(keys.length - 1, targetIndex));
         if (targetIndex === index) return key;
@@ -9706,9 +9776,11 @@ class PaperStatsApp {
             setTimeout(() => this.highlightSelectedItem(), 0);
         } else if (this.selectedItem.type === 'section') {
             const key = this.selectedItem.key;
-            this.moveSection(key, offset);
-            this.setSelectedItem({ type: 'section', path: [], key });
-            setTimeout(() => this.highlightSelectedItem(), 0);
+            const moved = this.moveSection(key, offset);
+            if (moved) {
+                this.setSelectedItem({ type: 'section', path: [], key });
+                setTimeout(() => this.highlightSelectedItem(), 0);
+            }
         }
     }
 
@@ -9732,15 +9804,25 @@ class PaperStatsApp {
 
     moveSection(key, offset) {
         if (!key || !this.currentData) return;
-        const keys = Object.keys(this.currentData).filter(k => !k.endsWith('_loc') && k !== 'schema_version' && k !== 'lastupdate');
+        if (key === 'meta_info') return false;
+        const allKeys = Object.keys(this.currentData).filter(k => !k.endsWith('_loc') && k !== 'schema_version' && k !== 'lastupdate');
+        const hasMeta = allKeys.includes('meta_info');
+        const keys = hasMeta ? allKeys.filter(k => k !== 'meta_info') : allKeys;
         const idx = keys.indexOf(key);
-        if (idx === -1) return;
+        if (idx === -1) return false;
         let target = idx + offset;
         target = Math.max(0, Math.min(keys.length - 1, target));
-        if (target === idx) return;
+        if (target === idx) return false;
         keys.splice(idx, 1);
         keys.splice(target, 0, key);
         const newObj = {};
+        if (hasMeta) {
+            newObj.meta_info = this.currentData.meta_info;
+            const locKey = 'meta_info_loc';
+            if (this.currentData.hasOwnProperty(locKey)) {
+                newObj[locKey] = this.currentData[locKey];
+            }
+        }
         keys.forEach(k => {
             newObj[k] = this.currentData[k];
             const locKey = k + '_loc';
@@ -9761,6 +9843,7 @@ class PaperStatsApp {
         this.updateSaveButtonState();
         this.renderStructuredView();
         this.setupEditableListeners();
+        return true;
     }
 
     async goToJsonSource() {

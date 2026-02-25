@@ -793,7 +793,9 @@ body.theme-dark .collapsible-title {
 
 body.theme-dark .collapsible-toggle,
 body.theme-dark .header-delete,
-body.theme-dark .header-json-update {
+body.theme-dark .header-json-update,
+body.theme-dark .header-move-up,
+body.theme-dark .header-move-down {
     color: var(--vscode-text-muted);
 }
 

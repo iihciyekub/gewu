@@ -10,17 +10,20 @@ GEWU — a workspace for dissecting texts and composing knowledge.
 - **文件组织**: 自动管理 JSON 数据、Markdown 笔记和 PDF 文献
 - **结构化编辑**: 支持 JSON 的可视化编辑和验证
 - **Markdown 编辑**: 内置 Markdown 编辑器，支持实时预览
-- **Front Matter 支持**: 在 Markdown 中添加结构化元数据（NEW!）
 - **PDF 查看**: 集成 PDF 查看器
-- **自动保存**: 实时保存，不丢失工作进度
 
 ## 快速开始
 
 ### 安装
 
 ```bash
-# 克隆或进入项目目录
-cd /Users/yjli/PolyUWorkspace/ref_251207_GEWU
+# 确认系统已安装 Git（可选，但建议）
+git --version
+
+# Git 安装（如未安装）
+# macOS (Homebrew): brew install git
+# Windows: https://git-scm.com/download/win
+# Ubuntu/Debian: sudo apt update && sudo apt install git
 
 # Node.js 版本（建议 LTS 20）
 # 如果使用 nvm：
