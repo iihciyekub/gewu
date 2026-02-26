@@ -4665,6 +4665,8 @@ body.theme-vscode .qa-toggle:hover {
     display: inline-flex;
     align-items: center;
     gap: 6px;
+    font: inherit;
+    font-weight: 400;
 }
 
 .prompt-editor {

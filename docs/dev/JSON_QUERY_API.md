@@ -12,7 +12,6 @@ This document describes the server-side API that returns JSON items filtered by 
 
 ```json
 {
-  "projectPath": "/path/to/project",
   "fields": ["wos_data.publication_year", "wos_data.issn"],
   "view": "view1",
   "groupNames": ["Group A"],
@@ -22,7 +21,7 @@ This document describes the server-side API that returns JSON items filtered by 
 
 Fields:
 
-- `projectPath` (string, required): Project root path.
+- `projectPath` (string, optional): Project root path. If omitted, the server uses the last selected project (currentProjectName).
 - `fields` (string | array<string>, required): Field path(s). Can be comma-separated string or array.
 - `view` (string, optional): View name, default `view1`.
 - `groupNames` (string | string[], optional): Filter to specific groups by id/name.
@@ -52,7 +51,7 @@ Fields:
 ```bash
 curl -X POST http://127.0.0.1:8000/json-query \
   -H "Content-Type: application/json" \
-  -d '{"projectPath":"/path/to/project","view":"DID_315_forChecklist","fields":["wos_data.publication_year"],"groupNames":["init"]}'
+  -d '{"view":"view1","fields":["wos_data.publication_year"],"groupNames":["init"]}'
 ```
 
 ## Notes

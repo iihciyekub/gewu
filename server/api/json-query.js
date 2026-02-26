@@ -86,11 +86,15 @@ async function handleJsonQuery(req, res, {
     normalizeProjectPath,
     ensureProjectStructure,
     normalizeGroupList,
-    fileOrderName
+    fileOrderName,
+    defaultProjectPath
 }) {
     try {
         const data = await parseJsonBody(req);
-        const { projectPath } = data;
+        let projectPath = data.projectPath;
+        if (!projectPath && defaultProjectPath) {
+            projectPath = defaultProjectPath;
+        }
         if (!projectPath) {
             res.writeHead(400, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify({ success: false, error: 'Missing projectPath' }));
@@ -198,7 +202,9 @@ async function handleJsonQuery(req, res, {
                 view,
                 fields,
                 groupNames: requestedGroups,
-                matchedGroupNames: matchedGroups.map(g => String(g.name || g.id || 'group'))
+                matchedGroupNames: matchedGroups.map(g => String(g.name || g.id || 'group')),
+                projectPath,
+                resolvedProjectPath: fullPath
             }
         }));
     } catch (error) {

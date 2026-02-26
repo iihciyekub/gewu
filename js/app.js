@@ -13381,8 +13381,10 @@ class PaperStatsApp {
                         const esc = escapeAttr(q);
                         return `<div class="goto-block"><a href="#" class="location-link goto-link" data-page="" data-quote-text="${esc}" data-open-params="" data-quote-index="0" data-value-path="" title="Jump to PDF search"><i class="fa-solid fa-quote-right"></i>${escapeHtml(q)}</a></div>`;
                     }
-                    if (infoLang === 'prompt') {
-                        return this.renderPromptBlock(token.content || '');
+                    if (infoLang === 'prompt' || infoLower.startsWith('prompt@')) {
+                        const promptTitleMatch = infoRaw.match(/^prompt@(.+)$/i);
+                        const promptTitle = (promptTitleMatch ? promptTitleMatch[1] : '').trim();
+                        return this.renderPromptBlock(token.content || '', promptTitle);
                     }
                     // 避免嵌套渲染导致递归
                     if (env && env.__qaRendering) {
@@ -14508,16 +14510,20 @@ class PaperStatsApp {
         return `<div class="query-inline" data-query-groups="${escGroups}" data-query-fields="${escFields}" data-query-value="${escValue}"><button class="bib-fetch-btn query-render-btn inline-syntax" type="button" title="${this.escapeAttr(title)}"><i class="fas fa-play"></i><span>${this.escapeHtml(hint)}</span></button></div>`;
     }
 
-    renderPromptBlock(content = '') {
+    renderPromptBlock(content = '', title = '') {
         const raw = String(content || '');
         const escPrompt = this.escapeHtml(raw);
         const encoded = this.encodePromptContent(raw);
         const escAttrPrompt = this.escapeAttr(encoded);
+        const cleanTitle = String(title || '').trim();
+        const labelText = cleanTitle ? `Prompt: ${cleanTitle}` : 'Prompt';
+        const escLabel = this.escapeHtml(labelText);
+        const escAttrTitle = this.escapeAttr(cleanTitle);
         const idx = Number.isFinite(this._promptRenderIndex) ? this._promptRenderIndex++ : 0;
         return `
-            <div class="prompt-block" data-prompt-raw="${escAttrPrompt}" data-prompt-index="${idx}">
+            <div class="prompt-block" data-prompt-raw="${escAttrPrompt}" data-prompt-index="${idx}" data-prompt-title="${escAttrTitle}">
                 <button class="bib-fetch-btn prompt-btn inline-syntax" type="button" title="Click to copy prompt. Right-click to edit.">
-                    <i class="fa-solid fa-bolt"></i><span>Prompt</span>
+                    <i class="fa-solid fa-bolt"></i><span>${escLabel}</span>
                 </button>
                 <div class="prompt-editor" hidden>
                     <textarea class="prompt-textarea" spellcheck="false">${escPrompt}</textarea>

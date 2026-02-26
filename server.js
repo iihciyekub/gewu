@@ -24,6 +24,7 @@ const TOOLS_ROOTS = [
 ];
 const CUSTOM_MANIFEST_PATH = path.join(ROOT_DIR, 'manifest.json');
 const FILE_ORDER_NAME = '.file_order.json';
+const LAST_PROJECT_STATE = { fullPath: '', projectKey: '' };
 let promptManifestCache = null;
 const deleteJobs = new Map();
 const DELETE_JOB_TTL_MS = 5 * 60 * 1000;
@@ -460,6 +461,8 @@ function normalizeProjectPath(projectPath) {
         ? relToRoot.split(path.sep).join('/')
         : (path.basename(candidate) || 'user');
     const fullPath = candidate;
+    LAST_PROJECT_STATE.fullPath = fullPath;
+    LAST_PROJECT_STATE.projectKey = projectKey;
     return { projectKey, fullPath };
 }
 
@@ -1056,8 +1059,6 @@ const server = http.createServer((req, res) => {
                 fs.mkdirSync(path.dirname(filePath), { recursive: true });
                 fs.writeFileSync(filePath, content, 'utf8');
 
-                console.log(`✓ Saved JSON: ${filePath}`);
-
                 res.writeHead(200, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify({
                     success: true,
@@ -1091,7 +1092,8 @@ const server = http.createServer((req, res) => {
             normalizeProjectPath,
             ensureProjectStructure,
             normalizeGroupList,
-            fileOrderName: FILE_ORDER_NAME
+            fileOrderName: FILE_ORDER_NAME,
+            defaultProjectPath: LAST_PROJECT_STATE.fullPath
         });
         return;
     }
@@ -1102,7 +1104,8 @@ const server = http.createServer((req, res) => {
             normalizeProjectPath,
             ensureProjectStructure,
             normalizeGroupList,
-            fileOrderName: FILE_ORDER_NAME
+            fileOrderName: FILE_ORDER_NAME,
+            defaultProjectPath: LAST_PROJECT_STATE.fullPath
         });
         return;
     }
@@ -1487,8 +1490,6 @@ const server = http.createServer((req, res) => {
 
                 // 删除文件
                 fs.unlinkSync(filePath);
-
-                console.log(`✓ Deleted: ${filename}`);
 
                 res.writeHead(200, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify({

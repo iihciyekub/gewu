@@ -48,13 +48,6 @@
       "insertText": "\\json{$1}{$2}",
       "detail": "Query JSON items",
       "documentation": "Query JSON items by fields (requires meta_info.doi)"
-    },
-    {
-      "trigger": "\\prompt",
-      "label": "\\prompt{...}",
-      "insertText": "\\prompt{$1}",
-      "detail": "Prompt block",
-      "documentation": "Insert a prompt block (supports multi-line content)"
     }
   ]
 }
