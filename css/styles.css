@@ -864,6 +864,7 @@ body {
     white-space: nowrap;
 }
 
+
 .file-list:focus,
 .file-list:focus-visible,
 .file-item:focus,
@@ -4436,6 +4437,16 @@ body.theme-dark .git-history-empty {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+}
+
+.groupby-table td .citation-inline,
+.groupby-table td .citation-link {
+    display: inline-block;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    vertical-align: top;
 }
 
 .groupby-table th {

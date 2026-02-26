@@ -594,6 +594,14 @@
             const records = [];
             let current = null;
             let currentTag = null;
+            const decodeEntity = (value) => {
+                if (value === undefined || value === null) return '';
+                const raw = String(value);
+                if (typeof this.decodeHtmlEntities === 'function') {
+                    return this.decodeHtmlEntities(raw);
+                }
+                return raw.replace(/&amp;/g, '&');
+            };
             for (const raw of lines) {
                 const line = raw || '';
                 if (!line.trim()) continue;
@@ -611,7 +619,7 @@
                         currentTag = null;
                         continue;
                     }
-                    const value = match[2]?.trim() || '';
+                    const value = decodeEntity(match[2]?.trim() || '');
                     if (!current) current = {};
                     if (!current[tag]) current[tag] = [];
                     if (value) current[tag].push(value);
@@ -619,7 +627,7 @@
                     continue;
                 }
                 if (current && currentTag && line.startsWith(' ')) {
-                    const value = line.trim();
+                    const value = decodeEntity(line.trim());
                     if (value) {
                         if (!current[currentTag]) current[currentTag] = [];
                         current[currentTag].push(value);

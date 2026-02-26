@@ -12,6 +12,7 @@ class PaperStatsApp {
         this.lastPasteBackup = null; // { file, data }
         this.hasUnsavedChanges = false;
         this.tempDataCache = {}; // 临时数据缓存 {filename: data}
+        this.fileDoiByBase = {}; // { base: doi }
         this.lastSearchText = null; // 跟踪上次搜索的文本
         this.lastSearchValuePath = null; // 跟踪上次搜索的字段路径
         this.searchMatchCount = 0; // 当前搜索的匹配数量
@@ -1689,7 +1690,8 @@ class PaperStatsApp {
 
         // 构建 DOI 缓存（异步，不阻塞主流程）
         if (this.doiCacheManager) {
-            this.doiCacheManager.getCacheData().then(() => {
+            this.doiCacheManager.getCacheData().then((data) => {
+                this.syncFileDoiMapFromCache(data);
                 console.log('DOI cache ready for autocomplete');
             }).catch(err => {
                 console.error('Failed to build DOI cache:', err);
@@ -1994,7 +1996,7 @@ class PaperStatsApp {
                     this.showNotification('Please load a project first', 'error');
                     return;
                 }
-                const ok = confirm('Batch add wos_data.cite/citep for all JSON files in current view?\n\nThis will read DOI from wos_data.doi and may fetch citation metadata.');
+                const ok = confirm('Batch add meta_info.cite/citep for all JSON files in current view?\n\nThis will read DOI from meta_info.doi and may fetch citation metadata.');
                 if (!ok) return;
                 await this.addCiteToAllJsonFiles();
             });
@@ -2619,6 +2621,7 @@ class PaperStatsApp {
         if (importPdfMenuItem && importPdfInput) {
             importPdfMenuItem.addEventListener('click', (e) => {
                 e.preventDefault();
+                importPdfInput.value = '';
                 importPdfInput.click();
                 this.toggleImportMenu(false);
             });
@@ -2636,6 +2639,26 @@ class PaperStatsApp {
             fileListEl.tabIndex = 0;
             fileListEl.addEventListener('mouseenter', () => {
                 fileListEl.focus({ preventScroll: true });
+            });
+            fileListEl.addEventListener('dragover', (e) => {
+                const items = Array.from(e.dataTransfer?.items || []);
+                const hasPdf = items.some(item => {
+                    if (item.kind !== 'file') return false;
+                    const type = (item.type || '').toLowerCase();
+                    const name = (item.getAsFile?.()?.name || '').toLowerCase();
+                    return type.includes('pdf') || name.endsWith('.pdf');
+                });
+                if (!hasPdf) return;
+                e.preventDefault();
+                e.dataTransfer.dropEffect = 'copy';
+            });
+            fileListEl.addEventListener('drop', async (e) => {
+                const files = Array.from(e.dataTransfer?.files || []);
+                const pdfFiles = files.filter(f => this.isPdfFile(f));
+                if (!pdfFiles.length) return;
+                e.preventDefault();
+                e.stopPropagation();
+                await this.handlePdfDropCreateEntries(pdfFiles, null);
             });
         }
 
@@ -2726,6 +2749,7 @@ class PaperStatsApp {
         }
         const fixAllMdDoisBtn = document.getElementById('fixAllMdDoisBtn');
         const fixAllJsonDoisBtn = document.getElementById('fixAllJsonDoisBtn');
+        const fixAllJsonDoisBtnHeader = document.getElementById('fixAllJsonDoisBtnHeader');
         const refreshDoiCacheBtn = document.getElementById('refreshDoiCacheBtn');
         if (fixAllMdDoisBtn) {
             fixAllMdDoisBtn.addEventListener('click', async () => {
@@ -2737,6 +2761,14 @@ class PaperStatsApp {
         }
         if (fixAllJsonDoisBtn) {
             fixAllJsonDoisBtn.addEventListener('click', async () => {
+                this.toggleJsonMenu(false);
+                if (confirm('Are you sure you want to batch fix meta_info.doi in all JSON files?\n\nThis will extract a valid DOI via regex and normalize the field.')) {
+                    await this.fixAllJsonDois();
+                }
+            });
+        }
+        if (fixAllJsonDoisBtnHeader) {
+            fixAllJsonDoisBtnHeader.addEventListener('click', async () => {
                 this.toggleJsonMenu(false);
                 if (confirm('Are you sure you want to batch fix meta_info.doi in all JSON files?\n\nThis will extract a valid DOI via regex and normalize the field.')) {
                     await this.fixAllJsonDois();
@@ -2906,6 +2938,7 @@ class PaperStatsApp {
         try {
             await this.doiCacheManager.clearCache();
             const data = await this.doiCacheManager.buildCache({ notify: true });
+            this.syncFileDoiMapFromCache(data);
             this.showNotification(`DOI cache refreshed: ${data.length} entries`, 'success');
         } catch (err) {
             console.error('Failed to refresh DOI cache:', err);
@@ -4457,6 +4490,7 @@ class PaperStatsApp {
         const loadId = ++this.currentLoadToken;
         this._doiIndex = null;
         this._doiIndexBuilding = null;
+        this.fileDoiByBase = {};
 
         // 检查是否有当前项目
         if (!this.currentProject) {
@@ -4497,6 +4531,15 @@ class PaperStatsApp {
             this.allProjectFiles = ordered;
             // renderFileList will handle filtering and grouping
             this.renderFileList(ordered, keepSelection ? currentSelected : null, true, ensuredGroups);
+            if (this.doiCacheManager?.memoryCache?.length) {
+                this.syncFileDoiMapFromCache(this.doiCacheManager.memoryCache);
+            } else if (this.doiCacheManager) {
+                this.doiCacheManager.getCacheData().then((data) => {
+                    this.syncFileDoiMapFromCache(data);
+                }).catch((err) => {
+                    console.warn('Failed to sync DOI cache for file list:', err);
+                });
+            }
         } catch (error) {
             if (loadId !== this.currentLoadToken || !this.currentProject) {
                 return;
@@ -5589,6 +5632,55 @@ class PaperStatsApp {
         if (skipped.length > 0) {
             console.log('Skipped duplicate group names:', skipped);
         }
+    }
+
+    getFileDoiForBase(base = '') {
+        const key = String(base || '').trim();
+        if (!key) return '';
+        const raw = (this.fileMetaByBase?.[key]?.doi || this.fileDoiByBase?.[key] || '');
+        return raw ? this.normalizeDoiString(raw) : '';
+    }
+
+    setFileDoiForBase(base = '', doi = '', opts = {}) {
+        const key = String(base || '').trim();
+        if (!key) return;
+        const normalized = this.normalizeDoiString(doi || '');
+        if (!normalized) return;
+        if (!this.fileDoiByBase) this.fileDoiByBase = {};
+        this.fileDoiByBase[key] = normalized;
+        if (this.fileMetaByBase?.[key]) {
+            this.fileMetaByBase[key].doi = normalized;
+        }
+        if (opts.refresh) {
+            this.refreshVisibleFileDoi();
+        }
+    }
+
+    syncFileDoiMapFromCache(cacheData, opts = {}) {
+        if (!Array.isArray(cacheData) || !cacheData.length) return;
+        const refresh = opts.refresh !== false;
+        cacheData.forEach((item) => {
+            const base = item?.base;
+            const doi = item?.doi;
+            if (!base || !doi) return;
+            this.setFileDoiForBase(base, doi, { refresh: false });
+        });
+        if (refresh) {
+            this.refreshVisibleFileDoi();
+        }
+    }
+
+    refreshVisibleFileDoi() {
+        const items = document.querySelectorAll('.file-item');
+        if (!items.length) return;
+        items.forEach((item) => {
+            const base = item?.dataset?.filename || '';
+            if (!base) return;
+            const numText = item.querySelector('.file-index')?.textContent || '';
+            const num = numText ? Number(numText) : NaN;
+            const number = Number.isFinite(num) ? num : numText;
+            this.setFileItemContent(item, base, number);
+        });
     }
 
     setFileItemContent(fileItem, displayName, number) {
@@ -6750,6 +6842,7 @@ class PaperStatsApp {
         const moved = [];
         const skipped = [];
         const failed = [];
+        const doiMap = new Map();
         const seenBases = new Set();
         const total = pdfFiles.length;
         let processed = 0;
@@ -6763,11 +6856,13 @@ class PaperStatsApp {
                     skipped.push({ file: pdfFile.name, reason: 'No DOI found' });
                     continue;
                 }
-                const base = this.doiToFilenameBase(doi);
+                const cleanDoi = this.normalizeDoiString(doi);
+                const base = this.doiToFilenameBase(cleanDoi);
                 if (!base) {
                     skipped.push({ file: pdfFile.name, reason: 'Invalid DOI' });
                     continue;
                 }
+                doiMap.set(base, cleanDoi);
 
                 // 检查是否在当前批次中已处理
                 if (seenBases.has(base)) {
@@ -6882,6 +6977,10 @@ class PaperStatsApp {
         if (created.length || updated.length) {
             await this.loadFileList(true);
         }
+        if (doiMap.size) {
+            doiMap.forEach((doi, base) => this.setFileDoiForBase(base, doi));
+            this.refreshVisibleFileDoi();
+        }
         const moveTargets = targetGroupId ? [...new Set([...created, ...updated, ...moved])] : [];
         if (moveTargets.length) {
             this.moveFilesToGroup(moveTargets, targetGroupId);
@@ -6918,6 +7017,14 @@ class PaperStatsApp {
             this.showNotification(`PDF import: ${parts.join(', ')}`, type);
         } else {
             tracker.finish('PDF import: done', 600);
+        }
+
+        if (created.length || updated.length) {
+            try {
+                await this.fixAllJsonDois();
+            } catch (err) {
+                console.warn('Auto fixAllJsonDois after PDF import failed:', err);
+            }
         }
     }
 
@@ -7496,6 +7603,11 @@ class PaperStatsApp {
 
             this.currentFile = filename;
             this.currentFileBase = base;
+            const currentDoi = (this.currentData?.meta_info?.doi || this.findFirstDoiInData(this.currentData) || '');
+            if (currentDoi) {
+                this.setFileDoiForBase(base, currentDoi);
+                this.refreshVisibleFileDoi();
+            }
             const metaChanged = this.ensureMetaInfoDefaultsOnLoad(filename);
             this.setLastSelectedFile(base);
             this.updateFileMeta();
@@ -8067,7 +8179,30 @@ class PaperStatsApp {
 
     getOrderedEntriesForObject(obj, basePath = []) {
         const entries = Object.entries(obj || {});
-        if (!Array.isArray(basePath) || !basePath.includes('wos_data')) return entries;
+        if (!Array.isArray(basePath)) return entries;
+        if (basePath.includes('meta_info')) {
+            const preferred = ['no', 'doi', 'cite', 'citep', 'apa', 'pdf_path'];
+            const keys = entries.map(([k]) => k);
+            const normalized = new Map(keys.map(k => [k, String(k || '').toLowerCase()]));
+            const seen = new Set();
+            const ordered = [];
+            preferred.forEach((want) => {
+                keys.forEach((k) => {
+                    const norm = normalized.get(k);
+                    if (norm === want || (want === 'no' && (norm === 'no.' || norm === 'no'))) {
+                        if (!seen.has(k)) {
+                            ordered.push(k);
+                            seen.add(k);
+                        }
+                    }
+                });
+            });
+            keys.forEach((k) => {
+                if (!seen.has(k)) ordered.push(k);
+            });
+            return ordered.map(k => [k, obj[k]]);
+        }
+        if (!basePath.includes('wos_data')) return entries;
         const preferred = [
             'doi',
             'wos_id',
@@ -13929,23 +14064,101 @@ class PaperStatsApp {
             await this.loadFileList(true);
         }
 
+        const view = this.currentJsonView || 'view1';
+        const createdFromPdf = [];
+        const skippedPdf = [];
+        const failedPdf = [];
+        const doiMap = new Map();
+        const tracker = (typeof this.createStatusProgressTracker === 'function')
+            ? this.createStatusProgressTracker('Fix JSON DOI')
+            : null;
+
+        const pdfMetas = Object.values(this.fileMetaByPath || {}).filter(m => m && m.kind === 'pdf');
+        if (pdfMetas.length) {
+            if (tracker) tracker.update(`Scanning PDFs (${pdfMetas.length})`, 2);
+            let nextNo = null;
+            try {
+                const maxNo = await this.getMaxMetaNo();
+                nextNo = (Number.isFinite(maxNo) ? maxNo : 0) + 1;
+            } catch (_err) {
+                // ignore numbering failure
+            }
+            for (let i = 0; i < pdfMetas.length; i++) {
+                const meta = pdfMetas[i];
+                const pdfName = meta.name || (meta.path || '').split('/').pop() || '';
+                if (!pdfName) {
+                    skippedPdf.push({ file: meta.path || 'PDF', reason: 'Missing filename' });
+                    continue;
+                }
+                try {
+                    const url = this.getPdfUrl(pdfName);
+                    const resp = await fetch(url, { cache: 'no-store' });
+                    if (!resp.ok) {
+                        skippedPdf.push({ file: pdfName, reason: `HTTP ${resp.status}` });
+                        continue;
+                    }
+                    const blob = await resp.blob();
+                    const doi = await this.extractDoiFromPdfFile(blob);
+                    if (!doi) {
+                        skippedPdf.push({ file: pdfName, reason: 'No DOI found' });
+                        continue;
+                    }
+                    const base = this.doiToFilenameBase(doi);
+                    if (!base) {
+                        skippedPdf.push({ file: pdfName, reason: 'Invalid DOI' });
+                        continue;
+                    }
+                    doiMap.set(base, doi);
+                    const existingPaths = this.getAllJsonPathsForBase(base);
+                    if (existingPaths && existingPaths.length) {
+                        skippedPdf.push({ file: pdfName, reason: 'JSON exists' });
+                        continue;
+                    }
+                    const jsonFilename = `json/${view}/${base}.json`;
+                    const payload = this.buildDoiJsonTemplate(doi);
+                    payload.meta_info.pdf_path = pdfName;
+                    if (Number.isFinite(nextNo)) {
+                        payload.meta_info.No = nextNo;
+                        nextNo += 1;
+                    }
+                    await this.saveJsonPayload(jsonFilename, payload);
+                    await this.ensureMarkdownExistsForFile(jsonFilename);
+                    createdFromPdf.push(base);
+                } catch (err) {
+                    failedPdf.push({ file: pdfName || 'PDF', reason: err.message || 'Unknown error' });
+                } finally {
+                    if (tracker && pdfMetas.length) {
+                        const percent = Math.min(15, Math.round(((i + 1) / pdfMetas.length) * 15));
+                        tracker.update(`Scanning PDFs (${i + 1}/${pdfMetas.length})`, percent);
+                    }
+                }
+            }
+            if (createdFromPdf.length) {
+                await this.loadFileList(true);
+            }
+            if (doiMap.size) {
+                doiMap.forEach((doi, base) => this.setFileDoiForBase(base, doi));
+                this.refreshVisibleFileDoi();
+            }
+        }
+
         const bases = Object.keys(this.fileMetaByBase || {});
         const jsonPaths = new Set();
         bases.forEach((base) => {
             this.getAllJsonPathsForBase(base).forEach((p) => jsonPaths.add(p));
         });
         if (!jsonPaths.size) {
-            this.showNotification('No JSON files to fix', 'info');
+            const msg = createdFromPdf.length
+                ? `Created ${createdFromPdf.length} JSON file(s) from PDFs, no JSON DOI to fix`
+                : 'No JSON files to fix';
+            this.showNotification(msg, createdFromPdf.length ? 'success' : 'info');
             return;
         }
 
         let fixed = 0;
         let skipped = 0;
         let errors = 0;
-        const tracker = (typeof this.createStatusProgressTracker === 'function')
-            ? this.createStatusProgressTracker('Fix JSON DOI')
-            : null;
-        if (tracker) tracker.update('Fixing JSON DOI (0%)', 0);
+        if (tracker) tracker.update('Fixing JSON DOI (0%)', 20);
 
         const paths = Array.from(jsonPaths);
         for (let i = 0; i < paths.length; i++) {
@@ -13993,14 +14206,19 @@ class PaperStatsApp {
                 console.error('Fix JSON DOI failed:', path, err);
             } finally {
                 if (tracker) {
-                    const percent = Math.round(((i + 1) / paths.length) * 100);
-                    tracker.update(`Fixing JSON DOI (${i + 1}/${paths.length})`, percent);
+                    const percent = 20 + Math.round(((i + 1) / paths.length) * 80);
+                    tracker.update(`Fixing JSON DOI (${i + 1}/${paths.length})`, Math.min(100, percent));
                 }
             }
         }
         if (tracker) tracker.finish('Fix JSON DOI done');
 
-        const message = `Fix JSON DOI completed! Fixed: ${fixed}, Skipped: ${skipped}, Errors: ${errors}`;
+        const parts = [];
+        if (createdFromPdf.length) parts.push(`created ${createdFromPdf.length} from PDFs`);
+        if (fixed) parts.push(`fixed ${fixed}`);
+        if (skipped) parts.push(`skipped ${skipped}`);
+        if (errors) parts.push(`errors ${errors}`);
+        const message = `Fix JSON DOI completed! ${parts.join(', ') || 'no changes'}`;
         this.showNotification(message, fixed > 0 ? 'success' : 'info');
     }
 
@@ -14049,24 +14267,33 @@ class PaperStatsApp {
                 return { status: 'fail' };
             }
             if (!data || typeof data !== 'object') return { status: 'skip' };
-            const wos = data.wos_data;
-            if (!wos || typeof wos !== 'object') return { status: 'skip' };
-            const rawDoi = wos.doi || wos.DOI || data?.meta_info?.doi || '';
+            const meta = data.meta_info && typeof data.meta_info === 'object' ? data.meta_info : {};
+            const wos = data.wos_data && typeof data.wos_data === 'object' ? data.wos_data : null;
+            const rawDoi = meta.doi || (wos ? (wos.doi || wos.DOI) : '') || '';
             const doi = this.normalizeDoiString(rawDoi);
             if (!doi) return { status: 'skip' };
 
-            const needCite = !wos.cite;
-            const needCitep = !wos.citep;
+            const needCite = !meta.cite;
+            const needCitep = !meta.citep;
             if (!needCite && !needCitep) return { status: 'skip' };
 
             try {
+                const projectKey = this.getProjectKey();
                 if (needCite) {
-                    wos.cite = await this.formatCitation([doi], 'cite');
+                    meta.cite = await this.formatCitation([doi], 'cite');
                 }
                 if (needCitep) {
-                    wos.citep = await this.formatCitation([doi], 'citep');
+                    meta.citep = await this.formatCitation([doi], 'citep');
                 }
-                data.wos_data = wos;
+                if (wos) {
+                    if (Object.prototype.hasOwnProperty.call(wos, 'cite')) delete wos.cite;
+                    if (Object.prototype.hasOwnProperty.call(wos, 'citep')) delete wos.citep;
+                    data.wos_data = wos;
+                }
+                data.meta_info = meta;
+                if (this.doiCacheManager) {
+                    await this.doiCacheManager.setCitationText(doi, meta.cite || '', meta.citep || '', projectKey);
+                }
                 await this.saveJsonPayload(path, data);
                 this.tempDataCache[path] = data;
                 if (this.currentFile === path) {
@@ -15016,6 +15243,10 @@ class PaperStatsApp {
 
             const table = document.createElement('table');
             table.className = 'groupby-table';
+            const doiHeaderIndexes = tableData.headers
+                .map((h, idx) => ({ h: String(h || '').trim().toLowerCase(), idx }))
+                .filter(item => item.h === 'wos_data.doi')
+                .map(item => item.idx);
             const thead = document.createElement('thead');
             const headRow = document.createElement('tr');
             tableData.headers.forEach((h) => {
@@ -15029,9 +15260,14 @@ class PaperStatsApp {
             const tbody = document.createElement('tbody');
             tableData.rows.forEach((row) => {
                 const tr = document.createElement('tr');
-                row.forEach((cell) => {
+                row.forEach((cell, idx) => {
                     const td = document.createElement('td');
-                    td.textContent = String(cell ?? '');
+                    const text = this.decodeHtmlEntities(String(cell ?? ''));
+                    if (doiHeaderIndexes.includes(idx) && text && text.toUpperCase() !== 'TOTAL') {
+                        td.innerHTML = this.renderCitationPlaceholder([text], 'cite');
+                    } else {
+                        td.textContent = text;
+                    }
                     tr.appendChild(td);
                 });
                 tbody.appendChild(tr);
@@ -15051,6 +15287,7 @@ class PaperStatsApp {
             });
             block.innerHTML = '';
             block.appendChild(wrapper);
+            this.applyCitationRendering(wrapper);
         } catch (err) {
             console.warn('GroupBy render failed:', err);
             block.innerHTML = `<div class="groupby-error">GroupBy failed: ${this.escapeHtml(err.message || String(err))}</div>`;
@@ -15149,6 +15386,11 @@ class PaperStatsApp {
         const headCells = Array.from(thead.querySelectorAll('th'));
         if (!headCells.length) return;
 
+        const doiHeaderIndexes = headers
+            .map((h, idx) => ({ h: String(h || '').trim().toLowerCase(), idx }))
+            .filter(item => item.h === 'wos_data.doi')
+            .map(item => item.idx);
+
         const originalRows = rows.map(row => row.slice());
         let sortState = { index: -1, dir: 'asc' };
 
@@ -15156,17 +15398,23 @@ class PaperStatsApp {
             tbody.innerHTML = '';
             nextRows.forEach((row) => {
                 const tr = document.createElement('tr');
-                row.forEach((cell) => {
+                row.forEach((cell, idx) => {
                     const td = document.createElement('td');
-                    td.textContent = String(cell ?? '');
+                    const text = this.decodeHtmlEntities(String(cell ?? ''));
+                    if (doiHeaderIndexes.includes(idx) && text && text.toUpperCase() !== 'TOTAL') {
+                        td.innerHTML = this.renderCitationPlaceholder([text], 'cite');
+                    } else {
+                        td.textContent = text;
+                    }
                     tr.appendChild(td);
                 });
                 tbody.appendChild(tr);
             });
+            this.applyCitationRendering(table);
         };
 
         const getSortableValue = (value) => {
-            const text = String(value ?? '').trim();
+            const text = this.decodeHtmlEntities(String(value ?? '')).trim();
             const num = Number(text);
             return Number.isFinite(num) && text !== '' ? num : text.toLowerCase();
         };
@@ -15212,6 +15460,16 @@ class PaperStatsApp {
             .replace(/^doi:/i, '')
             .replace(/^https?:\/\/(dx\.)?doi\.org\//i, '')
             .replace(/_/g, '/');
+    }
+
+    decodeHtmlEntities(text = '') {
+        const raw = text === undefined || text === null ? '' : String(text);
+        if (!raw || !raw.includes('&')) return raw;
+        if (!this._htmlDecodeEl) {
+            this._htmlDecodeEl = document.createElement('textarea');
+        }
+        this._htmlDecodeEl.innerHTML = raw;
+        return this._htmlDecodeEl.value;
     }
 
     parseDoiListFromLatex(raw = '') {
@@ -15346,6 +15604,18 @@ class PaperStatsApp {
             clean.push(norm);
         });
         const key = `${mode}:${clean.slice().sort().join(',')}`;
+        if (clean.length === 1 && this.doiCacheManager) {
+            try {
+                const cached = await this.doiCacheManager.getCitationText(clean[0], this.getProjectKey());
+                const hit = cached && cached[mode];
+                if (hit) {
+                    this.citationCache[key] = { text: hit, fallback: false };
+                    return hit;
+                }
+            } catch (_err) {
+                // ignore cache failure
+            }
+        }
 
         // 优先从项目存储加载元数据
         let storedMeta = {};
@@ -15378,6 +15648,15 @@ class PaperStatsApp {
                 text = text.replace(/^\(\s*/, '').replace(/\s*\)$/, '');
             }
             this.citationCache[key] = { text, fallback: false };
+            if (clean.length === 1 && this.doiCacheManager) {
+                try {
+                    const cite = mode === 'cite' ? text : '';
+                    const citep = mode === 'citep' ? text : '';
+                    await this.doiCacheManager.setCitationText(clean[0], cite, citep, this.getProjectKey());
+                } catch (_err) {
+                    // ignore cache save failure
+                }
+            }
             return text;
         } catch (err) {
             console.warn('Citation render fallback:', err);
@@ -21194,6 +21473,7 @@ document.addEventListener('DOMContentLoaded', () => {
         console.log('🔄 Refreshing DOI cache...');
         await app.doiCacheManager.clearCache();
         const data = await app.doiCacheManager.buildCache({ notify: true });
+        app.syncFileDoiMapFromCache(data);
         console.log(`✅ DOI cache refreshed: ${data.length} entries`);
         return data;
     };

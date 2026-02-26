@@ -114,6 +114,59 @@
             });
 
             const safeConcurrency = Number.isFinite(Number(concurrency)) ? Math.max(1, Number(concurrency)) : 12;
+            const preloadTracker = (progress && typeof this.createStatusProgressTracker === 'function')
+                ? this.createStatusProgressTracker('Preload JSON')
+                : null;
+            let preloadProcessed = 0;
+            if (preloadTracker) {
+                preloadTracker.update('Preloading JSON (0%)', 0);
+            }
+            const dataMap = new Map();
+            const preloadErrors = [];
+            let preloadCursor = 0;
+            const preloadWorker = async () => {
+                while (preloadCursor < bases.length) {
+                    const base = bases[preloadCursor];
+                    preloadCursor += 1;
+                    const path = this.getViewPathForBase(base, targetView);
+                    if (!path) {
+                        preloadErrors.push(base);
+                    } else if (this.tempDataCache && this.tempDataCache[path]) {
+                        dataMap.set(base, this.tempDataCache[path]);
+                    } else {
+                        let success = false;
+                        for (let attempt = 0; attempt < 2 && !success; attempt += 1) {
+                            try {
+                                const data = await this.readProjectFile(path);
+                                dataMap.set(base, data);
+                                success = true;
+                            } catch (_err) {
+                                // retry once
+                            }
+                        }
+                        if (!success) {
+                            preloadErrors.push(base);
+                        }
+                    }
+                    preloadProcessed += 1;
+                    if (preloadTracker) {
+                        const percent = bases.length ? Math.round((preloadProcessed / bases.length) * 100) : 100;
+                        preloadTracker.update(`Preloading JSON (${preloadProcessed}/${bases.length})`, percent);
+                    }
+                }
+            };
+            const preloadWorkers = Array.from({ length: Math.min(safeConcurrency, bases.length) }, () => preloadWorker());
+            try {
+                await Promise.all(preloadWorkers);
+                if (preloadTracker) preloadTracker.finish('Preload JSON done');
+            } catch (err) {
+                if (preloadTracker) preloadTracker.fail('Preload JSON failed');
+                throw err;
+            }
+            if (preloadErrors.length) {
+                throw new Error(`Preload failed for ${preloadErrors.length} file(s). Please retry.`);
+            }
+
             const tracker = (progress && typeof this.createStatusProgressTracker === 'function')
                 ? this.createStatusProgressTracker('Grouping fields')
                 : null;
@@ -133,7 +186,7 @@
                         continue;
                     }
                     try {
-                        const data = await this.readProjectFile(path);
+                        const data = dataMap.get(base);
                         let hasAny = false;
                         const groupValueSets = [];
                         if (includeGroup) {

@@ -12,12 +12,14 @@ class DoiCacheManager {
     constructor(app) {
         this.app = app;
         this.dbName = 'GEWUDoiCache';
-        this.dbVersion = 1;
+        this.dbVersion = 2;
         this.storeName = 'doiData';
+        this.citationStoreName = 'citationText';
         this.cacheDataVersion = 3; // 缓存数据版本（修改格式时增加此版本号）- v3: 优先使用 wos_data.author_full_names
         this.db = null;
         this.cacheKey = null; // 当前项目的缓存键
         this.memoryCache = null; // 内存缓存，加速查询
+        this.citationCache = new Map(); // key -> { cite, citep }
         this.lastUpdateTime = null;
         this.autoUpdateInterval = 5 * 60 * 1000; // 5分钟自动更新
         this.updateTimer = null;
@@ -49,6 +51,13 @@ class DoiCacheManager {
                     const objectStore = db.createObjectStore(this.storeName, { keyPath: 'projectKey' });
                     objectStore.createIndex('timestamp', 'timestamp', { unique: false });
                     console.log('✓ DOI Cache object store created');
+                }
+                if (!db.objectStoreNames.contains(this.citationStoreName)) {
+                    const citeStore = db.createObjectStore(this.citationStoreName, { keyPath: 'key' });
+                    citeStore.createIndex('projectKey', 'projectKey', { unique: false });
+                    citeStore.createIndex('doi', 'doi', { unique: false });
+                    citeStore.createIndex('timestamp', 'timestamp', { unique: false });
+                    console.log('✓ Citation Cache object store created');
                 }
             };
         });
@@ -140,6 +149,74 @@ class DoiCacheManager {
 
             request.onerror = () => {
                 console.error('Failed to save cache:', request.error);
+                reject(request.error);
+            };
+        });
+    }
+
+    getCitationKey(doi, projectKey = '') {
+        const key = String(projectKey || 'global').trim() || 'global';
+        const normalizedDoi = String(doi || '').trim();
+        return `${key}::${normalizedDoi}`;
+    }
+
+    async getCitationText(doi, projectKey = '') {
+        const key = this.getCitationKey(doi, projectKey);
+        if (this.citationCache.has(key)) {
+            return this.citationCache.get(key);
+        }
+        if (!this.db) {
+            await this.init();
+        }
+        return new Promise((resolve, reject) => {
+            const transaction = this.db.transaction([this.citationStoreName], 'readonly');
+            const objectStore = transaction.objectStore(this.citationStoreName);
+            const request = objectStore.get(key);
+
+            request.onsuccess = () => {
+                const result = request.result;
+                if (result && (result.cite || result.citep)) {
+                    this.citationCache.set(key, { cite: result.cite || '', citep: result.citep || '' });
+                    resolve(this.citationCache.get(key));
+                } else {
+                    resolve(null);
+                }
+            };
+
+            request.onerror = () => {
+                console.error('Failed to load citation cache:', request.error);
+                reject(request.error);
+            };
+        });
+    }
+
+    async setCitationText(doi, cite = '', citep = '', projectKey = '') {
+        const key = this.getCitationKey(doi, projectKey);
+        const existing = this.citationCache.get(key) || await this.getCitationText(doi, projectKey) || {};
+        const merged = {
+            cite: String(cite || existing.cite || ''),
+            citep: String(citep || existing.citep || '')
+        };
+        const entry = {
+            key,
+            projectKey: String(projectKey || 'global').trim() || 'global',
+            doi: String(doi || '').trim(),
+            cite: merged.cite,
+            citep: merged.citep,
+            timestamp: Date.now()
+        };
+        this.citationCache.set(key, { cite: entry.cite, citep: entry.citep });
+        if (!this.db) {
+            await this.init();
+        }
+        return new Promise((resolve, reject) => {
+            const transaction = this.db.transaction([this.citationStoreName], 'readwrite');
+            const objectStore = transaction.objectStore(this.citationStoreName);
+            const request = objectStore.put(entry);
+
+            request.onsuccess = () => resolve(true);
+            request.onerror = () => {
+                console.error('Failed to save citation cache:', request.error);
                 reject(request.error);
             };
         });
