@@ -4221,25 +4221,46 @@
             return this.visNetwork?.body?.data?.nodes || null;
         }
 
+        syncLabelStyleAlphaForNodes(nodes, baseLabelStyles = null) {
+            const list = Array.isArray(nodes) ? nodes : [];
+            if (!list.length) return [];
+            return list.map((node) => {
+                const base = (baseLabelStyles && baseLabelStyles.get(node.id)) || node.labelStyle || {};
+                const alpha = getNodeAlpha(node);
+                return { id: node.id, labelStyle: this.buildLabelStyleWithAlpha(base, alpha) };
+            });
+        }
+
+        syncLabelStyleAlphaForNodesByAlpha(nodes, alphaById, baseLabelStyles = null) {
+            const list = Array.isArray(nodes) ? nodes : [];
+            if (!list.length) return [];
+            const map = alphaById instanceof Map ? alphaById : null;
+            return list.map((node) => {
+                const base = (baseLabelStyles && baseLabelStyles.get(node.id)) || node.labelStyle || {};
+                const alpha = map && map.has(node.id) ? map.get(node.id) : getNodeAlpha(node);
+                return { id: node.id, labelStyle: this.buildLabelStyleWithAlpha(base, alpha) };
+            });
+        }
+
+        buildLabelStyleWithAlpha(base, alphaRaw) {
+            const alpha = Math.max(0, Math.min(1, Number.isFinite(alphaRaw) ? alphaRaw : 1));
+            const next = { ...(base || {}), opacity: alpha };
+            const alphaKeys = ['textColor', 'borderColor', 'backgroundColor', 'strokeColor'];
+            alphaKeys.forEach((key) => {
+                if (base && base[key] != null) {
+                    next[key] = applyAlphaToColor(base[key], alpha);
+                }
+            });
+            return next;
+        }
+
         forceSyncLabelOpacity() {
             const dataset = this.getNetworkNodesDataSet();
             const view = this.getEl(this.ids.view);
             const layer = view ? view.querySelector('.vis-network-label-layer') : null;
             if (!dataset || !layer) return;
             const nodes = dataset.get();
-            const updates = [];
-            const alphaKeys = ['textColor', 'borderColor', 'backgroundColor', 'strokeColor'];
-            nodes.forEach((node) => {
-                const alpha = getNodeAlpha(node);
-                const base = node.labelStyle || {};
-                const next = { ...base, opacity: alpha };
-                alphaKeys.forEach((key) => {
-                    if (base[key] != null) {
-                        next[key] = applyAlphaToColor(base[key], alpha);
-                    }
-                });
-                updates.push({ id: node.id, labelStyle: next });
-            });
+            const updates = this.syncLabelStyleAlphaForNodes(nodes);
             if (updates.length) {
                 this.updateNetworkNodes(updates);
             }
@@ -5231,13 +5252,7 @@
                 }
                 const color = alpha < 1 ? fadeNodeColor(baseColor, alpha) : baseColor;
                 const labelBase = state.baseLabelStyles.get(node.id) || node.labelStyle || {};
-                const labelNext = { ...labelBase, opacity: alpha };
-                const alphaKeys = ['textColor', 'borderColor', 'backgroundColor', 'strokeColor'];
-                alphaKeys.forEach((key) => {
-                    if (labelBase[key] != null) {
-                        labelNext[key] = applyAlphaToColor(labelBase[key], alpha);
-                    }
-                });
+                const labelNext = this.buildLabelStyleWithAlpha(labelBase, alpha);
                 return { id: node.id, color, opacity: alpha, labelStyle: labelNext };
             });
             const edgeUpdates = edges.map((edge) => {
@@ -5606,6 +5621,7 @@
                     lockedEdgeIds: new Set(),
                     baseNodeColors: new Map(),
                     baseEdgeColors: new Map(),
+                    baseLabelStyles: new Map(),
                     dirty: true
                 };
             }
@@ -5639,6 +5655,7 @@
             if (!keepBaseColors) {
                 state.baseNodeColors.clear();
                 state.baseEdgeColors.clear();
+                state.baseLabelStyles.clear();
             }
             state.dirty = true;
             this.hideEdgeHoverLabels();
@@ -5732,12 +5749,13 @@
             const dataset = this.visNetwork?.body?.data;
             if (!dataset?.nodes || !dataset?.edges) return;
             const state = this.getEdgeFocusState();
-            if (!state.baseNodeColors.size && !state.baseEdgeColors.size) return;
+            if (!state.baseNodeColors.size && !state.baseEdgeColors.size && !state.baseLabelStyles.size) return;
             const nodes = dataset.nodes.get();
             const edges = dataset.edges.get();
             const nodeUpdates = nodes.map((node) => ({
                 id: node.id,
-                color: state.baseNodeColors.get(node.id) || node.color
+                color: state.baseNodeColors.get(node.id) || node.color,
+                labelStyle: state.baseLabelStyles.get(node.id) || node.labelStyle
             }));
             const edgeUpdates = edges.map((edge) => ({
                 id: edge.id,
@@ -5758,10 +5776,11 @@
             const activeEdges = new Set(state.lockedEdgeIds);
             if (!nodeFocusActive && state.hoverEdgeId) activeEdges.add(state.hoverEdgeId);
             if (state.dirty) {
-                if (activeEdges.size && (state.baseNodeColors.size || state.baseEdgeColors.size)) {
+                if (activeEdges.size && (state.baseNodeColors.size || state.baseEdgeColors.size || state.baseLabelStyles.size)) {
                     const nodeUpdates = nodes.map((node) => ({
                         id: node.id,
-                        color: state.baseNodeColors.get(node.id) || node.color
+                        color: state.baseNodeColors.get(node.id) || node.color,
+                        labelStyle: state.baseLabelStyles.get(node.id) || node.labelStyle
                     }));
                     const edgeUpdates = edges.map((edge) => ({
                         id: edge.id,
@@ -5772,8 +5791,10 @@
                 }
                 state.baseNodeColors.clear();
                 state.baseEdgeColors.clear();
+                state.baseLabelStyles.clear();
                 nodes.forEach((node) => {
                     state.baseNodeColors.set(node.id, cloneVisColor(node.color));
+                    state.baseLabelStyles.set(node.id, cloneVisColor(node.labelStyle || {}));
                 });
                 edges.forEach((edge) => {
                     state.baseEdgeColors.set(edge.id, cloneVisColor(edge.color));
@@ -5828,7 +5849,9 @@
                     const color = isActive
                         ? fadeNodeColor(baseColor, 1)
                         : fadeNodeColor(baseColor, dimAlpha);
-                    return { id: node.id, color, opacity: isActive ? 1 : dimAlpha };
+                    const labelBase = state.baseLabelStyles.get(node.id) || node.labelStyle || {};
+                    const labelStyle = this.buildLabelStyleWithAlpha(labelBase, isActive ? 1 : dimAlpha);
+                    return { id: node.id, color, opacity: isActive ? 1 : dimAlpha, labelStyle };
                 });
                 const edgeUpdates = edges.map((edge) => {
                     const baseColor = state.baseEdgeColors.get(edge.id) || edge.color;
@@ -5848,7 +5871,11 @@
                 const nodeUpdates = nodes.map((node) => ({
                     id: node.id,
                     color: state.baseNodeColors.get(node.id) || node.color,
-                    opacity: 1
+                    opacity: 1,
+                    labelStyle: this.buildLabelStyleWithAlpha(
+                        state.baseLabelStyles.get(node.id) || node.labelStyle || {},
+                        1
+                    )
                 }));
                 const edgeUpdates = edges.map((edge) => ({
                     id: edge.id,
@@ -5875,7 +5902,9 @@
                 const color = isActive
                     ? fadeNodeColor(baseColor, 1)
                     : fadeNodeColor(baseColor, nodeDimAlpha);
-                return { id: node.id, color, opacity: isActive ? 1 : nodeDimAlpha };
+                const labelBase = state.baseLabelStyles.get(node.id) || node.labelStyle || {};
+                const labelStyle = this.buildLabelStyleWithAlpha(labelBase, isActive ? 1 : nodeDimAlpha);
+                return { id: node.id, color, opacity: isActive ? 1 : nodeDimAlpha, labelStyle };
             });
             const edgeUpdates = edges.map((edge) => {
                 const baseColor = state.baseEdgeColors.get(edge.id) || edge.color;
@@ -5903,7 +5932,9 @@
                 const color = isActive
                     ? fadeNodeColor(baseColor, 1)
                     : fadeNodeColor(baseColor, dimAlpha);
-                return { id: node.id, color, opacity: isActive ? 1 : dimAlpha };
+                const labelBase = state.baseLabelStyles.get(node.id) || node.labelStyle || {};
+                const labelStyle = this.buildLabelStyleWithAlpha(labelBase, isActive ? 1 : dimAlpha);
+                return { id: node.id, color, opacity: isActive ? 1 : dimAlpha, labelStyle };
             });
             const edgeUpdates = edges.map((edge) => {
                 const baseColor = state.baseEdgeColors.get(edge.id) || edge.color;
