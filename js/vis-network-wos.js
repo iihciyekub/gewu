@@ -4221,46 +4221,25 @@
             return this.visNetwork?.body?.data?.nodes || null;
         }
 
-        syncLabelStyleAlphaForNodes(nodes, baseLabelStyles = null) {
-            const list = Array.isArray(nodes) ? nodes : [];
-            if (!list.length) return [];
-            return list.map((node) => {
-                const base = (baseLabelStyles && baseLabelStyles.get(node.id)) || node.labelStyle || {};
-                const alpha = getNodeAlpha(node);
-                return { id: node.id, labelStyle: this.buildLabelStyleWithAlpha(base, alpha) };
-            });
-        }
-
-        syncLabelStyleAlphaForNodesByAlpha(nodes, alphaById, baseLabelStyles = null) {
-            const list = Array.isArray(nodes) ? nodes : [];
-            if (!list.length) return [];
-            const map = alphaById instanceof Map ? alphaById : null;
-            return list.map((node) => {
-                const base = (baseLabelStyles && baseLabelStyles.get(node.id)) || node.labelStyle || {};
-                const alpha = map && map.has(node.id) ? map.get(node.id) : getNodeAlpha(node);
-                return { id: node.id, labelStyle: this.buildLabelStyleWithAlpha(base, alpha) };
-            });
-        }
-
-        buildLabelStyleWithAlpha(base, alphaRaw) {
-            const alpha = Math.max(0, Math.min(1, Number.isFinite(alphaRaw) ? alphaRaw : 1));
-            const next = { ...(base || {}), opacity: alpha };
-            const alphaKeys = ['textColor', 'borderColor', 'backgroundColor', 'strokeColor'];
-            alphaKeys.forEach((key) => {
-                if (base && base[key] != null) {
-                    next[key] = applyAlphaToColor(base[key], alpha);
-                }
-            });
-            return next;
-        }
-
         forceSyncLabelOpacity() {
             const dataset = this.getNetworkNodesDataSet();
             const view = this.getEl(this.ids.view);
             const layer = view ? view.querySelector('.vis-network-label-layer') : null;
             if (!dataset || !layer) return;
             const nodes = dataset.get();
-            const updates = this.syncLabelStyleAlphaForNodes(nodes);
+            const updates = [];
+            const alphaKeys = ['textColor', 'borderColor', 'backgroundColor', 'strokeColor'];
+            nodes.forEach((node) => {
+                const alpha = getNodeAlpha(node);
+                const base = node.labelStyle || {};
+                const next = { ...base, opacity: alpha };
+                alphaKeys.forEach((key) => {
+                    if (base[key] != null) {
+                        next[key] = applyAlphaToColor(base[key], alpha);
+                    }
+                });
+                updates.push({ id: node.id, labelStyle: next });
+            });
             if (updates.length) {
                 this.updateNetworkNodes(updates);
             }
@@ -5034,6 +5013,8 @@
                 labelStyle: { ...(node.labelStyle || {}), textColor: color }
             }));
             dataset.update(updates);
+            this._labelThresholdBaseDirty = true;
+            this.markEdgeFocusDirty();
             this.updateLabelLayer();
         }
 
@@ -5046,6 +5027,8 @@
                 labelStyle: { ...(node.labelStyle || {}), backgroundColor: color }
             }));
             dataset.update(updates);
+            this._labelThresholdBaseDirty = true;
+            this.markEdgeFocusDirty();
             this.updateLabelLayer();
         }
 
@@ -5058,6 +5041,8 @@
                 labelStyle: { ...(node.labelStyle || {}), borderColor: color }
             }));
             dataset.update(updates);
+            this._labelThresholdBaseDirty = true;
+            this.markEdgeFocusDirty();
             this.updateLabelLayer();
         }
 
@@ -5070,6 +5055,8 @@
                 labelStyle: { ...(node.labelStyle || {}), strokeWidth: width }
             }));
             dataset.update(updates);
+            this._labelThresholdBaseDirty = true;
+            this.markEdgeFocusDirty();
             this.updateLabelLayer();
         }
 
@@ -5082,6 +5069,8 @@
                 labelStyle: { ...(node.labelStyle || {}), borderWidth: width }
             }));
             dataset.update(updates);
+            this._labelThresholdBaseDirty = true;
+            this.markEdgeFocusDirty();
             this.updateLabelLayer();
         }
 
@@ -5094,6 +5083,8 @@
                 labelStyle: { ...(node.labelStyle || {}), strokeColor: color }
             }));
             dataset.update(updates);
+            this._labelThresholdBaseDirty = true;
+            this.markEdgeFocusDirty();
             this.updateLabelLayer();
         }
 
@@ -5107,6 +5098,8 @@
                 labelStyle: { ...(node.labelStyle || {}), fontWeight: next }
             }));
             dataset.update(updates);
+            this._labelThresholdBaseDirty = true;
+            this.markEdgeFocusDirty();
             this.updateLabelLayer();
         }
 
@@ -5134,6 +5127,8 @@
                 };
             });
             dataset.update(updates);
+            this._labelThresholdBaseDirty = true;
+            this.markEdgeFocusDirty();
             this.updateLabelLayer();
         }
 
@@ -5252,7 +5247,13 @@
                 }
                 const color = alpha < 1 ? fadeNodeColor(baseColor, alpha) : baseColor;
                 const labelBase = state.baseLabelStyles.get(node.id) || node.labelStyle || {};
-                const labelNext = this.buildLabelStyleWithAlpha(labelBase, alpha);
+                const labelNext = { ...labelBase, opacity: alpha };
+                const alphaKeys = ['textColor', 'borderColor', 'backgroundColor', 'strokeColor'];
+                alphaKeys.forEach((key) => {
+                    if (labelBase[key] != null) {
+                        labelNext[key] = applyAlphaToColor(labelBase[key], alpha);
+                    }
+                });
                 return { id: node.id, color, opacity: alpha, labelStyle: labelNext };
             });
             const edgeUpdates = edges.map((edge) => {
@@ -5621,7 +5622,6 @@
                     lockedEdgeIds: new Set(),
                     baseNodeColors: new Map(),
                     baseEdgeColors: new Map(),
-                    baseLabelStyles: new Map(),
                     dirty: true
                 };
             }
@@ -5655,7 +5655,6 @@
             if (!keepBaseColors) {
                 state.baseNodeColors.clear();
                 state.baseEdgeColors.clear();
-                state.baseLabelStyles.clear();
             }
             state.dirty = true;
             this.hideEdgeHoverLabels();
@@ -5749,13 +5748,12 @@
             const dataset = this.visNetwork?.body?.data;
             if (!dataset?.nodes || !dataset?.edges) return;
             const state = this.getEdgeFocusState();
-            if (!state.baseNodeColors.size && !state.baseEdgeColors.size && !state.baseLabelStyles.size) return;
+            if (!state.baseNodeColors.size && !state.baseEdgeColors.size) return;
             const nodes = dataset.nodes.get();
             const edges = dataset.edges.get();
             const nodeUpdates = nodes.map((node) => ({
                 id: node.id,
-                color: state.baseNodeColors.get(node.id) || node.color,
-                labelStyle: state.baseLabelStyles.get(node.id) || node.labelStyle
+                color: state.baseNodeColors.get(node.id) || node.color
             }));
             const edgeUpdates = edges.map((edge) => ({
                 id: edge.id,
@@ -5776,11 +5774,10 @@
             const activeEdges = new Set(state.lockedEdgeIds);
             if (!nodeFocusActive && state.hoverEdgeId) activeEdges.add(state.hoverEdgeId);
             if (state.dirty) {
-                if (activeEdges.size && (state.baseNodeColors.size || state.baseEdgeColors.size || state.baseLabelStyles.size)) {
+                if (activeEdges.size && (state.baseNodeColors.size || state.baseEdgeColors.size)) {
                     const nodeUpdates = nodes.map((node) => ({
                         id: node.id,
-                        color: state.baseNodeColors.get(node.id) || node.color,
-                        labelStyle: state.baseLabelStyles.get(node.id) || node.labelStyle
+                        color: state.baseNodeColors.get(node.id) || node.color
                     }));
                     const edgeUpdates = edges.map((edge) => ({
                         id: edge.id,
@@ -5791,10 +5788,8 @@
                 }
                 state.baseNodeColors.clear();
                 state.baseEdgeColors.clear();
-                state.baseLabelStyles.clear();
                 nodes.forEach((node) => {
                     state.baseNodeColors.set(node.id, cloneVisColor(node.color));
-                    state.baseLabelStyles.set(node.id, cloneVisColor(node.labelStyle || {}));
                 });
                 edges.forEach((edge) => {
                     state.baseEdgeColors.set(edge.id, cloneVisColor(edge.color));
@@ -5849,9 +5844,7 @@
                     const color = isActive
                         ? fadeNodeColor(baseColor, 1)
                         : fadeNodeColor(baseColor, dimAlpha);
-                    const labelBase = state.baseLabelStyles.get(node.id) || node.labelStyle || {};
-                    const labelStyle = this.buildLabelStyleWithAlpha(labelBase, isActive ? 1 : dimAlpha);
-                    return { id: node.id, color, opacity: isActive ? 1 : dimAlpha, labelStyle };
+                    return { id: node.id, color, opacity: isActive ? 1 : dimAlpha };
                 });
                 const edgeUpdates = edges.map((edge) => {
                     const baseColor = state.baseEdgeColors.get(edge.id) || edge.color;
@@ -5871,11 +5864,7 @@
                 const nodeUpdates = nodes.map((node) => ({
                     id: node.id,
                     color: state.baseNodeColors.get(node.id) || node.color,
-                    opacity: 1,
-                    labelStyle: this.buildLabelStyleWithAlpha(
-                        state.baseLabelStyles.get(node.id) || node.labelStyle || {},
-                        1
-                    )
+                    opacity: 1
                 }));
                 const edgeUpdates = edges.map((edge) => ({
                     id: edge.id,
@@ -5902,9 +5891,7 @@
                 const color = isActive
                     ? fadeNodeColor(baseColor, 1)
                     : fadeNodeColor(baseColor, nodeDimAlpha);
-                const labelBase = state.baseLabelStyles.get(node.id) || node.labelStyle || {};
-                const labelStyle = this.buildLabelStyleWithAlpha(labelBase, isActive ? 1 : nodeDimAlpha);
-                return { id: node.id, color, opacity: isActive ? 1 : nodeDimAlpha, labelStyle };
+                return { id: node.id, color, opacity: isActive ? 1 : nodeDimAlpha };
             });
             const edgeUpdates = edges.map((edge) => {
                 const baseColor = state.baseEdgeColors.get(edge.id) || edge.color;
@@ -5932,9 +5919,7 @@
                 const color = isActive
                     ? fadeNodeColor(baseColor, 1)
                     : fadeNodeColor(baseColor, dimAlpha);
-                const labelBase = state.baseLabelStyles.get(node.id) || node.labelStyle || {};
-                const labelStyle = this.buildLabelStyleWithAlpha(labelBase, isActive ? 1 : dimAlpha);
-                return { id: node.id, color, opacity: isActive ? 1 : dimAlpha, labelStyle };
+                return { id: node.id, color, opacity: isActive ? 1 : dimAlpha };
             });
             const edgeUpdates = edges.map((edge) => {
                 const baseColor = state.baseEdgeColors.get(edge.id) || edge.color;
@@ -7973,20 +7958,25 @@
             };
 
             // Helper to apply to single node or all nodes
-            const applyLabelStyle = (updates) => {
+            const applyLabelStylePatch = (updates = {}, removeKeys = []) => {
                 if (!this.visNetwork || !this.visNetwork.body?.data?.nodes) return;
                 const nodeDataset = this.visNetwork.body.data.nodes;
                 if (getApplyToAll()) {
                     const nodeUpdates = nodeDataset.get().map((n) => {
                         const existingLabelStyle = n?.labelStyle || {};
-                        return { id: n.id, labelStyle: { ...existingLabelStyle, ...updates } };
+                        const next = { ...existingLabelStyle, ...updates };
+                        removeKeys.forEach((key) => { delete next[key]; });
+                        return { id: n.id, labelStyle: next };
                     });
                     this.updateNetworkNodes(nodeUpdates);
                 } else {
                     const currentNode = nodeDataset.get(nodeId);
                     const existingLabelStyle = currentNode?.labelStyle || {};
-                    this.updateNetworkNodes({ id: nodeId, labelStyle: { ...existingLabelStyle, ...updates } });
+                    const next = { ...existingLabelStyle, ...updates };
+                    removeKeys.forEach((key) => { delete next[key]; });
+                    this.updateNetworkNodes({ id: nodeId, labelStyle: next });
                 }
+                this._labelThresholdBaseDirty = true;
                 this.updateLabelLayer();
             };
 
@@ -8088,7 +8078,7 @@
                     this.applyLabelWeight();
                     this.queuePersistSettings();
                 } else {
-                    applyLabelStyle({ fontWeight: val });
+                    applyLabelStylePatch({ fontWeight: val });
                 }
             });
 
@@ -8099,7 +8089,7 @@
                     this.applyLabelStrokeWidth();
                     this.queuePersistSettings();
                 } else {
-                    applyLabelStyle({ strokeWidth: val });
+                    applyLabelStylePatch({ strokeWidth: val });
                 }
             });
 
@@ -8146,7 +8136,7 @@
                         : Math.round(30 + (1 - k) * lightRange);
                     const gray = Math.max(0, Math.min(255, grayRaw));
                     const color = `rgb(${gray}, ${gray}, ${gray})`;
-                    applyLabelStyle({ textColor: color });
+                    applyLabelStylePatch({ textColor: color });
                 }
             });
 
@@ -8159,7 +8149,7 @@
                     }
                     this.queuePersistSettings();
                 } else {
-                    applyLabelStyle({ borderWidth: val });
+                    applyLabelStylePatch({ borderWidth: val });
                 }
             });
 
@@ -8332,7 +8322,7 @@
                     if (getApplyToAll() && applyGlobal) {
                         applyGlobal.call(this, val);
                     } else {
-                        applyLabelStyle({ [property]: val });
+                        applyLabelStylePatch({ [property]: val });
                     }
                 };
 
