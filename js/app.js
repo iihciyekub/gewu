@@ -45,6 +45,7 @@ class PaperStatsApp {
         this.isMiddleActive = false; // 中间栏是否激活，用于键盘上下移动的激活判定
         this.isLeftActive = false; // 左侧栏是否激活，用于键盘左右移动文件顺序
         this.isRightActive = false; // 右侧栏是否激活
+        this.isFileListHover = false; // 鼠标是否停留在左侧文件列表
         this.fileFilterField = '';
         this.fileFilterValue = '';
         this.fileFilterMatches = null;
@@ -1849,35 +1850,13 @@ class PaperStatsApp {
         // 快捷键：Cmd/Ctrl + E 正向切换（JSON/MD/Draft），Cmd/Ctrl + Shift + E 反向切换
         document.addEventListener('keydown', (e) => {
             const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
-            const now = Date.now();
             if (e.key === 'Meta' || e.key === 'Control') {
                 this._modKeyDown = true;
-                this._cmdShortcutTimestamp = now;
                 return;
             }
             const mod = this._modKeyDown;
             if (mod) {
                 // allow specific mod shortcuts below (e.g., Cmd/Ctrl + /)
-            } else {
-                if (this._cmdShortcutTimestamp && now - this._cmdShortcutTimestamp <= 1500) {
-                    const key = e.key.toLowerCase();
-                    if (['j', 'm', 'd', 'v', 's', 'o', 'z', 'x'].includes(key)) {
-                        e.preventDefault();
-                        if (key === 'j') this.switchToView('structured');
-                        if (key === 'm') this.switchToView('markdown');
-                        if (key === 'd') this.switchToView('draft');
-                        if (key === 'v') this.switchToView('vis-network');
-                        if (key === 's') this.switchToView('settings');
-                        if (key === 'o') {
-                            this.switchToView('settings');
-                            this.showProjectDetailsPanel();
-                        }
-                        if (key === 'z') this.toggleStatusBarPosition();
-                        if (key === 'x') this.toggleStatusBarVisibility();
-                        this._cmdShortcutTimestamp = 0;
-                        return;
-                    }
-                }
             }
 
             if (mod && e.key.toLowerCase() === 'e') {
@@ -1898,7 +1877,6 @@ class PaperStatsApp {
                     return;
                 }
                 e.preventDefault();
-                this._cmdShortcutTimestamp = 0;
                 if ((this.currentView || 'structured') === 'settings') {
                     this.switchToView('draft');
                     return;
@@ -2311,6 +2289,27 @@ class PaperStatsApp {
                 this.toggleFileFilter();
                 return;
             }
+            if (mod && !e.shiftKey && key === 'a' && this.isFileListHover) {
+                if (['INPUT', 'TEXTAREA'].includes(e.target.tagName) || e.target.isContentEditable) return;
+                const groups = this.getCurrentGroups();
+                let targetGroup = this.currentGroupId
+                    ? groups.find(g => g.id === this.currentGroupId)
+                    : null;
+                if (!targetGroup) {
+                    const selected = this.getSelectedFilesArray();
+                    const anchor = this.lastFileSelectionAnchor || selected[selected.length - 1] || this.currentFile;
+                    if (anchor) {
+                        targetGroup = groups.find(g => (g.files || []).includes(anchor));
+                    }
+                }
+                if (!targetGroup) return;
+                const visibleSet = new Set(this.visibleFileOrder || []);
+                const groupFiles = (targetGroup.files || []).filter(f => visibleSet.has(f));
+                if (!groupFiles.length) return;
+                e.preventDefault();
+                this.setSelectedFiles(groupFiles, groupFiles[groupFiles.length - 1]);
+                return;
+            }
             if (mod && !e.shiftKey && key === 'o') {
                 e.preventDefault();
                 this.showProjectSelector();
@@ -2639,7 +2638,16 @@ class PaperStatsApp {
         if (fileListEl) {
             fileListEl.tabIndex = 0;
             fileListEl.addEventListener('mouseenter', () => {
+                this.isFileListHover = true;
                 fileListEl.focus({ preventScroll: true });
+            });
+            fileListEl.addEventListener('mouseleave', () => {
+                this.isFileListHover = false;
+            });
+            fileListEl.addEventListener('mousemove', (e) => {
+                const groupEl = e.target.closest('.file-group');
+                const groupId = groupEl?.dataset?.groupId || null;
+                if (groupId) this.currentGroupId = groupId;
             });
             fileListEl.addEventListener('dragover', (e) => {
                 const items = Array.from(e.dataTransfer?.items || []);
