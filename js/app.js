@@ -7042,12 +7042,12 @@ class PaperStatsApp {
 
     applyQuickJsonUpdate(rawText, opts = {}) {
         const text = String(rawText || '').trim();
-        if (!text) return;
+        if (!text) return false;
         const mergeTag = opts && typeof opts === 'object' ? String(opts.mergeTag || '').trim() : '';
         let jsonData = this.extractJSON(text, { allowArray: true });
         if (!jsonData) {
             this.showNotification('No valid JSON detected, format may be incorrect', 'error');
-            return;
+            return false;
         }
         jsonData = this.normalizePastedJson(jsonData);
         jsonData = this.mapIdItemToObject(jsonData);
@@ -7074,11 +7074,11 @@ class PaperStatsApp {
             changed = this.mergeIntoCurrentData(jsonData, true);
         } else {
             this.showNotification('Pasted JSON must be an object or array of objects', 'error');
-            return;
+            return false;
         }
         if (!changed) {
             this.showNotification('No mergeable fields detected', 'info');
-            return;
+            return false;
         }
         if (mergeTag && taggedKeys.size) {
             this.applyMergeTagToKeys(Array.from(taggedKeys), mergeTag);
@@ -7093,6 +7093,7 @@ class PaperStatsApp {
         this.setupEditableListeners();
         this.updateUndoButtonState();
         this.showNotification('JSON updated', 'success');
+        return true;
     }
 
     getQuickMergeTagOptions() {
@@ -7879,7 +7880,19 @@ class PaperStatsApp {
                     this.showNotification('No JSON file loaded', 'error');
                     return;
                 }
-                this.applyQuickJsonUpdate(textarea.value, { mergeTag: this.quickMergeTag || '' });
+                const selectedTag = String(mergeTagSelect?.value || this.quickMergeTag || '');
+                let nextTag = selectedTag;
+                if (mergeTagSelect && selectedTag) {
+                    const options = Array.from(mergeTagSelect.options || []);
+                    const currentIndex = options.findIndex(opt => opt.value === selectedTag);
+                    if (options.length) {
+                        const nextIndex = currentIndex >= 0 ? (currentIndex + 1) % options.length : 0;
+                        nextTag = String(options[nextIndex].value || '');
+                    }
+                }
+                this.quickMergeTag = nextTag;
+                this.applyQuickJsonUpdate(textarea.value, { mergeTag: selectedTag });
+                textarea.focus();
             });
         }
         if (clearBtn && textarea) {
@@ -7895,6 +7908,9 @@ class PaperStatsApp {
                 const config = this.getMergeTagConfig(next);
                 if (mergeTagIcon) {
                     mergeTagIcon.className = `${config ? config.icon : 'fa-solid fa-tag'} json-merge-tag-icon`;
+                }
+                if (textarea) {
+                    textarea.focus();
                 }
             });
         }
