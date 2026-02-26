@@ -824,6 +824,23 @@ body.theme-dark .json-merge-title {
     color: var(--vscode-text);
 }
 
+body.theme-dark .json-merge-tag-picker {
+    border: 1px solid var(--vscode-border);
+    background: #1f1f1f;
+}
+
+body.theme-dark .json-merge-tag-icon {
+    color: var(--vscode-text);
+}
+
+body.theme-dark .json-merge-tag-select {
+    color: var(--vscode-text);
+}
+
+body.theme-dark .merge-tag-toggle {
+    color: var(--vscode-text);
+}
+
 body.theme-dark .json-merge-apply,
 body.theme-dark .json-merge-clear {
     background: #1f1f1f;

@@ -6406,6 +6406,29 @@ ol.json-array {
     font-weight: 600;
 }
 
+.json-merge-tag-picker {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 2px 6px;
+    border: 1px solid var(--gray-200);
+    border-radius: 6px;
+    background: #fff;
+}
+
+.json-merge-tag-icon {
+    font-size: 12px;
+    color: var(--gray-700);
+}
+
+.json-merge-tag-select {
+    border: none;
+    background: transparent;
+    font-size: 11px;
+    color: var(--gray-800);
+    outline: none;
+}
+
 .json-merge-apply,
 .json-merge-clear {
     margin-left: auto;
@@ -6440,6 +6463,36 @@ ol.json-array {
     line-height: 1.4;
     color: var(--gray-900);
     background: #fff;
+}
+
+.merge-tag-toggle {
+    color: #666;
+    margin-right: 2px;
+    font-size: 12px;
+}
+
+.merge-tag-circle {
+    color: #2563eb;
+}
+
+.merge-tag-square {
+    color: #0f766e;
+}
+
+.merge-tag-star {
+    color: #f59e0b;
+}
+
+.merge-tag-bolt {
+    color: #ef4444;
+}
+
+.merge-tag-tag {
+    color: #8b5cf6;
+}
+
+.merge-tag-none {
+    color: var(--gray-500);
 }
 
 /* 表单样式 */

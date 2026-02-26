@@ -62,6 +62,7 @@ class PaperStatsApp {
         this.createGroupVisible = false;
         this.autoSaveConfigVisible = false;
         this.autoSaveConfigNeedsRender = false;
+        this.quickMergeTag = '';
         this.settingsPanelsStateKey = '';
         this.queryExportVisible = false;
         this.debugEnabled = this.loadDebugEnabled();
@@ -7039,9 +7040,10 @@ class PaperStatsApp {
         }
     }
 
-    applyQuickJsonUpdate(rawText) {
+    applyQuickJsonUpdate(rawText, opts = {}) {
         const text = String(rawText || '').trim();
         if (!text) return;
+        const mergeTag = opts && typeof opts === 'object' ? String(opts.mergeTag || '').trim() : '';
         let jsonData = this.extractJSON(text, { allowArray: true });
         if (!jsonData) {
             this.showNotification('No valid JSON detected, format may be incorrect', 'error');
@@ -7050,15 +7052,25 @@ class PaperStatsApp {
         jsonData = this.normalizePastedJson(jsonData);
         jsonData = this.mapIdItemToObject(jsonData);
         let changed = false;
+        const taggedKeys = new Set();
+        const collectKeys = (obj) => {
+            if (!obj || typeof obj !== 'object') return;
+            Object.keys(obj).forEach((key) => {
+                if (!key || key === 'schema_version' || key === 'lastupdate' || key.endsWith('_loc')) return;
+                taggedKeys.add(key);
+            });
+        };
         if (Array.isArray(jsonData)) {
             jsonData.forEach((item) => {
                 const mapped = this.mapIdItemToObject(item);
                 if (this.isPlainObject(mapped)) {
                     item = mapped;
+                    collectKeys(item);
                     changed = this.mergeIntoCurrentData(item, true) || changed;
                 }
             });
         } else if (this.isPlainObject(jsonData)) {
+            collectKeys(jsonData);
             changed = this.mergeIntoCurrentData(jsonData, true);
         } else {
             this.showNotification('Pasted JSON must be an object or array of objects', 'error');
@@ -7067,6 +7079,9 @@ class PaperStatsApp {
         if (!changed) {
             this.showNotification('No mergeable fields detected', 'info');
             return;
+        }
+        if (mergeTag && taggedKeys.size) {
+            this.applyMergeTagToKeys(Array.from(taggedKeys), mergeTag);
         }
         this.hasUnsavedChanges = true;
         if (this.currentFile) {
@@ -7078,6 +7093,48 @@ class PaperStatsApp {
         this.setupEditableListeners();
         this.updateUndoButtonState();
         this.showNotification('JSON updated', 'success');
+    }
+
+    getQuickMergeTagOptions() {
+        return [
+            { value: '', label: 'No tag', icon: 'fa-solid fa-tag', className: 'merge-tag-none' },
+            { value: 'circle', label: 'Circle', icon: 'fa-solid fa-circle', className: 'merge-tag-circle' },
+            { value: 'square', label: 'Square', icon: 'fa-solid fa-square', className: 'merge-tag-square' },
+            { value: 'star', label: 'Star', icon: 'fa-solid fa-star', className: 'merge-tag-star' },
+            { value: 'bolt', label: 'Bolt', icon: 'fa-solid fa-bolt', className: 'merge-tag-bolt' },
+            { value: 'tag', label: 'Tag', icon: 'fa-solid fa-tag', className: 'merge-tag-tag' }
+        ];
+    }
+
+    getMergeTagConfig(tag) {
+        const normalized = String(tag || '');
+        const options = this.getQuickMergeTagOptions();
+        return options.find(opt => opt.value === normalized) || null;
+    }
+
+    getMergeTagForSection(sectionKey) {
+        if (!sectionKey || !this.currentData) return '';
+        const locKey = `${sectionKey}_loc`;
+        const loc = this.currentData[locKey];
+        if (!loc || typeof loc !== 'object') return '';
+        const tag = loc.merge_tag;
+        return tag ? String(tag) : '';
+    }
+
+    applyMergeTagToKeys(keys = [], tag = '') {
+        if (!this.currentData) return;
+        const normalized = String(tag || '').trim();
+        if (!normalized) return;
+        const list = Array.isArray(keys) ? keys : [];
+        list.forEach((key) => {
+            const cleanKey = String(key || '').trim();
+            if (!cleanKey || cleanKey.endsWith('_loc')) return;
+            const locKey = `${cleanKey}_loc`;
+            const existing = this.currentData[locKey];
+            const nextLoc = this.isPlainObject(existing) ? { ...existing } : {};
+            nextLoc.merge_tag = normalized;
+            this.currentData[locKey] = nextLoc;
+        });
     }
 
     mapIdItemToObject(value) {
@@ -7787,9 +7844,23 @@ class PaperStatsApp {
         // Inline JSON merge input (placed at bottom)
         const mergeBox = document.createElement('div');
         mergeBox.className = 'json-merge-box';
+        const mergeTagOptions = this.getQuickMergeTagOptions();
+        const mergeTagOptionsHtml = mergeTagOptions.map((opt) => {
+            const selected = this.quickMergeTag === opt.value ? ' selected' : '';
+            return `<option value="${this.escapeAttr(opt.value)}"${selected}>${this.escapeHtml(opt.label)}</option>`;
+        }).join('');
+        const mergeTagConfig = this.getMergeTagConfig(this.quickMergeTag);
+        const mergeTagIconClass = mergeTagConfig ? mergeTagConfig.icon : 'fa-solid fa-tag';
+        const mergeTagIconTitle = mergeTagConfig ? `Mark merged fields: ${mergeTagConfig.label}` : 'Mark merged fields';
         mergeBox.innerHTML = `
             <div class="json-merge-head">
                 <span class="json-merge-title">Quick JSON Merge</span>
+                <div class="json-merge-tag-picker" title="${this.escapeAttr(mergeTagIconTitle)}">
+                    <i class="${this.escapeAttr(mergeTagIconClass)} json-merge-tag-icon"></i>
+                    <select class="json-merge-tag-select" aria-label="Merge tag selector">
+                        ${mergeTagOptionsHtml}
+                    </select>
+                </div>
                 <button class="json-merge-apply" type="button">Apply</button>
                 <button class="json-merge-clear" type="button">Clear</button>
             </div>
@@ -7800,19 +7871,31 @@ class PaperStatsApp {
         const applyBtn = mergeBox.querySelector('.json-merge-apply');
         const clearBtn = mergeBox.querySelector('.json-merge-clear');
         const textarea = mergeBox.querySelector('.json-merge-textarea');
+        const mergeTagSelect = mergeBox.querySelector('.json-merge-tag-select');
+        const mergeTagIcon = mergeBox.querySelector('.json-merge-tag-icon');
         if (applyBtn && textarea) {
             applyBtn.addEventListener('click', () => {
                 if (!this.currentData) {
                     this.showNotification('No JSON file loaded', 'error');
                     return;
                 }
-                this.applyQuickJsonUpdate(textarea.value);
+                this.applyQuickJsonUpdate(textarea.value, { mergeTag: this.quickMergeTag || '' });
             });
         }
         if (clearBtn && textarea) {
             clearBtn.addEventListener('click', () => {
                 textarea.value = '';
                 textarea.focus();
+            });
+        }
+        if (mergeTagSelect) {
+            mergeTagSelect.addEventListener('change', () => {
+                const next = String(mergeTagSelect.value || '');
+                this.quickMergeTag = next;
+                const config = this.getMergeTagConfig(next);
+                if (mergeTagIcon) {
+                    mergeTagIcon.className = `${config ? config.icon : 'fa-solid fa-tag'} json-merge-tag-icon`;
+                }
             });
         }
 
@@ -7839,8 +7922,14 @@ class PaperStatsApp {
         if (this.getSectionExpanded(title)) {
             header.classList.add('active');
         }
+        const mergeTag = this.getMergeTagForSection(title);
+        const mergeTagConfig = this.getMergeTagConfig(mergeTag);
+        const mergeTagHtml = mergeTagConfig && mergeTag
+            ? `<i class="${this.escapeAttr(mergeTagConfig.icon)} merge-tag-toggle ${this.escapeAttr(mergeTagConfig.className)}" title="Merge tag: ${this.escapeAttr(mergeTagConfig.label)}"></i>`
+            : '';
         header.innerHTML = `
             <i class="fas fa-chevron-right collapsible-toggle" title="Expand/Collapse"></i>
+            ${mergeTagHtml}
             <span class="collapsible-title">${this.formatKey(title)}</span>
             <i class="fas fa-arrow-up header-move-up" title="Move section up"></i>
             <i class="fas fa-arrow-down header-move-down" title="Move section down"></i>
