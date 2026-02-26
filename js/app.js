@@ -12717,6 +12717,7 @@ class PaperStatsApp {
             if (!opts.skipClose) this.closeHeaderMenus('info');
             this.moveSettingsPanelToEnd(panel);
             this.updateSettingsPanelsVisibility();
+            this.renderProjectInfoPanelContent();
             this.switchToView('settings');
             this.saveSettingsPanelsState();
             return;
@@ -13178,6 +13179,35 @@ class PaperStatsApp {
                 };
             };
             md.use(jsonQueryPlugin);
+
+            // 添加 \references{} 的 inline 规则处理
+            const referencesPlugin = (mdInstance) => {
+                const refRule = (state, silent) => {
+                    const max = state.posMax;
+                    const start = state.pos;
+                    const prefix = '\\references{';
+                    if (state.src.charCodeAt(start) !== 0x5C /* \ */) return false;
+                    if (state.src.slice(start, start + prefix.length) !== prefix) return false;
+                    let pos = start + prefix.length;
+                    while (pos < max && state.src.charCodeAt(pos) !== 0x7D /* } */) pos++;
+                    if (pos >= max) return false;
+                    if (!silent) {
+                        const token = state.push('references_inline', '', 0);
+                        token.meta = {};
+                    }
+                    state.pos = pos + 1;
+                    return true;
+                };
+                mdInstance.inline.ruler.before('escape', 'references_inline', refRule);
+                mdInstance.renderer.rules.references_inline = () => {
+                    const app = window.paperStats;
+                    if (app && typeof app.renderReferencesPlaceholder === 'function') {
+                        return app.renderReferencesPlaceholder();
+                    }
+                    return mdInstance.utils.escapeHtml('\\references{}');
+                };
+            };
+            md.use(referencesPlugin);
 
             // 添加 \prompt{} 的 inline 规则处理（支持换行）
             const promptInlinePlugin = (mdInstance) => {
@@ -14107,6 +14137,14 @@ class PaperStatsApp {
         this.updateViewTabs();
     }
 
+    async fetchTemplateMarkdown(kind = '') {
+        const upper = String(kind || '').trim().toUpperCase();
+        const name = upper === 'PROMPT' ? 'PROMPT.md' : 'DRAFT.md';
+        const res = await fetch(`/templates/${name}`, { cache: 'no-store' });
+        if (!res.ok) throw new Error(`Template load failed: ${res.status}`);
+        return await res.text();
+    }
+
     async loadDraftMarkdownFile() {
         const mdFilename = this.getDraftFilename();
         const render = document.getElementById('markdownRender');
@@ -14120,9 +14158,10 @@ class PaperStatsApp {
                 this.currentMarkdownExists = true;
             } catch (err) {
                 try {
-                    await this.persistMarkdown(mdFilename, '');
+                    const template = await this.fetchTemplateMarkdown('DRAFT');
+                    await this.persistMarkdown(mdFilename, template);
                     this.currentMarkdownExists = true;
-                    text = '';
+                    text = template;
                 } catch (errCreate) {
                     console.warn('自动创建草稿失败:', errCreate);
                     this.currentMarkdownExists = false;
@@ -14163,9 +14202,10 @@ class PaperStatsApp {
                 this.currentMarkdownExists = true;
             } catch (err) {
                 try {
-                    await this.persistMarkdown(mdFilename, '');
+                    const template = await this.fetchTemplateMarkdown('PROMPT');
+                    await this.persistMarkdown(mdFilename, template);
                     this.currentMarkdownExists = true;
-                    text = '';
+                    text = template;
                 } catch (errCreate) {
                     console.warn('自动创建PROMPT失败:', errCreate);
                     this.currentMarkdownExists = false;
@@ -14406,6 +14446,7 @@ class PaperStatsApp {
         this.applyGroupByRendering(render);
         this.applyQueryRendering(render);
         this.applyJsonQueryRendering(render);
+        this.applyReferencesRendering(render);
         this.adjustReferenceFont(render);
         this.updateMarkdownUndoButtonState();
         this.applyEditLockState();
@@ -14508,6 +14549,12 @@ class PaperStatsApp {
         const title = `Groups: ${groupLabel}\nFields: ${cleanFields || '(none)'}\nValue: ${cleanValue || '(none)'}`;
         const hint = `await query (${groupLabel} → ${cleanFields}${cleanValue ? ` = ${cleanValue}` : ''})...`;
         return `<div class="query-inline" data-query-groups="${escGroups}" data-query-fields="${escFields}" data-query-value="${escValue}"><button class="bib-fetch-btn query-render-btn inline-syntax" type="button" title="${this.escapeAttr(title)}"><i class="fas fa-play"></i><span>${this.escapeHtml(hint)}</span></button></div>`;
+    }
+
+    renderReferencesPlaceholder() {
+        const title = 'Generate APA references from DOI in Markdown';
+        const hint = 'Generate References (APA)';
+        return `<div class="references-inline"><button class="bib-fetch-btn json-render-btn references-render-btn inline-syntax" type="button" title="${this.escapeAttr(title)}"><i class="fas fa-play"></i><span>${this.escapeHtml(hint)}</span></button></div>`;
     }
 
     renderPromptBlock(content = '', title = '') {
@@ -14710,6 +14757,22 @@ class PaperStatsApp {
             const btn = block.querySelector('.query-render-btn');
             if (btn) {
                 btn.addEventListener('click', () => this.renderQueryBlock(block));
+            }
+        });
+    }
+
+    async applyReferencesRendering(renderRoot) {
+        if (!renderRoot) return;
+        const blocks = Array.from(renderRoot.querySelectorAll('.references-inline'));
+        if (!blocks.length) return;
+        blocks.forEach((block) => {
+            if (block.dataset.referencesBound === '1') return;
+            block.dataset.referencesBound = '1';
+            const btn = block.querySelector('.references-render-btn');
+            if (btn) {
+                btn.addEventListener('click', async () => {
+                    await this.generateReferencesFromMarkdown();
+                });
             }
         });
     }
@@ -15804,13 +15867,16 @@ class PaperStatsApp {
     }
 
     async generateReferencesFromMarkdown() {
-        const source = this.isMarkdownEditing ? (document.getElementById('markdownTextarea')?.value || '') : (this.currentMarkdownText || '');
-        if (!source) {
+        const rawSource = this.isMarkdownEditing
+            ? (document.getElementById('markdownTextarea')?.value || '')
+            : (this.currentMarkdownText || '');
+        if (!rawSource) {
             this.showNotification('No Markdown content available', 'info');
 
             return;
         }
-        const dois = this.extractDoisFromMarkdown(source);
+        const source = rawSource;
+        const dois = this.extractDoisFromMarkdown(rawSource);
         if (!dois.length) {
             this.showNotification('No DOIs found in Markdown', 'info');
             return;

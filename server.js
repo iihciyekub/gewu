@@ -321,6 +321,53 @@ function buildDefaultMarkdown(baseName) {
     return `# ${baseName}\n\n> 自动创建的 Markdown 笔记文件。\n\n- 可添加章节、要点、引用等。\n- 与 JSON 同名，便于版本记录。\n`;
 }
 
+function ensureRootMarkdownFiles(fullPath) {
+    const lowerNames = new Map();
+    try {
+        const entries = fs.readdirSync(fullPath, { withFileTypes: true });
+        entries
+            .filter(ent => ent.isFile())
+            .forEach(ent => lowerNames.set(ent.name.toLowerCase(), ent.name));
+    } catch (_err) {
+        // ignore
+    }
+
+    const templateDir = path.join(ROOT_DIR, 'templates');
+    const draftTemplatePath = path.join(templateDir, 'DRAFT.md');
+    const promptTemplatePath = path.join(templateDir, 'PROMPT.md');
+    const readTemplate = (templatePath, fallbackTitle) => {
+        try {
+            if (fs.existsSync(templatePath)) {
+                return fs.readFileSync(templatePath, 'utf8');
+            }
+        } catch (_err) {
+            // ignore and fallback
+        }
+        return buildDefaultMarkdown(fallbackTitle);
+    };
+
+    const draftName = lowerNames.get('draft.md') || 'DRAFT.md';
+    const promptName = lowerNames.get('prompt.md') || 'PROMPT.MD';
+    const draftPath = path.join(fullPath, draftName);
+    const promptPath = path.join(fullPath, promptName);
+
+    let draftCreated = false;
+    let promptCreated = false;
+
+    if (!fs.existsSync(draftPath)) {
+        const content = readTemplate(draftTemplatePath, 'DRAFT');
+        fs.writeFileSync(draftPath, content, 'utf8');
+        draftCreated = true;
+    }
+    if (!fs.existsSync(promptPath)) {
+        const content = readTemplate(promptTemplatePath, 'PROMPT');
+        fs.writeFileSync(promptPath, content, 'utf8');
+        promptCreated = true;
+    }
+
+    return { draftCreated, promptCreated, draftName, promptName };
+}
+
 function ensureProjectStructure(fullPath) {
     const jsonDir = path.join(fullPath, 'json', 'view1');
     const mdDir = path.join(fullPath, 'md');
@@ -982,6 +1029,8 @@ const server = http.createServer((req, res) => {
                 let created = false;
                 let markerCreated = false;
                 let dirsInitialized = false;
+                let draftCreated = false;
+                let promptCreated = false;
 
                 if (!fs.existsSync(fullPath)) {
                     fs.mkdirSync(fullPath, { recursive: true });
@@ -1003,6 +1052,9 @@ const server = http.createServer((req, res) => {
                 // 确保必须的目录存在（json/view1、md、pdf）
                 const dirs = ensureProjectStructure(fullPath);
                 markerCreated = ensureProjectMarker(fullPath);
+                const rootMd = ensureRootMarkdownFiles(fullPath);
+                draftCreated = rootMd.draftCreated;
+                promptCreated = rootMd.promptCreated;
 
                 res.writeHead(200, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify({
@@ -1012,7 +1064,9 @@ const server = http.createServer((req, res) => {
                     projectKey,
                     created,
                     markerCreated,
-                    dirsInitialized
+                    dirsInitialized,
+                    draftCreated,
+                    promptCreated
                 }));
 
             } catch (error) {
@@ -2236,6 +2290,7 @@ const server = http.createServer((req, res) => {
 
                 const { projectKey, fullPath } = normalizeProjectPath(projectPath);
                 ensureProjectStructure(fullPath);
+                ensureRootMarkdownFiles(fullPath);
 
                 const files = [];
 

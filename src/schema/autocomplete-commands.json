@@ -48,6 +48,13 @@
       "insertText": "\\json{$1}{$2}",
       "detail": "Query JSON items",
       "documentation": "Query JSON items by fields (requires meta_info.doi)"
+    },
+    {
+      "trigger": "\\references",
+      "label": "\\references{}",
+      "insertText": "\\references{}",
+      "detail": "Generate References",
+      "documentation": "Render a button to generate APA references from DOIs in Markdown"
     }
   ]
 }
