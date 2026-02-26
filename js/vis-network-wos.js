@@ -553,6 +553,17 @@
 
     function applyLabelStyle(label, node) {
         if (!label || !node) return;
+        if (window?._visLabelDebug) {
+            const id = label?.dataset?.nodeId || node?.id || '';
+            const nodeAlpha = getNodeAlpha(node);
+            console.log('[vis-label-debug] applyLabelStyle', {
+                nodeId: id,
+                nodeAlpha,
+                labelHidden: !!node.labelHidden,
+                labelStyleOpacity: node?.labelStyle?.opacity,
+                labelText: label?.textContent || ''
+            });
+        }
         const style = node.labelStyle || {};
         label.style.textAlign = 'center';
         label.style.display = 'flex';
@@ -584,7 +595,12 @@
             label.style.backgroundColor = '';
         }
         let opacity = typeof style.opacity === 'number' ? style.opacity : 1;
-        if (getNodeAlpha(node) <= 0) opacity = 0;
+        const nodeAlpha = getNodeAlpha(node);
+        if (nodeAlpha <= 0) {
+            opacity = 0;
+        } else {
+            opacity *= nodeAlpha;
+        }
         if (node.labelHidden) opacity = 0;
         label.style.opacity = String(opacity);
     }
@@ -663,7 +679,11 @@
     }
 
     function getNodeAlpha(node) {
-        if (!node || !node.color) return 1;
+        if (!node) return 1;
+        if (Number.isFinite(node.opacity)) {
+            return Math.max(0, Math.min(1, node.opacity));
+        }
+        if (!node.color) return 1;
         const pickAlpha = (value) => {
             const rgba = parseColorToRgba(value);
             return rgba ? rgba.a : null;
@@ -781,6 +801,16 @@
 
     function applyEdgeHoverLabelStyle(label, node) {
         if (!label || !node) return;
+        if (window?._visLabelDebug) {
+            const id = label?.dataset?.nodeId || node?.id || '';
+            const nodeAlpha = getNodeAlpha(node);
+            console.log('[vis-label-debug] applyEdgeHoverLabelStyle', {
+                nodeId: id,
+                nodeAlpha,
+                labelStyleOpacity: node?.labelStyle?.opacity,
+                labelText: label?.textContent || ''
+            });
+        }
         const style = node.labelStyle || {};
         if (style.fontSize) label.style.fontSize = `${style.fontSize}px`;
         if (style.fontWeight) label.style.fontWeight = String(style.fontWeight);
@@ -792,7 +822,12 @@
             label.style.backgroundColor = '';
         }
         let opacity = typeof style.opacity === 'number' ? style.opacity : 1;
-        if (getNodeAlpha(node) <= 0) opacity = 0;
+        const nodeAlpha = getNodeAlpha(node);
+        if (nodeAlpha <= 0) {
+            opacity = 0;
+        } else {
+            opacity *= nodeAlpha;
+        }
         label.style.opacity = String(opacity);
     }
 
@@ -4165,6 +4200,11 @@
                 if (closeBtn) {
                     closeBtn.addEventListener('click', () => { pop.style.display = 'none'; });
                 }
+                const syncBtn = pop.querySelector('#visLabelSyncOpacityBtn');
+                if (syncBtn && !syncBtn.dataset.visBound) {
+                    syncBtn.dataset.visBound = '1';
+                    syncBtn.addEventListener('click', () => this.forceSyncLabelOpacity());
+                }
                 pop._draggableInit = true;
             }
         }
@@ -4179,6 +4219,31 @@
 
         getNetworkNodesDataSet() {
             return this.visNetwork?.body?.data?.nodes || null;
+        }
+
+        forceSyncLabelOpacity() {
+            const dataset = this.getNetworkNodesDataSet();
+            const view = this.getEl(this.ids.view);
+            const layer = view ? view.querySelector('.vis-network-label-layer') : null;
+            if (!dataset || !layer) return;
+            const nodes = dataset.get();
+            const updates = [];
+            const alphaKeys = ['textColor', 'borderColor', 'backgroundColor', 'strokeColor'];
+            nodes.forEach((node) => {
+                const alpha = getNodeAlpha(node);
+                const base = node.labelStyle || {};
+                const next = { ...base, opacity: alpha };
+                alphaKeys.forEach((key) => {
+                    if (base[key] != null) {
+                        next[key] = applyAlphaToColor(base[key], alpha);
+                    }
+                });
+                updates.push({ id: node.id, labelStyle: next });
+            });
+            if (updates.length) {
+                this.updateNetworkNodes(updates);
+            }
+            this.updateLabelLayer();
         }
 
         /**
@@ -4266,6 +4331,11 @@
                         options.add(`wos_data.${key}`);
                     });
                 }
+                if (obj.meta_info && typeof obj.meta_info === 'object') {
+                    Object.keys(obj.meta_info).forEach((key) => {
+                        options.add(`meta_info.${key}`);
+                    });
+                }
             };
             Object.entries(data).forEach(([rootId, payload]) => {
                 if (!rootId || !payload) return;
@@ -4315,6 +4385,20 @@
             return this.getWorkingJson();
         }
 
+        buildWosLabelRecord(source, metaFallback = null) {
+            const record = {};
+            if (source && typeof source === 'object') {
+                Object.assign(record, source);
+            }
+            const wos = source?.wos_data && typeof source.wos_data === 'object' ? source.wos_data : null;
+            record.wos_data = wos || {};
+            const meta = source?.meta_info && typeof source.meta_info === 'object'
+                ? source.meta_info
+                : (metaFallback && typeof metaFallback === 'object' ? metaFallback : {});
+            record.meta_info = meta || {};
+            return record;
+        }
+
         buildWosNodeIndex(data) {
             const index = new Map();
             if (!data || typeof data !== 'object') return index;
@@ -4361,9 +4445,10 @@
             if (data && typeof data === 'object') {
                 Object.entries(data).forEach(([, payload]) => {
                     if (!payload) return;
+                    const metaFallback = payload?.meta_info;
                     if (payload.wos_data && payload.wos_data.wos_id) {
                         const key = this.normalizeWosId(payload.wos_data.wos_id);
-                        if (key) map.set(key, payload.wos_data);
+                        if (key) map.set(key, this.buildWosLabelRecord(payload, metaFallback));
                     }
                     const list = payload.page_wosids;
                     if (!Array.isArray(list)) return;
@@ -4371,7 +4456,7 @@
                         if (!item) return;
                         if (item.wos_data && item.wos_data.wos_id) {
                             const key = this.normalizeWosId(item.wos_data.wos_id);
-                            if (key) map.set(key, item.wos_data);
+                            if (key) map.set(key, this.buildWosLabelRecord(item, metaFallback));
                         }
                     });
                 });
@@ -4400,7 +4485,7 @@
                     const rawId = wos.wos_id || wos.wosid || data?.wos_id || data?.wosid;
                     const key = this.normalizeWosId(rawId);
                     if (key && wos && typeof wos === 'object') {
-                        index.set(key, wos);
+                        index.set(key, this.buildWosLabelRecord(data, data?.meta_info));
                     }
                 } catch (_e) {
                     continue;
@@ -4420,13 +4505,32 @@
         resolveLabelValue(nodeData, field, nodeId) {
             if (!field || field === 'wosid') return nodeId || '';
             if (!nodeData || typeof nodeData !== 'object') return null;
+            const readPath = (obj, pathParts) => {
+                if (!obj || typeof obj !== 'object') return null;
+                let cur = obj;
+                for (const part of pathParts) {
+                    if (!cur || typeof cur !== 'object') return null;
+                    if (!Object.prototype.hasOwnProperty.call(cur, part)) return null;
+                    cur = cur[part];
+                }
+                return cur;
+            };
             if (field.startsWith('wos_data.')) {
                 const key = field.slice('wos_data.'.length);
-                if (nodeData[key] != null) {
-                    return nodeData[key];
-                }
+                const fromWos = readPath(nodeData.wos_data || nodeData, key.split('.'));
+                if (fromWos != null) return fromWos;
             }
-            if (nodeData[field] != null) return nodeData[field];
+            if (field.startsWith('meta_info.')) {
+                const key = field.slice('meta_info.'.length);
+                const fromMeta = readPath(nodeData.meta_info || null, key.split('.'));
+                if (fromMeta != null) return fromMeta;
+            }
+            const direct = readPath(nodeData, field.split('.'));
+            if (direct != null) return direct;
+            const fromWos = readPath(nodeData.wos_data || null, field.split('.'));
+            if (fromWos != null) return fromWos;
+            const fromMeta = readPath(nodeData.meta_info || null, field.split('.'));
+            if (fromMeta != null) return fromMeta;
             return null;
         }
 
@@ -5047,7 +5151,8 @@
             const relatedDimAlpha = Number.isFinite(this.relatedMinDimAlpha) ? this.relatedMinDimAlpha : 0.2;
             const state = this._labelThresholdDimState || {
                 baseNodeColors: new Map(),
-                baseEdgeColors: new Map()
+                baseEdgeColors: new Map(),
+                baseLabelStyles: new Map()
             };
             this._labelThresholdDimState = state;
             const nodes = dataset.nodes.get();
@@ -5055,10 +5160,12 @@
             const hasLabelRule = min > 0 && dimAlpha < 1;
             const hasRelatedRule = relatedMin > 0 && relatedDimAlpha < 1;
             if (!hasLabelRule && !hasRelatedRule) {
-                if (state.baseNodeColors.size || state.baseEdgeColors.size) {
+                if (state.baseNodeColors.size || state.baseEdgeColors.size || state.baseLabelStyles.size) {
                     const nodeUpdates = nodes.map((node) => ({
                         id: node.id,
-                        color: state.baseNodeColors.get(node.id) || node.color
+                        color: state.baseNodeColors.get(node.id) || node.color,
+                        opacity: 1,
+                        labelStyle: state.baseLabelStyles.get(node.id) || node.labelStyle
                     }));
                     const edgeUpdates = edges.map((edge) => ({
                         id: edge.id,
@@ -5067,6 +5174,7 @@
                     this.updateNetworkData(nodeUpdates, edgeUpdates);
                     state.baseNodeColors.clear();
                     state.baseEdgeColors.clear();
+                    state.baseLabelStyles.clear();
                     this.markEdgeFocusDirty();
                     this.applyEdgeFocusDisplay();
                 }
@@ -5075,11 +5183,15 @@
             if (this._labelThresholdBaseDirty) {
                 state.baseNodeColors.clear();
                 state.baseEdgeColors.clear();
+                state.baseLabelStyles.clear();
                 this._labelThresholdBaseDirty = false;
             }
             nodes.forEach((node) => {
                 if (!state.baseNodeColors.has(node.id)) {
                     state.baseNodeColors.set(node.id, cloneVisColor(node.color));
+                }
+                if (!state.baseLabelStyles.has(node.id)) {
+                    state.baseLabelStyles.set(node.id, cloneVisColor(node.labelStyle || {}));
                 }
             });
             edges.forEach((edge) => {
@@ -5118,7 +5230,15 @@
                     alpha = Math.min(alpha, relatedDimAlpha);
                 }
                 const color = alpha < 1 ? fadeNodeColor(baseColor, alpha) : baseColor;
-                return { id: node.id, color };
+                const labelBase = state.baseLabelStyles.get(node.id) || node.labelStyle || {};
+                const labelNext = { ...labelBase, opacity: alpha };
+                const alphaKeys = ['textColor', 'borderColor', 'backgroundColor', 'strokeColor'];
+                alphaKeys.forEach((key) => {
+                    if (labelBase[key] != null) {
+                        labelNext[key] = applyAlphaToColor(labelBase[key], alpha);
+                    }
+                });
+                return { id: node.id, color, opacity: alpha, labelStyle: labelNext };
             });
             const edgeUpdates = edges.map((edge) => {
                 const baseColor = state.baseEdgeColors.get(edge.id) || edge.color;
@@ -5135,6 +5255,7 @@
             this.updateNetworkData(nodeUpdates, edgeUpdates);
             this.markEdgeFocusDirty();
             this.applyEdgeFocusDisplay();
+            this.updateLabelLayer();
         }
 
         applyNodeSizeScale() {
@@ -5703,10 +5824,11 @@
                 });
                 const nodeUpdates = nodes.map((node) => {
                     const baseColor = state.baseNodeColors.get(node.id) || node.color;
-                    const color = activeNodes.has(node.id)
+                    const isActive = activeNodes.has(node.id);
+                    const color = isActive
                         ? fadeNodeColor(baseColor, 1)
                         : fadeNodeColor(baseColor, dimAlpha);
-                    return { id: node.id, color };
+                    return { id: node.id, color, opacity: isActive ? 1 : dimAlpha };
                 });
                 const edgeUpdates = edges.map((edge) => {
                     const baseColor = state.baseEdgeColors.get(edge.id) || edge.color;
@@ -5719,12 +5841,14 @@
                 dataset.edges.update(edgeUpdates);
                 this.applyEdgeFocusLabelDisplay(activeNodes);
                 this.applyEdgeLabelDisplay();
+                this.updateLabelLayer();
                 return;
             }
             if (!activeEdges.size) {
                 const nodeUpdates = nodes.map((node) => ({
                     id: node.id,
-                    color: state.baseNodeColors.get(node.id) || node.color
+                    color: state.baseNodeColors.get(node.id) || node.color,
+                    opacity: 1
                 }));
                 const edgeUpdates = edges.map((edge) => ({
                     id: edge.id,
@@ -5734,6 +5858,7 @@
                 dataset.edges.update(edgeUpdates);
                 this.applyEdgeFocusLabelDisplay(null);
                 this.applyEdgeLabelDisplay();
+                this.updateLabelLayer();
                 return;
             }
             const activeNodes = new Set();
@@ -5746,10 +5871,11 @@
             const edgeDimAlpha = this.edgeFocusFadeAlpha;
             const nodeUpdates = nodes.map((node) => {
                 const baseColor = state.baseNodeColors.get(node.id) || node.color;
-                const color = activeNodes.has(node.id)
+                const isActive = activeNodes.has(node.id);
+                const color = isActive
                     ? fadeNodeColor(baseColor, 1)
                     : fadeNodeColor(baseColor, nodeDimAlpha);
-                return { id: node.id, color };
+                return { id: node.id, color, opacity: isActive ? 1 : nodeDimAlpha };
             });
             const edgeUpdates = edges.map((edge) => {
                 const baseColor = state.baseEdgeColors.get(edge.id) || edge.color;
@@ -5762,6 +5888,7 @@
             dataset.edges.update(edgeUpdates);
             this.applyEdgeFocusLabelDisplay(activeNodes);
             this.applyEdgeLabelDisplay();
+            this.updateLabelLayer();
         }
 
         applyCustomFocusDisplay(state, nodes, edges, dataset) {
@@ -5772,10 +5899,11 @@
                 : this.edgeFocusFadeAlpha;
             const nodeUpdates = nodes.map((node) => {
                 const baseColor = state.baseNodeColors.get(node.id) || node.color;
-                const color = activeNodes.has(node.id)
+                const isActive = activeNodes.has(node.id);
+                const color = isActive
                     ? fadeNodeColor(baseColor, 1)
                     : fadeNodeColor(baseColor, dimAlpha);
-                return { id: node.id, color };
+                return { id: node.id, color, opacity: isActive ? 1 : dimAlpha };
             });
             const edgeUpdates = edges.map((edge) => {
                 const baseColor = state.baseEdgeColors.get(edge.id) || edge.color;
@@ -5788,6 +5916,7 @@
             dataset.edges.update(edgeUpdates);
             this.applyEdgeFocusLabelDisplay(activeNodes);
             this.applyEdgeLabelDisplay();
+            this.updateLabelLayer();
         }
 
         applyEdgeFocusLabelDisplay(activeNodes) {
@@ -5807,18 +5936,52 @@
             const state = this.getEdgeFocusState();
             labels.forEach((label) => {
                 if (!label) return;
+                const applyOpacity = (value, nodeAlpha = 1) => {
+                    const raw = Number.isFinite(Number(value)) ? Number(value) : 1;
+                    const clamped = Math.max(0, Math.min(1, raw));
+                    const alpha = Math.max(0, Math.min(1, Number.isFinite(nodeAlpha) ? nodeAlpha : 1));
+                    label.style.opacity = String(clamped * alpha);
+                };
+                const logDebug = (nodeId, stage, baseOpacity, nodeAlpha, finalOpacity) => {
+                    if (!window?._visLabelDebug) return;
+                    console.log('[vis-label-debug]', {
+                        nodeId,
+                        stage,
+                        baseOpacity,
+                        nodeAlpha,
+                        finalOpacity
+                    });
+                };
                 if (label.classList.contains('is-edge-hover')) {
-                    label.style.opacity = '1';
+                    const nodeId = label.dataset.nodeId;
+                    const node = nodeId && nodeDataset && typeof nodeDataset.get === 'function'
+                        ? nodeDataset.get(nodeId)
+                        : null;
+                    const nodeAlpha = node ? getNodeAlpha(node) : 1;
+                    applyOpacity(1, nodeAlpha);
+                    logDebug(nodeId, 'edge-hover', 1, nodeAlpha, label.style.opacity);
                     return;
                 }
                 if (label.classList.contains('is-hover')) {
                     if (!activeNodes) {
                         if (label.dataset.baseOpacity != null) {
-                            label.style.opacity = label.dataset.baseOpacity;
+                            const nodeId = label.dataset.nodeId;
+                            const node = nodeId && nodeDataset && typeof nodeDataset.get === 'function'
+                                ? nodeDataset.get(nodeId)
+                                : null;
+                            const nodeAlpha = node ? getNodeAlpha(node) : 1;
+                            applyOpacity(label.dataset.baseOpacity, nodeAlpha);
+                            logDebug(nodeId, 'hover-restore', label.dataset.baseOpacity, nodeAlpha, label.style.opacity);
                             delete label.dataset.baseOpacity;
                         }
                     } else {
-                        label.style.opacity = '1';
+                        const nodeId = label.dataset.nodeId;
+                        const node = nodeId && nodeDataset && typeof nodeDataset.get === 'function'
+                            ? nodeDataset.get(nodeId)
+                            : null;
+                        const nodeAlpha = node ? getNodeAlpha(node) : 1;
+                        applyOpacity(1, nodeAlpha);
+                        logDebug(nodeId, 'hover-active', 1, nodeAlpha, label.style.opacity);
                     }
                     return;
                 }
@@ -5831,27 +5994,34 @@
                             label.dataset.baseOpacity = label.style.opacity || '1';
                         }
                         label.style.opacity = '0';
+                        logDebug(nodeId, 'node-alpha-zero', label.dataset.baseOpacity, 0, label.style.opacity);
                         return;
                     }
-                }
-                if (!activeNodes) {
-                    if (label.dataset.baseOpacity != null) {
-                        label.style.opacity = label.dataset.baseOpacity;
-                        delete label.dataset.baseOpacity;
+                    const nodeAlpha = node ? getNodeAlpha(node) : 1;
+                    if (!activeNodes) {
+                        if (label.dataset.baseOpacity != null) {
+                            applyOpacity(label.dataset.baseOpacity, nodeAlpha);
+                            logDebug(nodeId, 'restore-no-active', label.dataset.baseOpacity, nodeAlpha, label.style.opacity);
+                            delete label.dataset.baseOpacity;
+                        }
+                        return;
+                    }
+                    if (label.dataset.baseOpacity == null) {
+                        label.dataset.baseOpacity = label.style.opacity || '1';
+                    }
+                    if (activeNodes.has(nodeId)) {
+                        applyOpacity(label.dataset.baseOpacity || '1', nodeAlpha);
+                        logDebug(nodeId, 'active', label.dataset.baseOpacity || '1', nodeAlpha, label.style.opacity);
+                    } else {
+                        if (state.customFocusActive) {
+                            applyOpacity(0, nodeAlpha);
+                            logDebug(nodeId, 'inactive-custom-focus', 0, nodeAlpha, label.style.opacity);
+                        } else {
+                            applyOpacity(dimAlpha, nodeAlpha);
+                            logDebug(nodeId, 'inactive-dim', dimAlpha, nodeAlpha, label.style.opacity);
+                        }
                     }
                     return;
-                }
-                if (label.dataset.baseOpacity == null) {
-                    label.dataset.baseOpacity = label.style.opacity || '1';
-                }
-                if (activeNodes.has(nodeId)) {
-                    label.style.opacity = label.dataset.baseOpacity || '1';
-                } else {
-                    if (state.customFocusActive) {
-                        label.style.opacity = '0';
-                    } else {
-                        label.style.opacity = String(dimAlpha);
-                    }
                 }
             });
         }
@@ -9326,6 +9496,11 @@
             const layer = view ? view.querySelector('.vis-network-label-layer') : null;
             const dataset = this.getNetworkNodesDataSet();
             if (!layer || !dataset) return;
+            if (window?._visLabelDebug) {
+                const count = layer.querySelectorAll('.vis-node-label').length;
+                const nodeCount = dataset.get().length;
+                console.log('[vis-label-debug] updateLabelLayer', { labelCount: count, nodeCount });
+            }
             if (!layer.dataset.interactionBound) {
                 layer.dataset.interactionBound = '1';
                 layer.addEventListener('click', (e) => {
