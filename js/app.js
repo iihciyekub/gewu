@@ -1730,18 +1730,16 @@ class PaperStatsApp {
             const data = await resp.json();
             const name = String(data?.name || 'GEWU').trim();
             const version = String(data?.version || '').trim();
-            const dockerHub = String(data?.dockerHub || '').trim();
+            const githubUrl = 'https://github.com/iihciyekub/gewu';
             this.isDockerMode = Boolean(data?.isDocker);
             if (!version) return;
             const label = `${name} ${version}`;
             labelEl.textContent = label;
             const versionGroup = document.getElementById('statusVersionGroup');
             if (versionGroup) {
-                if (dockerHub) {
-                    versionGroup.href = dockerHub;
-                }
-                versionGroup.title = `Docker Hub: ${label}`;
-                versionGroup.setAttribute('aria-label', `Docker Hub: ${label}`);
+                versionGroup.href = githubUrl;
+                versionGroup.title = `GitHub: ${label}`;
+                versionGroup.setAttribute('aria-label', `GitHub: ${label}`);
             }
         } catch (err) {
             console.warn('Failed to load manifest version:', err);
