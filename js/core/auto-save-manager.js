@@ -87,6 +87,11 @@ class AutoSaveManager {
             visibilityListener: null
         };
 
+        this.hooks = {
+            dirtyFlags: {},
+            methods: {}
+        };
+
         // 加载配置
         this.loadConfig();
 
@@ -158,25 +163,46 @@ class AutoSaveManager {
      * 设置 JSON 变化检测
      */
     setupJsonChangeDetection() {
-        // 包装 app 的数据修改方法，触发自动保存
-        const originalMethods = [
-            'updateFieldValue',
-            'addNewPaper',
-            'deletePaper',
-            'updateMetadata',
-            // 其他可能修改数据的方法
-        ];
+        // 1) Hook dirty flags so any set triggers autosave
+        this.hookDirtyFlag('hasUnsavedChanges', AutoSaveManager.FILE_TYPES.JSON);
+        this.hookDirtyFlag('hasUnsavedMarkdownChanges', AutoSaveManager.FILE_TYPES.MARKDOWN);
 
-        originalMethods.forEach(methodName => {
-            if (typeof this.app[methodName] === 'function') {
-                const original = this.app[methodName].bind(this.app);
-                this.app[methodName] = (...args) => {
-                    const result = original(...args);
-                    this.scheduleAutoSave(AutoSaveManager.FILE_TYPES.JSON);
-                    return result;
-                };
+        // 2) Wrap core mutation helpers if present
+        this.wrapMethodOnce('setValueByPath', AutoSaveManager.FILE_TYPES.JSON);
+        this.wrapMethodOnce('setValueByPathOnData', AutoSaveManager.FILE_TYPES.JSON);
+    }
+
+    hookDirtyFlag(prop, fileType) {
+        if (!this.app || this.hooks.dirtyFlags[prop]) return;
+        const desc = Object.getOwnPropertyDescriptor(this.app, prop);
+        if (desc && !desc.configurable) return;
+        let internal = !!this.app[prop];
+        Object.defineProperty(this.app, prop, {
+            configurable: true,
+            enumerable: true,
+            get() {
+                return internal;
+            },
+            set: (next) => {
+                internal = !!next;
+                if (internal) {
+                    this.scheduleAutoSave(fileType);
+                }
             }
         });
+        this.hooks.dirtyFlags[prop] = true;
+    }
+
+    wrapMethodOnce(methodName, fileType) {
+        if (!this.app || this.hooks.methods[methodName]) return;
+        if (typeof this.app[methodName] !== 'function') return;
+        const original = this.app[methodName].bind(this.app);
+        this.app[methodName] = (...args) => {
+            const result = original(...args);
+            this.scheduleAutoSave(fileType);
+            return result;
+        };
+        this.hooks.methods[methodName] = true;
     }
 
     /**

@@ -555,6 +555,80 @@ class PaperStatsApp {
         this.showNotification(`Sorted by times_cited_all_databases (${label})`, 'success');
     }
 
+    async quickSetRatingForBase(base, rating) {
+        const safeBase = String(base || '').trim();
+        if (!safeBase) return;
+        const view = this.currentJsonView || 'view1';
+        const path = this.getViewPathForBase(safeBase, view) || this.getPathsForBase(safeBase)?.json || '';
+        if (!path) {
+            this.showNotification('No JSON file found for rating update', 'error');
+            return;
+        }
+
+        const normalized = this.normalizeRatingValue(rating);
+        let data = null;
+        const isCurrent = this.currentFile === path || this.currentFileBase === safeBase;
+        try {
+            if (isCurrent && this.currentData) {
+                data = this.currentData;
+            } else {
+                data = await this.readProjectFile(path);
+            }
+        } catch (err) {
+            this.showNotification(`Failed to read file: ${err.message}`, 'error');
+            return;
+        }
+
+        if (!data || typeof data !== 'object') {
+            this.showNotification('Invalid JSON data', 'error');
+            return;
+        }
+        if (!data.meta_info || typeof data.meta_info !== 'object') {
+            data.meta_info = {};
+        }
+        data.meta_info.rating = normalized;
+        if (!data.schema_version) {
+            data.schema_version = this.generateSchemaVersion();
+        }
+        data.lastupdate = this.generateLastUpdate();
+
+        try {
+            const projectPath = this.getRequiredProjectPath();
+            if (!projectPath) return;
+            const payload = JSON.stringify(data, null, 2);
+            const resp = await fetch('/save-json', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    projectPath,
+                    filename: path,
+                    content: payload
+                })
+            });
+            if (!resp.ok) {
+                const msg = await resp.text().catch(() => '');
+                throw new Error(msg || resp.statusText);
+            }
+        } catch (err) {
+            this.showNotification(`Rating save failed: ${err.message}`, 'error');
+            return;
+        }
+
+        if (isCurrent) {
+            this.currentData = data;
+            this.hasUnsavedChanges = false;
+            delete this.tempDataCache[this.currentFile];
+            this.updateSaveButtonState();
+            this.updateFileMeta();
+            this.renderStructuredView();
+            this.renderFlatView();
+            this.setupEditableListeners();
+            this.updateUndoButtonState();
+        }
+
+        this.showNotification(`Rating saved: ${normalized}/10`, 'success');
+    }
+
     loadDebugEnabled() {
         try {
             const qs = new URLSearchParams(window.location.search || '');
@@ -5807,6 +5881,22 @@ class PaperStatsApp {
             <i class="fas fa-trash-alt"></i> Delete All Files
             </div>
         `;
+        const currentRating = (this.currentFileBase === filename && this.currentData?.meta_info)
+            ? this.normalizeRatingValue(this.currentData.meta_info.rating)
+            : 0;
+        let ratingStarsHtml = '';
+        for (let i = 1; i <= 10; i++) {
+            const filled = i <= currentRating;
+            const iconClass = filled ? 'fa-solid' : 'fa-regular';
+            const stateClass = filled ? 'filled' : '';
+            ratingStarsHtml += `<button type="button" class="context-menu-star ${stateClass}" data-value="${i}" title="${i}/10"><i class="${iconClass} fa-star"></i></button>`;
+        }
+        menuHtml += `
+            <div class="context-menu-item context-menu-rating" data-action="quickRating">
+            <i class="fas fa-star"></i> Quick Rating
+            <span class="context-menu-stars">${ratingStarsHtml}</span>
+            </div>
+        `;
         if (!this.isDockerMode) {
             menuHtml += `
             <div class="context-menu-item" data-action="copyPdfFile">
@@ -5887,6 +5977,15 @@ class PaperStatsApp {
                     const gid = item.dataset.groupId;
                     if (gid) this.moveSelectedFilesToGroup(gid);
                 }
+            });
+        });
+        menu.querySelectorAll('.context-menu-star').forEach(btn => {
+            btn.addEventListener('click', async (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                const val = Number(btn.dataset.value || 0);
+                menu.remove();
+                await this.quickSetRatingForBase(filename, val);
             });
         });
 

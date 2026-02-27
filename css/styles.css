@@ -5501,8 +5501,7 @@ body.theme-vscode .md-chat-input-text {
 
 .md-chat-query-title {
     font-weight: 600;
-    font-size: 0.8125em;
-    /* 相对于父元素，原来 13px 基于 16px = 0.8125em */
+    font-size: 10pt;
     color: #1d2a39;
     margin-bottom: 4px;
 }
@@ -6629,6 +6628,38 @@ ol.json-array {
 
 .context-menu-item[data-action="delete"]:hover {
     background: #ffebee;
+}
+
+.context-menu-rating {
+    align-items: center;
+}
+
+.context-menu-stars {
+    margin-left: auto;
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+}
+
+.context-menu-star {
+    border: none;
+    background: transparent;
+    padding: 0;
+    cursor: pointer;
+    color: var(--gray-300);
+}
+
+.context-menu-star.filled {
+    color: var(--wos-orange);
+}
+
+.context-menu-star:hover {
+    color: var(--wos-orange-light);
+}
+
+.context-menu-star i {
+    font-size: 10px;
+    width: auto;
 }
 
 .context-menu-divider {
