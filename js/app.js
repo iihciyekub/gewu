@@ -22136,6 +22136,102 @@ document.addEventListener('DOMContentLoaded', () => {
         control.addEventListener('wheel', onWheelAdjust, { passive: false });
     })();
 
+    // 初始化 Middle 面板字体缩放
+    (() => {
+        const middlePanel = document.querySelector('.middle-panel');
+        const slider = document.getElementById('middleFontScaleSlider');
+        const valueDisplay = document.getElementById('middleFontScaleValue');
+        const resetBtn = document.querySelector('.middle-font-scale-control i');
+        const storageKey = 'middleFontScale';
+
+        if (!middlePanel || !slider || !valueDisplay) return;
+
+        let currentScale = 1;
+
+        const clampScale = (val) => {
+            const min = Number.parseFloat(slider.min) || 0.5;
+            const max = Number.parseFloat(slider.max) || 2;
+            return Math.min(max, Math.max(min, val));
+        };
+
+        const ensureBase = (el) => {
+            if (!(el instanceof HTMLElement)) return;
+            if (el.closest('.middle-action-buttons') || el.closest('.md-chat-panel')) return;
+            if (el.dataset.middleFontBase) return;
+            const size = Number.parseFloat(window.getComputedStyle(el).fontSize);
+            if (!Number.isFinite(size) || size <= 0) return;
+            const base = size / currentScale;
+            el.dataset.middleFontBase = String(base);
+            el.style.setProperty('--middle-font-base', `${base}px`);
+        };
+
+        const bootstrap = () => {
+            middlePanel.querySelectorAll('*').forEach(ensureBase);
+        };
+
+        const applyScale = (scale) => {
+            if (!Number.isFinite(scale)) return;
+            const clamped = clampScale(scale);
+            currentScale = clamped;
+            middlePanel.style.setProperty('--middle-font-scale', String(clamped));
+            valueDisplay.textContent = `${Math.round(clamped * 100)}%`;
+            try {
+                localStorage.setItem(storageKey, String(clamped));
+            } catch (err) {
+                console.warn('无法保存中间栏字体缩放设置:', err);
+            }
+        };
+
+        bootstrap();
+
+        const savedScale = localStorage.getItem(storageKey);
+        if (savedScale) {
+            const parsed = Number.parseFloat(savedScale);
+            if (Number.isFinite(parsed)) {
+                slider.value = String(clampScale(parsed));
+            }
+        }
+        applyScale(Number.parseFloat(slider.value));
+
+        slider.addEventListener('input', (e) => {
+            const scale = Number.parseFloat(e.target.value);
+            applyScale(scale);
+        });
+
+        const onWheelAdjust = (e) => {
+            e.preventDefault();
+            const current = Number.parseFloat(slider.value);
+            if (!Number.isFinite(current)) return;
+            const step = Number.parseFloat(slider.step) || 0.05;
+            const next = e.deltaY < 0 ? current + step : current - step;
+            const clamped = clampScale(next);
+            slider.value = String(clamped);
+            applyScale(clamped);
+        };
+
+        slider.addEventListener('wheel', onWheelAdjust, { passive: false });
+
+        if (resetBtn) {
+            resetBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                const base = 1.25;
+                slider.value = String(base);
+                applyScale(base);
+            });
+        }
+
+        const observer = new MutationObserver((mutations) => {
+            mutations.forEach((mutation) => {
+                mutation.addedNodes.forEach((node) => {
+                    if (!(node instanceof HTMLElement)) return;
+                    ensureBase(node);
+                    node.querySelectorAll('*').forEach(ensureBase);
+                });
+            });
+        });
+        observer.observe(middlePanel, { childList: true, subtree: true });
+    })();
+
     // 页面关闭/刷新前提示保存
     window.addEventListener('beforeunload', (e) => {
         if (app.hasUnsavedChanges || app.hasUnsavedMarkdownChanges) {

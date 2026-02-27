@@ -1457,6 +1457,39 @@ body.theme-vscode .tab-btn.active {
     flex-wrap: nowrap;
 }
 
+.middle-font-scale-control {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 10px;
+    border-radius: 999px;
+    border: 1px solid rgba(17, 24, 39, 0.15);
+    background: #f3f4f6;
+    color: #111827;
+    font-size: 11px;
+    height: 28px;
+    white-space: nowrap;
+}
+
+.middle-font-scale-control input[type="range"] {
+    width: 90px;
+    height: 4px;
+    accent-color: #111827;
+    cursor: pointer;
+}
+
+.middle-font-scale-control span {
+    min-width: 38px;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+}
+
+.middle-font-scale-control:hover {
+    background: #e5e7eb;
+    border-color: rgba(17, 24, 39, 0.25);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+}
+
 .settings-view.active ~ .middle-action-buttons,
 .vis-network-view.active ~ .middle-action-buttons {
     display: none;
@@ -1502,6 +1535,15 @@ body.theme-vscode .tab-btn.active {
         padding: 6px 8px;
         gap: 0;
     }
+
+    .middle-font-scale-control {
+        padding: 6px 8px;
+        gap: 0;
+    }
+
+    .middle-font-scale-control input[type="range"] {
+        width: 70px;
+    }
 }
 
 .middle-toggle-source-btn:active,
@@ -1509,6 +1551,14 @@ body.theme-vscode .tab-btn.active {
 .middle-git-btn:active,
 .middle-chat-btn:active {
     transform: translateY(1px);
+}
+
+.middle-panel {
+    --middle-font-scale: 1;
+}
+
+.middle-panel [data-middle-font-base] {
+    font-size: calc(var(--middle-font-base) * var(--middle-font-scale)) !important;
 }
 
 body.theme-dark .middle-toggle-source-btn,
@@ -6336,6 +6386,7 @@ ol.json-array {
     transition: transform 0.2s;
     cursor: pointer;
     margin-right: 2px;
+    font-size: 10px;
 }
 
 .collapsible-header.active .collapsible-toggle {
