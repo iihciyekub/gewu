@@ -278,31 +278,88 @@ class PaperStatsApp {
         const files = (target.files || []).slice();
         if (!files.length) return;
 
+        const prev = this.groupSortState[groupId]?.no || 'asc';
+        const nextDir = prev === 'asc' ? 'desc' : 'asc';
+        this.groupSortState[groupId] = { ...(this.groupSortState[groupId] || {}), no: nextDir };
+
         const fetchNo = async (base) => {
             const path = this.getViewPathForBase(base, view);
-            if (!path) return { no: Number.MAX_SAFE_INTEGER, base };
+            if (!path) return { no: null, base };
             try {
                 const data = await this.readProjectFile(path);
                 const meta = data?.meta_info || {};
                 const noVal = meta.No ?? meta.no ?? meta.NO ?? meta.No;
                 const parsed = typeof noVal === 'number' ? noVal : Number(String(noVal).trim());
-                const no = Number.isFinite(parsed) ? parsed : Number.MAX_SAFE_INTEGER;
-                return { no: Number.isFinite(no) ? no : Number.MAX_SAFE_INTEGER, base };
+                const no = Number.isFinite(parsed) ? parsed : null;
+                return { no, base };
             } catch (err) {
                 console.warn('sortGroupByMetaNo fetch failed for', base, err);
-                return { no: Number.MAX_SAFE_INTEGER, base };
+                return { no: null, base };
             }
         };
 
         const results = await Promise.all(files.map(f => fetchNo(f)));
+        const dir = nextDir === 'asc' ? 1 : -1;
         const order = results
-            .sort((a, b) => a.no - b.no || a.base.localeCompare(b.base))
+            .sort((a, b) => {
+                const aMissing = !Number.isFinite(a.no);
+                const bMissing = !Number.isFinite(b.no);
+                if (aMissing && bMissing) return a.base.localeCompare(b.base);
+                if (aMissing) return 1;
+                if (bMissing) return -1;
+                return (a.no - b.no) * dir || a.base.localeCompare(b.base);
+            })
             .map(r => r.base);
 
         target.files = order;
         this.persistGroupsAndRender(groups, this.currentFile);
-        this.showNotification(`Sorted by No completed (${target.name})`, 'success');
+        const label = nextDir === 'asc' ? 'ascending' : 'descending';
+        this.showNotification(`Sorted by No (${label})`, 'success');
 
+    }
+
+    async sortGroupByRating(groupId) {
+        const view = this.currentJsonView || '';
+        const groups = this.getCurrentGroups();
+        const target = groups.find(g => g.id === groupId);
+        if (!target) return;
+        const files = (target.files || []).slice();
+        if (!files.length) return;
+
+        const prev = this.groupSortState[groupId]?.rating || 'desc';
+        const nextDir = prev === 'asc' ? 'desc' : 'asc';
+        this.groupSortState[groupId] = { ...(this.groupSortState[groupId] || {}), rating: nextDir };
+
+        const fetchRating = async (base) => {
+            const path = this.getViewPathForBase(base, view);
+            if (!path) return { rating: 0, base };
+            try {
+                const data = await this.readProjectFile(path);
+                const meta = data?.meta_info || {};
+                const raw = meta.rating ?? meta.Rating ?? meta.RATING;
+                const parsed = this.normalizeRatingValue(raw);
+                const rating = Number.isFinite(parsed) ? parsed : 0;
+                return { rating, base };
+            } catch (err) {
+                console.warn('sortGroupByRating fetch failed for', base, err);
+                return { rating: 0, base };
+            }
+        };
+
+        const results = await Promise.all(files.map(f => fetchRating(f)));
+        const dir = nextDir === 'asc' ? 1 : -1;
+        const order = results
+            .sort((a, b) => {
+                const aVal = Number.isFinite(a.rating) ? a.rating : 0;
+                const bVal = Number.isFinite(b.rating) ? b.rating : 0;
+                return (aVal - bVal) * dir || a.base.localeCompare(b.base);
+            })
+            .map(r => r.base);
+
+        target.files = order;
+        this.persistGroupsAndRender(groups, this.currentFile);
+        const label = nextDir === 'asc' ? 'ascending' : 'descending';
+        this.showNotification(`Sorted by rating (${label})`, 'success');
     }
 
     async sortGroupByPublicationYear(groupId) {
@@ -3851,6 +3908,15 @@ class PaperStatsApp {
             .replace(/[.]+$/g, '');
     }
 
+    normalizeRatingValue(raw) {
+        if (raw === null || raw === undefined || raw === '') return 0;
+        const num = Number(String(raw).trim());
+        if (!Number.isFinite(num)) return 0;
+        if (num < 1) return 0;
+        const rounded = Math.round(num);
+        return Math.min(10, Math.max(1, rounded));
+    }
+
     getDoiKeyVariants(doi = '') {
         const base = this.normalizeDoi(doi).trim().toLowerCase();
         if (!base) return [];
@@ -3965,7 +4031,8 @@ class PaperStatsApp {
             schema_version: '1.0',
             meta_info: {
                 doi: clean,
-                No: null
+                No: null,
+                rating: null
             }
         };
     }
@@ -5843,6 +5910,7 @@ class PaperStatsApp {
         menu.style.left = `${e.pageX}px`;
         menu.style.top = `${e.pageY}px`;
         const canEdit = group && group.id !== 'init';
+        const noDir = this.groupSortState?.[group?.id]?.no || 'asc';
         const yearDir = this.groupSortState?.[group?.id]?.year || 'asc';
         const yearIcon = yearDir === 'asc' ? 'fa-sort-amount-down-alt' : 'fa-sort-amount-up-alt';
         const titleDir = this.groupSortState?.[group?.id]?.sourceTitle || 'asc';
@@ -5851,21 +5919,27 @@ class PaperStatsApp {
         const citedWosIcon = citedWosDir === 'asc' ? 'fa-sort-amount-down-alt' : 'fa-sort-amount-up-alt';
         const citedAllDir = this.groupSortState?.[group?.id]?.timesCitedAll || 'desc';
         const citedAllIcon = citedAllDir === 'asc' ? 'fa-sort-amount-down-alt' : 'fa-sort-amount-up-alt';
+        const ratingDir = this.groupSortState?.[group?.id]?.rating || 'desc';
+        const noIcon = noDir === 'asc' ? 'fa-sort-numeric-down-alt' : 'fa-sort-numeric-up-alt';
+        const ratingIcon = ratingDir === 'asc' ? 'fa-sort-amount-down-alt' : 'fa-sort-amount-up-alt';
         menu.innerHTML = `
             <div class="context-menu-item" data-action="sortGroupByNo">
-                <i class="fas fa-sort-numeric-down-alt"></i> Sort by No
+                <i class="fas ${noIcon}"></i> Sort by No (${noDir === 'asc' ? 'ascending' : 'descending'})
+            </div>
+            <div class="context-menu-item" data-action="sortGroupByRating">
+                <i class="fas ${ratingIcon}"></i> Sort by rating (${ratingDir === 'asc' ? 'ascending' : 'descending'})
             </div>
             <div class="context-menu-item" data-action="sortGroupByYear">
-                <i class="fas ${yearIcon}"></i> Sort by Publication Year
+                <i class="fas ${yearIcon}"></i> Sort by Publication Year (${yearDir === 'asc' ? 'ascending' : 'descending'})
             </div>
             <div class="context-menu-item" data-action="sortGroupBySourceTitle">
-                <i class="fas ${titleIcon}"></i> Sort by Journal
+                <i class="fas ${titleIcon}"></i> Sort by Journal (${titleDir === 'asc' ? 'ascending' : 'descending'})
             </div>
             <div class="context-menu-item" data-action="sortGroupByTimesCitedWos">
-                <i class="fas ${citedWosIcon}"></i> Sort by times_cited_wos
+                <i class="fas ${citedWosIcon}"></i> Sort by times_cited_wos (${citedWosDir === 'asc' ? 'ascending' : 'descending'})
             </div>
             <div class="context-menu-item" data-action="sortGroupByTimesCitedAll">
-                <i class="fas ${citedAllIcon}"></i> Sort by times_cited_all_databases
+                <i class="fas ${citedAllIcon}"></i> Sort by times_cited_all_databases (${citedAllDir === 'asc' ? 'ascending' : 'descending'})
             </div>
             <div class="context-menu-divider"></div>
             <div class="context-menu-item" data-action="copyGroupDois">
@@ -5920,6 +5994,8 @@ class PaperStatsApp {
                     await this.downloadGroupBib(group);
                 } else if (action === 'sortGroupByNo') {
                     await this.sortGroupByMetaNo(group.id);
+                } else if (action === 'sortGroupByRating') {
+                    await this.sortGroupByRating(group.id);
                 } else if (action === 'sortGroupByYear') {
                     await this.sortGroupByPublicationYear(group.id);
                 } else if (action === 'sortGroupBySourceTitle') {
@@ -8294,7 +8370,7 @@ class PaperStatsApp {
         const entries = Object.entries(obj || {});
         if (!Array.isArray(basePath)) return entries;
         if (basePath.includes('meta_info')) {
-            const preferred = ['no', 'doi', 'cite', 'citep', 'apa', 'pdf_path'];
+            const preferred = ['no', 'doi', 'rating', 'cite', 'citep', 'apa', 'pdf_path'];
             const keys = entries.map(([k]) => k);
             const normalized = new Map(keys.map(k => [k, String(k || '').toLowerCase()]));
             const seen = new Set();
@@ -8352,6 +8428,18 @@ class PaperStatsApp {
         const displayValue = typeof value === 'string' ? value : JSON.stringify(value);
 
         const keyLower = (key || '').toLowerCase();
+        if (keyLower === 'rating' && Array.isArray(path) && path[0] === 'meta_info') {
+            const rating = this.normalizeRatingValue(value);
+            const title = rating > 0 ? `Rating: ${rating}/10` : 'Rating: not set';
+            let starsHtml = '';
+            for (let i = 1; i <= 10; i++) {
+                const isFilled = i <= rating;
+                const iconClass = isFilled ? 'fa-solid' : 'fa-regular';
+                const stateClass = isFilled ? 'filled' : 'empty';
+                starsHtml += `<i class="${iconClass} fa-star rating-star ${stateClass}" data-value="${i}" title="${i}/10"></i>`;
+            }
+            return `<span class="editable-value rating-value" data-path="${path.join('.')}" data-raw-value="${this.escapeAttr(String(rating))}">\n                <span class="rating-stars" data-path="${path.join('.')}" title="${this.escapeAttr(title)}">${starsHtml}</span>\n            </span>`;
+        }
         // 特殊处理: ORCID 字段，渲染跳转链接
         if ((keyLower === 'orcid' || keyLower === 'orcid_id') && value) {
             const rawList = Array.isArray(value) ? value : String(value).split(';');
@@ -8823,6 +8911,10 @@ class PaperStatsApp {
         }
         if (!Object.prototype.hasOwnProperty.call(meta, 'apa')) {
             meta.apa = '';
+            changed = true;
+        }
+        if (!Object.prototype.hasOwnProperty.call(meta, 'rating')) {
+            meta.rating = null;
             changed = true;
         }
         if (changed) {
@@ -20859,6 +20951,9 @@ class PaperStatsApp {
         if (this._doiCopyBtnHandler) {
             document.removeEventListener('click', this._doiCopyBtnHandler);
         }
+        if (this._ratingStarHandler) {
+            document.removeEventListener('click', this._ratingStarHandler);
+        }
 
         this._locationLinkHandler = (e) => {
             const target = e.target;
@@ -21062,6 +21157,29 @@ class PaperStatsApp {
                 this.showNotification(`Copy failed: ${err.message}`, 'error');
             }
         };
+        this._ratingStarHandler = (e) => {
+            const star = e.target.closest('.rating-star');
+            if (!star) return;
+            const wrapper = star.closest('.rating-stars');
+            if (!wrapper) return;
+            const pathStr = wrapper.dataset.path || '';
+            if (!pathStr) return;
+            e.preventDefault();
+            e.stopPropagation();
+            const rating = this.normalizeRatingValue(star.dataset.value);
+            const pathArr = pathStr.split('.').filter(Boolean);
+            if (!pathArr.length) return;
+            this.setValueByPath(pathArr, rating);
+            this.hasUnsavedChanges = true;
+            if (this.currentFile) {
+                this.tempDataCache[this.currentFile] = this.currentData;
+            }
+            this.updateSaveButtonState();
+            this.renderStructuredView();
+            this.renderFlatView();
+            this.setupEditableListeners();
+            this.updateUndoButtonState();
+        };
         this._pdfCopyBtnHandler = async (e) => {
             const btn = e.target.closest('.pdf-path-copy-btn');
             if (!btn) return;
@@ -21110,6 +21228,7 @@ class PaperStatsApp {
         document.addEventListener('mouseover', this._apaBtnHoverHandler);
         document.addEventListener('mouseout', this._apaBtnLeaveHandler);
         document.addEventListener('click', this._doiCopyBtnHandler);
+        document.addEventListener('click', this._ratingStarHandler);
         document.addEventListener('click', this._pdfCopyBtnHandler);
         document.addEventListener('click', this._pdfDeleteBtnHandler);
         document.addEventListener('click', (e) => {

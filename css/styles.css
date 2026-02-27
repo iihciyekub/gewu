@@ -2096,6 +2096,35 @@ body.theme-vscode .nested-index-cell {
     box-shadow: 0 0 0 1px var(--wos-border);
 }
 
+.rating-value {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    width: auto;
+    min-width: 0;
+}
+
+.rating-stars {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    line-height: 1;
+}
+
+.rating-star {
+    font-size: 12px;
+    color: var(--gray-300);
+    cursor: pointer;
+}
+
+.rating-star.filled {
+    color: var(--wos-orange);
+}
+
+.rating-star:hover {
+    color: var(--wos-orange-light);
+}
+
 .location-link {
     display: inline-flex;
     flex: 0 0 auto;
